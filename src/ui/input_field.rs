@@ -39,12 +39,18 @@ impl InputAllowedChars {
 pub enum InputParser {
     String,
     U32Range { min: u32, max: u32 },
+    F32Range {
+        min: f32,
+        max: f32,
+        max_fraction_digits: usize,
+    },
 }
 
 #[derive(Clone, Debug)]
 pub enum ParsedInputValue {
     String(String),
     U32(u32),
+    F32(f32),
 }
 
 #[derive(Component, Clone, Debug)]
@@ -92,9 +98,50 @@ impl TextInputField {
         }
     }
 
+    pub fn new_f32(
+        initial: f32,
+        min: f32,
+        max: f32,
+        max_len: usize,
+        max_fraction_digits: usize,
+    ) -> Self {
+        let value = initial.clamp(min, max);
+        let mut text = format!("{value:.3}");
+        while text.ends_with('0') {
+            text.pop();
+        }
+        if text.ends_with('.') {
+            text.pop();
+        }
+        if text.is_empty() {
+            text = "0".to_string();
+        }
+
+        Self {
+            value: ParsedInputValue::F32(value),
+            cursor: text.chars().count(),
+            focused: false,
+            text,
+            max_len,
+            allowed_chars: InputAllowedChars::Custom("0123456789.,".to_string()),
+            parser: InputParser::F32Range {
+                min,
+                max,
+                max_fraction_digits,
+            },
+        }
+    }
+
     pub fn parsed_u32(&self) -> Option<u32> {
         match self.value {
             ParsedInputValue::U32(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn parsed_f32(&self) -> Option<f32> {
+        match self.value {
+            ParsedInputValue::F32(v) => Some(v),
             _ => None,
         }
     }
@@ -124,6 +171,9 @@ impl TextInputField {
 
     fn insert_char(&mut self, ch: char) {
         if !self.allowed_chars.allows(ch) {
+            return;
+        }
+        if !self.can_insert_char_for_parser(ch) {
             return;
         }
         if self.char_count() >= self.max_len {
@@ -177,8 +227,63 @@ impl TextInputField {
                     self.value = ParsedInputValue::U32(parsed.clamp(min, max));
                 }
             }
+            InputParser::F32Range { min, max, .. } => {
+                if let Some(parsed) = parse_decimal_input(&self.text) {
+                    self.value = ParsedInputValue::F32(parsed.clamp(min, max));
+                }
+            }
         }
     }
+
+    fn can_insert_char_for_parser(&self, ch: char) -> bool {
+        match self.parser {
+            InputParser::F32Range {
+                max_fraction_digits,
+                ..
+            } => {
+                let mut next = self.text.clone();
+                let byte_index = self.byte_index_at(self.cursor);
+                next.insert(byte_index, ch);
+
+                let separator_count = next
+                    .chars()
+                    .filter(|candidate| *candidate == '.' || *candidate == ',')
+                    .count();
+                if separator_count > 1 {
+                    return false;
+                }
+
+                if let Some(separator_byte_index) = next.find(['.', ',']) {
+                    let separator_char_index =
+                        next[..separator_byte_index].chars().count();
+                    let fraction_len =
+                        next.chars().count().saturating_sub(separator_char_index + 1);
+                    if fraction_len > max_fraction_digits {
+                        return false;
+                    }
+                }
+
+                true
+            }
+            _ => true,
+        }
+    }
+}
+
+fn parse_decimal_input(text: &str) -> Option<f32> {
+    if text.is_empty() {
+        return None;
+    }
+
+    let mut normalized = text.replace(',', ".");
+    if normalized == "." {
+        return None;
+    }
+    if normalized.starts_with('.') {
+        normalized = format!("0{normalized}");
+    }
+
+    normalized.parse::<f32>().ok()
 }
 
 #[derive(Component)]

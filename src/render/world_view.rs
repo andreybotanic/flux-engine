@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::{
     simulation::{
-        gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES, HYDROGEN_MAX_VISUAL_PARTICLES},
+        gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
         gpu::GasSimulationImages,
         SimulationStep,
     },
@@ -20,6 +20,40 @@ const BOARD_GAS_COLOR: Color = Color::srgb(0.18, 0.18, 0.18);
 const BACKDROP_MAIN_COLOR: Color = Color::srgba(0.10, 0.14, 0.18, 0.85);
 const BACKDROP_GAS_COLOR: Color = Color::srgba(0.12, 0.12, 0.12, 0.85);
 const GRID_LINE_COLOR: Color = Color::srgba(1.0, 1.0, 1.0, 0.09);
+const GAS_VISUAL_MIN_PARTICLES: f32 = 1.0;
+const GAS_VISUAL_MIN_INTENSITY: f32 = 0.05;
+
+#[derive(Resource, Clone, Copy)]
+pub struct GasVisualSettings {
+    pub gamma: f32,
+    pub max_particles_for_max_color: u32,
+}
+
+impl Default for GasVisualSettings {
+    fn default() -> Self {
+        Self {
+            gamma: 1.0,
+            max_particles_for_max_color: 1000,
+        }
+    }
+}
+
+fn gas_visual_intensity(particles: f32, gamma: f32, max_particles_for_max_color: u32) -> f32 {
+    if particles <= 0.0 {
+        return 0.0;
+    }
+
+    let max_particles = max_particles_for_max_color.max(1) as f32;
+    let clamped = particles.clamp(GAS_VISUAL_MIN_PARTICLES, max_particles);
+    let norm = if max_particles <= GAS_VISUAL_MIN_PARTICLES {
+        1.0
+    } else {
+        ((clamped - GAS_VISUAL_MIN_PARTICLES) / (max_particles - GAS_VISUAL_MIN_PARTICLES))
+            .clamp(0.0, 1.0)
+    };
+    let base = GAS_VISUAL_MIN_INTENSITY + (1.0 - GAS_VISUAL_MIN_INTENSITY) * norm;
+    base.powf(gamma.clamp(0.0, 10.0))
+}
 
 #[derive(Resource, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OverlayMode {
@@ -208,11 +242,12 @@ pub fn apply_overlay_mode(
 pub fn sync_gas_display_texture(
     step: Res<SimulationStep>,
     gas: Res<GasField>,
+    visual_settings: Res<GasVisualSettings>,
     simulation_images: Res<GasSimulationImages>,
     mut images: ResMut<Assets<Image>>,
     mut gas_query: Query<&mut Sprite, With<GasOverlaySprite>>,
 ) {
-    if !step.is_changed() {
+    if !step.is_changed() && !visual_settings.is_changed() {
         return;
     }
 
@@ -227,12 +262,14 @@ pub fn sync_gas_display_texture(
                 let color = if is_boundary(x, y) {
                     Color::linear_rgba(0.0, 1.0, 0.0, 1.0)
                 } else {
-                    let particles = gas.amount(x, y) as f32;
+                    let particles = gas.total_amount(x, y) as f32;
                     let storage_linear = (particles / HYDROGEN_GPU_STORAGE_MAX_PARTICLES as f32)
                         .clamp(0.0, 1.0);
-                    let visual_linear = (particles / HYDROGEN_MAX_VISUAL_PARTICLES as f32)
-                        .clamp(0.0, 1.0);
-                    let visual = visual_linear.powf(0.35);
+                    let visual = gas_visual_intensity(
+                        particles,
+                        visual_settings.gamma,
+                        visual_settings.max_particles_for_max_color,
+                    );
                     Color::linear_rgba(visual, 0.0, storage_linear, 1.0)
                 };
 

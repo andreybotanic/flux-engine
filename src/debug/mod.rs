@@ -1,10 +1,10 @@
-use bevy::prelude::*;
+﻿use bevy::prelude::*;
 
 use crate::{
     simulation::{
         do_one_substep,
         gas::{preview_next_substep, GasField},
-        BlockSyncState, SimulationControl, SimulationStep,
+        BlockSyncState, GasSimulationConfig, SimulationControl, SimulationStep,
     },
     world::grid::{cell_center, WorldGrid, CELL_SIZE},
 };
@@ -12,6 +12,19 @@ use crate::{
 #[derive(Resource, Default)]
 pub struct DebugMode {
     pub active: bool,
+}
+
+#[derive(Resource, Clone, Copy)]
+pub struct DebugOverlaySettings {
+    pub show_diffusion_cells: bool,
+}
+
+impl Default for DebugOverlaySettings {
+    fn default() -> Self {
+        Self {
+            show_diffusion_cells: true,
+        }
+    }
 }
 
 #[derive(Resource, Default)]
@@ -25,6 +38,7 @@ pub struct DebugPlugin;
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DebugMode>()
+            .init_resource::<DebugOverlaySettings>()
             .init_resource::<DebugStepPreview>()
             .add_systems(
                 Update,
@@ -37,6 +51,7 @@ fn handle_debug_keys(
     keys: Res<ButtonInput<KeyCode>>,
     mut debug_mode: ResMut<DebugMode>,
     mut control: ResMut<SimulationControl>,
+    config: Res<GasSimulationConfig>,
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
     world: Res<WorldGrid>,
@@ -50,18 +65,20 @@ fn handle_debug_keys(
     }
 
     if debug_mode.active && keys.just_pressed(KeyCode::Enter) {
-        do_one_substep(&mut block_state, &mut gas, &world, &mut step);
+        do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);
     }
 }
 
 fn update_debug_preview(
     debug_mode: Res<DebugMode>,
+    overlay_settings: Res<DebugOverlaySettings>,
+    config: Res<GasSimulationConfig>,
     gas: Res<GasField>,
     world: Res<WorldGrid>,
     block_state: Res<BlockSyncState>,
     mut preview: ResMut<DebugStepPreview>,
 ) {
-    if !debug_mode.active {
+    if !debug_mode.active || !config.enable_diffusion || !overlay_settings.show_diffusion_cells {
         if !preview.moves.is_empty() {
             preview.moves.clear();
         }
@@ -69,7 +86,11 @@ fn update_debug_preview(
     }
 
     // Recompute only when something relevant changed
-    if !debug_mode.is_changed() && !gas.is_changed() && !block_state.is_changed() {
+    if !debug_mode.is_changed()
+        && !overlay_settings.is_changed()
+        && !gas.is_changed()
+        && !block_state.is_changed()
+    {
         return;
     }
 
@@ -77,8 +98,13 @@ fn update_debug_preview(
     preview.moves = moves;
 }
 
-fn draw_debug_overlays(debug_mode: Res<DebugMode>, preview: Res<DebugStepPreview>, mut gizmos: Gizmos) {
-    if !debug_mode.active {
+fn draw_debug_overlays(
+    debug_mode: Res<DebugMode>,
+    overlay_settings: Res<DebugOverlaySettings>,
+    preview: Res<DebugStepPreview>,
+    mut gizmos: Gizmos,
+) {
+    if !debug_mode.active || !overlay_settings.show_diffusion_cells {
         return;
     }
 

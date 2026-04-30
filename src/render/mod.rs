@@ -13,6 +13,7 @@ pub struct RenderPlugin;
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<OverlayMode>()
+            .init_resource::<GasVisualSettings>()
             .init_resource::<WallEntities>()
             .add_systems(Startup, setup_world_view.after(setup_simulation_images).after(spawn_main_camera))
             .add_systems(
@@ -27,4 +28,4 @@ impl Plugin for RenderPlugin {
     }
 }
 
-pub use world_view::OverlayMode;
+pub use world_view::{GasVisualSettings, OverlayMode};

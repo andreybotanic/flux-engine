@@ -15,9 +15,7 @@ use bevy::{
 
 use crate::{
     simulation::{
-        gas::{
-            seeded_gas_amount, HYDROGEN_GPU_STORAGE_MAX_PARTICLES, HYDROGEN_MAX_VISUAL_PARTICLES,
-        },
+        gas::{seeded_gas_amount, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
         SimulationStep,
     },
     world::grid::{is_boundary, WORLD_HEIGHT, WORLD_WIDTH},
@@ -25,6 +23,21 @@ use crate::{
 
 const SHADER_ASSET_PATH: &str = "shaders/gas_diffusion.wgsl";
 const WORKGROUP_SIZE: u32 = 8;
+const GAS_VISUAL_MIN_PARTICLES: f32 = 1.0;
+const GAS_VISUAL_MAX_PARTICLES: f32 = 1000.0;
+const GAS_VISUAL_MIN_INTENSITY: f32 = 0.05;
+
+fn gas_visual_intensity(particles: f32) -> f32 {
+    if particles <= 0.0 {
+        return 0.0;
+    }
+
+    let clamped = particles.clamp(GAS_VISUAL_MIN_PARTICLES, GAS_VISUAL_MAX_PARTICLES);
+    let norm = ((clamped - GAS_VISUAL_MIN_PARTICLES)
+        / (GAS_VISUAL_MAX_PARTICLES - GAS_VISUAL_MIN_PARTICLES))
+        .clamp(0.0, 1.0);
+    GAS_VISUAL_MIN_INTENSITY + (1.0 - GAS_VISUAL_MIN_INTENSITY) * norm
+}
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 struct GasComputeLabel;
@@ -170,8 +183,7 @@ fn build_seeded_image() -> Image {
             let wall = if is_boundary(x, y) { 1.0 } else { 0.0 };
             let particles = seeded_gas_amount(x, y) as f32;
             let storage_linear = (particles / HYDROGEN_GPU_STORAGE_MAX_PARTICLES as f32).clamp(0.0, 1.0);
-            let visual_linear = (particles / HYDROGEN_MAX_VISUAL_PARTICLES as f32).clamp(0.0, 1.0);
-            let visual = visual_linear.powf(0.35);
+            let visual = gas_visual_intensity(particles);
             let color = Color::linear_rgba(visual, wall, storage_linear, 1.0);
             let _ = image.set_color_at(x, y, color);
         }

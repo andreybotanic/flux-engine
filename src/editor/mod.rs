@@ -1,8 +1,13 @@
 ﻿use bevy::{prelude::*, window::PrimaryWindow};
 
 use crate::{
+    debug::{DebugMode, DebugOverlaySettings},
     input::camera::MainCamera,
-    simulation::{gas::GasField, SimulationStep},
+    render::GasVisualSettings,
+    simulation::{
+        gas::{GasField, GasKind},
+        GasSimulationConfig, SimulationStep,
+    },
     ui::input_field::{TextInputDisplay, TextInputField, TextInputStyle},
     world::{
         grid::{cell_center, world_to_cell, WorldGrid, CELL_SIZE},
@@ -13,11 +18,10 @@ use crate::{
 const PANEL_BG: Color = Color::srgba(0.05, 0.07, 0.10, 0.86);
 const BUTTON_IDLE: Color = Color::srgba(0.20, 0.22, 0.25, 0.94);
 const BUTTON_ACTIVE: Color = Color::srgba(0.28, 0.47, 0.26, 0.96);
-const BUTTON_TOGGLE_OFF: Color = Color::srgba(0.40, 0.20, 0.20, 0.96);
 const INPUT_FOCUSED: Color = Color::srgba(0.23, 0.40, 0.56, 0.96);
 
-const TOP_LEFT_SIM_PANEL_WIDTH: f32 = 280.0;
-const TOP_LEFT_SIM_PANEL_HEIGHT: f32 = 56.0;
+const TOP_LEFT_SIM_PANEL_WIDTH: f32 = 320.0;
+const TOP_LEFT_SIM_PANEL_HEIGHT: f32 = 112.0;
 
 const MAIN_TOOLBAR_LEFT: f32 = 12.0;
 const MAIN_TOOLBAR_BOTTOM: f32 = 12.0;
@@ -29,15 +33,16 @@ const DEBUG_TOOLBAR_TOP: f32 = 12.0;
 const DEBUG_TOOLBAR_WIDTH: f32 = 286.0;
 const DEBUG_TOOLBAR_HEIGHT: f32 = 48.0;
 
-const DEBUG_SETTINGS_RIGHT: f32 = 12.0;
-const DEBUG_SETTINGS_TOP: f32 = 66.0;
-const DEBUG_SETTINGS_WIDTH: f32 = 286.0;
-const DEBUG_SETTINGS_HEIGHT: f32 = 170.0;
+const DEBUG_PANEL_RIGHT: f32 = 12.0;
+const DEBUG_PANEL_TOP: f32 = 12.0;
+const DEBUG_PANEL_WIDTH: f32 = 286.0;
+const DEBUG_PANEL_HEIGHT: f32 = 252.0;
+const DEBUG_AND_GAS_PANEL_GAP: f32 = 12.0;
 
-const DEBUG_TOGGLE_TOP: f32 = 12.0;
-const DEBUG_TOGGLE_RIGHT: f32 = 12.0;
-const DEBUG_TOGGLE_WIDTH: f32 = 128.0;
-const DEBUG_TOGGLE_HEIGHT: f32 = 32.0;
+const GAS_PANEL_RIGHT: f32 = 12.0;
+const GAS_PANEL_TOP: f32 = DEBUG_PANEL_TOP + DEBUG_PANEL_HEIGHT + DEBUG_AND_GAS_PANEL_GAP;
+const GAS_PANEL_WIDTH: f32 = 286.0;
+const GAS_PANEL_HEIGHT: f32 = 156.0;
 
 #[derive(Resource, Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum EditorTool {
@@ -52,23 +57,6 @@ pub enum EditorTool {
 #[derive(Resource, Default)]
 pub struct MainToolbarState {
     pub selected: EditorTool,
-}
-
-#[derive(Resource)]
-pub struct DebugToolbarState {
-    pub visible: bool,
-}
-
-impl Default for DebugToolbarState {
-    fn default() -> Self {
-        Self { visible: true }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum GasKind {
-    #[default]
-    Hydrogen,
 }
 
 #[derive(Resource)]
@@ -104,15 +92,21 @@ struct BrushDragState {
 #[derive(Component, Clone, Copy)]
 enum EditorUiAction {
     SelectTool(EditorTool),
-    ToggleDebugToolbar,
+    ToggleGasKind,
     ToggleReplace,
+    ToggleLbmVelocity,
+    ToggleDiffusion,
+    ToggleShowDiffusionCells,
 }
 
 #[derive(Component)]
 struct DebugToolbarRoot;
 
 #[derive(Component)]
-struct DebugSettingsPanel;
+struct DebugPanelRoot;
+
+#[derive(Component)]
+struct GasToolPanelRoot;
 
 #[derive(Component)]
 struct GasReplaceLabel;
@@ -121,10 +115,25 @@ struct GasReplaceLabel;
 struct GasKindLabel;
 
 #[derive(Component)]
-struct DebugToggleLabel;
+struct GasAmountInputField;
 
 #[derive(Component)]
-struct GasAmountInputField;
+struct LbmToggleLabel;
+
+#[derive(Component)]
+struct DiffusionToggleLabel;
+
+#[derive(Component)]
+struct DiffusionCellsToggleLabel;
+
+#[derive(Component)]
+struct DiffusionCellsToggleButton;
+
+#[derive(Component)]
+struct GasGammaInputField;
+
+#[derive(Component)]
+struct GasMaxColorParticlesInputField;
 
 #[derive(Component)]
 struct BlueprintGhost;
@@ -141,7 +150,6 @@ impl Plugin for EditorPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EditorTool>()
             .init_resource::<MainToolbarState>()
-            .init_resource::<DebugToolbarState>()
             .init_resource::<GasToolSettings>()
             .init_resource::<SelectionDragState>()
             .init_resource::<BrushDragState>()
@@ -187,31 +195,6 @@ fn setup_editor_ui(mut commands: Commands) {
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                right: Val::Px(DEBUG_TOGGLE_RIGHT),
-                top: Val::Px(DEBUG_TOGGLE_TOP),
-                width: Val::Px(DEBUG_TOGGLE_WIDTH),
-                height: Val::Px(DEBUG_TOGGLE_HEIGHT),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            Button,
-            BackgroundColor(BUTTON_IDLE),
-            EditorUiAction::ToggleDebugToolbar,
-        ))
-        .with_children(|button| {
-            button.spawn((
-                Text::new("Debug tools"),
-                TextFont::from_font_size(13.0),
-                TextColor(Color::WHITE),
-                DebugToggleLabel,
-            ));
-        });
-
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
                 left: Val::Px(DEBUG_TOOLBAR_LEFT),
                 top: Val::Px(DEBUG_TOOLBAR_TOP),
                 display: Display::Flex,
@@ -234,10 +217,10 @@ fn setup_editor_ui(mut commands: Commands) {
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                right: Val::Px(DEBUG_SETTINGS_RIGHT),
-                top: Val::Px(DEBUG_SETTINGS_TOP),
-                width: Val::Px(DEBUG_SETTINGS_WIDTH),
-                height: Val::Px(DEBUG_SETTINGS_HEIGHT),
+                right: Val::Px(DEBUG_PANEL_RIGHT),
+                top: Val::Px(DEBUG_PANEL_TOP),
+                width: Val::Px(DEBUG_PANEL_WIDTH),
+                height: Val::Px(DEBUG_PANEL_HEIGHT),
                 display: Display::Flex,
                 flex_direction: FlexDirection::Column,
                 row_gap: Val::Px(8.0),
@@ -245,15 +228,216 @@ fn setup_editor_ui(mut commands: Commands) {
                 ..default()
             },
             BackgroundColor(PANEL_BG),
-            DebugSettingsPanel,
+            DebugPanelRoot,
         ))
         .with_children(|parent| {
             parent.spawn((
-                Text::new("Gas: Hydrogen"),
-                TextFont::from_font_size(13.0),
-                TextColor(Color::WHITE),
-                GasKindLabel,
+                Text::new("Debug Panel"),
+                TextFont::from_font_size(14.0),
+                TextColor(Color::srgba(0.95, 0.97, 1.0, 1.0)),
             ));
+
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(220.0),
+                        height: Val::Px(32.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(BUTTON_IDLE),
+                    EditorUiAction::ToggleLbmVelocity,
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("LBM/Velocity: On"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::WHITE),
+                        LbmToggleLabel,
+                    ));
+                });
+
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(220.0),
+                        height: Val::Px(32.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(BUTTON_IDLE),
+                    EditorUiAction::ToggleDiffusion,
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("Diffusion: On"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::WHITE),
+                        DiffusionToggleLabel,
+                    ));
+                });
+
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(220.0),
+                        height: Val::Px(32.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(BUTTON_IDLE),
+                    EditorUiAction::ToggleShowDiffusionCells,
+                    DiffusionCellsToggleButton,
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("Show diffusion cells: On"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::WHITE),
+                        DiffusionCellsToggleLabel,
+                    ));
+                });
+
+            parent
+                .spawn((
+                    Node {
+                        display: Display::Flex,
+                        flex_direction: FlexDirection::Row,
+                        column_gap: Val::Px(8.0),
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                ))
+                .with_children(|row| {
+                    row.spawn((
+                        Text::new("Gamma:"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::WHITE),
+                    ));
+
+                    row
+                        .spawn((
+                            Button,
+                            Node {
+                                min_width: Val::Px(92.0),
+                                height: Val::Px(30.0),
+                                justify_content: JustifyContent::FlexStart,
+                                align_items: AlignItems::Center,
+                                padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                                ..default()
+                            },
+                            BackgroundColor(BUTTON_IDLE),
+                            TextInputField::new_f32(1.0, 0.0, 10.0, 6, 3),
+                            TextInputStyle {
+                                idle_bg: BUTTON_IDLE,
+                                focused_bg: INPUT_FOCUSED,
+                            },
+                            bevy::ui::RelativeCursorPosition::default(),
+                            GasGammaInputField,
+                        ))
+                        .with_children(|button| {
+                            button.spawn((
+                                Text::new("1"),
+                                TextFont::from_font_size(13.0),
+                                TextColor(Color::WHITE),
+                                TextInputDisplay,
+                            ));
+                        });
+                });
+
+            parent
+                .spawn((
+                    Node {
+                        display: Display::Flex,
+                        flex_direction: FlexDirection::Row,
+                        column_gap: Val::Px(8.0),
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                ))
+                .with_children(|row| {
+                    row.spawn((
+                        Text::new("Max color at:"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::WHITE),
+                    ));
+
+                    row
+                        .spawn((
+                            Button,
+                            Node {
+                                min_width: Val::Px(92.0),
+                                height: Val::Px(30.0),
+                                justify_content: JustifyContent::FlexStart,
+                                align_items: AlignItems::Center,
+                                padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                                ..default()
+                            },
+                            BackgroundColor(BUTTON_IDLE),
+                            TextInputField::new_u32(1000, 1, 10_000, 5),
+                            TextInputStyle {
+                                idle_bg: BUTTON_IDLE,
+                                focused_bg: INPUT_FOCUSED,
+                            },
+                            bevy::ui::RelativeCursorPosition::default(),
+                            GasMaxColorParticlesInputField,
+                        ))
+                        .with_children(|button| {
+                            button.spawn((
+                                Text::new("1000"),
+                                TextFont::from_font_size(13.0),
+                                TextColor(Color::WHITE),
+                                TextInputDisplay,
+                            ));
+                        });
+                });
+        });
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                right: Val::Px(GAS_PANEL_RIGHT),
+                top: Val::Px(GAS_PANEL_TOP),
+                width: Val::Px(GAS_PANEL_WIDTH),
+                height: Val::Px(GAS_PANEL_HEIGHT),
+                display: Display::Flex,
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(8.0),
+                padding: UiRect::all(Val::Px(10.0)),
+                ..default()
+            },
+            BackgroundColor(PANEL_BG),
+            GasToolPanelRoot,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(190.0),
+                        height: Val::Px(32.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(BUTTON_IDLE),
+                    EditorUiAction::ToggleGasKind,
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("Gas: Hydrogen"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::WHITE),
+                        GasKindLabel,
+                    ));
+                });
 
             parent
                 .spawn((
@@ -301,12 +485,6 @@ fn setup_editor_ui(mut commands: Commands) {
                             ));
                         });
                 });
-
-            parent.spawn((
-                Text::new("Click to place cursor, arrows move, Backspace/Delete edit"),
-                TextFont::from_font_size(12.0),
-                TextColor(Color::srgba(0.85, 0.89, 0.95, 0.9)),
-            ));
 
             parent
                 .spawn((
@@ -394,12 +572,26 @@ fn handle_editor_ui_actions(
     mut interactions: Query<(&Interaction, &EditorUiAction), (Changed<Interaction>, With<Button>)>,
     mut tool: ResMut<EditorTool>,
     mut main_toolbar: ResMut<MainToolbarState>,
-    mut debug_toolbar: ResMut<DebugToolbarState>,
     mut gas_settings: ResMut<GasToolSettings>,
-    mut gas_input: Single<&mut TextInputField, With<GasAmountInputField>>,
+    mut gas_simulation: ResMut<GasSimulationConfig>,
+    mut debug_overlay: ResMut<DebugOverlaySettings>,
+    mut input_set: ParamSet<(
+        Single<&mut TextInputField, With<GasAmountInputField>>,
+        Single<&mut TextInputField, With<GasGammaInputField>>,
+        Single<&mut TextInputField, With<GasMaxColorParticlesInputField>>,
+    )>,
     mut selection_drag: ResMut<SelectionDragState>,
     mut brush_drag: ResMut<BrushDragState>,
 ) {
+    let mut unfocus_inputs = || {
+        let mut gas_input = input_set.p0();
+        gas_input.focused = false;
+        let mut gamma_input = input_set.p1();
+        gamma_input.focused = false;
+        let mut max_color_particles_input = input_set.p2();
+        max_color_particles_input.focused = false;
+    };
+
     for (interaction, action) in &mut interactions {
         if *interaction != Interaction::Pressed {
             continue;
@@ -409,24 +601,32 @@ fn handle_editor_ui_actions(
             EditorUiAction::SelectTool(next_tool) => {
                 *tool = next_tool;
                 main_toolbar.selected = next_tool;
-                gas_input.focused = false;
+                unfocus_inputs();
                 selection_drag.active = false;
                 selection_drag.start = None;
                 selection_drag.current = None;
                 brush_drag.active = false;
                 brush_drag.last_cell = None;
             }
-            EditorUiAction::ToggleDebugToolbar => {
-                debug_toolbar.visible = !debug_toolbar.visible;
-                gas_input.focused = false;
-                if !debug_toolbar.visible && matches!(*tool, EditorTool::AddGas | EditorTool::ClearGas) {
-                    *tool = EditorTool::None;
-                    main_toolbar.selected = EditorTool::None;
-                }
+            EditorUiAction::ToggleGasKind => {
+                unfocus_inputs();
+                gas_settings.gas_kind = gas_settings.gas_kind.next();
             }
             EditorUiAction::ToggleReplace => {
-                gas_input.focused = false;
+                unfocus_inputs();
                 gas_settings.replace = !gas_settings.replace;
+            }
+            EditorUiAction::ToggleLbmVelocity => {
+                unfocus_inputs();
+                gas_simulation.enable_lbm_velocity = !gas_simulation.enable_lbm_velocity;
+            }
+            EditorUiAction::ToggleDiffusion => {
+                unfocus_inputs();
+                gas_simulation.enable_diffusion = !gas_simulation.enable_diffusion;
+            }
+            EditorUiAction::ToggleShowDiffusionCells => {
+                unfocus_inputs();
+                debug_overlay.show_diffusion_cells = !debug_overlay.show_diffusion_cells;
             }
         }
     }
@@ -434,36 +634,60 @@ fn handle_editor_ui_actions(
 
 fn refresh_editor_ui(
     tool: Res<EditorTool>,
-    debug_toolbar: Res<DebugToolbarState>,
+    debug_mode: Res<DebugMode>,
+    gas_simulation: Res<GasSimulationConfig>,
+    debug_overlay: Res<DebugOverlaySettings>,
+    mut gas_visual_settings: ResMut<GasVisualSettings>,
     mut gas_settings: ResMut<GasToolSettings>,
     gas_input: Single<&TextInputField, With<GasAmountInputField>>,
+    gamma_input: Single<&TextInputField, With<GasGammaInputField>>,
+    max_color_particles_input: Single<&TextInputField, With<GasMaxColorParticlesInputField>>,
     mut button_query: Query<(&EditorUiAction, &mut BackgroundColor), With<Button>>,
     mut visibility_set: ParamSet<(
         Single<&mut Visibility, With<DebugToolbarRoot>>,
-        Single<&mut Visibility, With<DebugSettingsPanel>>,
+        Single<&mut Visibility, With<DebugPanelRoot>>,
+        Single<&mut Visibility, With<GasToolPanelRoot>>,
+        Single<&mut Visibility, With<DiffusionCellsToggleButton>>,
     )>,
     mut text_set: ParamSet<(
         Single<&mut Text, With<GasReplaceLabel>>,
         Single<&mut Text, With<GasKindLabel>>,
-        Single<&mut Text, With<DebugToggleLabel>>,
+        Single<&mut Text, With<LbmToggleLabel>>,
+        Single<&mut Text, With<DiffusionToggleLabel>>,
+        Single<&mut Text, With<DiffusionCellsToggleLabel>>,
     )>,
 ) {
     if let Some(amount) = gas_input.parsed_u32() {
         gas_settings.amount = amount;
     }
+    if let Some(gamma) = gamma_input.parsed_f32() {
+        let next_gamma = gamma.clamp(0.0, 10.0);
+        if (gas_visual_settings.gamma - next_gamma).abs() > f32::EPSILON {
+            gas_visual_settings.gamma = next_gamma;
+        }
+    }
+    if let Some(max_particles) = max_color_particles_input.parsed_u32() {
+        let next_max_particles = max_particles.clamp(1, 10_000);
+        if gas_visual_settings.max_particles_for_max_color != next_max_particles {
+            gas_visual_settings.max_particles_for_max_color = next_max_particles;
+        }
+    }
 
     for (action, mut bg) in &mut button_query {
         bg.0 = match action {
             EditorUiAction::SelectTool(action_tool) if *action_tool == *tool => BUTTON_ACTIVE,
+            EditorUiAction::ToggleGasKind if *tool == EditorTool::AddGas => BUTTON_ACTIVE,
             EditorUiAction::ToggleReplace if gas_settings.replace => BUTTON_ACTIVE,
-            EditorUiAction::ToggleDebugToolbar if !debug_toolbar.visible => BUTTON_TOGGLE_OFF,
+            EditorUiAction::ToggleLbmVelocity if gas_simulation.enable_lbm_velocity => BUTTON_ACTIVE,
+            EditorUiAction::ToggleDiffusion if gas_simulation.enable_diffusion => BUTTON_ACTIVE,
+            EditorUiAction::ToggleShowDiffusionCells if debug_overlay.show_diffusion_cells => BUTTON_ACTIVE,
             _ => BUTTON_IDLE,
         };
     }
 
     {
         let mut debug_toolbar_root = visibility_set.p0();
-        **debug_toolbar_root = if debug_toolbar.visible {
+        **debug_toolbar_root = if debug_mode.active {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -471,8 +695,26 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut debug_settings_panel = visibility_set.p1();
-        **debug_settings_panel = if debug_toolbar.visible && *tool == EditorTool::AddGas {
+        let mut debug_panel = visibility_set.p1();
+        **debug_panel = if debug_mode.active {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+
+    {
+        let mut gas_tool_panel = visibility_set.p2();
+        **gas_tool_panel = if debug_mode.active && *tool == EditorTool::AddGas {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+
+    {
+        let mut diffusion_cells_toggle_button = visibility_set.p3();
+        **diffusion_cells_toggle_button = if debug_mode.active && gas_simulation.enable_diffusion {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -481,9 +723,7 @@ fn refresh_editor_ui(
 
     {
         let mut gas_kind_text = text_set.p1();
-        gas_kind_text.0 = match gas_settings.gas_kind {
-            GasKind::Hydrogen => "Gas: Hydrogen".to_string(),
-        };
+        gas_kind_text.0 = format!("Gas: {}", gas_settings.gas_kind.label());
     }
 
     {
@@ -496,11 +736,29 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut debug_toggle_text = text_set.p2();
-        debug_toggle_text.0 = if debug_toolbar.visible {
-            "Debug tools: On".to_string()
+        let mut lbm_toggle_text = text_set.p2();
+        lbm_toggle_text.0 = if gas_simulation.enable_lbm_velocity {
+            "LBM/Velocity: On".to_string()
         } else {
-            "Debug tools: Off".to_string()
+            "LBM/Velocity: Off".to_string()
+        };
+    }
+
+    {
+        let mut diffusion_toggle_text = text_set.p3();
+        diffusion_toggle_text.0 = if gas_simulation.enable_diffusion {
+            "Diffusion: On".to_string()
+        } else {
+            "Diffusion: Off".to_string()
+        };
+    }
+
+    {
+        let mut diffusion_cells_toggle_text = text_set.p4();
+        diffusion_cells_toggle_text.0 = if debug_overlay.show_diffusion_cells {
+            "Show diffusion cells: On".to_string()
+        } else {
+            "Show diffusion cells: Off".to_string()
         };
     }
 }
@@ -510,7 +768,7 @@ fn handle_editor_mouse_input(
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     tool: Res<EditorTool>,
-    debug_toolbar: Res<DebugToolbarState>,
+    debug_mode: Res<DebugMode>,
     gas_settings: Res<GasToolSettings>,
     gas_input: Single<&TextInputField, With<GasAmountInputField>>,
     mut world: ResMut<WorldGrid>,
@@ -522,7 +780,7 @@ fn handle_editor_mouse_input(
 ) {
     let cursor_position = window.cursor_position();
     let blocked_by_ui = cursor_position
-        .map(|cursor| is_cursor_over_ui(cursor, &window, &debug_toolbar, *tool))
+        .map(|cursor| is_cursor_over_ui(cursor, &window, debug_mode.active, *tool))
         .unwrap_or(false);
 
     let hovered_cell = cursor_position
@@ -537,7 +795,7 @@ fn handle_editor_mouse_input(
                 &mut brush_drag,
                 |cell| {
                     if world.set_solid(cell.x, cell.y) {
-                        gas.clear_amount(cell.x, cell.y);
+                        gas.clear_cell(cell.x, cell.y);
                         step.0 = step.0.wrapping_add(1);
                         world_changed.write(WorldCellChanged { cell });
                     }
@@ -578,7 +836,14 @@ fn handle_editor_mouse_input(
                     let amount = gas_input.parsed_u32().unwrap_or(gas_settings.amount);
                     match *tool {
                         EditorTool::AddGas => {
-                            gas.apply_rect(min, max, amount, gas_settings.replace, &world);
+                            gas.apply_rect(
+                                min,
+                                max,
+                                gas_settings.gas_kind,
+                                amount,
+                                gas_settings.replace,
+                                &world,
+                            );
                             step.0 = step.0.wrapping_add(1);
                         }
                         EditorTool::ClearGas => {
@@ -646,7 +911,7 @@ fn update_editor_cursor_overlays(
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     tool: Res<EditorTool>,
-    debug_toolbar: Res<DebugToolbarState>,
+    debug_mode: Res<DebugMode>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut overlay_set: ParamSet<(
         Single<(&mut Transform, &mut Visibility), With<BlueprintGhost>>,
@@ -656,7 +921,7 @@ fn update_editor_cursor_overlays(
 ) {
     let cursor_position = window.cursor_position();
     let is_on_ui = cursor_position
-        .map(|cursor| is_cursor_over_ui(cursor, &window, &debug_toolbar, *tool))
+        .map(|cursor| is_cursor_over_ui(cursor, &window, debug_mode.active, *tool))
         .unwrap_or(false);
 
     let world_cell = cursor_position.and_then(|cursor| viewport_cursor_to_cell(cursor, &camera_query));
@@ -747,7 +1012,7 @@ fn viewport_cursor_to_cell(cursor: Vec2, camera_query: &Single<(&Camera, &Global
     world_to_cell(world_pos)
 }
 
-fn is_cursor_over_ui(cursor: Vec2, window: &Window, debug_toolbar: &DebugToolbarState, tool: EditorTool) -> bool {
+fn is_cursor_over_ui(cursor: Vec2, window: &Window, debug_mode_active: bool, tool: EditorTool) -> bool {
     let mut rects = vec![
         UiRectPx::top_left(12.0, 12.0, TOP_LEFT_SIM_PANEL_WIDTH, TOP_LEFT_SIM_PANEL_HEIGHT),
         UiRectPx::top_left(
@@ -756,15 +1021,9 @@ fn is_cursor_over_ui(cursor: Vec2, window: &Window, debug_toolbar: &DebugToolbar
             MAIN_TOOLBAR_WIDTH,
             MAIN_TOOLBAR_HEIGHT,
         ),
-        UiRectPx::top_left(
-            window.width() - DEBUG_TOGGLE_RIGHT - DEBUG_TOGGLE_WIDTH,
-            DEBUG_TOGGLE_TOP,
-            DEBUG_TOGGLE_WIDTH,
-            DEBUG_TOGGLE_HEIGHT,
-        ),
     ];
 
-    if debug_toolbar.visible {
+    if debug_mode_active {
         rects.push(UiRectPx::top_left(
             DEBUG_TOOLBAR_LEFT,
             DEBUG_TOOLBAR_TOP,
@@ -772,12 +1031,19 @@ fn is_cursor_over_ui(cursor: Vec2, window: &Window, debug_toolbar: &DebugToolbar
             DEBUG_TOOLBAR_HEIGHT,
         ));
 
+        rects.push(UiRectPx::top_left(
+            window.width() - DEBUG_PANEL_RIGHT - DEBUG_PANEL_WIDTH,
+            DEBUG_PANEL_TOP,
+            DEBUG_PANEL_WIDTH,
+            DEBUG_PANEL_HEIGHT,
+        ));
+
         if tool == EditorTool::AddGas {
             rects.push(UiRectPx::top_left(
-                window.width() - DEBUG_SETTINGS_RIGHT - DEBUG_SETTINGS_WIDTH,
-                DEBUG_SETTINGS_TOP,
-                DEBUG_SETTINGS_WIDTH,
-                DEBUG_SETTINGS_HEIGHT,
+                window.width() - GAS_PANEL_RIGHT - GAS_PANEL_WIDTH,
+                GAS_PANEL_TOP,
+                GAS_PANEL_WIDTH,
+                GAS_PANEL_HEIGHT,
             ));
         }
     }

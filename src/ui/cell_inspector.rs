@@ -1,9 +1,9 @@
-use bevy::{prelude::*, window::PrimaryWindow};
+﻿use bevy::{prelude::*, window::PrimaryWindow};
 
 use crate::{
     input::camera::MainCamera,
     render::OverlayMode,
-    simulation::gas::GasField,
+    simulation::gas::{GasField, GasKind},
     world::grid::{world_to_cell, WorldGrid},
 };
 
@@ -20,8 +20,8 @@ pub fn setup_cell_inspector(mut commands: Commands) {
                 position_type: PositionType::Absolute,
                 top: Val::Px(12.0),
                 left: Val::Px(12.0),
-                width: Val::Px(290.0),
-                min_height: Val::Px(86.0),
+                width: Val::Px(310.0),
+                min_height: Val::Px(108.0),
                 padding: UiRect::all(Val::Px(7.0)),
                 ..default()
             },
@@ -61,12 +61,12 @@ pub fn update_cell_inspector(
             Ok(cursor_world_pos) => match world_to_cell(cursor_world_pos) {
                 Some(cell) => {
                     let cell_kind = if world.is_solid(cell.x, cell.y) { "solid" } else { "empty" };
+                    let h2 = gas.amount(cell.x, cell.y, GasKind::Hydrogen);
+                    let o2 = gas.amount(cell.x, cell.y, GasKind::Oxygen);
+                    let total = gas.total_amount(cell.x, cell.y);
                     format!(
-                        "{overlay_name}\n({}, {}) {}\nH2: {} particles",
-                        cell.x,
-                        cell.y,
-                        cell_kind,
-                        gas.amount(cell.x, cell.y)
+                        "{overlay_name}\n({}, {}) {}\nH2: {} particles\nO2: {} particles\nTotal: {} particles",
+                        cell.x, cell.y, cell_kind, h2, o2, total
                     )
                 }
                 None => format!("{overlay_name}\noutside grid"),
@@ -78,7 +78,7 @@ pub fn update_cell_inspector(
 
     if let Some(cursor_position) = window.cursor_position() {
         let panel_offset = Vec2::new(12.0, 12.0);
-        let panel_size = Vec2::new(290.0, 86.0);
+        let panel_size = Vec2::new(310.0, 108.0);
 
         let max_left = (window.width() - panel_size.x).max(0.0);
         let max_top = (window.height() - panel_size.y).max(0.0);
