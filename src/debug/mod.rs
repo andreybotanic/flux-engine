@@ -94,7 +94,14 @@ fn update_debug_preview(
         return;
     }
 
-    let (_, moves) = preview_next_substep(&gas, &world, block_state.rng_state, block_state.phase);
+    let (_, moves) = preview_next_substep(
+        &gas,
+        &world,
+        block_state.rng_state,
+        block_state.phase,
+        [config.diffusion_k_h2, config.diffusion_k_o2],
+        config.max_flux_fraction,
+    );
     preview.moves = moves;
 }
 

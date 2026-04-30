@@ -61,9 +61,9 @@ pub fn update_cell_inspector(
             Ok(cursor_world_pos) => match world_to_cell(cursor_world_pos) {
                 Some(cell) => {
                     let cell_kind = if world.is_solid(cell.x, cell.y) { "solid" } else { "empty" };
-                    let h2 = gas.amount(cell.x, cell.y, GasKind::Hydrogen);
-                    let o2 = gas.amount(cell.x, cell.y, GasKind::Oxygen);
-                    let total = gas.total_amount(cell.x, cell.y);
+                    let h2 = gas.amount_rounded(cell.x, cell.y, GasKind::Hydrogen);
+                    let o2 = gas.amount_rounded(cell.x, cell.y, GasKind::Oxygen);
+                    let total = gas.total_amount_rounded(cell.x, cell.y);
                     format!(
                         "{overlay_name}\n({}, {}) {}\nH2: {} particles\nO2: {} particles\nTotal: {} particles",
                         cell.x, cell.y, cell_kind, h2, o2, total

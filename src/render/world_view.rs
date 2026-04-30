@@ -262,7 +262,9 @@ pub fn sync_gas_display_texture(
                 let color = if is_boundary(x, y) {
                     Color::linear_rgba(0.0, 1.0, 0.0, 1.0)
                 } else {
-                    let particles = gas.total_amount(x, y) as f32;
+                    // Keep overlay semantics consistent with HUD "particles" values.
+                    // Tiny float residuals from solver should not light up cells as non-zero gas.
+                    let particles = gas.total_amount_rounded(x, y) as f32;
                     let storage_linear = (particles / HYDROGEN_GPU_STORAGE_MAX_PARTICLES as f32)
                         .clamp(0.0, 1.0);
                     let visual = gas_visual_intensity(
