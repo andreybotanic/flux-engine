@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::world::grid::{is_boundary, linear_index, WORLD_HEIGHT, WORLD_WIDTH};
+use crate::world::grid::{is_boundary, linear_index, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH};
 
 pub const HYDROGEN_DIFFUSION_NUMERATOR: u32 = 1;
 pub const HYDROGEN_DIFFUSION_DENOMINATOR: u32 = 5;
@@ -33,6 +33,52 @@ impl GasField {
     pub fn amount(&self, x: u32, y: u32) -> u32 {
         self.read[linear_index(x, y)]
     }
+
+    pub fn set_amount(&mut self, x: u32, y: u32, amount: u32) {
+        let index = linear_index(x, y);
+        self.read[index] = amount;
+        self.write[index] = amount;
+    }
+
+    pub fn add_amount(&mut self, x: u32, y: u32, amount: u32) {
+        let next = self.amount(x, y).saturating_add(amount);
+        self.set_amount(x, y, next);
+    }
+
+    pub fn clear_amount(&mut self, x: u32, y: u32) {
+        self.set_amount(x, y, 0);
+    }
+
+    pub fn clear_rect(&mut self, min: UVec2, max: UVec2) {
+        for y in min.y..=max.y {
+            for x in min.x..=max.x {
+                self.clear_amount(x, y);
+            }
+        }
+    }
+
+    pub fn apply_rect(
+        &mut self,
+        min: UVec2,
+        max: UVec2,
+        amount: u32,
+        replace: bool,
+        world: &WorldGrid,
+    ) {
+        for y in min.y..=max.y {
+            for x in min.x..=max.x {
+                if world.is_solid(x, y) || is_boundary(x, y) {
+                    continue;
+                }
+
+                if replace {
+                    self.set_amount(x, y, amount);
+                } else {
+                    self.add_amount(x, y, amount);
+                }
+            }
+        }
+    }
 }
 
 pub fn seeded_gas_amount(x: u32, y: u32) -> u32 {
@@ -52,6 +98,7 @@ pub fn seeded_gas_amount(x: u32, y: u32) -> u32 {
 
 pub fn step_cpu_gas_block_sync(
     gas: &mut GasField,
+    world: &WorldGrid,
     block_index: u8,
     offset_x: u32,
     offset_y: u32,
@@ -69,6 +116,10 @@ pub fn step_cpu_gas_block_sync(
                 gas.write[index] = 0;
                 continue;
             }
+            if world.is_solid(x, y) {
+                gas.write[index] = 0;
+                continue;
+            }
 
             if !is_active_block_cell(x, y, target_x, target_y, offset_x, offset_y) {
                 continue;
@@ -80,7 +131,7 @@ pub fn step_cpu_gas_block_sync(
                 continue;
             }
 
-            let neighbours = open_cardinal_neighbours(x, y);
+            let neighbours = open_cardinal_neighbours(world, x, y);
             if neighbours.is_empty() {
                 continue;
             }
@@ -116,10 +167,10 @@ fn cardinal_neighbours(x: u32, y: u32) -> [(u32, u32); 4] {
     [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
 }
 
-fn open_cardinal_neighbours(x: u32, y: u32) -> Vec<(u32, u32)> {
+fn open_cardinal_neighbours(world: &WorldGrid, x: u32, y: u32) -> Vec<(u32, u32)> {
     let mut result = Vec::with_capacity(4);
     for (nx, ny) in cardinal_neighbours(x, y) {
-        if !is_boundary(nx, ny) {
+        if !is_boundary(nx, ny) && !world.is_solid(nx, ny) {
             result.push((nx, ny));
         }
     }
@@ -149,6 +200,7 @@ pub fn phase_offsets(phase: u8) -> (u32, u32) {
 /// Returns `(block_index, moves)` where each move is `(from_x, from_y, to_x, to_y)`.
 pub fn preview_next_substep(
     gas: &GasField,
+    world: &WorldGrid,
     mut rng_state: u64,
     phase: u8,
 ) -> (u8, Vec<(u32, u32, u32, u32)>) {
@@ -163,6 +215,9 @@ pub fn preview_next_substep(
             if is_boundary(x, y) {
                 continue;
             }
+            if world.is_solid(x, y) {
+                continue;
+            }
             if !is_active_block_cell(x, y, target_x, target_y, offset_x, offset_y) {
                 continue;
             }
@@ -171,7 +226,7 @@ pub fn preview_next_substep(
             if transfer == 0 {
                 continue;
             }
-            let neighbours = open_cardinal_neighbours(x, y);
+            let neighbours = open_cardinal_neighbours(world, x, y);
             if neighbours.is_empty() {
                 continue;
             }
@@ -225,12 +280,13 @@ mod tests {
     #[test]
     fn one_step_spreads_particles_to_cardinal_neighbours() {
         let mut field = GasField::default();
+        let world = WorldGrid::default();
         let center_x = WORLD_WIDTH / 2;
         let center_y = WORLD_HEIGHT / 2;
         let center_before = field.amount(center_x, center_y);
         let mut rng_state = 123;
 
-        step_cpu_gas_block_sync(&mut field, 0, 0, 0, &mut rng_state);
+        step_cpu_gas_block_sync(&mut field, &world, 0, 0, 0, &mut rng_state);
 
         assert!(field.amount(center_x, center_y) < center_before);
 
@@ -244,6 +300,7 @@ mod tests {
     #[test]
     fn step_preserves_total_particle_count() {
         let mut field = GasField::default();
+        let world = WorldGrid::default();
         let before = total_particles(&field);
         let mut rng_state = 777;
 
@@ -251,7 +308,7 @@ mod tests {
             let block_index = (next_random_u32(&mut rng_state) % 9) as u8;
             let offset_x = step % 3;
             let offset_y = (step / 3) % 3;
-            step_cpu_gas_block_sync(&mut field, block_index, offset_x, offset_y, &mut rng_state);
+            step_cpu_gas_block_sync(&mut field, &world, block_index, offset_x, offset_y, &mut rng_state);
         }
 
         let after = total_particles(&field);
@@ -323,7 +380,8 @@ mod tests {
         }
 
         let mut moved_case = field.clone();
-        step_cpu_gas_block_sync(&mut moved_case, 0, 1, 1, &mut move_seed);
+        let world = WorldGrid::default();
+        step_cpu_gas_block_sync(&mut moved_case, &world, 0, 1, 1, &mut move_seed);
         assert_eq!(moved_case.amount(x, y), 0);
         let moved_neighbour_sum = moved_case.amount(x + 1, y)
             + moved_case.amount(x - 1, y)
@@ -332,7 +390,7 @@ mod tests {
         assert_eq!(moved_neighbour_sum, 1);
 
         let mut stayed_case = field;
-        step_cpu_gas_block_sync(&mut stayed_case, 0, 1, 1, &mut stay_seed);
+        step_cpu_gas_block_sync(&mut stayed_case, &world, 0, 1, 1, &mut stay_seed);
         assert_eq!(stayed_case.amount(x, y), 1);
         let stayed_neighbour_sum = stayed_case.amount(x + 1, y)
             + stayed_case.amount(x - 1, y)
@@ -368,7 +426,8 @@ mod tests {
         }
 
         // offset(1,1) + block_index 0 activates cells where x%3==1 and y%3==1, including (1,1).
-        step_cpu_gas_block_sync(&mut field, 0, 1, 1, &mut rng_state);
+        let world = WorldGrid::default();
+        step_cpu_gas_block_sync(&mut field, &world, 0, 1, 1, &mut rng_state);
 
         // Transfer 20% and retain 80% each way:
         // cell1: 15 -> sends 3, keeps 12
@@ -401,9 +460,31 @@ mod tests {
             rng_state = rng_state.wrapping_add(1);
         }
 
-        step_cpu_gas_block_sync(&mut field, 0, 1, 1, &mut rng_state);
+        let world = WorldGrid::default();
+        step_cpu_gas_block_sync(&mut field, &world, 0, 1, 1, &mut rng_state);
 
         assert_eq!(field.amount(x1, y1), 6);
         assert_eq!(field.amount(x2, y2), 7);
+    }
+
+    #[test]
+    fn diffusion_does_not_cross_solid_cells() {
+        let mut field = GasField {
+            read: vec![0; (WORLD_WIDTH * WORLD_HEIGHT) as usize],
+            write: vec![0; (WORLD_WIDTH * WORLD_HEIGHT) as usize],
+        };
+        let mut world = WorldGrid::default();
+
+        // Source at (1,1) and destination candidate at (2,1).
+        let source = (1, 1);
+        let blocked = (2, 1);
+        field.set_amount(source.0, source.1, 10);
+        assert!(world.set_solid(blocked.0, blocked.1));
+
+        let mut rng_state = 0u64;
+
+        step_cpu_gas_block_sync(&mut field, &world, 0, 1, 1, &mut rng_state);
+
+        assert_eq!(field.amount(blocked.0, blocked.1), 0);
     }
 }

@@ -9,6 +9,7 @@ use self::{
     gas::{next_random_u32, phase_offsets, step_cpu_gas_block_sync, GasField},
     gpu::GasGpuPlugin,
 };
+use crate::world::grid::WorldGrid;
 
 #[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
 pub struct SimulationStep(pub u64);
@@ -101,6 +102,7 @@ fn run_simulation_tick(
     control: Res<SimulationControl>,
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
+    world: Res<WorldGrid>,
     mut step: ResMut<SimulationStep>,
 ) {
     if control.paused {
@@ -108,13 +110,14 @@ fn run_simulation_tick(
     }
 
     for _ in 0..control.speed.multiplier() {
-        do_one_substep(&mut block_state, &mut gas, &mut step);
+        do_one_substep(&mut block_state, &mut gas, &world, &mut step);
     }
 }
 
 pub fn do_one_substep(
     block_state: &mut BlockSyncState,
     gas: &mut GasField,
+    world: &WorldGrid,
     step: &mut SimulationStep,
 ) {
     let block_index = (next_random_u32(&mut block_state.rng_state) % 9) as u8;
@@ -122,6 +125,7 @@ pub fn do_one_substep(
 
     step_cpu_gas_block_sync(
         gas,
+        world,
         block_index,
         offset_x,
         offset_y,

@@ -6,7 +6,7 @@ use crate::{
         gas::{preview_next_substep, GasField},
         BlockSyncState, SimulationControl, SimulationStep,
     },
-    world::grid::{cell_center, CELL_SIZE},
+    world::grid::{cell_center, WorldGrid, CELL_SIZE},
 };
 
 #[derive(Resource, Default)]
@@ -39,6 +39,7 @@ fn handle_debug_keys(
     mut control: ResMut<SimulationControl>,
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
+    world: Res<WorldGrid>,
     mut step: ResMut<SimulationStep>,
 ) {
     if keys.just_pressed(KeyCode::Backquote) {
@@ -49,13 +50,14 @@ fn handle_debug_keys(
     }
 
     if debug_mode.active && keys.just_pressed(KeyCode::Enter) {
-        do_one_substep(&mut block_state, &mut gas, &mut step);
+        do_one_substep(&mut block_state, &mut gas, &world, &mut step);
     }
 }
 
 fn update_debug_preview(
     debug_mode: Res<DebugMode>,
     gas: Res<GasField>,
+    world: Res<WorldGrid>,
     block_state: Res<BlockSyncState>,
     mut preview: ResMut<DebugStepPreview>,
 ) {
@@ -71,7 +73,7 @@ fn update_debug_preview(
         return;
     }
 
-    let (_, moves) = preview_next_substep(&gas, block_state.rng_state, block_state.phase);
+    let (_, moves) = preview_next_substep(&gas, &world, block_state.rng_state, block_state.phase);
     preview.moves = moves;
 }
 

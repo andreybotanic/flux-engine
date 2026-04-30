@@ -1,13 +1,27 @@
-use bevy::{prelude::*, window::PresentMode};
+﻿use std::path::Path;
 
-use crate::{debug::DebugPlugin, input::InputPlugin, render::RenderPlugin, simulation::GasSimulationPlugin, ui::UiPlugin, world::WorldPlugin};
+use bevy::{asset::AssetPlugin, prelude::*, window::PresentMode};
+
+use crate::{
+    debug::DebugPlugin, editor::EditorPlugin, input::InputPlugin, render::RenderPlugin,
+    simulation::GasSimulationPlugin, ui::UiPlugin, world::WorldPlugin,
+};
 
 pub fn run() {
+    let asset_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .to_string_lossy()
+        .to_string();
+
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Time::<Fixed>::from_hz(30.0))
         .add_plugins(
             DefaultPlugins
+                .set(AssetPlugin {
+                    file_path: asset_path,
+                    ..default()
+                })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: "FluxEngine".into(),
@@ -25,6 +39,7 @@ pub fn run() {
             RenderPlugin,
             InputPlugin,
             UiPlugin,
+            EditorPlugin,
             DebugPlugin,
         ))
         .run();

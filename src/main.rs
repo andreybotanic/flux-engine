@@ -1,5 +1,6 @@
 mod app;
 mod debug;
+mod editor;
 mod input;
 mod render;
 mod simulation;

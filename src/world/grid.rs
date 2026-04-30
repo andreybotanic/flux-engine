@@ -39,10 +39,36 @@ impl WorldGrid {
     pub fn is_solid(&self, x: u32, y: u32) -> bool {
         self.cell(x, y) == CellKind::Solid
     }
+
+    pub fn set_cell_kind(&mut self, x: u32, y: u32, kind: CellKind) -> bool {
+        if !is_editable_cell(x, y) {
+            return false;
+        }
+
+        let index = linear_index(x, y);
+        if self.cells[index] == kind {
+            return false;
+        }
+
+        self.cells[index] = kind;
+        true
+    }
+
+    pub fn set_solid(&mut self, x: u32, y: u32) -> bool {
+        self.set_cell_kind(x, y, CellKind::Solid)
+    }
+
+    pub fn set_empty(&mut self, x: u32, y: u32) -> bool {
+        self.set_cell_kind(x, y, CellKind::Empty)
+    }
 }
 
 pub fn is_boundary(x: u32, y: u32) -> bool {
     x == 0 || y == 0 || x == WORLD_WIDTH - 1 || y == WORLD_HEIGHT - 1
+}
+
+pub fn is_editable_cell(x: u32, y: u32) -> bool {
+    !is_boundary(x, y)
 }
 
 pub fn linear_index(x: u32, y: u32) -> usize {

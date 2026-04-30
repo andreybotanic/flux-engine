@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bevy::prelude::*;
 
 use crate::{
@@ -6,6 +8,7 @@ use crate::{
         gpu::GasSimulationImages,
         SimulationStep,
     },
+    world::WorldCellChanged,
     world::grid::{
         cell_center, is_boundary, world_dimensions, world_origin, CellKind, WorldGrid, CELL_SIZE,
         WORLD_HEIGHT, WORLD_WIDTH,
@@ -40,6 +43,11 @@ pub(crate) struct WallVisual {
     gas: Color,
 }
 
+#[derive(Resource, Default)]
+pub(crate) struct WallEntities {
+    by_cell: HashMap<(u32, u32), Entity>,
+}
+
 pub fn setup_world_view(
     mut commands: Commands,
     simulation_images: Res<GasSimulationImages>,
@@ -71,23 +79,17 @@ pub fn setup_world_view(
         GasOverlaySprite,
     ));
 
+    let mut wall_entities = WallEntities::default();
     for y in 0..WORLD_HEIGHT {
         for x in 0..WORLD_WIDTH {
             if world.cell(x, y) != CellKind::Solid {
                 continue;
             }
-
-            let pattern_offset = if (x + y) % 2 == 0 { 0.05 } else { -0.05 };
-            let main = Color::srgb(0.34 + pattern_offset, 0.38 + pattern_offset, 0.42 + pattern_offset);
-            let gas = Color::srgb(0.48 + pattern_offset, 0.48 + pattern_offset, 0.48 + pattern_offset);
-
-            commands.spawn((
-                Sprite::from_color(main, Vec2::splat(CELL_SIZE - 1.0)),
-                Transform::from_translation(cell_center(x, y).extend(0.5)),
-                WallVisual { main, gas },
-            ));
+            let entity = spawn_wall_sprite(&mut commands, x, y);
+            wall_entities.by_cell.insert((x, y), entity);
         }
     }
+    commands.insert_resource(wall_entities);
 
     // Semi-transparent grid lines
     let origin = world_origin();
@@ -108,6 +110,54 @@ pub fn setup_world_view(
             Sprite::from_color(GRID_LINE_COLOR, Vec2::new(world_w, 1.0)),
             Transform::from_xyz(0.0, y, grid_z),
         ));
+    }
+}
+
+fn spawn_wall_sprite(commands: &mut Commands, x: u32, y: u32) -> Entity {
+    let pattern_offset = if (x + y) % 2 == 0 { 0.05 } else { -0.05 };
+    let main = Color::srgb(
+        0.34 + pattern_offset,
+        0.38 + pattern_offset,
+        0.42 + pattern_offset,
+    );
+    let gas = Color::srgb(
+        0.48 + pattern_offset,
+        0.48 + pattern_offset,
+        0.48 + pattern_offset,
+    );
+
+    commands
+        .spawn((
+            Sprite::from_color(main, Vec2::splat(CELL_SIZE - 1.0)),
+            Transform::from_translation(cell_center(x, y).extend(0.5)),
+            WallVisual { main, gas },
+        ))
+        .id()
+}
+
+pub fn sync_wall_visuals(
+    mut commands: Commands,
+    world: Res<WorldGrid>,
+    mut wall_entities: ResMut<WallEntities>,
+    mut changes: EventReader<WorldCellChanged>,
+) {
+    for change in changes.read() {
+        let x = change.cell.x;
+        let y = change.cell.y;
+        let key = (x, y);
+        let is_solid = world.cell(x, y) == CellKind::Solid;
+
+        match (is_solid, wall_entities.by_cell.get(&key).copied()) {
+            (true, None) => {
+                let entity = spawn_wall_sprite(&mut commands, x, y);
+                wall_entities.by_cell.insert(key, entity);
+            }
+            (false, Some(entity)) => {
+                commands.entity(entity).despawn();
+                wall_entities.by_cell.remove(&key);
+            }
+            _ => {}
+        }
     }
 }
 
