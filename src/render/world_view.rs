@@ -1,27 +1,32 @@
 use std::collections::HashMap;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, window::PrimaryWindow};
 
 use crate::{
+    input::camera::MainCamera,
     simulation::{
         gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
         gpu::GasSimulationImages,
         SimulationStep,
     },
     world::grid::{
-        cell_center, is_boundary, world_dimensions, world_origin, CellKind, WorldGrid, CELL_SIZE,
-        WORLD_HEIGHT, WORLD_WIDTH,
+        cell_center, is_boundary, world_dimensions, world_to_cell, CellKind, CellMaterial,
+        WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH,
     },
     world::WorldCellChanged,
 };
 
-const BOARD_MAIN_COLOR: Color = Color::srgb(0.06, 0.09, 0.12);
-const BOARD_GAS_COLOR: Color = Color::srgb(0.18, 0.18, 0.18);
-const BACKDROP_MAIN_COLOR: Color = Color::srgba(0.10, 0.14, 0.18, 0.85);
-const BACKDROP_GAS_COLOR: Color = Color::srgba(0.12, 0.12, 0.12, 0.85);
-const GRID_LINE_COLOR: Color = Color::srgba(1.0, 1.0, 1.0, 0.09);
+const BOARD_MAIN_COLOR: Color = Color::srgba(0.96, 0.96, 0.96, 0.88);
+const BOARD_GAS_COLOR: Color = Color::srgba(0.80, 0.81, 0.82, 0.78);
+const BACKDROP_MAIN_COLOR: Color = Color::srgba(0.96, 0.96, 0.96, 1.0);
+const BACKDROP_GAS_COLOR: Color = Color::srgba(0.84, 0.84, 0.85, 1.0);
+const GRID_LINE_COLOR: Color = Color::srgba(0.29, 0.32, 0.35, 1.0);
+const CURSOR_GRID_MAX_ALPHA: f32 = 0.24;
+const CURSOR_GRID_RADIUS_CELLS: i32 = 4;
+const CURSOR_GRID_FADE_RADIUS: f32 = 3.9;
 const GAS_VISUAL_MIN_PARTICLES: f32 = 1.0;
 const GAS_VISUAL_MIN_INTENSITY: f32 = 0.05;
+const BACKDROP_TILE_SIZE: f32 = 256.0;
 
 #[derive(Resource, Clone, Copy)]
 pub struct GasVisualSettings {
@@ -73,8 +78,16 @@ pub(crate) struct GasOverlaySprite;
 
 #[derive(Component)]
 pub(crate) struct WallVisual {
-    main: Color,
-    gas: Color,
+    main_tint: Color,
+    gas_tint: Color,
+}
+
+#[derive(Resource, Clone)]
+pub(crate) struct WorldVisualAssets {
+    backdrop_noise: Handle<Image>,
+    brick: Handle<Image>,
+    metal: Handle<Image>,
+    boundary: Handle<Image>,
 }
 
 #[derive(Resource, Default)]
@@ -86,20 +99,46 @@ pub fn setup_world_view(
     mut commands: Commands,
     simulation_images: Res<GasSimulationImages>,
     world: Res<WorldGrid>,
+    asset_server: Res<AssetServer>,
 ) {
+    let visuals = WorldVisualAssets {
+        backdrop_noise: asset_server.load("sprites/world/backdrop_noise.png"),
+        brick: asset_server.load("sprites/world/tile_brick.png"),
+        metal: asset_server.load("sprites/world/tile_metal.png"),
+        boundary: asset_server.load("sprites/world/tile_boundary.png"),
+    };
+    commands.insert_resource(visuals.clone());
+
     let world_size = world_dimensions();
 
     commands.spawn((
-        Sprite::from_color(
-            BACKDROP_MAIN_COLOR,
-            world_size + Vec2::splat(CELL_SIZE * 4.0),
-        ),
+        Sprite {
+            image: visuals.backdrop_noise.clone(),
+            custom_size: Some(world_size + Vec2::splat(CELL_SIZE * 6.0)),
+            color: BACKDROP_MAIN_COLOR,
+            image_mode: SpriteImageMode::Tiled {
+                tile_x: true,
+                tile_y: true,
+                stretch_value: BACKDROP_TILE_SIZE,
+            },
+            ..default()
+        },
         Transform::from_xyz(14.0, -18.0, -2.0),
         BackdropLayer,
     ));
 
     commands.spawn((
-        Sprite::from_color(BOARD_MAIN_COLOR, world_size),
+        Sprite {
+            image: visuals.backdrop_noise.clone(),
+            custom_size: Some(world_size),
+            color: BOARD_MAIN_COLOR,
+            image_mode: SpriteImageMode::Tiled {
+                tile_x: true,
+                tile_y: true,
+                stretch_value: BACKDROP_TILE_SIZE,
+            },
+            ..default()
+        },
         Transform::from_xyz(0.0, 0.0, -1.0),
         BoardLayer,
     ));
@@ -119,55 +158,53 @@ pub fn setup_world_view(
     let mut wall_entities = WallEntities::default();
     for y in 0..WORLD_HEIGHT {
         for x in 0..WORLD_WIDTH {
-            if world.cell(x, y) != CellKind::Solid {
-                continue;
+            if let CellKind::Solid(material) = world.cell(x, y) {
+                let entity = spawn_wall_sprite(&mut commands, &visuals, x, y, material);
+                wall_entities.by_cell.insert((x, y), entity);
             }
-            let entity = spawn_wall_sprite(&mut commands, x, y);
-            wall_entities.by_cell.insert((x, y), entity);
         }
     }
     commands.insert_resource(wall_entities);
-
-    // Semi-transparent grid lines
-    let origin = world_origin();
-    let world_w = WORLD_WIDTH as f32 * CELL_SIZE;
-    let world_h = WORLD_HEIGHT as f32 * CELL_SIZE;
-    let grid_z = 1.5_f32;
-
-    for i in 0..=WORLD_WIDTH {
-        let x = origin.x + i as f32 * CELL_SIZE;
-        commands.spawn((
-            Sprite::from_color(GRID_LINE_COLOR, Vec2::new(1.0, world_h)),
-            Transform::from_xyz(x, 0.0, grid_z),
-        ));
-    }
-    for i in 0..=WORLD_HEIGHT {
-        let y = origin.y + i as f32 * CELL_SIZE;
-        commands.spawn((
-            Sprite::from_color(GRID_LINE_COLOR, Vec2::new(world_w, 1.0)),
-            Transform::from_xyz(0.0, y, grid_z),
-        ));
-    }
 }
 
-fn spawn_wall_sprite(commands: &mut Commands, x: u32, y: u32) -> Entity {
-    let pattern_offset = if (x + y) % 2 == 0 { 0.05 } else { -0.05 };
-    let main = Color::srgb(
-        0.34 + pattern_offset,
-        0.38 + pattern_offset,
-        0.42 + pattern_offset,
-    );
-    let gas = Color::srgb(
-        0.48 + pattern_offset,
-        0.48 + pattern_offset,
-        0.48 + pattern_offset,
-    );
+fn spawn_wall_sprite(
+    commands: &mut Commands,
+    visuals: &WorldVisualAssets,
+    x: u32,
+    y: u32,
+    material: CellMaterial,
+) -> Entity {
+    let (image, main_tint, gas_tint) = match material {
+        CellMaterial::Boundary => (
+            visuals.boundary.clone(),
+            Color::srgb(0.90, 0.90, 0.91),
+            Color::srgb(0.66, 0.66, 0.67),
+        ),
+        CellMaterial::Brick => (
+            visuals.brick.clone(),
+            Color::srgb(0.99, 0.99, 0.99),
+            Color::srgb(0.72, 0.72, 0.74),
+        ),
+        CellMaterial::Metal => (
+            visuals.metal.clone(),
+            Color::srgb(0.99, 0.99, 0.99),
+            Color::srgb(0.71, 0.71, 0.73),
+        ),
+    };
 
     commands
         .spawn((
-            Sprite::from_color(main, Vec2::splat(CELL_SIZE - 1.0)),
+            Sprite {
+                image,
+                custom_size: Some(Vec2::splat(CELL_SIZE)),
+                color: main_tint,
+                ..default()
+            },
             Transform::from_translation(cell_center(x, y).extend(0.5)),
-            WallVisual { main, gas },
+            WallVisual {
+                main_tint,
+                gas_tint,
+            },
         ))
         .id()
 }
@@ -175,6 +212,7 @@ fn spawn_wall_sprite(commands: &mut Commands, x: u32, y: u32) -> Entity {
 pub fn sync_wall_visuals(
     mut commands: Commands,
     world: Res<WorldGrid>,
+    visuals: Res<WorldVisualAssets>,
     mut wall_entities: ResMut<WallEntities>,
     mut changes: EventReader<WorldCellChanged>,
 ) {
@@ -182,16 +220,21 @@ pub fn sync_wall_visuals(
         let x = change.cell.x;
         let y = change.cell.y;
         let key = (x, y);
-        let is_solid = world.cell(x, y) == CellKind::Solid;
+        let current_cell = world.cell(x, y);
 
-        match (is_solid, wall_entities.by_cell.get(&key).copied()) {
-            (true, None) => {
-                let entity = spawn_wall_sprite(&mut commands, x, y);
+        match (current_cell, wall_entities.by_cell.get(&key).copied()) {
+            (CellKind::Solid(material), None) => {
+                let entity = spawn_wall_sprite(&mut commands, &visuals, x, y, material);
                 wall_entities.by_cell.insert(key, entity);
             }
-            (false, Some(entity)) => {
+            (CellKind::Empty, Some(entity)) => {
                 commands.entity(entity).despawn();
                 wall_entities.by_cell.remove(&key);
+            }
+            (CellKind::Solid(material), Some(entity)) => {
+                commands.entity(entity).despawn();
+                let next_entity = spawn_wall_sprite(&mut commands, &visuals, x, y, material);
+                wall_entities.by_cell.insert(key, next_entity);
             }
             _ => {}
         }
@@ -239,9 +282,51 @@ pub fn apply_overlay_mode(
     }
     for (wall_visual, mut sprite) in &mut sprite_sets.p2() {
         sprite.color = match *overlay_mode {
-            OverlayMode::Main => wall_visual.main,
-            OverlayMode::Gas => wall_visual.gas,
+            OverlayMode::Main => wall_visual.main_tint,
+            OverlayMode::Gas => wall_visual.gas_tint,
         };
+    }
+}
+
+pub fn draw_cursor_grid_overlay(
+    window: Single<&Window, With<PrimaryWindow>>,
+    camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
+    mut gizmos: Gizmos,
+) {
+    let Some(cursor_pos) = window.cursor_position() else {
+        return;
+    };
+
+    let (camera, camera_transform) = *camera_query;
+    let Ok(cursor_world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) else {
+        return;
+    };
+    let Some(cursor_cell) = world_to_cell(cursor_world_pos) else {
+        return;
+    };
+
+    for dy in -CURSOR_GRID_RADIUS_CELLS..=CURSOR_GRID_RADIUS_CELLS {
+        for dx in -CURSOR_GRID_RADIUS_CELLS..=CURSOR_GRID_RADIUS_CELLS {
+            let x = cursor_cell.x as i32 + dx;
+            let y = cursor_cell.y as i32 + dy;
+            if x < 0 || y < 0 || x >= WORLD_WIDTH as i32 || y >= WORLD_HEIGHT as i32 {
+                continue;
+            }
+
+            let center = cell_center(x as u32, y as u32);
+            let cell_distance = (center - cursor_world_pos).length() / CELL_SIZE;
+            let fade = grid_fade(cell_distance, CURSOR_GRID_FADE_RADIUS);
+            if fade <= 0.01 {
+                continue;
+            }
+
+            let color = GRID_LINE_COLOR.with_alpha(CURSOR_GRID_MAX_ALPHA * fade);
+            gizmos.rect_2d(
+                Isometry2d::from_translation(center),
+                Vec2::splat(CELL_SIZE),
+                color,
+            );
+        }
     }
 }
 
@@ -294,5 +379,38 @@ pub fn sync_gas_display_texture(
 
     for mut sprite in &mut gas_query {
         sprite.image = texture.clone();
+    }
+}
+
+fn grid_fade(distance_cells: f32, fade_radius_cells: f32) -> f32 {
+    if fade_radius_cells <= f32::EPSILON || distance_cells >= fade_radius_cells {
+        return 0.0;
+    }
+    if distance_cells <= 0.0 {
+        return 1.0;
+    }
+
+    let t = (distance_cells / fade_radius_cells).clamp(0.0, 1.0);
+    let smooth = 1.0 - t * t;
+    smooth * smooth
+}
+
+#[cfg(test)]
+mod tests {
+    use super::grid_fade;
+
+    #[test]
+    fn grid_fade_is_full_at_center_and_zero_beyond_radius() {
+        assert!((grid_fade(0.0, 8.0) - 1.0).abs() < 1e-6);
+        assert_eq!(grid_fade(8.0, 8.0), 0.0);
+        assert_eq!(grid_fade(9.5, 8.0), 0.0);
+    }
+
+    #[test]
+    fn grid_fade_decreases_smoothly_with_distance() {
+        let near = grid_fade(1.0, 8.0);
+        let mid = grid_fade(4.0, 8.0);
+        let far = grid_fade(7.0, 8.0);
+        assert!(near > mid && mid > far && far > 0.0);
     }
 }

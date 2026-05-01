@@ -2,10 +2,11 @@ use bevy::prelude::*;
 
 use crate::simulation::{SimulationControl, SimulationSpeed};
 
-const PANEL_BG: Color = Color::srgba(0.06, 0.08, 0.10, 0.82);
-const BUTTON_IDLE: Color = Color::srgba(0.20, 0.22, 0.25, 0.90);
-const BUTTON_ACTIVE: Color = Color::srgba(0.34, 0.44, 0.22, 0.95);
-const BUTTON_PAUSED: Color = Color::srgba(0.46, 0.20, 0.20, 0.95);
+const PANEL_BG: Color = Color::srgba(0.91, 0.92, 0.93, 0.96);
+const BUTTON_IDLE: Color = Color::srgba(0.78, 0.80, 0.83, 0.95);
+const BUTTON_ACTIVE: Color = Color::srgba(0.58, 0.68, 0.58, 0.96);
+const BUTTON_PAUSED: Color = Color::srgba(0.80, 0.46, 0.44, 0.96);
+const LABEL_COLOR: Color = Color::srgba(0.10, 0.10, 0.12, 1.0);
 
 #[derive(Component, Clone, Copy)]
 pub(crate) enum SimControlAction {
@@ -49,7 +50,7 @@ pub fn setup_sim_control_ui(mut commands: Commands) {
                     button.spawn((
                         Text::new("x1"),
                         TextFont::from_font_size(14.0),
-                        TextColor(Color::WHITE),
+                        TextColor(LABEL_COLOR),
                     ));
                 });
 
@@ -70,7 +71,7 @@ pub fn setup_sim_control_ui(mut commands: Commands) {
                     button.spawn((
                         Text::new("x2"),
                         TextFont::from_font_size(14.0),
-                        TextColor(Color::WHITE),
+                        TextColor(LABEL_COLOR),
                     ));
                 });
 
@@ -91,7 +92,7 @@ pub fn setup_sim_control_ui(mut commands: Commands) {
                     button.spawn((
                         Text::new("x5"),
                         TextFont::from_font_size(14.0),
-                        TextColor(Color::WHITE),
+                        TextColor(LABEL_COLOR),
                     ));
                 });
 
@@ -112,7 +113,7 @@ pub fn setup_sim_control_ui(mut commands: Commands) {
                     button.spawn((
                         Text::new("Pause"),
                         TextFont::from_font_size(14.0),
-                        TextColor(Color::WHITE),
+                        TextColor(LABEL_COLOR),
                         SimPauseLabel,
                     ));
                 });

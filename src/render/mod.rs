@@ -3,8 +3,8 @@ pub mod world_view;
 use bevy::prelude::*;
 
 use self::world_view::{
-    apply_overlay_mode, setup_world_view, sync_gas_display_texture, sync_wall_visuals,
-    update_overlay_mode, WallEntities,
+    apply_overlay_mode, draw_cursor_grid_overlay, setup_world_view, sync_gas_display_texture,
+    sync_wall_visuals, update_overlay_mode, WallEntities,
 };
 use crate::{input::camera::spawn_main_camera, simulation::gpu::setup_simulation_images};
 
@@ -28,6 +28,7 @@ impl Plugin for RenderPlugin {
                     apply_overlay_mode,
                     sync_wall_visuals,
                     sync_gas_display_texture,
+                    draw_cursor_grid_overlay,
                 ),
             );
     }
