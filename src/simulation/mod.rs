@@ -58,7 +58,8 @@ pub struct SolverTuning {
     pub target_cfl_like_limit: f32,
     pub enable_buoyancy: bool,
     pub buoyancy_strength: f32,
-    pub buoyancy_ref_mass: f32,
+    pub buoyancy_window_radius: u8,
+    pub buoyancy_window_sigma: f32,
     pub buoyancy_gain: f32,
     pub buoyancy_alpha: f32,
     pub buoyancy_force_cap: f32,
@@ -71,10 +72,11 @@ impl Default for SolverTuning {
             tau_odd: 1.15,
             target_cfl_like_limit: 0.85,
             enable_buoyancy: true,
-            buoyancy_strength: 0.06,
-            buoyancy_ref_mass: 29.0,
-            buoyancy_gain: 2.0,
-            buoyancy_alpha: 0.75,
+            buoyancy_strength: 0.12,
+            buoyancy_window_radius: 2,
+            buoyancy_window_sigma: 1.2,
+            buoyancy_gain: 2.2,
+            buoyancy_alpha: 0.9,
             buoyancy_force_cap: 0.20,
         }
     }
@@ -327,5 +329,116 @@ mod tests {
             .iter()
             .flat_map(|cell| cell.iter())
             .all(|v| v.is_finite() && *v >= -1e-5));
+    }
+
+    #[test]
+    fn no_nan_inf_long_run() {
+        let world = WorldGrid::default();
+        let mut gas = GasField::default();
+        gas.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
+        let cx = WORLD_WIDTH / 2;
+        let cy = WORLD_HEIGHT / 2;
+        let _ = gas.apply_species_delta_with_lbm(cx, cy, GasKind::Hydrogen, 10_000.0);
+
+        let mut step = SimulationStep(0);
+        let mut state = BlockSyncState::default();
+        let cfg = GasSimulationConfig::default();
+        for _ in 0..4_000 {
+            do_one_substep(&mut state, &mut gas, &world, &cfg, &mut step);
+        }
+
+        for y in 1..WORLD_HEIGHT - 1 {
+            for x in 1..WORLD_WIDTH - 1 {
+                for kind in GasKind::ALL {
+                    let amount = gas.amount(x, y, kind);
+                    assert!(amount.is_finite());
+                    assert!(amount >= -1e-4);
+                }
+                let v = gas.velocity(x, y);
+                assert!(v.x.is_finite() && v.y.is_finite());
+            }
+        }
+    }
+
+    #[test]
+    fn hole_jet_direction_with_context_buoyancy() {
+        let mut world = WorldGrid::default();
+        let mut gas = GasField::default();
+        gas.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
+
+        let left = 42;
+        let right = 60;
+        let bottom = 12;
+        let top = 28;
+        let hole_x = (left + right) / 2;
+
+        for y in bottom..=top {
+            for x in left..=right {
+                let is_wall = x == left || x == right || y == bottom || y == top;
+                if !is_wall {
+                    continue;
+                }
+                if y == top && x == hole_x {
+                    continue;
+                }
+                let _ = world.set_solid(x, y);
+            }
+        }
+        let chimney_left = hole_x.saturating_sub(1);
+        let chimney_right = (hole_x + 1).min(WORLD_WIDTH - 2);
+        for y in top + 1..=(top + 18).min(WORLD_HEIGHT - 2) {
+            let _ = world.set_solid(chimney_left, y);
+            let _ = world.set_solid(chimney_right, y);
+        }
+
+        for y in bottom + 1..top {
+            for x in left + 1..right {
+                let _ = gas.apply_species_delta_with_lbm(x, y, GasKind::Hydrogen, 120.0);
+            }
+        }
+
+        let mut step = SimulationStep(0);
+        let mut state = BlockSyncState::default();
+        let mut cfg = GasSimulationConfig::default();
+        cfg.solver_tuning.enable_buoyancy = true;
+        cfg.solver_tuning.buoyancy_strength = 0.25;
+        cfg.solver_tuning.buoyancy_window_radius = 2;
+        cfg.solver_tuning.buoyancy_window_sigma = 1.2;
+        cfg.solver_tuning.buoyancy_gain = 2.0;
+        cfg.solver_tuning.buoyancy_alpha = 0.75;
+        cfg.solver_tuning.buoyancy_force_cap = 0.3;
+
+        for _ in 0..220 {
+            do_one_substep(&mut state, &mut gas, &world, &cfg, &mut step);
+        }
+
+        let mut upward_flux = 0.0f32;
+        let mut lateral_flux = 0.0f32;
+        for y in top + 1..=(top + 18).min(WORLD_HEIGHT - 2) {
+            for x in left.saturating_sub(8)..=(right + 8).min(WORLD_WIDTH - 2) {
+                if world.is_solid(x, y) {
+                    continue;
+                }
+                let rho = gas.total_amount(x, y).max(0.0);
+                let v = gas.velocity(x, y);
+                if x == hole_x {
+                    upward_flux += rho * v.y.max(0.0);
+                } else {
+                    lateral_flux += rho * v.x.abs();
+                }
+            }
+        }
+
+        let ratio = upward_flux / (lateral_flux + 1e-6);
+        assert!(
+            ratio > 1.0,
+            "Expected upward jet dominance, got ratio={ratio:.3}, upward={upward_flux:.3}, lateral={lateral_flux:.3}"
+        );
     }
 }

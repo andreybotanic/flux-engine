@@ -1,6 +1,7 @@
 use super::SolverTuning;
 use crate::world::grid::{is_boundary, linear_index, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH};
 use bevy::prelude::*;
+use std::sync::OnceLock;
 
 pub const INITIAL_HYDROGEN_CENTER_PARTICLES: u32 = 10_000;
 pub const INITIAL_OXYGEN_CENTER_PARTICLES: u32 = 0;
@@ -33,6 +34,8 @@ const LBM_WEIGHTS: [f32; 9] = [
 const LBM_OPPOSITE: [usize; 9] = [0, 2, 1, 4, 3, 7, 8, 5, 6];
 const EPSILON_DENSITY: f32 = 1e-6;
 const LBM_VELOCITY_CLAMP: f32 = 0.95;
+const BUOYANCY_MIN_ENV_MASS: f32 = 1e-6;
+const SPECIES_RELATIVE_DRIFT_SCALE: f32 = 0.45;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum GasKind {
@@ -76,6 +79,13 @@ impl GasKind {
 const GAS_KIND_COUNT: usize = GasKind::ALL.len();
 pub type GasScalar = f32;
 type GasCell = [GasScalar; GAS_KIND_COUNT];
+
+#[derive(Clone, Copy)]
+struct KernelOffset {
+    dx: i32,
+    dy: i32,
+    dist2: f32,
+}
 
 #[derive(Resource, Clone)]
 pub struct GasField {
@@ -373,6 +383,14 @@ impl GasField {
         let velocity_limit = tuning.target_cfl_like_limit.clamp(0.1, 0.98);
         let omega_plus = (1.0 / tuning.tau_even.max(0.55)).clamp(0.01, 1.99);
         let omega_minus = (1.0 / tuning.tau_odd.max(0.55)).clamp(0.01, 1.99);
+        let buoyancy_radius = tuning.buoyancy_window_radius.clamp(1, 3);
+        let buoyancy_sigma = tuning.buoyancy_window_sigma.clamp(0.5, 3.0);
+        let buoyancy_kernel = kernel_offsets_for_radius(buoyancy_radius);
+        let inv_two_sigma_sq = 1.0 / (2.0 * buoyancy_sigma * buoyancy_sigma);
+        let buoyancy_kernel_weights: Vec<f32> = buoyancy_kernel
+            .iter()
+            .map(|sample| (-sample.dist2 * inv_two_sigma_sq).exp())
+            .collect();
 
         for y in 0..WORLD_HEIGHT {
             for x in 0..WORLD_WIDTH {
@@ -384,30 +402,45 @@ impl GasField {
                 }
 
                 let (rho, mut forced_u) = macroscopic_from_distributions(&self.lbm_read[index]);
+                let mut local_species_buoyancy = [0.0f32; GAS_KIND_COUNT];
+                let mut local_mix_buoyancy = 0.0f32;
+                let mut has_local_buoyancy_context = false;
                 if !enable_lbm_velocity {
                     forced_u = Vec2::ZERO;
                 } else if tuning.enable_buoyancy && rho > EPSILON_DENSITY {
                     let species_total = self.read[index].iter().copied().sum::<f32>();
                     if species_total > EPSILON_DENSITY {
-                        let ref_mass = tuning.buoyancy_ref_mass.max(1e-3);
                         let alpha = tuning.buoyancy_alpha.max(0.0);
                         let gain = tuning.buoyancy_gain.max(0.0);
-                        let mut weighted_buoyancy = 0.0f32;
-
-                        for kind in GasKind::ALL {
-                            let amount = self.read[index][kind.index()].max(0.0);
-                            if amount <= EPSILON_DENSITY {
-                                continue;
+                        if let Some(m_env) = estimate_local_env_mix_mass(
+                            self,
+                            world,
+                            x,
+                            y,
+                            buoyancy_kernel,
+                            &buoyancy_kernel_weights,
+                        ) {
+                            has_local_buoyancy_context = true;
+                            let mut m_cell = 0.0f32;
+                            for kind in GasKind::ALL {
+                                let amount = self.read[index][kind.index()].max(0.0);
+                                if amount <= EPSILON_DENSITY {
+                                    continue;
+                                }
+                                let yi = amount / species_total;
+                                m_cell += yi * kind.molecular_mass();
+                                let xi = (m_env - kind.molecular_mass()) / m_env;
+                                let bi = (gain * xi).tanh() * xi.abs().powf(alpha);
+                                local_species_buoyancy[kind.index()] = bi;
                             }
-                            let yi = amount / species_total;
-                            let xi = (ref_mass - kind.molecular_mass()) / ref_mass;
-                            let bi = (gain * xi).tanh() * xi.abs().powf(alpha);
-                            weighted_buoyancy += yi * bi;
+                            let x_mix = (m_env - m_cell) / m_env;
+                            local_mix_buoyancy =
+                                (gain * x_mix).tanh() * x_mix.abs().powf(alpha);
                         }
 
                         let cap = tuning.buoyancy_force_cap.abs();
                         let force_y =
-                            (tuning.buoyancy_strength * weighted_buoyancy).clamp(-cap, cap);
+                            (tuning.buoyancy_strength * local_mix_buoyancy).clamp(-cap, cap);
                         forced_u.y += force_y;
                     }
                 }
@@ -477,12 +510,34 @@ impl GasField {
                         continue;
                     }
 
-                    for (dir, weight) in post.into_iter().enumerate() {
+                    let mut biased_sum = 0.0f32;
+                    let mut biased_weights = post;
+                    if tuning.enable_buoyancy && has_local_buoyancy_context {
+                        let relative_b = local_species_buoyancy[kind_index] - local_mix_buoyancy;
+                        let drift = (relative_b
+                            * tuning.buoyancy_strength
+                            * SPECIES_RELATIVE_DRIFT_SCALE)
+                            .clamp(-0.35, 0.35);
+                        for dir in 0..9 {
+                            let dir_y = LBM_DIRS[dir].y as f32;
+                            let multiplier = (1.0 + drift * dir_y).max(0.0);
+                            biased_weights[dir] = post[dir] * multiplier;
+                            biased_sum += biased_weights[dir];
+                        }
+                    } else {
+                        biased_sum = post_sum;
+                    }
+                    if biased_sum <= EPSILON_DENSITY {
+                        self.write[index][kind_index] += amount;
+                        continue;
+                    }
+
+                    for (dir, weight) in biased_weights.into_iter().enumerate() {
                         if weight <= EPSILON_DENSITY {
                             continue;
                         }
                         let target_index = species_targets[dir];
-                        let share = amount * (weight / post_sum);
+                        let share = amount * (weight / biased_sum);
                         if share <= EPSILON_DENSITY {
                             continue;
                         }
@@ -657,6 +712,92 @@ impl GasField {
         self.write.copy_from_slice(&self.read);
     }
 
+}
+
+fn build_kernel_offsets(radius: i32) -> Vec<KernelOffset> {
+    let mut offsets = Vec::new();
+    for dy in -radius..=radius {
+        for dx in -radius..=radius {
+            if dx == 0 && dy == 0 {
+                continue;
+            }
+            let dist2 = (dx * dx + dy * dy) as f32;
+            offsets.push(KernelOffset { dx, dy, dist2 });
+        }
+    }
+    offsets
+}
+
+fn kernel_offsets_for_radius(radius: u8) -> &'static [KernelOffset] {
+    static KERNELS: OnceLock<Vec<Vec<KernelOffset>>> = OnceLock::new();
+    let kernels = KERNELS.get_or_init(|| {
+        vec![
+            build_kernel_offsets(1),
+            build_kernel_offsets(2),
+            build_kernel_offsets(3),
+        ]
+    });
+    let idx = radius.clamp(1, 3) as usize - 1;
+    kernels[idx].as_slice()
+}
+
+fn estimate_local_env_mix_mass(
+    field: &GasField,
+    world: &WorldGrid,
+    x: u32,
+    y: u32,
+    kernel: &[KernelOffset],
+    kernel_weights: &[f32],
+) -> Option<f32> {
+    let mut weighted_mass_sum = 0.0f32;
+    let mut weighted_rho_sum = 0.0f32;
+
+    for (sample, w) in kernel.iter().zip(kernel_weights.iter().copied()) {
+        let nx = x as i32 + sample.dx;
+        let ny = y as i32 + sample.dy;
+        if nx < 0 || ny < 0 || nx >= WORLD_WIDTH as i32 || ny >= WORLD_HEIGHT as i32 {
+            continue;
+        }
+
+        let nx = nx as u32;
+        let ny = ny as u32;
+        if is_boundary(nx, ny) || world.is_solid(nx, ny) {
+            continue;
+        }
+
+        let nidx = linear_index(nx, ny);
+        let rho_n: f32 = field.read[nidx].iter().copied().sum();
+        if rho_n <= EPSILON_DENSITY {
+            continue;
+        }
+
+        let mut m_mix_n = 0.0f32;
+        for kind in GasKind::ALL {
+            let ci = field.read[nidx][kind.index()].max(0.0);
+            if ci <= EPSILON_DENSITY {
+                continue;
+            }
+            m_mix_n += (ci / rho_n) * kind.molecular_mass();
+        }
+        if !m_mix_n.is_finite() || m_mix_n <= BUOYANCY_MIN_ENV_MASS {
+            continue;
+        }
+
+        let wrho = w * rho_n;
+        weighted_rho_sum += wrho;
+        weighted_mass_sum += wrho * m_mix_n;
+    }
+
+    if weighted_rho_sum <= EPSILON_DENSITY {
+        return None;
+    }
+
+    let m_env = weighted_mass_sum / weighted_rho_sum;
+    if m_env.is_finite() && m_env > BUOYANCY_MIN_ENV_MASS {
+        Some(m_env)
+    } else {
+        None
+    }
 }
 
 pub fn seeded_hydrogen_amount(x: u32, y: u32) -> u32 {
@@ -866,7 +1007,7 @@ mod tests {
     }
 
     #[test]
-    fn buoyancy_uses_molecular_mass_and_stays_finite() {
+    fn buoyancy_local_env_finite_and_bounded() {
         let mut field = GasField::default();
         let world = WorldGrid::default();
         field.clear_rect(
@@ -883,13 +1024,164 @@ mod tests {
         let tuning = SolverTuning {
             enable_buoyancy: true,
             buoyancy_strength: 0.2,
-            buoyancy_ref_mass: 29.0,
+            buoyancy_window_radius: 2,
+            buoyancy_window_sigma: 1.2,
             buoyancy_gain: 2.0,
             buoyancy_alpha: 0.75,
             buoyancy_force_cap: 0.2,
             ..Default::default()
         };
 
+        field.step_lbm_unified(&world, &tuning, true, true);
+
+        for yy in 1..WORLD_HEIGHT - 1 {
+            for xx in 1..WORLD_WIDTH - 1 {
+                let v = field.velocity(xx, yy);
+                assert!(v.x.is_finite() && v.y.is_finite());
+                assert!(v.length() <= tuning.target_cfl_like_limit + 1e-5);
+            }
+        }
+    }
+
+    #[test]
+    fn buoyancy_uniform_single_species_near_zero() {
+        let mut field = GasField::default();
+        let world = WorldGrid::default();
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
+
+        for y in 1..WORLD_HEIGHT - 1 {
+            for x in 1..WORLD_WIDTH - 1 {
+                field.set_amount(x, y, GasKind::Hydrogen, 10.0);
+            }
+        }
+        field.recompute_total_density_buffer(&world);
+        field.sync_lbm_from_total_density(&world);
+
+        let tuning = SolverTuning {
+            enable_buoyancy: true,
+            buoyancy_strength: 0.4,
+            buoyancy_window_radius: 2,
+            buoyancy_window_sigma: 1.2,
+            buoyancy_gain: 2.0,
+            buoyancy_alpha: 0.75,
+            buoyancy_force_cap: 0.5,
+            ..Default::default()
+        };
+        field.step_lbm_unified(&world, &tuning, true, true);
+
+        let mut sum_abs_vy = 0.0f32;
+        let mut count = 0u32;
+        for y in 3..WORLD_HEIGHT - 3 {
+            for x in 3..WORLD_WIDTH - 3 {
+                let vy = field.velocity(x, y).y;
+                sum_abs_vy += vy.abs();
+                count += 1;
+            }
+        }
+        let avg_abs_vy = sum_abs_vy / count as f32;
+        assert!(
+            avg_abs_vy < 1e-3,
+            "Average |vy| should be near zero for uniform single-species field, got {}",
+            avg_abs_vy
+        );
+    }
+
+    #[test]
+    fn buoyancy_uniform_mixed_species_near_zero() {
+        let mut field = GasField::default();
+        let world = WorldGrid::default();
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
+
+        for y in 1..WORLD_HEIGHT - 1 {
+            for x in 1..WORLD_WIDTH - 1 {
+                field.set_amount(x, y, GasKind::Hydrogen, 10.0);
+                field.set_amount(x, y, GasKind::Oxygen, 10.0);
+            }
+        }
+        field.recompute_total_density_buffer(&world);
+        field.sync_lbm_from_total_density(&world);
+
+        let tuning = SolverTuning {
+            enable_buoyancy: true,
+            buoyancy_strength: 0.4,
+            buoyancy_window_radius: 2,
+            buoyancy_window_sigma: 1.2,
+            buoyancy_gain: 2.2,
+            buoyancy_alpha: 0.9,
+            buoyancy_force_cap: 0.5,
+            ..Default::default()
+        };
+        field.step_lbm_unified(&world, &tuning, true, true);
+
+        let mut sum_abs_vy = 0.0f32;
+        let mut count = 0u32;
+        for y in 3..WORLD_HEIGHT - 3 {
+            for x in 3..WORLD_WIDTH - 3 {
+                let vy = field.velocity(x, y).y;
+                sum_abs_vy += vy.abs();
+                count += 1;
+            }
+        }
+        let avg_abs_vy = sum_abs_vy / count as f32;
+        assert!(
+            avg_abs_vy < 1e-3,
+            "Average |vy| should be near zero for uniform mixed field, got {}",
+            avg_abs_vy
+        );
+    }
+
+    #[test]
+    fn buoyancy_light_vs_heavy_relative_sign() {
+        let tuning = SolverTuning {
+            enable_buoyancy: true,
+            buoyancy_strength: 1.0,
+            buoyancy_window_radius: 2,
+            buoyancy_window_sigma: 1.2,
+            buoyancy_gain: 2.0,
+            buoyancy_alpha: 0.75,
+            buoyancy_force_cap: 1.0,
+            ..Default::default()
+        };
+        let m_env = 20.0f32;
+        let h2_x = (m_env - GasKind::Hydrogen.molecular_mass()) / m_env;
+        let o2_x = (m_env - GasKind::Oxygen.molecular_mass()) / m_env;
+        let h2_b = (tuning.buoyancy_gain * h2_x).tanh() * h2_x.abs().powf(tuning.buoyancy_alpha);
+        let o2_b = (tuning.buoyancy_gain * o2_x).tanh() * o2_x.abs().powf(tuning.buoyancy_alpha);
+        assert!(h2_b > 0.0, "Hydrogen should be buoyant in this context");
+        assert!(o2_b < 0.0, "Oxygen should sink in this context");
+    }
+
+    #[test]
+    fn buoyancy_window_params_clamped() {
+        let mut field = GasField::default();
+        let world = WorldGrid::default();
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
+        let x = WORLD_WIDTH / 2;
+        let y = WORLD_HEIGHT / 2;
+        field.set_amount(x, y, GasKind::Hydrogen, 500.0);
+        field.set_amount(x + 1, y, GasKind::Oxygen, 500.0);
+        field.recompute_total_density_buffer(&world);
+        field.sync_lbm_from_total_density(&world);
+
+        let tuning = SolverTuning {
+            enable_buoyancy: true,
+            buoyancy_strength: 0.2,
+            buoyancy_window_radius: 0,
+            buoyancy_window_sigma: 0.01,
+            buoyancy_gain: 2.0,
+            buoyancy_alpha: 0.75,
+            buoyancy_force_cap: 0.2,
+            ..Default::default()
+        };
         field.step_lbm_unified(&world, &tuning, true, true);
 
         for yy in 1..WORLD_HEIGHT - 1 {

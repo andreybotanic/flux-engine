@@ -144,7 +144,10 @@ struct SimulationHzInputField;
 struct BuoyancyStrengthInputField;
 
 #[derive(Component)]
-struct BuoyancyRefMassInputField;
+struct BuoyancyWindowRadiusInputField;
+
+#[derive(Component)]
+struct BuoyancyWindowSigmaInputField;
 
 #[derive(Component)]
 struct BuoyancyGainInputField;
@@ -432,7 +435,7 @@ fn setup_editor_ui(mut commands: Commands) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(0.06, 0.0, 5.0, 6, 3),
+                        TextInputField::new_f32(0.12, 0.0, 5.0, 6, 3),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -442,7 +445,7 @@ fn setup_editor_ui(mut commands: Commands) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("0.06"),
+                            Text::new("0.12"),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -460,7 +463,7 @@ fn setup_editor_ui(mut commands: Commands) {
                 },))
                 .with_children(|row| {
                     row.spawn((
-                        Text::new("Buoyancy ref mass:"),
+                        Text::new("Buoyancy radius:"),
                         TextFont::from_font_size(13.0),
                         TextColor(Color::WHITE),
                     ));
@@ -475,17 +478,60 @@ fn setup_editor_ui(mut commands: Commands) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(29.0, 0.1, 200.0, 6, 3),
+                        TextInputField::new_u32(2, 1, 3, 1),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
                         },
                         bevy::ui::RelativeCursorPosition::default(),
-                        BuoyancyRefMassInputField,
+                        BuoyancyWindowRadiusInputField,
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("29"),
+                            Text::new("2"),
+                            TextFont::from_font_size(13.0),
+                            TextColor(Color::WHITE),
+                            TextInputDisplay,
+                        ));
+                    });
+                });
+
+            parent
+                .spawn((Node {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(8.0),
+                    align_items: AlignItems::Center,
+                    ..default()
+                },))
+                .with_children(|row| {
+                    row.spawn((
+                        Text::new("Buoyancy sigma:"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::WHITE),
+                    ));
+                    row.spawn((
+                        Button,
+                        Node {
+                            min_width: Val::Px(92.0),
+                            height: Val::Px(30.0),
+                            justify_content: JustifyContent::FlexStart,
+                            align_items: AlignItems::Center,
+                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                            ..default()
+                        },
+                        BackgroundColor(BUTTON_IDLE),
+                        TextInputField::new_f32(1.2, 0.5, 3.0, 6, 3),
+                        TextInputStyle {
+                            idle_bg: BUTTON_IDLE,
+                            focused_bg: INPUT_FOCUSED,
+                        },
+                        bevy::ui::RelativeCursorPosition::default(),
+                        BuoyancyWindowSigmaInputField,
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new("1.2"),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -518,7 +564,7 @@ fn setup_editor_ui(mut commands: Commands) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(2.0, 0.0, 10.0, 6, 3),
+                        TextInputField::new_f32(2.2, 0.0, 10.0, 6, 3),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -528,7 +574,7 @@ fn setup_editor_ui(mut commands: Commands) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("2"),
+                            Text::new("2.2"),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -561,7 +607,7 @@ fn setup_editor_ui(mut commands: Commands) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(0.75, 0.0, 4.0, 6, 3),
+                        TextInputField::new_f32(0.9, 0.0, 4.0, 6, 3),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -571,7 +617,7 @@ fn setup_editor_ui(mut commands: Commands) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("0.75"),
+                            Text::new("0.9"),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -969,11 +1015,12 @@ fn refresh_editor_ui(
         Single<&TextInputField, With<GasMaxColorParticlesInputField>>,
         Single<&TextInputField, With<SimulationHzInputField>>,
         Single<&TextInputField, With<BuoyancyStrengthInputField>>,
-        Single<&TextInputField, With<BuoyancyRefMassInputField>>,
+        Single<&TextInputField, With<BuoyancyWindowRadiusInputField>>,
+        Single<&TextInputField, With<BuoyancyWindowSigmaInputField>>,
         Single<&TextInputField, With<BuoyancyGainInputField>>,
         Single<&TextInputField, With<BuoyancyAlphaInputField>>,
-        Single<&TextInputField, With<BuoyancyForceCapInputField>>,
     )>,
+    buoyancy_cap_input: Single<&TextInputField, With<BuoyancyForceCapInputField>>,
     mut button_query: Query<(&EditorUiAction, &mut BackgroundColor), With<Button>>,
     mut visibility_set: ParamSet<(
         Single<&mut Visibility, With<DebugToolbarRoot>>,
@@ -1011,16 +1058,19 @@ fn refresh_editor_ui(
     if let Some(value) = input_set.p3().parsed_f32() {
         gas_simulation.solver_tuning.buoyancy_strength = value.clamp(0.0, 5.0);
     }
-    if let Some(value) = input_set.p4().parsed_f32() {
-        gas_simulation.solver_tuning.buoyancy_ref_mass = value.clamp(0.1, 200.0);
+    if let Some(value) = input_set.p4().parsed_u32() {
+        gas_simulation.solver_tuning.buoyancy_window_radius = value.clamp(1, 3) as u8;
     }
     if let Some(value) = input_set.p5().parsed_f32() {
-        gas_simulation.solver_tuning.buoyancy_gain = value.clamp(0.0, 10.0);
+        gas_simulation.solver_tuning.buoyancy_window_sigma = value.clamp(0.5, 3.0);
     }
     if let Some(value) = input_set.p6().parsed_f32() {
-        gas_simulation.solver_tuning.buoyancy_alpha = value.clamp(0.0, 4.0);
+        gas_simulation.solver_tuning.buoyancy_gain = value.clamp(0.0, 10.0);
     }
     if let Some(value) = input_set.p7().parsed_f32() {
+        gas_simulation.solver_tuning.buoyancy_alpha = value.clamp(0.0, 4.0);
+    }
+    if let Some(value) = buoyancy_cap_input.parsed_f32() {
         gas_simulation.solver_tuning.buoyancy_force_cap = value.clamp(0.0, 2.0);
     }
 
