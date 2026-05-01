@@ -4,8 +4,8 @@ use crate::{
     input::camera::MainCamera,
     simulation::{
         do_one_substep,
-        gas::{preview_next_substep, GasField, GasKind},
-        BlockSyncState, GasSimulationConfig, GasSolverMode, SimulationControl, SimulationStep,
+        gas::{GasField, GasKind},
+        BlockSyncState, GasSimulationConfig, SimulationControl, SimulationStep,
     },
     world::grid::{cell_center, is_boundary, WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH},
 };
@@ -17,27 +17,15 @@ pub struct DebugMode {
 
 #[derive(Resource, Clone, Copy)]
 pub struct DebugOverlaySettings {
-    pub show_diffusion_cells: bool,
     pub show_momentum_vectors: bool,
-    pub preview_min_amount: f32,
-    pub preview_min_flux: f32,
 }
 
 impl Default for DebugOverlaySettings {
     fn default() -> Self {
         Self {
-            show_diffusion_cells: true,
             show_momentum_vectors: false,
-            preview_min_amount: 0.5,
-            preview_min_flux: 0.01,
         }
     }
-}
-
-#[derive(Resource, Default)]
-pub struct DebugStepPreview {
-    /// Each entry: (from_x, from_y, to_x, to_y)
-    pub moves: Vec<(u32, u32, u32, u32)>,
 }
 
 #[derive(Resource, Default, Clone, Copy)]
@@ -64,7 +52,6 @@ impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DebugMode>()
             .init_resource::<DebugOverlaySettings>()
-            .init_resource::<DebugStepPreview>()
             .init_resource::<DebugGasMetrics>()
             .init_resource::<DebugMassBaseline>()
             .init_gizmo_group::<MomentumVectorGizmoConfigGroup>()
@@ -73,7 +60,6 @@ impl Plugin for DebugPlugin {
                 (
                     configure_momentum_gizmo_line_width,
                     handle_debug_keys,
-                    update_debug_preview,
                     update_debug_metrics,
                     draw_debug_overlays,
                 )
@@ -114,48 +100,6 @@ fn handle_debug_keys(
     if debug_mode.active && keys.just_pressed(KeyCode::Enter) {
         do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);
     }
-}
-
-fn update_debug_preview(
-    debug_mode: Res<DebugMode>,
-    overlay_settings: Res<DebugOverlaySettings>,
-    config: Res<GasSimulationConfig>,
-    gas: Res<GasField>,
-    world: Res<WorldGrid>,
-    block_state: Res<BlockSyncState>,
-    mut preview: ResMut<DebugStepPreview>,
-) {
-    if !debug_mode.active
-        || !config.enable_diffusion
-        || !overlay_settings.show_diffusion_cells
-        || !matches!(config.solver_mode, GasSolverMode::LegacyHybrid)
-    {
-        if !preview.moves.is_empty() {
-            preview.moves.clear();
-        }
-        return;
-    }
-
-    // Recompute only when something relevant changed
-    if !debug_mode.is_changed()
-        && !overlay_settings.is_changed()
-        && !gas.is_changed()
-        && !block_state.is_changed()
-    {
-        return;
-    }
-
-    let (_, moves) = preview_next_substep(
-        &gas,
-        &world,
-        block_state.rng_state,
-        block_state.phase,
-        [config.diffusion_k_h2, config.diffusion_k_o2],
-        config.max_flux_fraction,
-        overlay_settings.preview_min_amount,
-        overlay_settings.preview_min_flux,
-    );
-    preview.moves = moves;
 }
 
 fn update_debug_metrics(
@@ -273,38 +217,13 @@ fn update_debug_metrics(
 fn draw_debug_overlays(
     debug_mode: Res<DebugMode>,
     overlay_settings: Res<DebugOverlaySettings>,
-    preview: Res<DebugStepPreview>,
     gas: Res<GasField>,
     world: Res<WorldGrid>,
     camera_projection: Single<&Projection, With<MainCamera>>,
-    mut gizmos: Gizmos,
     mut momentum_gizmos: Gizmos<MomentumVectorGizmoConfigGroup>,
 ) {
     if !debug_mode.active {
         return;
-    }
-
-    if overlay_settings.show_diffusion_cells {
-        let cell_size = Vec2::splat(CELL_SIZE - 1.0);
-
-        for &(fx, fy, tx, ty) in &preview.moves {
-            let from_center = cell_center(fx, fy);
-            let to_center = cell_center(tx, ty);
-
-            // Green outline: cell that will emit particles
-            gizmos.rect_2d(
-                Isometry2d::from_translation(from_center),
-                cell_size,
-                Color::srgba(0.15, 1.0, 0.15, 0.9),
-            );
-
-            // Blue outline: neighbor that will receive particles
-            gizmos.rect_2d(
-                Isometry2d::from_translation(to_center),
-                cell_size,
-                Color::srgba(0.15, 0.55, 1.0, 0.9),
-            );
-        }
     }
 
     if !overlay_settings.show_momentum_vectors {
