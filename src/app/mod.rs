@@ -1,10 +1,18 @@
-﻿use std::path::Path;
+use std::path::Path;
 
 use bevy::{asset::AssetPlugin, prelude::*, window::PresentMode};
 
 use crate::{
-    debug::DebugPlugin, editor::EditorPlugin, input::InputPlugin, render::RenderPlugin,
-    simulation::GasSimulationPlugin, ui::UiPlugin, world::WorldPlugin,
+    debug::DebugPlugin,
+    editor::EditorPlugin,
+    input::InputPlugin,
+    render::RenderPlugin,
+    simulation::{
+        backend::{SimulationBackend, SimulationBackendConfig, WorldSizeConfig},
+        GasSimulationPlugin,
+    },
+    ui::UiPlugin,
+    world::WorldPlugin,
 };
 
 pub fn run() {
@@ -13,9 +21,51 @@ pub fn run() {
         .to_string_lossy()
         .to_string();
 
-    App::new()
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(Time::<Fixed>::from_hz(30.0))
+    let mut app = App::new();
+    app.insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(Time::<Fixed>::from_hz(30.0));
+
+    let args: Vec<String> = std::env::args().collect();
+    let mut backend = std::env::var("FLUX_SIM_BACKEND")
+        .ok()
+        .map(|value| value.to_lowercase())
+        .and_then(|value| match value.as_str() {
+            "cpu" => Some(SimulationBackend::Cpu),
+            "gpu" => Some(SimulationBackend::Gpu),
+            _ => None,
+        })
+        .unwrap_or(SimulationBackend::Gpu);
+    let mut world_size = WorldSizeConfig::default();
+
+    let mut i = 1usize;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--sim-backend" if i + 1 < args.len() => {
+                backend = match args[i + 1].to_lowercase().as_str() {
+                    "gpu" => SimulationBackend::Gpu,
+                    _ => SimulationBackend::Cpu,
+                };
+                i += 1;
+            }
+            "--world-size" if i + 1 < args.len() => {
+                let raw = &args[i + 1];
+                if let Some((w, h)) = raw.split_once('x') {
+                    if let (Ok(width), Ok(height)) = (w.parse::<u32>(), h.parse::<u32>()) {
+                        if width >= 3 && height >= 3 {
+                            world_size.width = width;
+                            world_size.height = height;
+                        }
+                    }
+                }
+                i += 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+
+    app.insert_resource(SimulationBackendConfig { backend })
+        .insert_resource(world_size)
         .add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {
@@ -41,6 +91,7 @@ pub fn run() {
             UiPlugin,
             EditorPlugin,
             DebugPlugin,
-        ))
-        .run();
+        ));
+
+    app.run();
 }

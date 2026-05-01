@@ -983,7 +983,8 @@ fn handle_editor_ui_actions(
             }
             EditorUiAction::ToggleDiffusion => {
                 unfocus_inputs();
-                gas_simulation.enable_species_relaxation = !gas_simulation.enable_species_relaxation;
+                gas_simulation.enable_species_relaxation =
+                    !gas_simulation.enable_species_relaxation;
             }
             EditorUiAction::ToggleBuoyancy => {
                 unfocus_inputs();
@@ -1167,13 +1168,17 @@ fn refresh_editor_ui(
         let mut perf_text = text_set_primary.p5();
         let speed_mult = sim_control.speed.multiplier();
         perf_text.0 = format!(
-            "Step ms: {:.3} | avg: {:.3} | Target Hz: {} x {} = {:.1} | Actual Hz: {:.1}",
+            "Step ms: {:.3} | avg: {:.3} | Target Hz: {} x {} = {:.1} | Actual Hz: {:.1} | GPU compute/upload/readback/total: {:.3}/{:.3}/{:.3}/{:.3} ms",
             sim_perf.last_step_ms,
             sim_perf.avg_step_ms,
             sim_rate.target_hz,
             speed_mult,
             sim_perf.target_hz_effective,
-            sim_perf.actual_hz
+            sim_perf.actual_hz,
+            sim_perf.last_gpu_compute_ms,
+            sim_perf.last_upload_to_gpu_ms,
+            sim_perf.last_readback_from_gpu_ms,
+            sim_perf.last_step_total_ms
         );
     }
 

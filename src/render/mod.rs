@@ -3,10 +3,10 @@ pub mod world_view;
 use bevy::prelude::*;
 
 use self::world_view::{
-    apply_overlay_mode, setup_world_view, sync_gas_display_texture, sync_wall_visuals,
-    update_overlay_mode, WallEntities,
+    apply_overlay_mode, setup_simulation_images, setup_world_view, sync_gas_display_texture,
+    sync_wall_visuals, update_overlay_mode, WallEntities,
 };
-use crate::{input::camera::spawn_main_camera, simulation::gpu::setup_simulation_images};
+use crate::input::camera::spawn_main_camera;
 
 pub struct RenderPlugin;
 
@@ -17,8 +17,10 @@ impl Plugin for RenderPlugin {
             .init_resource::<WallEntities>()
             .add_systems(
                 Startup,
-                setup_world_view
-                    .after(setup_simulation_images)
+                (
+                    setup_simulation_images,
+                    setup_world_view.after(setup_simulation_images),
+                )
                     .after(spawn_main_camera),
             )
             .add_systems(

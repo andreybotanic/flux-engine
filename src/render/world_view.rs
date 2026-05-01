@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    render::render_asset::RenderAssetUsages,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
+};
 
 use crate::{
     simulation::{
         gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
-        gpu::GasSimulationImages,
         SimulationStep,
     },
     world::grid::{
@@ -22,6 +25,12 @@ const BACKDROP_GAS_COLOR: Color = Color::srgba(0.12, 0.12, 0.12, 0.85);
 const GRID_LINE_COLOR: Color = Color::srgba(1.0, 1.0, 1.0, 0.09);
 const GAS_VISUAL_MIN_PARTICLES: f32 = 1.0;
 const GAS_VISUAL_MIN_INTENSITY: f32 = 0.05;
+
+#[derive(Resource, Clone)]
+pub struct GasSimulationImages {
+    pub texture_a: Handle<Image>,
+    pub texture_b: Handle<Image>,
+}
 
 #[derive(Resource, Clone, Copy)]
 pub struct GasVisualSettings {
@@ -53,6 +62,47 @@ fn gas_visual_intensity(particles: f32, gamma: f32, max_particles_for_max_color:
     };
     let base = GAS_VISUAL_MIN_INTENSITY + (1.0 - GAS_VISUAL_MIN_INTENSITY) * norm;
     base.powf(gamma.clamp(0.0, 10.0))
+}
+
+pub fn setup_simulation_images(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    let image_a = images.add(build_seeded_image());
+    let image_b = images.add(build_seeded_image());
+
+    commands.insert_resource(GasSimulationImages {
+        texture_a: image_a,
+        texture_b: image_b,
+    });
+}
+
+fn build_seeded_image() -> Image {
+    let mut image = Image::new_fill(
+        Extent3d {
+            width: WORLD_WIDTH,
+            height: WORLD_HEIGHT,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        &[0; 16],
+        TextureFormat::Rgba32Float,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    );
+
+    image.texture_descriptor.usage =
+        TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
+
+    for y in 0..WORLD_HEIGHT {
+        for x in 0..WORLD_WIDTH {
+            let wall = if is_boundary(x, y) { 1.0 } else { 0.0 };
+            let particles = 0.0f32;
+            let storage_linear =
+                (particles / HYDROGEN_GPU_STORAGE_MAX_PARTICLES as f32).clamp(0.0, 1.0);
+            let visual = GAS_VISUAL_MIN_INTENSITY;
+            let color = Color::linear_rgba(visual, wall, storage_linear, 1.0);
+            let _ = image.set_color_at(x, y, color);
+        }
+    }
+
+    image
 }
 
 #[derive(Resource, Clone, Copy, PartialEq, Eq, Default)]

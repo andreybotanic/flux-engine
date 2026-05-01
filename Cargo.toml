@@ -5,3 +5,6 @@ edition = "2021"
 
 [dependencies]
 bevy = { version = "0.16", default-features = true }
+bytemuck = { version = "1.19", features = ["derive"] }
+pollster = "0.4"
+wgpu = "24.0"

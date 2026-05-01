@@ -1,3 +1,4 @@
+use super::gpu_solver::GpuSolverHostState;
 use super::SolverTuning;
 use crate::world::grid::{is_boundary, linear_index, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH};
 use bevy::prelude::*;
@@ -434,8 +435,7 @@ impl GasField {
                                 local_species_buoyancy[kind.index()] = bi;
                             }
                             let x_mix = (m_env - m_cell) / m_env;
-                            local_mix_buoyancy =
-                                (gain * x_mix).tanh() * x_mix.abs().powf(alpha);
+                            local_mix_buoyancy = (gain * x_mix).tanh() * x_mix.abs().powf(alpha);
                         }
 
                         let cap = tuning.buoyancy_force_cap.abs();
@@ -514,10 +514,9 @@ impl GasField {
                     let mut biased_weights = post;
                     if tuning.enable_buoyancy && has_local_buoyancy_context {
                         let relative_b = local_species_buoyancy[kind_index] - local_mix_buoyancy;
-                        let drift = (relative_b
-                            * tuning.buoyancy_strength
-                            * SPECIES_RELATIVE_DRIFT_SCALE)
-                            .clamp(-0.35, 0.35);
+                        let drift =
+                            (relative_b * tuning.buoyancy_strength * SPECIES_RELATIVE_DRIFT_SCALE)
+                                .clamp(-0.35, 0.35);
                         for dir in 0..9 {
                             let dir_y = LBM_DIRS[dir].y as f32;
                             let multiplier = (1.0 + drift * dir_y).max(0.0);
@@ -712,6 +711,69 @@ impl GasField {
         self.write.copy_from_slice(&self.read);
     }
 
+    pub fn lbm_read_snapshot(&self) -> Vec<[f32; 9]> {
+        self.lbm_read.clone()
+    }
+
+    pub fn to_gpu_host_state(&self, world: &WorldGrid) -> GpuSolverHostState {
+        let mut species = Vec::with_capacity((WORLD_WIDTH * WORLD_HEIGHT) as usize);
+        let mut velocity = Vec::with_capacity((WORLD_WIDTH * WORLD_HEIGHT) as usize);
+        let mut solid_mask = Vec::with_capacity((WORLD_WIDTH * WORLD_HEIGHT) as usize);
+        for y in 0..WORLD_HEIGHT {
+            for x in 0..WORLD_WIDTH {
+                let idx = linear_index(x, y);
+                species.push(self.read[idx]);
+                let v = self.velocity[idx];
+                velocity.push([v.x, v.y]);
+                let solid = if is_boundary(x, y) || world.is_solid(x, y) {
+                    1u32
+                } else {
+                    0u32
+                };
+                solid_mask.push(solid);
+            }
+        }
+
+        let mut lbm_flat = Vec::with_capacity((WORLD_WIDTH * WORLD_HEIGHT * 9) as usize);
+        for dirs in &self.lbm_read {
+            lbm_flat.extend_from_slice(dirs);
+        }
+
+        GpuSolverHostState {
+            species,
+            lbm_flat,
+            total_density: self.total_density.clone(),
+            velocity,
+            solid_mask,
+        }
+    }
+
+    pub fn apply_gpu_host_state(&mut self, state: &GpuSolverHostState) {
+        let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+        if state.species.len() != cells
+            || state.lbm_flat.len() != cells * 9
+            || state.total_density.len() != cells
+            || state.velocity.len() != cells
+        {
+            return;
+        }
+
+        for idx in 0..cells {
+            self.read[idx] = state.species[idx];
+            self.write[idx] = state.species[idx];
+            self.total_density[idx] = state.total_density[idx];
+            self.velocity[idx] = Vec2::new(state.velocity[idx][0], state.velocity[idx][1]);
+        }
+
+        for idx in 0..cells {
+            let base = idx * 9;
+            for dir in 0..9 {
+                let value = state.lbm_flat[base + dir];
+                self.lbm_read[idx][dir] = value;
+                self.lbm_write[idx][dir] = value;
+            }
+        }
+    }
 }
 
 fn build_kernel_offsets(radius: i32) -> Vec<KernelOffset> {
