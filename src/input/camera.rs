@@ -1,4 +1,8 @@
-use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*, window::PrimaryWindow};
+use bevy::{
+    input::mouse::{MouseMotion, MouseWheel},
+    prelude::*,
+    window::PrimaryWindow,
+};
 
 use crate::world::grid::{world_dimensions, CAMERA_MARGIN};
 

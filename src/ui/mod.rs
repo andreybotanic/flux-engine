@@ -26,6 +26,9 @@ impl Plugin for UiPlugin {
                 )
                     .chain(),
             )
-            .add_systems(PostUpdate, update_cell_inspector.after(TransformSystem::TransformPropagate));
+            .add_systems(
+                PostUpdate,
+                update_cell_inspector.after(TransformSystem::TransformPropagate),
+            );
     }
 }

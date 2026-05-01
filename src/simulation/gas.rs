@@ -1,5 +1,6 @@
-﻿use bevy::prelude::*;
+use super::{GasSolverMode, SolverTuning};
 use crate::world::grid::{is_boundary, linear_index, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH};
+use bevy::prelude::*;
 
 pub const HYDROGEN_DIFFUSION_K: f32 = 0.20;
 pub const OXYGEN_DIFFUSION_K: f32 = 0.14;
@@ -149,10 +150,7 @@ impl GasField {
     }
 
     pub fn total_amount(&self, x: u32, y: u32) -> GasScalar {
-        self.read[linear_index(x, y)]
-            .iter()
-            .copied()
-            .sum()
+        self.read[linear_index(x, y)].iter().copied().sum()
     }
 
     pub fn total_amount_rounded(&self, x: u32, y: u32) -> u32 {
@@ -391,7 +389,8 @@ impl GasField {
 
                 let mut post = [0.0; 9];
                 for i in 0..9 {
-                    post[i] = (self.lbm_read[index][i] - omega * (self.lbm_read[index][i] - feq[i]))
+                    post[i] = (self.lbm_read[index][i]
+                        - omega * (self.lbm_read[index][i] - feq[i]))
                         .max(0.0);
                 }
                 let post_sum: f32 = post.iter().sum();
@@ -469,6 +468,164 @@ impl GasField {
         }
     }
 
+    pub fn step_lbm_unified(
+        &mut self,
+        world: &WorldGrid,
+        tuning: &SolverTuning,
+        solver_mode: GasSolverMode,
+        enable_species_relaxation: bool,
+    ) {
+        for entry in &mut self.lbm_write {
+            *entry = [0.0; 9];
+        }
+        for entry in &mut self.write {
+            *entry = [0.0; GAS_KIND_COUNT];
+        }
+
+        let velocity_limit = tuning.target_cfl_like_limit.clamp(0.1, 0.98);
+        let omega_bgk = (1.0 / tuning.tau_even.max(0.55)).clamp(0.01, 1.99);
+        let omega_plus = (1.0 / tuning.tau_even.max(0.55)).clamp(0.01, 1.99);
+        let omega_minus = (1.0 / tuning.tau_odd.max(0.55)).clamp(0.01, 1.99);
+
+        for y in 0..WORLD_HEIGHT {
+            for x in 0..WORLD_WIDTH {
+                let index = linear_index(x, y);
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    self.velocity[index] = Vec2::ZERO;
+                    self.write[index] = [0.0; GAS_KIND_COUNT];
+                    continue;
+                }
+
+                let (rho, u) = macroscopic_from_distributions(&self.lbm_read[index]);
+                let mut forced_u = u;
+                if tuning.enable_buoyancy && rho > EPSILON_DENSITY {
+                    let species_total = self.read[index].iter().copied().sum::<f32>();
+                    if species_total > EPSILON_DENSITY {
+                        let light_fraction = (self.read[index][GasKind::Hydrogen.index()]
+                            / species_total)
+                            .clamp(0.0, 1.0);
+                        forced_u.y += tuning.buoyancy_strength.max(0.0) * light_fraction;
+                    }
+                }
+                let forced_u = forced_u.clamp_length_max(velocity_limit);
+                let feq = equilibrium_distributions(rho, forced_u);
+
+                let mut post = [0.0; 9];
+                match solver_mode {
+                    GasSolverMode::LegacyHybrid => {
+                        for i in 0..9 {
+                            post[i] = (self.lbm_read[index][i]
+                                - omega_bgk * (self.lbm_read[index][i] - feq[i]))
+                                .max(0.0);
+                        }
+                    }
+                    GasSolverMode::UnifiedTRT => {
+                        // TRT decomposition into even/odd moments for opposite directions.
+                        for i in 0..9 {
+                            let j = LBM_OPPOSITE[i];
+                            let fi = self.lbm_read[index][i];
+                            let fj = self.lbm_read[index][j];
+                            let feqi = feq[i];
+                            let feqj = feq[j];
+                            let f_plus = 0.5 * (fi + fj);
+                            let f_minus = 0.5 * (fi - fj);
+                            let feq_plus = 0.5 * (feqi + feqj);
+                            let feq_minus = 0.5 * (feqi - feqj);
+                            post[i] = (fi
+                                - omega_plus * (f_plus - feq_plus)
+                                - omega_minus * (f_minus - feq_minus))
+                                .max(0.0);
+                        }
+                    }
+                    GasSolverMode::UnifiedMRTCM => {
+                        // Prototype MRT-CM-like relaxation using per-direction rates.
+                        for i in 0..9 {
+                            let s = tuning.relaxation_rates[i].clamp(0.01, 1.99);
+                            post[i] = (self.lbm_read[index][i]
+                                - s * (self.lbm_read[index][i] - feq[i]))
+                                .max(0.0);
+                        }
+                    }
+                }
+
+                let post_sum: f32 = post.iter().sum();
+                let mut species_targets = [index; 9];
+
+                for i in 0..9 {
+                    let dir = LBM_DIRS[i];
+                    let nx = x as i32 + dir.x;
+                    let ny = y as i32 + dir.y;
+
+                    if nx < 0 || ny < 0 || nx >= WORLD_WIDTH as i32 || ny >= WORLD_HEIGHT as i32 {
+                        let opposite = LBM_OPPOSITE[i];
+                        self.lbm_write[index][opposite] += post[i];
+                        species_targets[i] = index;
+                        continue;
+                    }
+
+                    let nx = nx as u32;
+                    let ny = ny as u32;
+                    if is_boundary(nx, ny) || world.is_solid(nx, ny) {
+                        let opposite = LBM_OPPOSITE[i];
+                        self.lbm_write[index][opposite] += post[i];
+                        species_targets[i] = index;
+                    } else {
+                        let neighbour_index = linear_index(nx, ny);
+                        self.lbm_write[neighbour_index][i] += post[i];
+                        species_targets[i] = neighbour_index;
+                    }
+                }
+
+                for kind in GasKind::ALL {
+                    let kind_index = kind.index();
+                    let amount = self.read[index][kind_index];
+                    if amount <= EPSILON_DENSITY {
+                        continue;
+                    }
+
+                    if !enable_species_relaxation {
+                        self.write[index][kind_index] += amount;
+                        continue;
+                    }
+
+                    if post_sum <= EPSILON_DENSITY {
+                        self.write[index][kind_index] += amount;
+                        continue;
+                    }
+
+                    for (dir, weight) in post.into_iter().enumerate() {
+                        if weight <= EPSILON_DENSITY {
+                            continue;
+                        }
+                        let target_index = species_targets[dir];
+                        let share = amount * (weight / post_sum);
+                        if share <= EPSILON_DENSITY {
+                            continue;
+                        }
+                        self.write[target_index][kind_index] += share;
+                    }
+                }
+            }
+        }
+
+        std::mem::swap(&mut self.lbm_read, &mut self.lbm_write);
+        std::mem::swap(&mut self.read, &mut self.write);
+
+        for y in 0..WORLD_HEIGHT {
+            for x in 0..WORLD_WIDTH {
+                let index = linear_index(x, y);
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    self.velocity[index] = Vec2::ZERO;
+                    self.total_density[index] = 0.0;
+                    continue;
+                }
+                let (rho, u) = macroscopic_from_distributions(&self.lbm_read[index]);
+                self.total_density[index] = rho.max(0.0);
+                self.velocity[index] = u.clamp_length_max(velocity_limit);
+            }
+        }
+    }
+
     pub fn clear_velocity(&mut self) {
         for v in &mut self.velocity {
             *v = Vec2::ZERO;
@@ -495,50 +652,121 @@ impl GasField {
         &mut self,
         world: &WorldGrid,
         target_totals: [GasScalar; GAS_KIND_COUNT],
+        min_residual: GasScalar,
     ) {
         let current_totals = self.species_totals(world);
         let mut scales = [1.0; GAS_KIND_COUNT];
         for kind_index in 0..GAS_KIND_COUNT {
-            if target_totals[kind_index] <= EPSILON_DENSITY || current_totals[kind_index] <= EPSILON_DENSITY {
+            if target_totals[kind_index] <= EPSILON_DENSITY
+                || current_totals[kind_index] <= EPSILON_DENSITY
+            {
                 continue;
             }
             scales[kind_index] = target_totals[kind_index] / current_totals[kind_index];
         }
 
-        let mut first_open_index = None;
         for y in 0..WORLD_HEIGHT {
             for x in 0..WORLD_WIDTH {
                 if is_boundary(x, y) || world.is_solid(x, y) {
                     continue;
                 }
                 let index = linear_index(x, y);
-                if first_open_index.is_none() {
-                    first_open_index = Some(index);
-                }
                 for kind_index in 0..GAS_KIND_COUNT {
-                    self.read[index][kind_index] = (self.read[index][kind_index] * scales[kind_index]).max(0.0);
+                    self.read[index][kind_index] =
+                        (self.read[index][kind_index] * scales[kind_index]).max(0.0);
                 }
             }
         }
 
-        if let Some(anchor_index) = first_open_index {
-            let mut corrected_totals = [0.0; GAS_KIND_COUNT];
-            for y in 0..WORLD_HEIGHT {
-                for x in 0..WORLD_WIDTH {
-                    if is_boundary(x, y) || world.is_solid(x, y) {
-                        continue;
+        let mut corrected_totals = [0.0; GAS_KIND_COUNT];
+        let mut fallback_index = None;
+        let mut fallback_total = -1.0f32;
+        for y in 0..WORLD_HEIGHT {
+            for x in 0..WORLD_WIDTH {
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    continue;
+                }
+                let index = linear_index(x, y);
+                let cell_total: f32 = self.read[index].iter().copied().sum();
+                if cell_total > fallback_total {
+                    fallback_total = cell_total;
+                    fallback_index = Some(index);
+                }
+                for (kind_index, total) in corrected_totals.iter_mut().enumerate() {
+                    *total += self.read[index][kind_index];
+                }
+            }
+        }
+
+        let residual_threshold = min_residual.max(0.0);
+        for kind_index in 0..GAS_KIND_COUNT {
+            let residual = target_totals[kind_index] - corrected_totals[kind_index];
+            if residual.abs() <= residual_threshold {
+                continue;
+            }
+
+            let available = corrected_totals[kind_index];
+            if available > EPSILON_DENSITY {
+                let mut last_idx = None;
+                let mut distributed = 0.0f32;
+                for y in 0..WORLD_HEIGHT {
+                    for x in 0..WORLD_WIDTH {
+                        if is_boundary(x, y) || world.is_solid(x, y) {
+                            continue;
+                        }
+                        let index = linear_index(x, y);
+                        let amount = self.read[index][kind_index];
+                        if amount <= EPSILON_DENSITY {
+                            continue;
+                        }
+
+                        let share = residual * (amount / available);
+                        self.read[index][kind_index] =
+                            (self.read[index][kind_index] + share).max(0.0);
+                        distributed += share;
+                        last_idx = Some(index);
                     }
-                    let index = linear_index(x, y);
-                    for (kind_index, total) in corrected_totals.iter_mut().enumerate() {
-                        *total += self.read[index][kind_index];
+                }
+                let remnant = residual - distributed;
+                if remnant.abs() > residual_threshold {
+                    if let Some(index) = last_idx.or(fallback_index) {
+                        self.read[index][kind_index] =
+                            (self.read[index][kind_index] + remnant).max(0.0);
+                    }
+                }
+            } else if let Some(index) = fallback_index {
+                self.read[index][kind_index] = (self.read[index][kind_index] + residual).max(0.0);
+            }
+        }
+
+        // Final exactness pass: enforce target totals by assigning tiny remaining residual
+        // to the densest cell of the corresponding species (never to a fixed corner anchor).
+        let mut final_totals = [0.0; GAS_KIND_COUNT];
+        let mut max_kind_index = [None; GAS_KIND_COUNT];
+        let mut max_kind_value = [-1.0f32; GAS_KIND_COUNT];
+        for y in 0..WORLD_HEIGHT {
+            for x in 0..WORLD_WIDTH {
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    continue;
+                }
+                let index = linear_index(x, y);
+                for kind_index in 0..GAS_KIND_COUNT {
+                    let amount = self.read[index][kind_index];
+                    final_totals[kind_index] += amount;
+                    if amount > max_kind_value[kind_index] {
+                        max_kind_value[kind_index] = amount;
+                        max_kind_index[kind_index] = Some(index);
                     }
                 }
             }
-
-            for kind_index in 0..GAS_KIND_COUNT {
-                let residual = target_totals[kind_index] - corrected_totals[kind_index];
-                self.read[anchor_index][kind_index] =
-                    (self.read[anchor_index][kind_index] + residual).max(0.0);
+        }
+        for kind_index in 0..GAS_KIND_COUNT {
+            let residual = target_totals[kind_index] - final_totals[kind_index];
+            if residual.abs() <= EPSILON_DENSITY {
+                continue;
+            }
+            if let Some(index) = max_kind_index[kind_index].or(fallback_index) {
+                self.read[index][kind_index] = (self.read[index][kind_index] + residual).max(0.0);
             }
         }
 
@@ -557,7 +785,8 @@ impl GasField {
                 }
 
                 let velocity = self.velocity[index];
-                let mut targets: [(Option<(u32, u32)>, f32); 4] = [(None, 0.0), (None, 0.0), (None, 0.0), (None, 0.0)];
+                let mut targets: [(Option<(u32, u32)>, f32); 4] =
+                    [(None, 0.0), (None, 0.0), (None, 0.0), (None, 0.0)];
                 let mut target_count = 0usize;
 
                 if velocity.x > 0.0 {
@@ -621,14 +850,16 @@ impl GasField {
                         let share = if slot + 1 == target_count {
                             (total_move - moved_sum).max(0.0)
                         } else {
-                            (total_move * (*weight / total_weight)).min((total_move - moved_sum).max(0.0))
+                            (total_move * (*weight / total_weight))
+                                .min((total_move - moved_sum).max(0.0))
                         };
 
                         if share <= EPSILON_TRANSFER {
                             continue;
                         }
 
-                        self.write[index][kind_index] = (self.write[index][kind_index] - share).max(0.0);
+                        self.write[index][kind_index] =
+                            (self.write[index][kind_index] - share).max(0.0);
                         self.write[neighbour_index][kind_index] += share;
                         moved_sum += share;
                     }
@@ -821,6 +1052,8 @@ pub fn preview_next_substep(
     phase: u8,
     diffusion_k: [f32; GAS_KIND_COUNT],
     max_flux_fraction: f32,
+    preview_min_amount: f32,
+    preview_min_flux: f32,
 ) -> (u8, Vec<(u32, u32, u32, u32)>) {
     let block_index = (next_random_u32(&mut rng_state) % 9) as u8;
     let (offset_x, offset_y) = phase_offsets(phase);
@@ -853,6 +1086,9 @@ pub fn preview_next_substep(
                 }
                 let center = gas.amount(x, y, kind).max(0.0);
                 let neighbour = gas.amount(nx, ny, kind).max(0.0);
+                if center.max(neighbour) < preview_min_amount.max(0.0) {
+                    return false;
+                }
                 let raw_flux = k * (center - neighbour);
                 if raw_flux.abs() <= EPSILON_TRANSFER {
                     return false;
@@ -862,7 +1098,8 @@ pub fn preview_next_substep(
                 let flux = raw_flux
                     .max(-limited_max_from_neighbour)
                     .min(limited_max_from_center);
-                flux.abs() > EPSILON_TRANSFER
+                let min_flux = preview_min_flux.max(EPSILON_TRANSFER);
+                flux.abs() > min_flux
             });
             if !has_movable {
                 continue;
@@ -924,8 +1161,14 @@ mod tests {
         let center_x = WORLD_WIDTH / 2;
         let center_y = WORLD_HEIGHT / 2;
 
-        assert_eq!(seeded_hydrogen_amount(center_x, center_y), INITIAL_HYDROGEN_CENTER_PARTICLES);
-        assert_eq!(seeded_oxygen_amount(center_x, center_y), INITIAL_OXYGEN_CENTER_PARTICLES);
+        assert_eq!(
+            seeded_hydrogen_amount(center_x, center_y),
+            INITIAL_HYDROGEN_CENTER_PARTICLES
+        );
+        assert_eq!(
+            seeded_oxygen_amount(center_x, center_y),
+            INITIAL_OXYGEN_CENTER_PARTICLES
+        );
     }
 
     #[test]
@@ -945,7 +1188,10 @@ mod tests {
         let mut field = GasField::default();
         let world = WorldGrid::default();
 
-        field.clear_rect(UVec2::new(1, 1), UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2));
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
         field.set_amount(4, 4, GasKind::Hydrogen, 100.0);
         field.set_amount(4, 4, GasKind::Oxygen, 100.0);
 
@@ -978,7 +1224,10 @@ mod tests {
         let mut field = GasField::default();
         let mut world = WorldGrid::default();
 
-        field.clear_rect(UVec2::new(1, 1), UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2));
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
         field.set_amount(1, 1, GasKind::Hydrogen, 50.0);
         field.set_amount(1, 1, GasKind::Oxygen, 50.0);
         assert!(world.set_solid(2, 1));
@@ -1011,7 +1260,10 @@ mod tests {
     fn antisymmetric_pair_flux_respects_limiter() {
         let mut field = GasField::default();
         let mut world = WorldGrid::default();
-        field.clear_rect(UVec2::new(1, 1), UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2));
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
 
         field.set_amount(3, 3, GasKind::Hydrogen, 100.0);
         field.set_amount(4, 3, GasKind::Hydrogen, 10.0);
@@ -1020,16 +1272,7 @@ mod tests {
         assert!(world.set_solid(3, 4));
 
         let mut seed = 7;
-        step_cpu_gas_block_sync(
-            &mut field,
-            &world,
-            0,
-            0,
-            0,
-            &mut seed,
-            [0.20, 0.14],
-            0.30,
-        );
+        step_cpu_gas_block_sync(&mut field, &world, 0, 0, 0, &mut seed, [0.20, 0.14], 0.30);
 
         let center = field.amount(3, 3, GasKind::Hydrogen);
         let right = field.amount(4, 3, GasKind::Hydrogen);
@@ -1083,7 +1326,10 @@ mod tests {
     fn reconciliation_preserves_total_density_consistency() {
         let mut field = GasField::default();
         let world = WorldGrid::default();
-        field.clear_rect(UVec2::new(1, 1), UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2));
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
         field.set_amount(20, 20, GasKind::Hydrogen, 123.25);
         field.set_amount(20, 20, GasKind::Oxygen, 11.75);
         field.recompute_total_density_buffer(&world);
@@ -1091,6 +1337,64 @@ mod tests {
         let total_species = field.total_amount(20, 20);
         assert!((field.total_density(20, 20) - total_species).abs() < 1e-5);
     }
+
+    #[test]
+    fn renormalization_does_not_inject_corner_when_residual_exists() {
+        let mut field = GasField::default();
+        let world = WorldGrid::default();
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
+        field.set_amount(50, 50, GasKind::Hydrogen, 100.0);
+        field.set_amount(51, 50, GasKind::Hydrogen, 40.0);
+        field.set_amount(51, 51, GasKind::Hydrogen, 15.0);
+
+        // Force a tiny residual correction path.
+        field.renormalize_species_mass(&world, [155.00013, 0.0], 0.0);
+
+        assert!(
+            field.amount(1, 1, GasKind::Hydrogen) <= 1e-6,
+            "Corner cell should stay empty after residual correction"
+        );
+        let total_h2 = total_species(&field, GasKind::Hydrogen);
+        assert!((total_h2 - 155.00013).abs() < 1e-4);
+    }
+
+    #[test]
+    fn preview_ignores_micro_flux() {
+        let mut field = GasField::default();
+        let world = WorldGrid::default();
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
+        for y in 1..WORLD_HEIGHT - 1 {
+            for x in 1..WORLD_WIDTH - 1 {
+                field.set_amount(x, y, GasKind::Hydrogen, x as f32);
+            }
+        }
+
+        let (_, base_moves) =
+            preview_next_substep(&field, &world, 77, 0, [0.20, 0.14], 0.30, 0.0, 0.0);
+        assert!(
+            !base_moves.is_empty(),
+            "Baseline preview should detect at least one movable pair"
+        );
+
+        let (_, suppressed_moves) = preview_next_substep(
+            &field,
+            &world,
+            77,
+            0,
+            [0.20, 0.14],
+            0.30,
+            1_000_000.0,
+            1_000_000.0,
+        );
+        assert!(
+            suppressed_moves.is_empty(),
+            "Preview thresholds should suppress micro/noise moves"
+        );
+    }
 }
-
-

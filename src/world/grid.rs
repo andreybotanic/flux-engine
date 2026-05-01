@@ -76,7 +76,10 @@ pub fn linear_index(x: u32, y: u32) -> usize {
 }
 
 pub fn world_dimensions() -> Vec2 {
-    Vec2::new(WORLD_WIDTH as f32 * CELL_SIZE, WORLD_HEIGHT as f32 * CELL_SIZE)
+    Vec2::new(
+        WORLD_WIDTH as f32 * CELL_SIZE,
+        WORLD_HEIGHT as f32 * CELL_SIZE,
+    )
 }
 
 pub fn world_origin() -> Vec2 {

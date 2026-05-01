@@ -1,4 +1,4 @@
-﻿use bevy::{prelude::*, window::PrimaryWindow};
+use bevy::{prelude::*, window::PrimaryWindow};
 
 use crate::{
     input::camera::MainCamera,
@@ -57,22 +57,28 @@ pub fn update_cell_inspector(
     };
 
     let message = match window.cursor_position() {
-        Some(cursor_position) => match camera.viewport_to_world_2d(camera_transform, cursor_position) {
-            Ok(cursor_world_pos) => match world_to_cell(cursor_world_pos) {
-                Some(cell) => {
-                    let cell_kind = if world.is_solid(cell.x, cell.y) { "solid" } else { "empty" };
-                    let h2 = gas.amount_rounded(cell.x, cell.y, GasKind::Hydrogen);
-                    let o2 = gas.amount_rounded(cell.x, cell.y, GasKind::Oxygen);
-                    let total = gas.total_amount_rounded(cell.x, cell.y);
-                    format!(
+        Some(cursor_position) => {
+            match camera.viewport_to_world_2d(camera_transform, cursor_position) {
+                Ok(cursor_world_pos) => match world_to_cell(cursor_world_pos) {
+                    Some(cell) => {
+                        let cell_kind = if world.is_solid(cell.x, cell.y) {
+                            "solid"
+                        } else {
+                            "empty"
+                        };
+                        let h2 = gas.amount_rounded(cell.x, cell.y, GasKind::Hydrogen);
+                        let o2 = gas.amount_rounded(cell.x, cell.y, GasKind::Oxygen);
+                        let total = gas.total_amount_rounded(cell.x, cell.y);
+                        format!(
                         "{overlay_name}\n({}, {}) {}\nH2: {} particles\nO2: {} particles\nTotal: {} particles",
                         cell.x, cell.y, cell_kind, h2, o2, total
                     )
-                }
-                None => format!("{overlay_name}\noutside grid"),
-            },
-            Err(_) => format!("{overlay_name}\nunavailable"),
-        },
+                    }
+                    None => format!("{overlay_name}\noutside grid"),
+                },
+                Err(_) => format!("{overlay_name}\nunavailable"),
+            }
+        }
         None => format!("{overlay_name}\nunavailable"),
     };
 

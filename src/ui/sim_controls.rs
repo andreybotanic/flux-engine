@@ -135,7 +135,10 @@ pub fn handle_sim_control_keyboard(
 }
 
 pub fn handle_sim_control_buttons(
-    mut interactions: Query<(&Interaction, &SimControlAction), (Changed<Interaction>, With<Button>)>,
+    mut interactions: Query<
+        (&Interaction, &SimControlAction),
+        (Changed<Interaction>, With<Button>),
+    >,
     mut control: ResMut<SimulationControl>,
 ) {
     for (interaction, action) in &mut interactions {

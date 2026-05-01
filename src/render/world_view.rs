@@ -8,11 +8,11 @@ use crate::{
         gpu::GasSimulationImages,
         SimulationStep,
     },
-    world::WorldCellChanged,
     world::grid::{
         cell_center, is_boundary, world_dimensions, world_origin, CellKind, WorldGrid, CELL_SIZE,
         WORLD_HEIGHT, WORLD_WIDTH,
     },
+    world::WorldCellChanged,
 };
 
 const BOARD_MAIN_COLOR: Color = Color::srgb(0.06, 0.09, 0.12);
@@ -90,7 +90,10 @@ pub fn setup_world_view(
     let world_size = world_dimensions();
 
     commands.spawn((
-        Sprite::from_color(BACKDROP_MAIN_COLOR, world_size + Vec2::splat(CELL_SIZE * 4.0)),
+        Sprite::from_color(
+            BACKDROP_MAIN_COLOR,
+            world_size + Vec2::splat(CELL_SIZE * 4.0),
+        ),
         Transform::from_xyz(14.0, -18.0, -2.0),
         BackdropLayer,
     ));
@@ -195,7 +198,10 @@ pub fn sync_wall_visuals(
     }
 }
 
-pub fn update_overlay_mode(input: Res<ButtonInput<KeyCode>>, mut overlay_mode: ResMut<OverlayMode>) {
+pub fn update_overlay_mode(
+    input: Res<ButtonInput<KeyCode>>,
+    mut overlay_mode: ResMut<OverlayMode>,
+) {
     if input.just_pressed(KeyCode::F1) {
         *overlay_mode = OverlayMode::Main;
     }
@@ -265,8 +271,8 @@ pub fn sync_gas_display_texture(
                     // Keep overlay semantics consistent with HUD "particles" values.
                     // Tiny float residuals from solver should not light up cells as non-zero gas.
                     let particles = gas.total_amount_rounded(x, y) as f32;
-                    let storage_linear = (particles / HYDROGEN_GPU_STORAGE_MAX_PARTICLES as f32)
-                        .clamp(0.0, 1.0);
+                    let storage_linear =
+                        (particles / HYDROGEN_GPU_STORAGE_MAX_PARTICLES as f32).clamp(0.0, 1.0);
                     let visual = gas_visual_intensity(
                         particles,
                         visual_settings.gamma,

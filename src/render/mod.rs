@@ -15,7 +15,12 @@ impl Plugin for RenderPlugin {
         app.init_resource::<OverlayMode>()
             .init_resource::<GasVisualSettings>()
             .init_resource::<WallEntities>()
-            .add_systems(Startup, setup_world_view.after(setup_simulation_images).after(spawn_main_camera))
+            .add_systems(
+                Startup,
+                setup_world_view
+                    .after(setup_simulation_images)
+                    .after(spawn_main_camera),
+            )
             .add_systems(
                 Update,
                 (

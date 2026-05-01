@@ -1,12 +1,12 @@
-﻿use bevy::{prelude::*, window::PrimaryWindow};
+use bevy::{prelude::*, window::PrimaryWindow};
 
 use crate::{
-    debug::{DebugMode, DebugOverlaySettings},
+    debug::{DebugGasMetrics, DebugMode, DebugOverlaySettings},
     input::camera::MainCamera,
     render::GasVisualSettings,
     simulation::{
         gas::{GasField, GasKind},
-        GasSimulationConfig, SimulationStep,
+        GasSimulationConfig, GasSolverMode, SimulationStep,
     },
     ui::input_field::{TextInputDisplay, TextInputField, TextInputStyle},
     world::{
@@ -36,7 +36,7 @@ const DEBUG_TOOLBAR_HEIGHT: f32 = 48.0;
 const DEBUG_PANEL_RIGHT: f32 = 12.0;
 const DEBUG_PANEL_TOP: f32 = 12.0;
 const DEBUG_PANEL_WIDTH: f32 = 286.0;
-const DEBUG_PANEL_HEIGHT: f32 = 252.0;
+const DEBUG_PANEL_HEIGHT: f32 = 424.0;
 const DEBUG_AND_GAS_PANEL_GAP: f32 = 12.0;
 
 const GAS_PANEL_RIGHT: f32 = 12.0;
@@ -96,7 +96,10 @@ enum EditorUiAction {
     ToggleReplace,
     ToggleLbmVelocity,
     ToggleDiffusion,
+    ToggleSolverMode,
+    ToggleBuoyancy,
     ToggleShowDiffusionCells,
+    ToggleShowMomentumVectors,
 }
 
 #[derive(Component)]
@@ -124,16 +127,25 @@ struct LbmToggleLabel;
 struct DiffusionToggleLabel;
 
 #[derive(Component)]
+struct SolverModeLabel;
+
+#[derive(Component)]
 struct DiffusionCellsToggleLabel;
 
 #[derive(Component)]
 struct DiffusionCellsToggleButton;
 
 #[derive(Component)]
+struct BuoyancyToggleLabel;
+
+#[derive(Component)]
 struct GasGammaInputField;
 
 #[derive(Component)]
 struct GasMaxColorParticlesInputField;
+
+#[derive(Component)]
+struct WaveMetricsLabel;
 
 #[derive(Component)]
 struct BlueprintGhost;
@@ -292,6 +304,50 @@ fn setup_editor_ui(mut commands: Commands) {
                         ..default()
                     },
                     BackgroundColor(BUTTON_IDLE),
+                    EditorUiAction::ToggleSolverMode,
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("Solver: Legacy"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::WHITE),
+                        SolverModeLabel,
+                    ));
+                });
+
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(220.0),
+                        height: Val::Px(32.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(BUTTON_IDLE),
+                    EditorUiAction::ToggleBuoyancy,
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("Buoyancy: On"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::WHITE),
+                        BuoyancyToggleLabel,
+                    ));
+                });
+
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(220.0),
+                        height: Val::Px(32.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(BUTTON_IDLE),
                     EditorUiAction::ToggleShowDiffusionCells,
                     DiffusionCellsToggleButton,
                 ))
@@ -306,14 +362,42 @@ fn setup_editor_ui(mut commands: Commands) {
 
             parent
                 .spawn((
+                    Button,
                     Node {
-                        display: Display::Flex,
-                        flex_direction: FlexDirection::Row,
-                        column_gap: Val::Px(8.0),
+                        width: Val::Px(220.0),
+                        height: Val::Px(32.0),
+                        justify_content: JustifyContent::Center,
                         align_items: AlignItems::Center,
                         ..default()
                     },
+                    BackgroundColor(BUTTON_IDLE),
+                    EditorUiAction::ToggleShowMomentumVectors,
                 ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("Show impulses"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::WHITE),
+                    ));
+                });
+
+            parent.spawn((
+                Text::new(
+                    "Anisotropy: 0.0000 | Radial waves: 0.0000 | Mass err H2/O2: 0.0000 / 0.0000",
+                ),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::WHITE),
+                WaveMetricsLabel,
+            ));
+
+            parent
+                .spawn((Node {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(8.0),
+                    align_items: AlignItems::Center,
+                    ..default()
+                },))
                 .with_children(|row| {
                     row.spawn((
                         Text::new("Gamma:"),
@@ -321,46 +405,43 @@ fn setup_editor_ui(mut commands: Commands) {
                         TextColor(Color::WHITE),
                     ));
 
-                    row
-                        .spawn((
-                            Button,
-                            Node {
-                                min_width: Val::Px(92.0),
-                                height: Val::Px(30.0),
-                                justify_content: JustifyContent::FlexStart,
-                                align_items: AlignItems::Center,
-                                padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                                ..default()
-                            },
-                            BackgroundColor(BUTTON_IDLE),
-                            TextInputField::new_f32(1.0, 0.0, 10.0, 6, 3),
-                            TextInputStyle {
-                                idle_bg: BUTTON_IDLE,
-                                focused_bg: INPUT_FOCUSED,
-                            },
-                            bevy::ui::RelativeCursorPosition::default(),
-                            GasGammaInputField,
-                        ))
-                        .with_children(|button| {
-                            button.spawn((
-                                Text::new("1"),
-                                TextFont::from_font_size(13.0),
-                                TextColor(Color::WHITE),
-                                TextInputDisplay,
-                            ));
-                        });
+                    row.spawn((
+                        Button,
+                        Node {
+                            min_width: Val::Px(92.0),
+                            height: Val::Px(30.0),
+                            justify_content: JustifyContent::FlexStart,
+                            align_items: AlignItems::Center,
+                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                            ..default()
+                        },
+                        BackgroundColor(BUTTON_IDLE),
+                        TextInputField::new_f32(1.0, 0.0, 10.0, 6, 3),
+                        TextInputStyle {
+                            idle_bg: BUTTON_IDLE,
+                            focused_bg: INPUT_FOCUSED,
+                        },
+                        bevy::ui::RelativeCursorPosition::default(),
+                        GasGammaInputField,
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new("1"),
+                            TextFont::from_font_size(13.0),
+                            TextColor(Color::WHITE),
+                            TextInputDisplay,
+                        ));
+                    });
                 });
 
             parent
-                .spawn((
-                    Node {
-                        display: Display::Flex,
-                        flex_direction: FlexDirection::Row,
-                        column_gap: Val::Px(8.0),
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                ))
+                .spawn((Node {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(8.0),
+                    align_items: AlignItems::Center,
+                    ..default()
+                },))
                 .with_children(|row| {
                     row.spawn((
                         Text::new("Max color at:"),
@@ -368,34 +449,33 @@ fn setup_editor_ui(mut commands: Commands) {
                         TextColor(Color::WHITE),
                     ));
 
-                    row
-                        .spawn((
-                            Button,
-                            Node {
-                                min_width: Val::Px(92.0),
-                                height: Val::Px(30.0),
-                                justify_content: JustifyContent::FlexStart,
-                                align_items: AlignItems::Center,
-                                padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                                ..default()
-                            },
-                            BackgroundColor(BUTTON_IDLE),
-                            TextInputField::new_u32(1000, 1, 10_000, 5),
-                            TextInputStyle {
-                                idle_bg: BUTTON_IDLE,
-                                focused_bg: INPUT_FOCUSED,
-                            },
-                            bevy::ui::RelativeCursorPosition::default(),
-                            GasMaxColorParticlesInputField,
-                        ))
-                        .with_children(|button| {
-                            button.spawn((
-                                Text::new("1000"),
-                                TextFont::from_font_size(13.0),
-                                TextColor(Color::WHITE),
-                                TextInputDisplay,
-                            ));
-                        });
+                    row.spawn((
+                        Button,
+                        Node {
+                            min_width: Val::Px(92.0),
+                            height: Val::Px(30.0),
+                            justify_content: JustifyContent::FlexStart,
+                            align_items: AlignItems::Center,
+                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                            ..default()
+                        },
+                        BackgroundColor(BUTTON_IDLE),
+                        TextInputField::new_u32(1000, 1, 10_000, 5),
+                        TextInputStyle {
+                            idle_bg: BUTTON_IDLE,
+                            focused_bg: INPUT_FOCUSED,
+                        },
+                        bevy::ui::RelativeCursorPosition::default(),
+                        GasMaxColorParticlesInputField,
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new("1000"),
+                            TextFont::from_font_size(13.0),
+                            TextColor(Color::WHITE),
+                            TextInputDisplay,
+                        ));
+                    });
                 });
         });
 
@@ -440,15 +520,13 @@ fn setup_editor_ui(mut commands: Commands) {
                 });
 
             parent
-                .spawn((
-                    Node {
-                        display: Display::Flex,
-                        flex_direction: FlexDirection::Row,
-                        column_gap: Val::Px(8.0),
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                ))
+                .spawn((Node {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(8.0),
+                    align_items: AlignItems::Center,
+                    ..default()
+                },))
                 .with_children(|row| {
                     row.spawn((
                         Text::new("Amount:"),
@@ -456,34 +534,33 @@ fn setup_editor_ui(mut commands: Commands) {
                         TextColor(Color::WHITE),
                     ));
 
-                    row
-                        .spawn((
-                            Button,
-                            Node {
-                                min_width: Val::Px(112.0),
-                                height: Val::Px(30.0),
-                                justify_content: JustifyContent::FlexStart,
-                                align_items: AlignItems::Center,
-                                padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                                ..default()
-                            },
-                            BackgroundColor(BUTTON_IDLE),
-                            TextInputField::new_u32(100, 1, 1_000_000, 7),
-                            TextInputStyle {
-                                idle_bg: BUTTON_IDLE,
-                                focused_bg: INPUT_FOCUSED,
-                            },
-                            bevy::ui::RelativeCursorPosition::default(),
-                            GasAmountInputField,
-                        ))
-                        .with_children(|button| {
-                            button.spawn((
-                                Text::new("100"),
-                                TextFont::from_font_size(13.0),
-                                TextColor(Color::WHITE),
-                                TextInputDisplay,
-                            ));
-                        });
+                    row.spawn((
+                        Button,
+                        Node {
+                            min_width: Val::Px(112.0),
+                            height: Val::Px(30.0),
+                            justify_content: JustifyContent::FlexStart,
+                            align_items: AlignItems::Center,
+                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                            ..default()
+                        },
+                        BackgroundColor(BUTTON_IDLE),
+                        TextInputField::new_u32(100, 1, 1_000_000, 7),
+                        TextInputStyle {
+                            idle_bg: BUTTON_IDLE,
+                            focused_bg: INPUT_FOCUSED,
+                        },
+                        bevy::ui::RelativeCursorPosition::default(),
+                        GasAmountInputField,
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new("100"),
+                            TextFont::from_font_size(13.0),
+                            TextColor(Color::WHITE),
+                            TextInputDisplay,
+                        ));
+                    });
                 });
 
             parent
@@ -535,14 +612,20 @@ fn spawn_tool_button(parent: &mut ChildSpawnerCommands, label: &str, tool: Edito
 
 fn setup_editor_overlays(mut commands: Commands) {
     commands.spawn((
-        Sprite::from_color(Color::srgba(0.15, 0.9, 0.25, 0.16), Vec2::splat(CELL_SIZE - 2.0)),
+        Sprite::from_color(
+            Color::srgba(0.15, 0.9, 0.25, 0.16),
+            Vec2::splat(CELL_SIZE - 2.0),
+        ),
         Transform::from_xyz(0.0, 0.0, 1.8),
         Visibility::Hidden,
         BlueprintGhost,
     ));
 
     commands.spawn((
-        Sprite::from_color(Color::srgba(1.0, 0.24, 0.24, 0.28), Vec2::splat(CELL_SIZE - 2.0)),
+        Sprite::from_color(
+            Color::srgba(1.0, 0.24, 0.24, 0.28),
+            Vec2::splat(CELL_SIZE - 2.0),
+        ),
         Transform::from_xyz(0.0, 0.0, 1.79),
         Visibility::Hidden,
         EraseCellHighlight,
@@ -624,9 +707,22 @@ fn handle_editor_ui_actions(
                 unfocus_inputs();
                 gas_simulation.enable_diffusion = !gas_simulation.enable_diffusion;
             }
+            EditorUiAction::ToggleSolverMode => {
+                unfocus_inputs();
+                gas_simulation.solver_mode = gas_simulation.solver_mode.next();
+            }
+            EditorUiAction::ToggleBuoyancy => {
+                unfocus_inputs();
+                gas_simulation.solver_tuning.enable_buoyancy =
+                    !gas_simulation.solver_tuning.enable_buoyancy;
+            }
             EditorUiAction::ToggleShowDiffusionCells => {
                 unfocus_inputs();
                 debug_overlay.show_diffusion_cells = !debug_overlay.show_diffusion_cells;
+            }
+            EditorUiAction::ToggleShowMomentumVectors => {
+                unfocus_inputs();
+                debug_overlay.show_momentum_vectors = !debug_overlay.show_momentum_vectors;
             }
         }
     }
@@ -635,6 +731,7 @@ fn handle_editor_ui_actions(
 fn refresh_editor_ui(
     tool: Res<EditorTool>,
     debug_mode: Res<DebugMode>,
+    debug_metrics: Res<DebugGasMetrics>,
     gas_simulation: Res<GasSimulationConfig>,
     debug_overlay: Res<DebugOverlaySettings>,
     mut gas_visual_settings: ResMut<GasVisualSettings>,
@@ -649,12 +746,15 @@ fn refresh_editor_ui(
         Single<&mut Visibility, With<GasToolPanelRoot>>,
         Single<&mut Visibility, With<DiffusionCellsToggleButton>>,
     )>,
-    mut text_set: ParamSet<(
+    mut text_set_primary: ParamSet<(
         Single<&mut Text, With<GasReplaceLabel>>,
         Single<&mut Text, With<GasKindLabel>>,
         Single<&mut Text, With<LbmToggleLabel>>,
         Single<&mut Text, With<DiffusionToggleLabel>>,
+        Single<&mut Text, With<SolverModeLabel>>,
+        Single<&mut Text, With<BuoyancyToggleLabel>>,
         Single<&mut Text, With<DiffusionCellsToggleLabel>>,
+        Single<&mut Text, With<WaveMetricsLabel>>,
     )>,
 ) {
     if let Some(amount) = gas_input.parsed_u32() {
@@ -678,9 +778,27 @@ fn refresh_editor_ui(
             EditorUiAction::SelectTool(action_tool) if *action_tool == *tool => BUTTON_ACTIVE,
             EditorUiAction::ToggleGasKind if *tool == EditorTool::AddGas => BUTTON_ACTIVE,
             EditorUiAction::ToggleReplace if gas_settings.replace => BUTTON_ACTIVE,
-            EditorUiAction::ToggleLbmVelocity if gas_simulation.enable_lbm_velocity => BUTTON_ACTIVE,
+            EditorUiAction::ToggleLbmVelocity if gas_simulation.enable_lbm_velocity => {
+                BUTTON_ACTIVE
+            }
             EditorUiAction::ToggleDiffusion if gas_simulation.enable_diffusion => BUTTON_ACTIVE,
-            EditorUiAction::ToggleShowDiffusionCells if debug_overlay.show_diffusion_cells => BUTTON_ACTIVE,
+            EditorUiAction::ToggleSolverMode
+                if !matches!(gas_simulation.solver_mode, GasSolverMode::LegacyHybrid) =>
+            {
+                BUTTON_ACTIVE
+            }
+            EditorUiAction::ToggleBuoyancy
+                if gas_simulation.solver_tuning.enable_buoyancy
+                    && !matches!(gas_simulation.solver_mode, GasSolverMode::LegacyHybrid) =>
+            {
+                BUTTON_ACTIVE
+            }
+            EditorUiAction::ToggleShowDiffusionCells if debug_overlay.show_diffusion_cells => {
+                BUTTON_ACTIVE
+            }
+            EditorUiAction::ToggleShowMomentumVectors if debug_overlay.show_momentum_vectors => {
+                BUTTON_ACTIVE
+            }
             _ => BUTTON_IDLE,
         };
     }
@@ -714,7 +832,10 @@ fn refresh_editor_ui(
 
     {
         let mut diffusion_cells_toggle_button = visibility_set.p3();
-        **diffusion_cells_toggle_button = if debug_mode.active && gas_simulation.enable_diffusion {
+        **diffusion_cells_toggle_button = if debug_mode.active
+            && gas_simulation.enable_diffusion
+            && matches!(gas_simulation.solver_mode, GasSolverMode::LegacyHybrid)
+        {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -722,12 +843,12 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut gas_kind_text = text_set.p1();
+        let mut gas_kind_text = text_set_primary.p1();
         gas_kind_text.0 = format!("Gas: {}", gas_settings.gas_kind.label());
     }
 
     {
-        let mut replace_text = text_set.p0();
+        let mut replace_text = text_set_primary.p0();
         replace_text.0 = if gas_settings.replace {
             "Replace: On".to_string()
         } else {
@@ -736,7 +857,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut lbm_toggle_text = text_set.p2();
+        let mut lbm_toggle_text = text_set_primary.p2();
         lbm_toggle_text.0 = if gas_simulation.enable_lbm_velocity {
             "LBM/Velocity: On".to_string()
         } else {
@@ -745,21 +866,68 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut diffusion_toggle_text = text_set.p3();
-        diffusion_toggle_text.0 = if gas_simulation.enable_diffusion {
-            "Diffusion: On".to_string()
-        } else {
-            "Diffusion: Off".to_string()
-        };
+        let mut diffusion_toggle_text = text_set_primary.p3();
+        diffusion_toggle_text.0 =
+            if matches!(gas_simulation.solver_mode, GasSolverMode::LegacyHybrid) {
+                if gas_simulation.enable_diffusion {
+                    "Diffusion: On".to_string()
+                } else {
+                    "Diffusion: Off".to_string()
+                }
+            } else if gas_simulation.enable_diffusion {
+                "Species relax: On".to_string()
+            } else {
+                "Species relax: Off".to_string()
+            };
     }
 
     {
-        let mut diffusion_cells_toggle_text = text_set.p4();
+        let mut solver_mode_text = text_set_primary.p4();
+        solver_mode_text.0 = format!("Solver: {}", gas_simulation.solver_mode.label());
+    }
+
+    {
+        let mut buoyancy_toggle_text = text_set_primary.p5();
+        buoyancy_toggle_text.0 =
+            if matches!(gas_simulation.solver_mode, GasSolverMode::LegacyHybrid) {
+                "Buoyancy: N/A (Legacy)".to_string()
+            } else if gas_simulation.solver_tuning.enable_buoyancy {
+                "Buoyancy: On".to_string()
+            } else {
+                "Buoyancy: Off".to_string()
+            };
+    }
+
+    {
+        let mut diffusion_cells_toggle_text = text_set_primary.p6();
         diffusion_cells_toggle_text.0 = if debug_overlay.show_diffusion_cells {
             "Show diffusion cells: On".to_string()
         } else {
             "Show diffusion cells: Off".to_string()
         };
+    }
+
+    {
+        let mut metrics_text = text_set_primary.p7();
+        let preview_mode = if matches!(gas_simulation.solver_mode, GasSolverMode::LegacyHybrid) {
+            "Legacy diffusion preview"
+        } else {
+            "Unified (preview N/A)"
+        };
+        let velocity_mode = if debug_overlay.show_momentum_vectors {
+            "Impulse vectors: On"
+        } else {
+            "Impulse vectors: Off"
+        };
+        metrics_text.0 = format!(
+            "{} | {} | Anisotropy: {:.4} | Radial waves: {:.4} | Mass err H2/O2: {:.4} / {:.4}",
+            preview_mode,
+            velocity_mode,
+            debug_metrics.anisotropy_score,
+            debug_metrics.radial_wave_score,
+            debug_metrics.mass_error_h2,
+            debug_metrics.mass_error_o2
+        );
     }
 }
 
@@ -783,8 +951,8 @@ fn handle_editor_mouse_input(
         .map(|cursor| is_cursor_over_ui(cursor, &window, debug_mode.active, *tool))
         .unwrap_or(false);
 
-    let hovered_cell = cursor_position
-        .and_then(|cursor| viewport_cursor_to_cell(cursor, &camera_query));
+    let hovered_cell =
+        cursor_position.and_then(|cursor| viewport_cursor_to_cell(cursor, &camera_query));
 
     match *tool {
         EditorTool::BuildSolid => {
@@ -924,14 +1092,17 @@ fn update_editor_cursor_overlays(
         .map(|cursor| is_cursor_over_ui(cursor, &window, debug_mode.active, *tool))
         .unwrap_or(false);
 
-    let world_cell = cursor_position.and_then(|cursor| viewport_cursor_to_cell(cursor, &camera_query));
+    let world_cell =
+        cursor_position.and_then(|cursor| viewport_cursor_to_cell(cursor, &camera_query));
 
     {
         let mut blueprint = overlay_set.p0();
         let (ghost_transform, ghost_visibility) = &mut *blueprint;
-        if *tool == EditorTool::BuildSolid && !is_on_ui && !mouse_buttons.pressed(MouseButton::Left) {
+        if *tool == EditorTool::BuildSolid && !is_on_ui && !mouse_buttons.pressed(MouseButton::Left)
+        {
             if let Some(cell) = world_cell {
-                **ghost_transform = Transform::from_translation(cell_center(cell.x, cell.y).extend(1.8));
+                **ghost_transform =
+                    Transform::from_translation(cell_center(cell.x, cell.y).extend(1.8));
                 **ghost_visibility = Visibility::Visible;
             } else {
                 **ghost_visibility = Visibility::Hidden;
@@ -946,7 +1117,8 @@ fn update_editor_cursor_overlays(
         let (highlight_transform, highlight_visibility) = &mut *erase_highlight;
         if *tool == EditorTool::EraseSolid && !is_on_ui {
             if let Some(cell) = world_cell {
-                **highlight_transform = Transform::from_translation(cell_center(cell.x, cell.y).extend(1.79));
+                **highlight_transform =
+                    Transform::from_translation(cell_center(cell.x, cell.y).extend(1.79));
                 **highlight_visibility = Visibility::Visible;
             } else {
                 **highlight_visibility = Visibility::Hidden;
@@ -1006,15 +1178,28 @@ fn normalized_rect(a: UVec2, b: UVec2) -> (UVec2, UVec2) {
     (min, max)
 }
 
-fn viewport_cursor_to_cell(cursor: Vec2, camera_query: &Single<(&Camera, &GlobalTransform), With<MainCamera>>) -> Option<UVec2> {
+fn viewport_cursor_to_cell(
+    cursor: Vec2,
+    camera_query: &Single<(&Camera, &GlobalTransform), With<MainCamera>>,
+) -> Option<UVec2> {
     let (camera, camera_transform) = **camera_query;
     let world_pos = camera.viewport_to_world_2d(camera_transform, cursor).ok()?;
     world_to_cell(world_pos)
 }
 
-fn is_cursor_over_ui(cursor: Vec2, window: &Window, debug_mode_active: bool, tool: EditorTool) -> bool {
+fn is_cursor_over_ui(
+    cursor: Vec2,
+    window: &Window,
+    debug_mode_active: bool,
+    tool: EditorTool,
+) -> bool {
     let mut rects = vec![
-        UiRectPx::top_left(12.0, 12.0, TOP_LEFT_SIM_PANEL_WIDTH, TOP_LEFT_SIM_PANEL_HEIGHT),
+        UiRectPx::top_left(
+            12.0,
+            12.0,
+            TOP_LEFT_SIM_PANEL_WIDTH,
+            TOP_LEFT_SIM_PANEL_HEIGHT,
+        ),
         UiRectPx::top_left(
             MAIN_TOOLBAR_LEFT,
             window.height() - MAIN_TOOLBAR_BOTTOM - MAIN_TOOLBAR_HEIGHT,

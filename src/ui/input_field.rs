@@ -38,7 +38,10 @@ impl InputAllowedChars {
 #[derive(Clone, Debug)]
 pub enum InputParser {
     String,
-    U32Range { min: u32, max: u32 },
+    U32Range {
+        min: u32,
+        max: u32,
+    },
     F32Range {
         min: f32,
         max: f32,
@@ -65,7 +68,11 @@ pub struct TextInputField {
 }
 
 impl TextInputField {
-    pub fn new_string(initial: impl Into<String>, max_len: usize, allowed_chars: InputAllowedChars) -> Self {
+    pub fn new_string(
+        initial: impl Into<String>,
+        max_len: usize,
+        allowed_chars: InputAllowedChars,
+    ) -> Self {
         let mut text = initial.into();
         if text.chars().count() > max_len {
             text = text.chars().take(max_len).collect();
@@ -254,10 +261,11 @@ impl TextInputField {
                 }
 
                 if let Some(separator_byte_index) = next.find(['.', ',']) {
-                    let separator_char_index =
-                        next[..separator_byte_index].chars().count();
-                    let fraction_len =
-                        next.chars().count().saturating_sub(separator_char_index + 1);
+                    let separator_char_index = next[..separator_byte_index].chars().count();
+                    let fraction_len = next
+                        .chars()
+                        .count()
+                        .saturating_sub(separator_char_index + 1);
                     if fraction_len > max_fraction_digits {
                         return false;
                     }
@@ -359,7 +367,10 @@ fn ensure_text_input_caret(
 fn focus_text_input_on_click(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut query_set: ParamSet<(
-        Query<(Entity, &Interaction, &RelativeCursorPosition), (Changed<Interaction>, With<TextInputField>)>,
+        Query<
+            (Entity, &Interaction, &RelativeCursorPosition),
+            (Changed<Interaction>, With<TextInputField>),
+        >,
         Query<(Entity, &mut TextInputField, &ComputedNode)>,
     )>,
     display_layout_query: Query<(&TextLayoutInfo, &ChildOf), With<TextInputDisplay>>,
@@ -392,7 +403,12 @@ fn focus_text_input_on_click(
 
                 if let Some(layout_info) = display_layout_by_input.get(&entity) {
                     let click_x = relative_x.unwrap_or(input_width) - content_left;
-                    field.cursor = cursor_index_from_click_x(&field.text, field.char_count(), layout_info, click_x);
+                    field.cursor = cursor_index_from_click_x(
+                        &field.text,
+                        field.char_count(),
+                        layout_info,
+                        click_x,
+                    );
                 } else {
                     let len = field.char_count();
                     let cursor_pos = normalized.map(|p| p.x.clamp(0.0, 1.0)).unwrap_or(1.0);
@@ -493,7 +509,10 @@ fn sync_text_input_caret(
     mut blink: ResMut<TextInputCaretBlink>,
     input_query: Query<(&TextInputField, &ComputedNode)>,
     display_query: Query<(&TextLayoutInfo, &ChildOf), With<TextInputDisplay>>,
-    mut caret_query: Query<(&mut Node, &mut Visibility, &ChildOf, &mut BackgroundColor), With<TextInputCaret>>,
+    mut caret_query: Query<
+        (&mut Node, &mut Visibility, &ChildOf, &mut BackgroundColor),
+        With<TextInputCaret>,
+    >,
 ) {
     blink.timer.tick(time.delta());
     if blink.timer.just_finished() {
@@ -520,7 +539,8 @@ fn sync_text_input_caret(
         let content_inset = input_node.content_inset();
         let text_origin_x = content_inset.left;
         let text_origin_y = content_inset.top;
-        let content_height = (input_node.size().y - content_inset.top - content_inset.bottom).max(0.0);
+        let content_height =
+            (input_node.size().y - content_inset.top - content_inset.bottom).max(0.0);
         let caret_height = (content_height * CARET_HEIGHT_FACTOR).max(CARET_MIN_HEIGHT_PX);
         let caret_top = text_origin_y + ((content_height - caret_height) * 0.5).max(0.0);
 
@@ -530,7 +550,8 @@ fn sync_text_input_caret(
             text_origin_x
         };
 
-        caret_node.left = Val::Px((caret_x - (CARET_WIDTH_PX * 0.5)).max(text_origin_x - CARET_SIDE_PADDING_PX));
+        caret_node.left =
+            Val::Px((caret_x - (CARET_WIDTH_PX * 0.5)).max(text_origin_x - CARET_SIDE_PADDING_PX));
         caret_node.top = Val::Px(caret_top);
         caret_node.width = Val::Px(CARET_WIDTH_PX);
         caret_node.height = Val::Px(caret_height);

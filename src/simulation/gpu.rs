@@ -84,7 +84,10 @@ impl Plugin for GasGpuPlugin {
         .add_systems(Startup, setup_simulation_images);
 
         let render_app = app.sub_app_mut(RenderApp);
-        render_app.add_systems(Render, prepare_bind_groups.in_set(RenderSet::PrepareBindGroups));
+        render_app.add_systems(
+            Render,
+            prepare_bind_groups.in_set(RenderSet::PrepareBindGroups),
+        );
 
         let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
         render_graph.add_node(GasComputeLabel, GasComputeNode::default());
@@ -129,7 +132,9 @@ impl render_graph::Node for GasComputeNode {
         let bind_groups = &world.resource::<GasBindGroups>().0;
         let pipeline_cache = world.resource::<PipelineCache>();
         let pipeline = world.resource::<GasComputePipeline>();
-        let compute_pipeline = pipeline_cache.get_compute_pipeline(pipeline.pipeline).unwrap();
+        let compute_pipeline = pipeline_cache
+            .get_compute_pipeline(pipeline.pipeline)
+            .unwrap();
 
         let mut pass = render_context
             .command_encoder()
@@ -182,7 +187,8 @@ fn build_seeded_image() -> Image {
         for x in 0..WORLD_WIDTH {
             let wall = if is_boundary(x, y) { 1.0 } else { 0.0 };
             let particles = seeded_gas_amount(x, y) as f32;
-            let storage_linear = (particles / HYDROGEN_GPU_STORAGE_MAX_PARTICLES as f32).clamp(0.0, 1.0);
+            let storage_linear =
+                (particles / HYDROGEN_GPU_STORAGE_MAX_PARTICLES as f32).clamp(0.0, 1.0);
             let visual = gas_visual_intensity(particles);
             let color = Color::linear_rgba(visual, wall, storage_linear, 1.0);
             let _ = image.set_color_at(x, y, color);
