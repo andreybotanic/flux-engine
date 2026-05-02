@@ -40,6 +40,15 @@ const SPECIES_RELATIVE_DRIFT_SCALE: f32 = 0.45;
 pub type GasScalar = f32;
 pub type GasCell = Vec<GasScalar>;
 
+#[derive(Clone, Debug)]
+pub struct GasFieldSnapshot {
+    pub gas_count: usize,
+    pub species: Vec<f32>,
+    pub total_density: Vec<f32>,
+    pub velocity: Vec<[f32; 2]>,
+    pub lbm_flat: Vec<f32>,
+}
+
 #[derive(Clone, Copy)]
 struct KernelOffset {
     dx: i32,
@@ -117,6 +126,122 @@ impl GasField {
 
     pub fn gas_count(&self) -> usize {
         self.gas_count
+    }
+
+    pub fn snapshot_state(&self) -> GasFieldSnapshot {
+        let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+        let mut species = Vec::with_capacity(cells * self.gas_count);
+        for idx in 0..cells {
+            for gas_index in 0..self.gas_count {
+                species.push(self.read[idx][gas_index]);
+            }
+        }
+
+        let velocity = self.velocity.iter().map(|v| [v.x, v.y]).collect::<Vec<_>>();
+
+        let mut lbm_flat = Vec::with_capacity(cells * 9);
+        for dirs in &self.lbm_read {
+            lbm_flat.extend_from_slice(dirs);
+        }
+
+        GasFieldSnapshot {
+            gas_count: self.gas_count,
+            species,
+            total_density: self.total_density.clone(),
+            velocity,
+            lbm_flat,
+        }
+    }
+
+    pub fn restore_state(&mut self, snapshot: &GasFieldSnapshot) -> Result<(), String> {
+        let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+        if snapshot.gas_count != self.gas_count {
+            return Err(format!(
+                "Gas snapshot gas_count mismatch: got {}, expected {}",
+                snapshot.gas_count, self.gas_count
+            ));
+        }
+
+        if snapshot.species.len() != cells * self.gas_count {
+            return Err(format!(
+                "Gas snapshot species length mismatch: got {}, expected {}",
+                snapshot.species.len(),
+                cells * self.gas_count
+            ));
+        }
+        if snapshot.total_density.len() != cells {
+            return Err(format!(
+                "Gas snapshot total_density length mismatch: got {}, expected {}",
+                snapshot.total_density.len(),
+                cells
+            ));
+        }
+        if snapshot.velocity.len() != cells {
+            return Err(format!(
+                "Gas snapshot velocity length mismatch: got {}, expected {}",
+                snapshot.velocity.len(),
+                cells
+            ));
+        }
+        if snapshot.lbm_flat.len() != cells * 9 {
+            return Err(format!(
+                "Gas snapshot lbm length mismatch: got {}, expected {}",
+                snapshot.lbm_flat.len(),
+                cells * 9
+            ));
+        }
+
+        for idx in 0..cells {
+            for gas_index in 0..self.gas_count {
+                let value = snapshot.species[idx * self.gas_count + gas_index];
+                if !value.is_finite() {
+                    return Err(format!(
+                        "Gas snapshot contains non-finite species value at cell {}, gas {}",
+                        idx, gas_index
+                    ));
+                }
+                let clamped = value.max(0.0);
+                self.read[idx][gas_index] = clamped;
+                self.write[idx][gas_index] = clamped;
+            }
+
+            let rho = snapshot.total_density[idx];
+            if !rho.is_finite() {
+                return Err(format!(
+                    "Gas snapshot contains non-finite total_density at cell {}",
+                    idx
+                ));
+            }
+            self.total_density[idx] = rho.max(0.0);
+
+            let vx = snapshot.velocity[idx][0];
+            let vy = snapshot.velocity[idx][1];
+            if !vx.is_finite() || !vy.is_finite() {
+                return Err(format!(
+                    "Gas snapshot contains non-finite velocity at cell {}",
+                    idx
+                ));
+            }
+            self.velocity[idx] = Vec2::new(vx, vy);
+        }
+
+        for idx in 0..cells {
+            let base = idx * 9;
+            for dir in 0..9 {
+                let value = snapshot.lbm_flat[base + dir];
+                if !value.is_finite() {
+                    return Err(format!(
+                        "Gas snapshot contains non-finite lbm value at cell {}, dir {}",
+                        idx, dir
+                    ));
+                }
+                let clamped = value.max(0.0);
+                self.lbm_read[idx][dir] = clamped;
+                self.lbm_write[idx][dir] = clamped;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn molecular_mass(&self, gas_index: usize) -> f32 {
@@ -447,8 +572,8 @@ impl GasField {
                 if species_eq_blend > 0.0 {
                     transport_sum = 0.0;
                     for dir in 0..9 {
-                        let blended =
-                            post[dir] * (1.0 - species_eq_blend) + feq[dir].max(0.0) * species_eq_blend;
+                        let blended = post[dir] * (1.0 - species_eq_blend)
+                            + feq[dir].max(0.0) * species_eq_blend;
                         transport_weights[dir] = blended.max(0.0);
                         transport_sum += transport_weights[dir];
                     }
@@ -577,8 +702,16 @@ impl GasField {
         let current_totals = self.species_totals(world);
         let mut scales = vec![1.0f32; self.gas_count];
         for gas_index in 0..self.gas_count {
-            let target = target_totals.get(gas_index).copied().unwrap_or(0.0).max(0.0);
-            let current = current_totals.get(gas_index).copied().unwrap_or(0.0).max(0.0);
+            let target = target_totals
+                .get(gas_index)
+                .copied()
+                .unwrap_or(0.0)
+                .max(0.0);
+            let current = current_totals
+                .get(gas_index)
+                .copied()
+                .unwrap_or(0.0)
+                .max(0.0);
             if target <= EPSILON_DENSITY || current <= EPSILON_DENSITY {
                 continue;
             }
@@ -620,7 +753,11 @@ impl GasField {
         }
 
         for gas_index in 0..self.gas_count {
-            let target = target_totals.get(gas_index).copied().unwrap_or(0.0).max(0.0);
+            let target = target_totals
+                .get(gas_index)
+                .copied()
+                .unwrap_or(0.0)
+                .max(0.0);
             let residual = target - corrected_totals[gas_index];
             if residual.abs() <= residual_threshold {
                 continue;
@@ -681,7 +818,11 @@ impl GasField {
         }
 
         for gas_index in 0..self.gas_count {
-            let target = target_totals.get(gas_index).copied().unwrap_or(0.0).max(0.0);
+            let target = target_totals
+                .get(gas_index)
+                .copied()
+                .unwrap_or(0.0)
+                .max(0.0);
             let residual = target - final_totals[gas_index];
             if residual.abs() <= EPSILON_DENSITY {
                 continue;
@@ -1119,17 +1260,20 @@ mod tests {
                 }
 
                 let c = field.amount(x, y, gas_index).max(0.0);
-                let lap_like = c
-                    - 0.25
-                        * (field.amount(x - 1, y, gas_index).max(0.0)
-                            + field.amount(x + 1, y, gas_index).max(0.0)
-                            + field.amount(x, y - 1, gas_index).max(0.0)
-                            + field.amount(x, y + 1, gas_index).max(0.0));
+                let lap_like = c - 0.25
+                    * (field.amount(x - 1, y, gas_index).max(0.0)
+                        + field.amount(x + 1, y, gas_index).max(0.0)
+                        + field.amount(x, y - 1, gas_index).max(0.0)
+                        + field.amount(x, y + 1, gas_index).max(0.0));
                 acc += lap_like.abs();
                 count += 1;
             }
         }
-        if count == 0 { 0.0 } else { acc / count as f32 }
+        if count == 0 {
+            0.0
+        } else {
+            acc / count as f32
+        }
     }
 
     #[test]
@@ -1214,5 +1358,82 @@ mod tests {
             "CO2 should stay near zero, got {}",
             totals.get(2).copied().unwrap_or(0.0)
         );
+    }
+
+    #[test]
+    fn gas_snapshot_roundtrip_preserves_internal_state() {
+        let registry = registry_with_three();
+        let world = WorldGrid::default();
+        let mut field = GasField::from_registry(&registry);
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
+        let cx = WORLD_WIDTH / 2;
+        let cy = WORLD_HEIGHT / 2;
+        let _ = field.apply_species_delta_with_lbm(cx, cy, 0, 6000.0);
+        let _ = field.apply_species_delta_with_lbm(cx + 1, cy, 1, 3000.0);
+        let _ = field.apply_species_delta_with_lbm(cx, cy + 1, 2, 1000.0);
+        field.recompute_total_density_buffer(&world);
+        field.sync_lbm_from_total_density(&world);
+
+        let snapshot = field.snapshot_state();
+        let mut restored = GasField::from_registry(&registry);
+        restored
+            .restore_state(&snapshot)
+            .expect("restore from valid snapshot");
+
+        let original_snapshot = field.snapshot_state();
+        let restored_snapshot = restored.snapshot_state();
+        assert_eq!(original_snapshot.gas_count, restored_snapshot.gas_count);
+        assert_eq!(
+            original_snapshot.species.len(),
+            restored_snapshot.species.len()
+        );
+        assert_eq!(
+            original_snapshot.total_density.len(),
+            restored_snapshot.total_density.len()
+        );
+        assert_eq!(
+            original_snapshot.velocity.len(),
+            restored_snapshot.velocity.len()
+        );
+        assert_eq!(
+            original_snapshot.lbm_flat.len(),
+            restored_snapshot.lbm_flat.len()
+        );
+
+        for i in 0..original_snapshot.species.len() {
+            assert!(
+                (original_snapshot.species[i] - restored_snapshot.species[i]).abs() < 1e-6,
+                "species mismatch at index {}",
+                i
+            );
+        }
+        for i in 0..original_snapshot.total_density.len() {
+            assert!(
+                (original_snapshot.total_density[i] - restored_snapshot.total_density[i]).abs()
+                    < 1e-6,
+                "total_density mismatch at index {}",
+                i
+            );
+            assert!(
+                (original_snapshot.velocity[i][0] - restored_snapshot.velocity[i][0]).abs() < 1e-6,
+                "velocity.x mismatch at index {}",
+                i
+            );
+            assert!(
+                (original_snapshot.velocity[i][1] - restored_snapshot.velocity[i][1]).abs() < 1e-6,
+                "velocity.y mismatch at index {}",
+                i
+            );
+        }
+        for i in 0..original_snapshot.lbm_flat.len() {
+            assert!(
+                (original_snapshot.lbm_flat[i] - restored_snapshot.lbm_flat[i]).abs() < 1e-6,
+                "lbm mismatch at index {}",
+                i
+            );
+        }
     }
 }

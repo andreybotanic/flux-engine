@@ -10,6 +10,7 @@ use bevy::{
 use crate::{
     config::{CellTypeVisualConfig, GasMainViewVisualConfig, GasRegistry},
     input::camera::MainCamera,
+    save::WorldLoadState,
     simulation::{
         gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
         SimulationStep,
@@ -180,9 +181,11 @@ pub fn setup_world_view(
     mut commands: Commands,
     simulation_images: Res<GasSimulationImages>,
     world: Res<WorldGrid>,
+    world_load_state: Res<WorldLoadState>,
     asset_server: Res<AssetServer>,
     cell_visuals: Res<CellTypeVisualConfig>,
 ) {
+    let show_world = world_load_state.has_world;
     let visuals = WorldVisualAssets {
         backdrop_noise: asset_server.load("sprites/world/backdrop_noise.png"),
         brick: asset_server.load("sprites/world/tile_brick.png"),
@@ -206,6 +209,11 @@ pub fn setup_world_view(
             ..default()
         },
         Transform::from_xyz(14.0, -18.0, -2.0),
+        if show_world {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        },
         BackdropLayer,
     ));
 
@@ -222,6 +230,11 @@ pub fn setup_world_view(
             ..default()
         },
         Transform::from_xyz(0.0, 0.0, -1.0),
+        if show_world {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        },
         BoardLayer,
     ));
 
@@ -245,7 +258,11 @@ pub fn setup_world_view(
             ..default()
         },
         Transform::from_xyz(0.0, 0.0, 0.8),
-        Visibility::Visible,
+        if show_world {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        },
         GasMainOverlaySprite,
     ));
 
@@ -253,8 +270,15 @@ pub fn setup_world_view(
     for y in 0..WORLD_HEIGHT {
         for x in 0..WORLD_WIDTH {
             if let CellKind::Solid(material) = world.cell(x, y) {
-                let entity =
-                    spawn_wall_sprite(&mut commands, &visuals, &cell_visuals, x, y, material);
+                let entity = spawn_wall_sprite(
+                    &mut commands,
+                    &visuals,
+                    &cell_visuals,
+                    x,
+                    y,
+                    material,
+                    show_world,
+                );
                 wall_entities.by_cell.insert((x, y), entity);
             }
         }
@@ -269,6 +293,7 @@ fn spawn_wall_sprite(
     x: u32,
     y: u32,
     material: CellMaterial,
+    show_world: bool,
 ) -> Entity {
     let image = match material {
         CellMaterial::Boundary => visuals.boundary.clone(),
@@ -287,6 +312,11 @@ fn spawn_wall_sprite(
                 ..default()
             },
             Transform::from_translation(cell_center(x, y).extend(0.5)),
+            if show_world {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            },
             WallVisual {
                 main_tint,
                 gas_tint,
@@ -312,7 +342,7 @@ pub fn sync_wall_visuals(
         match (current_cell, wall_entities.by_cell.get(&key).copied()) {
             (CellKind::Solid(material), None) => {
                 let entity =
-                    spawn_wall_sprite(&mut commands, &visuals, &cell_visuals, x, y, material);
+                    spawn_wall_sprite(&mut commands, &visuals, &cell_visuals, x, y, material, true);
                 wall_entities.by_cell.insert(key, entity);
             }
             (CellKind::Empty, Some(entity)) => {
@@ -322,7 +352,7 @@ pub fn sync_wall_visuals(
             (CellKind::Solid(material), Some(entity)) => {
                 commands.entity(entity).despawn();
                 let next_entity =
-                    spawn_wall_sprite(&mut commands, &visuals, &cell_visuals, x, y, material);
+                    spawn_wall_sprite(&mut commands, &visuals, &cell_visuals, x, y, material, true);
                 wall_entities.by_cell.insert(key, next_entity);
             }
             _ => {}
@@ -344,21 +374,64 @@ pub fn update_overlay_mode(
 
 pub fn apply_overlay_mode(
     overlay_mode: Res<OverlayMode>,
+    world_load_state: Res<WorldLoadState>,
     mut sprite_sets: ParamSet<(
-        Query<&mut Sprite, With<BoardLayer>>,
-        Query<&mut Sprite, (With<BackdropLayer>, Without<BoardLayer>)>,
-        Query<(&WallVisual, &mut Sprite)>,
+        Query<
+            (&mut Sprite, &mut Visibility),
+            (
+                With<BoardLayer>,
+                Without<BackdropLayer>,
+                Without<WallVisual>,
+                Without<GasOverlaySprite>,
+                Without<GasMainOverlaySprite>,
+            ),
+        >,
+        Query<
+            (&mut Sprite, &mut Visibility),
+            (
+                With<BackdropLayer>,
+                Without<BoardLayer>,
+                Without<WallVisual>,
+                Without<GasOverlaySprite>,
+                Without<GasMainOverlaySprite>,
+            ),
+        >,
+        Query<
+            (&WallVisual, &mut Sprite, &mut Visibility),
+            (
+                Without<BoardLayer>,
+                Without<BackdropLayer>,
+                Without<GasOverlaySprite>,
+                Without<GasMainOverlaySprite>,
+            ),
+        >,
+        Query<
+            &mut Visibility,
+            (
+                With<GasOverlaySprite>,
+                Without<GasMainOverlaySprite>,
+                Without<BoardLayer>,
+                Without<BackdropLayer>,
+                Without<WallVisual>,
+            ),
+        >,
+        Query<
+            &mut Visibility,
+            (
+                With<GasMainOverlaySprite>,
+                Without<GasOverlaySprite>,
+                Without<BoardLayer>,
+                Without<BackdropLayer>,
+                Without<WallVisual>,
+            ),
+        >,
     )>,
-    mut gas_query: Query<&mut Visibility, (With<GasOverlaySprite>, Without<GasMainOverlaySprite>)>,
-    mut gas_main_query: Query<
-        &mut Visibility,
-        (With<GasMainOverlaySprite>, Without<GasOverlaySprite>),
-    >,
 ) {
-    if !overlay_mode.is_changed() {
+    if !overlay_mode.is_changed() && !world_load_state.is_changed() {
         return;
     }
 
+    let show_world = world_load_state.has_world;
     let (board_color, backdrop_color, gas_visibility, gas_main_visibility) = match *overlay_mode {
         OverlayMode::Main => (
             BOARD_MAIN_COLOR,
@@ -374,22 +447,45 @@ pub fn apply_overlay_mode(
         ),
     };
 
-    for mut board in &mut sprite_sets.p0() {
+    for (mut board, mut visibility) in &mut sprite_sets.p0() {
         board.color = board_color;
+        *visibility = if show_world {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
-    for mut backdrop in &mut sprite_sets.p1() {
+    for (mut backdrop, mut visibility) in &mut sprite_sets.p1() {
         backdrop.color = backdrop_color;
+        *visibility = if show_world {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
-    for mut visibility in &mut gas_query {
-        *visibility = gas_visibility;
+    for mut visibility in &mut sprite_sets.p3() {
+        *visibility = if show_world {
+            gas_visibility
+        } else {
+            Visibility::Hidden
+        };
     }
-    for mut visibility in &mut gas_main_query {
-        *visibility = gas_main_visibility;
+    for mut visibility in &mut sprite_sets.p4() {
+        *visibility = if show_world {
+            gas_main_visibility
+        } else {
+            Visibility::Hidden
+        };
     }
-    for (wall_visual, mut sprite) in &mut sprite_sets.p2() {
+    for (wall_visual, mut sprite, mut visibility) in &mut sprite_sets.p2() {
         sprite.color = match *overlay_mode {
             OverlayMode::Main => wall_visual.main_tint,
             OverlayMode::Gas => wall_visual.gas_tint,
+        };
+        *visibility = if show_world {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
         };
     }
 }
@@ -397,8 +493,13 @@ pub fn apply_overlay_mode(
 pub fn draw_cursor_grid_overlay(
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
+    world_load_state: Res<WorldLoadState>,
     mut gizmos: Gizmos,
 ) {
+    if !world_load_state.has_world {
+        return;
+    }
+
     let Some(cursor_pos) = window.cursor_position() else {
         return;
     };

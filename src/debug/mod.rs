@@ -192,7 +192,8 @@ fn update_debug_metrics(
     let o2_index = gas_registry.index_of("o2");
     let co2_index = gas_registry.index_of("co2");
 
-    let external_gas_edit_without_step = baseline.initialized && gas.is_changed() && step.0 == baseline.last_step;
+    let external_gas_edit_without_step =
+        baseline.initialized && gas.is_changed() && step.0 == baseline.last_step;
     if !baseline.initialized || step.0 == 0 || external_gas_edit_without_step {
         baseline.initialized = true;
         baseline.species = totals.clone();

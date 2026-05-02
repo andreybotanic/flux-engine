@@ -5,6 +5,7 @@ use crate::{
     editor::{is_cursor_over_ui, ActiveEditorTool, MainMenuState},
     input::camera::MainCamera,
     render::OverlayMode,
+    save::WorldLoadState,
     simulation::gas::GasField,
     world::grid::{world_to_cell, WorldGrid},
 };
@@ -45,6 +46,7 @@ pub fn update_cell_inspector(
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     active_tool: Res<ActiveEditorTool>,
     main_menu: Res<MainMenuState>,
+    world_load_state: Res<WorldLoadState>,
     debug_mode: Res<crate::debug::DebugMode>,
     gas: Res<GasField>,
     gas_registry: Res<GasRegistry>,
@@ -56,6 +58,11 @@ pub fn update_cell_inspector(
     let (camera, camera_transform) = *camera_query;
     let text = &mut *text_query;
     let (node, visibility) = &mut *panel_query;
+
+    if !world_load_state.has_world {
+        **visibility = Visibility::Hidden;
+        return;
+    }
 
     let overlay_name = match *overlay_mode {
         OverlayMode::Main => "F1 Main",

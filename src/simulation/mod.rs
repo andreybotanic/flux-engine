@@ -12,10 +12,7 @@ use self::{
     gas::GasField,
     gpu_solver::{GpuGasSolver, GpuStepTimings},
 };
-use crate::{
-    config::{GasRegistry, WorldInitConfig},
-    world::grid::WorldGrid,
-};
+use crate::{config::GasRegistry, save::WorldLoadState, world::grid::WorldGrid};
 
 #[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
 pub struct SimulationStep(pub u64);
@@ -208,27 +205,8 @@ impl Plugin for GasSimulationPlugin {
     }
 }
 
-fn initialize_gas_field_from_registry(
-    mut commands: Commands,
-    registry: Res<GasRegistry>,
-    world_init: Res<WorldInitConfig>,
-    world: Res<WorldGrid>,
-) {
-    let mut field = GasField::from_registry(&registry);
-    for placement in &world_init.gas_placements {
-        let Some(gas_index) = registry.index_of(&placement.gas_id) else {
-            continue;
-        };
-        field.apply_rect(
-            placement.min,
-            placement.max,
-            gas_index,
-            placement.amount,
-            placement.replace,
-            &world,
-        );
-    }
-    commands.insert_resource(field);
+fn initialize_gas_field_from_registry(mut commands: Commands, registry: Res<GasRegistry>) {
+    commands.insert_resource(GasField::from_registry(&registry));
 }
 
 fn apply_fixed_rate_config(config: Res<SimulationRateConfig>, mut fixed_time: ResMut<Time<Fixed>>) {
@@ -270,8 +248,9 @@ fn mark_gpu_state_dirty_from_gas_edits(
 }
 
 fn run_simulation_tick(
-    control: Res<SimulationControl>,
+    mut control: ResMut<SimulationControl>,
     mut backend: ResMut<SimulationBackendConfig>,
+    world_load_state: Res<WorldLoadState>,
     rate: Res<SimulationRateConfig>,
     config: Res<GasSimulationConfig>,
     mut block_state: ResMut<BlockSyncState>,
@@ -283,6 +262,11 @@ fn run_simulation_tick(
 ) {
     let speed_mult = control.speed.multiplier() as f32;
     perf.target_hz_effective = rate.target_hz.clamp(1, 1000) as f32 * speed_mult;
+
+    if !world_load_state.has_world {
+        control.paused = true;
+        return;
+    }
 
     if control.paused {
         return;

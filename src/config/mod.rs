@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::{
     render::GasVisualSettings,
     simulation::{GasSimulationConfig, SimulationRateConfig, SolverTuning},
-    world::grid::{CellMaterial, WORLD_HEIGHT, WORLD_WIDTH},
+    world::grid::CellMaterial,
 };
 
 #[derive(Resource, Clone, Debug)]
@@ -74,20 +74,6 @@ impl GasDefinition {
     pub fn color_as_bevy(&self) -> Color {
         Color::srgb(self.color[0], self.color[1], self.color[2])
     }
-}
-
-#[derive(Resource, Clone, Debug, Default)]
-pub struct WorldInitConfig {
-    pub gas_placements: Vec<WorldGasPlacement>,
-}
-
-#[derive(Clone, Debug)]
-pub struct WorldGasPlacement {
-    pub gas_id: String,
-    pub min: UVec2,
-    pub max: UVec2,
-    pub amount: u32,
-    pub replace: bool,
 }
 
 #[derive(Resource, Clone, Copy, Debug)]
@@ -155,7 +141,6 @@ impl CellTypeVisualConfig {
 #[derive(Clone)]
 pub struct GameConfig {
     pub gas_registry: GasRegistry,
-    pub world_init: WorldInitConfig,
     pub simulation_rate: SimulationRateConfig,
     pub gas_simulation: GasSimulationConfig,
     pub gas_visual: GasVisualSettings,
@@ -172,11 +157,9 @@ impl GameConfig {
     pub fn load_from_root(root: &Path) -> Result<Self, String> {
         let simulation = read_toml::<SimulationToml>(&root.join("simulation.toml"))?;
         let cell_types = read_toml::<CellTypesToml>(&root.join("cell_types.toml"))?;
-        let world_toml = read_toml::<WorldToml>(&root.join("world.toml"))?;
         let gases = load_gas_files(&root.join("gases"))?;
 
         let gas_registry = GasRegistry::new(gases)?;
-        let world_init = build_world_init_config(&world_toml, &gas_registry)?;
 
         let simulation_rate = SimulationRateConfig {
             target_hz: simulation.rate.target_hz,
@@ -228,7 +211,6 @@ impl GameConfig {
 
         Ok(Self {
             gas_registry,
-            world_init,
             simulation_rate,
             gas_simulation,
             gas_visual,
@@ -311,30 +293,6 @@ struct CellTypesToml {
 }
 
 #[derive(Deserialize)]
-struct WorldToml {
-    #[serde(default)]
-    gas_placements: Vec<WorldGasPlacementToml>,
-}
-
-#[derive(Deserialize)]
-struct WorldGasPlacementToml {
-    gas_id: String,
-    x: u32,
-    y: u32,
-    #[serde(default = "default_one")]
-    width: u32,
-    #[serde(default = "default_one")]
-    height: u32,
-    amount: u32,
-    #[serde(default)]
-    replace: bool,
-}
-
-fn default_one() -> u32 {
-    1
-}
-
-#[derive(Deserialize)]
 struct GasToml {
     id: String,
     label: String,
@@ -414,72 +372,6 @@ fn load_gas_files(gases_root: &Path) -> Result<Vec<GasDefinition>, String> {
     Ok(gases)
 }
 
-fn build_world_init_config(
-    world_toml: &WorldToml,
-    gas_registry: &GasRegistry,
-) -> Result<WorldInitConfig, String> {
-    let mut placements = Vec::with_capacity(world_toml.gas_placements.len());
-    for (idx, entry) in world_toml.gas_placements.iter().enumerate() {
-        let gas_id = entry.gas_id.trim();
-        if gas_id.is_empty() {
-            return Err(format!("world.toml gas_placements[{idx}] has empty gas_id"));
-        }
-        if gas_registry.index_of(gas_id).is_none() {
-            return Err(format!(
-                "world.toml gas_placements[{idx}] references unknown gas_id '{}'",
-                gas_id
-            ));
-        }
-        if entry.width == 0 || entry.height == 0 {
-            return Err(format!(
-                "world.toml gas_placements[{idx}] must have width/height > 0"
-            ));
-        }
-        if entry.amount == 0 {
-            return Err(format!(
-                "world.toml gas_placements[{idx}] must have amount > 0"
-            ));
-        }
-
-        let max_x = entry
-            .x
-            .checked_add(entry.width - 1)
-            .ok_or_else(|| format!("world.toml gas_placements[{idx}] width overflows"))?;
-        let max_y = entry
-            .y
-            .checked_add(entry.height - 1)
-            .ok_or_else(|| format!("world.toml gas_placements[{idx}] height overflows"))?;
-
-        if entry.x >= WORLD_WIDTH
-            || entry.y >= WORLD_HEIGHT
-            || max_x >= WORLD_WIDTH
-            || max_y >= WORLD_HEIGHT
-        {
-            return Err(format!(
-                "world.toml gas_placements[{idx}] rectangle ({}, {})..({}, {}) is outside world bounds {}x{}",
-                entry.x,
-                entry.y,
-                max_x,
-                max_y,
-                WORLD_WIDTH,
-                WORLD_HEIGHT
-            ));
-        }
-
-        placements.push(WorldGasPlacement {
-            gas_id: gas_id.to_string(),
-            min: UVec2::new(entry.x, entry.y),
-            max: UVec2::new(max_x, max_y),
-            amount: entry.amount,
-            replace: entry.replace,
-        });
-    }
-
-    Ok(WorldInitConfig {
-        gas_placements: placements,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -556,21 +448,6 @@ gas_tint = [0.71, 0.71, 0.73]
 "#,
         )
         .expect("write cell types");
-
-        fs::write(
-            root.join("world.toml"),
-            r#"
-[[gas_placements]]
-gas_id = "h2"
-x = 51
-y = 51
-width = 1
-height = 1
-amount = 10000
-replace = false
-"#,
-        )
-        .expect("write world");
     }
 
     #[test]
@@ -670,40 +547,5 @@ color = [1.2, 0.0, 0.0]
             .map(|g| g.id.as_str())
             .collect::<Vec<_>>();
         assert_eq!(ids, vec!["h2", "o2", "co2"]);
-    }
-
-    #[test]
-    fn world_config_rejects_unknown_gas_reference() {
-        let root = make_temp_root("flux_world_bad_gas");
-        write_minimal_configs(&root);
-
-        fs::write(
-            root.join("gases").join("h2.toml"),
-            r#"id = "h2"
-label = "H2"
-molecular_mass = 2.016
-color = [0.8, 0.2, 0.9]
-"#,
-        )
-        .expect("write h2");
-        fs::write(
-            root.join("world.toml"),
-            r#"
-[[gas_placements]]
-gas_id = "unknown"
-x = 10
-y = 10
-amount = 100
-"#,
-        )
-        .expect("write world override");
-
-        let err = match GameConfig::load_from_root(&root) {
-            Ok(_) => panic!("must fail on unknown gas in world config"),
-            Err(err) => err,
-        };
-        assert!(err.contains("unknown gas_id"));
-
-        let _ = fs::remove_dir_all(root);
     }
 }

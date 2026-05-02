@@ -74,7 +74,6 @@ pub fn run() {
     }
 
     app.insert_resource(game_config.gas_registry.clone())
-        .insert_resource(game_config.world_init.clone())
         .insert_resource(game_config.simulation_rate)
         .insert_resource(game_config.gas_simulation)
         .insert_resource(game_config.gas_visual)

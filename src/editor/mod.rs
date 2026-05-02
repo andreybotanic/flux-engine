@@ -5,13 +5,21 @@ use crate::{
     debug::{DebugGasMetrics, DebugMode, DebugOverlaySettings},
     input::camera::MainCamera,
     render::GasVisualSettings,
+    save::{
+        create_save, list_saves, load_save, new_game_snapshot, overwrite_save, saves_root_default,
+        MainMenuConfirmState, MainMenuDeferredAction, MainMenuMode, MainMenuScreen,
+        MainMenuUiState, SaveSessionState, WorldLoadState,
+    },
     simulation::{
         gas::GasField, GasSimulationConfig, SimulationControl, SimulationPerfStats,
-        SimulationRateConfig,
+        SimulationRateConfig, SimulationStep,
     },
     ui::input_field::{TextInputDisplay, TextInputField, TextInputStyle},
     world::{
-        grid::{cell_center, world_to_cell, CellMaterial, WorldGrid, CELL_SIZE},
+        grid::{
+            cell_center, world_to_cell, CellMaterial, WorldGrid, CELL_SIZE, WORLD_HEIGHT,
+            WORLD_WIDTH,
+        },
         WorldCellChanged,
     },
 };
@@ -81,9 +89,15 @@ impl Default for CellToolSettings {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct MainMenuState {
     pub open: bool,
+}
+
+impl Default for MainMenuState {
+    fn default() -> Self {
+        Self { open: true }
+    }
 }
 
 #[derive(Resource)]
@@ -127,6 +141,9 @@ enum EditorUiAction {
     ToggleBuoyancy,
     ToggleShowMomentumVectors,
 }
+
+#[derive(Component)]
+struct MainToolbarRoot;
 
 #[derive(Component)]
 struct DebugToolbarRoot;
@@ -204,7 +221,60 @@ struct EraseCellHighlight;
 struct MainMenuRoot;
 
 #[derive(Component)]
-struct MainMenuExitButton;
+struct MainMenuTitleText;
+
+#[derive(Component)]
+struct MainMenuStatusText;
+
+#[derive(Component)]
+struct MainMenuRootActions;
+
+#[derive(Component)]
+struct MainMenuSaveActions;
+
+#[derive(Component)]
+struct MainMenuLoadActions;
+
+#[derive(Component)]
+struct MainMenuConfirmActions;
+
+#[derive(Component)]
+struct MainMenuSaveNameRow;
+
+#[derive(Component)]
+struct MainMenuSaveNameInputField;
+
+#[derive(Component)]
+struct MainMenuSaveListRoot;
+
+#[derive(Component)]
+struct MainMenuConfirmPrimaryLabel;
+
+#[derive(Component)]
+struct MainMenuConfirmSecondaryLabel;
+
+#[derive(Component)]
+struct MainMenuConfirmCancelLabel;
+
+#[derive(Component, Clone)]
+struct MainMenuActionButton(MainMenuButtonAction);
+
+#[derive(Clone)]
+enum MainMenuButtonAction {
+    Continue,
+    NewGame,
+    OpenSaveScreen,
+    OpenLoadScreen,
+    ExitToMainMenu,
+    ExitApp,
+    BackToRoot,
+    CreateNewSave,
+    SelectOverwrite(String),
+    SelectLoad(String),
+    ConfirmPrimary,
+    ConfirmSecondary,
+    ConfirmCancel,
+}
 
 #[derive(Component)]
 struct ToolButtonMeta {
@@ -240,6 +310,7 @@ enum EscAction {
     CloseMenuKeepPaused,
     ClearSelectedTool,
     OpenMenuAndPause,
+    Ignore,
 }
 
 pub struct EditorPlugin;
@@ -249,13 +320,18 @@ impl Plugin for EditorPlugin {
         app.init_resource::<ActiveEditorTool>()
             .init_resource::<CellToolSettings>()
             .init_resource::<MainMenuState>()
+            .init_resource::<MainMenuUiState>()
+            .init_resource::<SaveSessionState>()
+            .init_resource::<WorldLoadState>()
             .init_resource::<GasToolSettings>()
             .init_resource::<SelectionDragState>()
             .init_resource::<BrushDragState>()
             .add_systems(Startup, (setup_editor_ui, setup_editor_overlays))
             .add_systems(Update, handle_escape_and_main_menu)
+            .add_systems(Update, handle_main_menu_actions)
             .add_systems(Update, handle_editor_ui_actions)
             .add_systems(Update, refresh_editor_ui)
+            .add_systems(Update, refresh_main_menu_ui)
             .add_systems(
                 Update,
                 (
@@ -297,6 +373,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ..default()
             },
             BackgroundColor(PANEL_BG),
+            MainToolbarRoot,
         ))
         .with_children(|parent| {
             spawn_tool_button(
@@ -1023,43 +1100,290 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
             parent
                 .spawn((
                     Node {
-                        width: Val::Px(280.0),
-                        height: Val::Px(160.0),
+                        width: Val::Px(780.0),
+                        height: Val::Px(640.0),
                         display: Display::Flex,
                         flex_direction: FlexDirection::Column,
-                        justify_content: JustifyContent::Center,
+                        justify_content: JustifyContent::FlexStart,
                         align_items: AlignItems::Center,
-                        row_gap: Val::Px(14.0),
+                        row_gap: Val::Px(10.0),
+                        padding: UiRect::all(Val::Px(18.0)),
                         ..default()
                     },
                     BackgroundColor(MODAL_BG),
                 ))
                 .with_children(|panel| {
                     panel.spawn((
+                        Node {
+                            width: Val::Percent(100.0),
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },
                         Text::new("Main Menu"),
                         TextFont::from_font_size(24.0),
                         TextColor(Color::srgba(0.08, 0.09, 0.11, 1.0)),
+                        TextLayout::new_with_justify(JustifyText::Center),
+                        MainMenuTitleText,
                     ));
+                    panel.spawn((
+                        Node {
+                            width: Val::Percent(100.0),
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },
+                        Text::new(""),
+                        TextFont::from_font_size(14.0),
+                        TextColor(Color::srgba(0.20, 0.22, 0.26, 1.0)),
+                        TextLayout::new_with_justify(JustifyText::Center),
+                        MainMenuStatusText,
+                    ));
+
                     panel
                         .spawn((
-                            Button,
                             Node {
-                                width: Val::Px(132.0),
-                                height: Val::Px(42.0),
-                                justify_content: JustifyContent::Center,
+                                display: Display::Flex,
+                                flex_direction: FlexDirection::Column,
+                                width: Val::Percent(100.0),
                                 align_items: AlignItems::Center,
+                                row_gap: Val::Px(8.0),
                                 ..default()
                             },
-                            BackgroundColor(MODAL_BUTTON_BG),
-                            MainMenuExitButton,
+                            MainMenuRootActions,
                         ))
-                        .with_children(|button| {
-                            button.spawn((
-                                Text::new("Exit"),
-                                TextFont::from_font_size(16.0),
-                                TextColor(Color::WHITE),
-                            ));
+                        .with_children(|actions| {
+                            spawn_main_menu_action_button(
+                                actions,
+                                "Continue",
+                                MainMenuButtonAction::Continue,
+                                220.0,
+                            );
+                            spawn_main_menu_action_button(
+                                actions,
+                                "New Game",
+                                MainMenuButtonAction::NewGame,
+                                220.0,
+                            );
+                            spawn_main_menu_action_button(
+                                actions,
+                                "Save",
+                                MainMenuButtonAction::OpenSaveScreen,
+                                220.0,
+                            );
+                            spawn_main_menu_action_button(
+                                actions,
+                                "Load",
+                                MainMenuButtonAction::OpenLoadScreen,
+                                220.0,
+                            );
+                            spawn_main_menu_action_button(
+                                actions,
+                                "Exit To Main",
+                                MainMenuButtonAction::ExitToMainMenu,
+                                220.0,
+                            );
+                            spawn_main_menu_action_button(
+                                actions,
+                                "Exit",
+                                MainMenuButtonAction::ExitApp,
+                                220.0,
+                            );
                         });
+
+                    panel
+                        .spawn((
+                            Node {
+                                display: Display::None,
+                                flex_direction: FlexDirection::Row,
+                                width: Val::Percent(100.0),
+                                justify_content: JustifyContent::Center,
+                                align_items: AlignItems::Center,
+                                column_gap: Val::Px(8.0),
+                                ..default()
+                            },
+                            MainMenuSaveNameRow,
+                        ))
+                        .with_children(|row| {
+                            row.spawn((
+                                Text::new("Save Name:"),
+                                TextFont::from_font_size(14.0),
+                                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                                TextLayout::new_with_justify(JustifyText::Center),
+                            ));
+                            row.spawn((
+                                Button,
+                                Node {
+                                    min_width: Val::Px(520.0),
+                                    height: Val::Px(34.0),
+                                    justify_content: JustifyContent::FlexStart,
+                                    align_items: AlignItems::Center,
+                                    padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                                    ..default()
+                                },
+                                BackgroundColor(BUTTON_IDLE),
+                                TextInputField::new_string(
+                                    "New Save",
+                                    64,
+                                    crate::ui::input_field::InputAllowedChars::Any,
+                                ),
+                                TextInputStyle {
+                                    idle_bg: BUTTON_IDLE,
+                                    focused_bg: INPUT_FOCUSED,
+                                },
+                                bevy::ui::RelativeCursorPosition::default(),
+                                MainMenuSaveNameInputField,
+                            ))
+                            .with_children(|button| {
+                                button.spawn((
+                                    Text::new("New Save"),
+                                    TextFont::from_font_size(14.0),
+                                    TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                                    TextInputDisplay,
+                                ));
+                            });
+                        });
+
+                    panel
+                        .spawn((
+                            Node {
+                                display: Display::None,
+                                flex_direction: FlexDirection::Row,
+                                width: Val::Percent(100.0),
+                                justify_content: JustifyContent::Center,
+                                column_gap: Val::Px(8.0),
+                                ..default()
+                            },
+                            MainMenuSaveActions,
+                        ))
+                        .with_children(|actions| {
+                            spawn_main_menu_action_button(
+                                actions,
+                                "Back",
+                                MainMenuButtonAction::BackToRoot,
+                                140.0,
+                            );
+                            spawn_main_menu_action_button(
+                                actions,
+                                "Create New Save",
+                                MainMenuButtonAction::CreateNewSave,
+                                220.0,
+                            );
+                        });
+
+                    panel
+                        .spawn((
+                            Node {
+                                display: Display::None,
+                                flex_direction: FlexDirection::Row,
+                                width: Val::Percent(100.0),
+                                justify_content: JustifyContent::Center,
+                                column_gap: Val::Px(8.0),
+                                ..default()
+                            },
+                            MainMenuLoadActions,
+                        ))
+                        .with_children(|actions| {
+                            spawn_main_menu_action_button(
+                                actions,
+                                "Back",
+                                MainMenuButtonAction::BackToRoot,
+                                140.0,
+                            );
+                        });
+
+                    panel
+                        .spawn((
+                            Node {
+                                display: Display::None,
+                                flex_direction: FlexDirection::Row,
+                                width: Val::Percent(100.0),
+                                justify_content: JustifyContent::Center,
+                                column_gap: Val::Px(8.0),
+                                ..default()
+                            },
+                            MainMenuConfirmActions,
+                        ))
+                        .with_children(|actions| {
+                            actions
+                                .spawn((
+                                    Button,
+                                    Node {
+                                        width: Val::Px(160.0),
+                                        height: Val::Px(38.0),
+                                        justify_content: JustifyContent::Center,
+                                        align_items: AlignItems::Center,
+                                        ..default()
+                                    },
+                                    BackgroundColor(MODAL_BUTTON_BG),
+                                    MainMenuActionButton(MainMenuButtonAction::ConfirmPrimary),
+                                    MainMenuConfirmPrimaryLabel,
+                                ))
+                                .with_children(|button| {
+                                    button.spawn((
+                                        Text::new("Yes"),
+                                        TextFont::from_font_size(15.0),
+                                        TextColor(Color::WHITE),
+                                        TextLayout::new_with_justify(JustifyText::Center),
+                                    ));
+                                });
+                            actions
+                                .spawn((
+                                    Button,
+                                    Node {
+                                        width: Val::Px(160.0),
+                                        height: Val::Px(38.0),
+                                        justify_content: JustifyContent::Center,
+                                        align_items: AlignItems::Center,
+                                        ..default()
+                                    },
+                                    BackgroundColor(MODAL_BUTTON_BG),
+                                    MainMenuActionButton(MainMenuButtonAction::ConfirmSecondary),
+                                    MainMenuConfirmSecondaryLabel,
+                                ))
+                                .with_children(|button| {
+                                    button.spawn((
+                                        Text::new("No"),
+                                        TextFont::from_font_size(15.0),
+                                        TextColor(Color::WHITE),
+                                        TextLayout::new_with_justify(JustifyText::Center),
+                                    ));
+                                });
+                            actions
+                                .spawn((
+                                    Button,
+                                    Node {
+                                        width: Val::Px(160.0),
+                                        height: Val::Px(38.0),
+                                        justify_content: JustifyContent::Center,
+                                        align_items: AlignItems::Center,
+                                        ..default()
+                                    },
+                                    BackgroundColor(MODAL_BUTTON_BG),
+                                    MainMenuActionButton(MainMenuButtonAction::ConfirmCancel),
+                                    MainMenuConfirmCancelLabel,
+                                ))
+                                .with_children(|button| {
+                                    button.spawn((
+                                        Text::new("Cancel"),
+                                        TextFont::from_font_size(15.0),
+                                        TextColor(Color::WHITE),
+                                        TextLayout::new_with_justify(JustifyText::Center),
+                                    ));
+                                });
+                        });
+
+                    panel.spawn((
+                        Node {
+                            display: Display::None,
+                            flex_direction: FlexDirection::Column,
+                            width: Val::Percent(100.0),
+                            align_items: AlignItems::Center,
+                            row_gap: Val::Px(6.0),
+                            height: Val::Px(350.0),
+                            overflow: Overflow::clip_y(),
+                            ..default()
+                        },
+                        MainMenuSaveListRoot,
+                    ));
                 });
         });
 
@@ -1178,6 +1502,36 @@ fn spawn_cell_material_button(
         });
 }
 
+fn spawn_main_menu_action_button(
+    parent: &mut ChildSpawnerCommands,
+    label: &str,
+    action: MainMenuButtonAction,
+    width: f32,
+) -> Entity {
+    parent
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(width),
+                height: Val::Px(38.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(MODAL_BUTTON_BG),
+            MainMenuActionButton(action),
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new(label.to_string()),
+                TextFont::from_font_size(15.0),
+                TextColor(Color::WHITE),
+                TextLayout::new_with_justify(JustifyText::Center),
+            ));
+        })
+        .id()
+}
+
 fn setup_editor_overlays(mut commands: Commands, asset_server: Res<AssetServer>) {
     let brick_silhouette = asset_server.load("sprites/ui/silhouette_brick.png");
     commands.spawn((
@@ -1233,13 +1587,19 @@ fn clear_active_tool_state(
     brush_drag.last_cell = None;
 }
 
-fn escape_action(main_menu_open: bool, has_selected_tool: bool) -> EscAction {
-    if main_menu_open {
-        EscAction::CloseMenuKeepPaused
-    } else if has_selected_tool {
-        EscAction::ClearSelectedTool
-    } else {
-        EscAction::OpenMenuAndPause
+fn escape_action(menu_mode: MainMenuMode, has_selected_tool: bool, has_world: bool) -> EscAction {
+    match menu_mode {
+        MainMenuMode::Main => EscAction::Ignore,
+        MainMenuMode::InGame => EscAction::CloseMenuKeepPaused,
+        MainMenuMode::Hidden => {
+            if !has_world {
+                EscAction::Ignore
+            } else if has_selected_tool {
+                EscAction::ClearSelectedTool
+            } else {
+                EscAction::OpenMenuAndPause
+            }
+        }
     }
 }
 
@@ -1247,31 +1607,13 @@ fn handle_escape_and_main_menu(
     keys: Res<ButtonInput<KeyCode>>,
     mut active_tool: ResMut<ActiveEditorTool>,
     mut main_menu: ResMut<MainMenuState>,
+    mut menu_ui: ResMut<MainMenuUiState>,
+    world_load_state: Res<WorldLoadState>,
     mut control: ResMut<crate::simulation::SimulationControl>,
     mut input_fields: Query<&mut TextInputField>,
     mut selection_drag: ResMut<SelectionDragState>,
     mut brush_drag: ResMut<BrushDragState>,
-    mut exit_button_query: Query<
-        (&Interaction, &mut BackgroundColor),
-        (Changed<Interaction>, With<MainMenuExitButton>),
-    >,
-    mut exit_writer: EventWriter<AppExit>,
 ) {
-    for (interaction, mut bg) in &mut exit_button_query {
-        match *interaction {
-            Interaction::Pressed => {
-                bg.0 = MODAL_BUTTON_HOVER;
-                exit_writer.write(AppExit::Success);
-            }
-            Interaction::Hovered => {
-                bg.0 = MODAL_BUTTON_HOVER;
-            }
-            Interaction::None => {
-                bg.0 = MODAL_BUTTON_BG;
-            }
-        }
-    }
-
     if !keys.just_pressed(KeyCode::Escape) {
         return;
     }
@@ -1287,8 +1629,14 @@ fn handle_escape_and_main_menu(
         return;
     }
 
-    match escape_action(main_menu.open, active_tool.selected.is_some()) {
+    match escape_action(
+        menu_ui.mode,
+        active_tool.selected.is_some(),
+        world_load_state.has_world,
+    ) {
         EscAction::CloseMenuKeepPaused => {
+            menu_ui.mode = MainMenuMode::Hidden;
+            menu_ui.screen = MainMenuScreen::Root;
             main_menu.open = false;
         }
         EscAction::ClearSelectedTool => {
@@ -1297,9 +1645,690 @@ fn handle_escape_and_main_menu(
         }
         EscAction::OpenMenuAndPause => {
             control.paused = true;
+            menu_ui.mode = MainMenuMode::InGame;
+            menu_ui.screen = MainMenuScreen::Root;
             main_menu.open = true;
         }
+        EscAction::Ignore => {}
     }
+}
+
+fn handle_main_menu_actions(
+    mut interactions: Query<
+        (&Interaction, &MainMenuActionButton, &mut BackgroundColor),
+        (Changed<Interaction>, With<Button>),
+    >,
+    mut main_menu: ResMut<MainMenuState>,
+    mut menu_ui: ResMut<MainMenuUiState>,
+    mut control: ResMut<SimulationControl>,
+    gas_registry: Res<GasRegistry>,
+    mut world: ResMut<WorldGrid>,
+    mut gas: ResMut<GasField>,
+    mut step: ResMut<SimulationStep>,
+    mut save_session: ResMut<SaveSessionState>,
+    mut world_load_state: ResMut<WorldLoadState>,
+    save_name_input: Single<&TextInputField, With<MainMenuSaveNameInputField>>,
+    mut world_changed: EventWriter<WorldCellChanged>,
+    mut exit_writer: EventWriter<AppExit>,
+) {
+    if !main_menu.open {
+        return;
+    }
+
+    for (interaction, action_button, mut bg) in &mut interactions {
+        match *interaction {
+            Interaction::Pressed | Interaction::Hovered => bg.0 = MODAL_BUTTON_HOVER,
+            Interaction::None => bg.0 = MODAL_BUTTON_BG,
+        }
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+
+        match &action_button.0 {
+            MainMenuButtonAction::Continue => {
+                if menu_ui.mode != MainMenuMode::InGame || !world_load_state.has_world {
+                    continue;
+                }
+                menu_ui.mode = MainMenuMode::Hidden;
+                menu_ui.screen = MainMenuScreen::Root;
+                menu_ui.confirm_state = None;
+                menu_ui.post_save_action = None;
+                main_menu.open = false;
+                menu_ui.status_text.clear();
+            }
+            MainMenuButtonAction::NewGame => {
+                let state = new_game_snapshot(&gas_registry);
+                match apply_runtime_world_state(
+                    state,
+                    &mut world,
+                    &mut gas,
+                    &mut step,
+                    &mut world_changed,
+                ) {
+                    Ok(_) => {
+                        control.paused = true;
+                        save_session.mark_persisted(step.0, None);
+                        world_load_state.has_world = true;
+                        menu_ui.mode = MainMenuMode::Hidden;
+                        menu_ui.screen = MainMenuScreen::Root;
+                        menu_ui.confirm_state = None;
+                        menu_ui.post_save_action = None;
+                        main_menu.open = false;
+                        menu_ui.status_text.clear();
+                    }
+                    Err(err) => {
+                        menu_ui.status_text = format!("New game failed: {}", err);
+                    }
+                }
+            }
+            MainMenuButtonAction::OpenSaveScreen => {
+                if !world_load_state.has_world {
+                    menu_ui.status_text =
+                        "No world loaded. Start or load a world before saving.".to_string();
+                    continue;
+                }
+                menu_ui.screen = MainMenuScreen::Save;
+                refresh_saves_cache(&mut menu_ui);
+            }
+            MainMenuButtonAction::OpenLoadScreen => {
+                menu_ui.screen = MainMenuScreen::Load;
+                refresh_saves_cache(&mut menu_ui);
+            }
+            MainMenuButtonAction::ExitToMainMenu => {
+                if menu_ui.mode != MainMenuMode::InGame {
+                    continue;
+                }
+                if save_session.has_unsaved_changes(step.0) {
+                    menu_ui.return_screen = MainMenuScreen::Root;
+                    menu_ui.confirm_state = Some(MainMenuConfirmState::UnsavedChanges(
+                        MainMenuDeferredAction::ExitToMainMenu,
+                    ));
+                    menu_ui.confirm_text = "Save changes before exiting to main menu?".to_string();
+                    menu_ui.screen = MainMenuScreen::Confirm;
+                } else {
+                    let state = new_game_snapshot(&gas_registry);
+                    match apply_runtime_world_state(
+                        state,
+                        &mut world,
+                        &mut gas,
+                        &mut step,
+                        &mut world_changed,
+                    ) {
+                        Ok(_) => {
+                            control.paused = true;
+                            save_session.mark_persisted(step.0, None);
+                            world_load_state.has_world = false;
+                            menu_ui.mode = MainMenuMode::Main;
+                            menu_ui.screen = MainMenuScreen::Root;
+                            menu_ui.confirm_state = None;
+                            menu_ui.post_save_action = None;
+                            main_menu.open = true;
+                            menu_ui.status_text.clear();
+                        }
+                        Err(err) => {
+                            menu_ui.status_text = format!("Exit to main failed: {}", err);
+                        }
+                    }
+                }
+            }
+            MainMenuButtonAction::ExitApp => {
+                if world_load_state.has_world && save_session.has_unsaved_changes(step.0) {
+                    menu_ui.return_screen = MainMenuScreen::Root;
+                    menu_ui.confirm_state = Some(MainMenuConfirmState::UnsavedChanges(
+                        MainMenuDeferredAction::ExitApp,
+                    ));
+                    menu_ui.confirm_text = "Save changes before exiting the game?".to_string();
+                    menu_ui.screen = MainMenuScreen::Confirm;
+                } else {
+                    exit_writer.write(AppExit::Success);
+                }
+            }
+            MainMenuButtonAction::BackToRoot => {
+                menu_ui.screen = MainMenuScreen::Root;
+                menu_ui.confirm_state = None;
+                menu_ui.confirm_text.clear();
+                menu_ui.post_save_action = None;
+                menu_ui.status_text.clear();
+            }
+            MainMenuButtonAction::CreateNewSave => {
+                if !world_load_state.has_world {
+                    menu_ui.status_text =
+                        "No world loaded. Start or load a world before saving.".to_string();
+                    continue;
+                }
+                let name = save_name_input.text.clone();
+                match create_save(
+                    &saves_root_default(),
+                    &name,
+                    &world,
+                    &gas,
+                    &gas_registry,
+                    step.0,
+                ) {
+                    Ok(descriptor) => {
+                        save_session.mark_persisted(step.0, Some(descriptor.id.clone()));
+                        refresh_saves_cache(&mut menu_ui);
+                        if let Some(post_action) = menu_ui.post_save_action.take() {
+                            match post_action {
+                                MainMenuDeferredAction::ExitToMainMenu => {
+                                    let state = new_game_snapshot(&gas_registry);
+                                    match apply_runtime_world_state(
+                                        state,
+                                        &mut world,
+                                        &mut gas,
+                                        &mut step,
+                                        &mut world_changed,
+                                    ) {
+                                        Ok(_) => {
+                                            control.paused = true;
+                                            save_session.mark_persisted(step.0, None);
+                                            world_load_state.has_world = false;
+                                            menu_ui.mode = MainMenuMode::Main;
+                                            menu_ui.screen = MainMenuScreen::Root;
+                                            main_menu.open = true;
+                                            menu_ui.status_text.clear();
+                                        }
+                                        Err(err) => {
+                                            menu_ui.status_text =
+                                                format!("Exit to main failed: {}", err);
+                                            menu_ui.screen = MainMenuScreen::Save;
+                                        }
+                                    }
+                                }
+                                MainMenuDeferredAction::ExitApp => {
+                                    exit_writer.write(AppExit::Success);
+                                }
+                            }
+                        } else {
+                            menu_ui.status_text = format!("Saved '{}'.", descriptor.display_name);
+                        }
+                    }
+                    Err(err) => {
+                        menu_ui.status_text = format!("Create save failed: {}", err);
+                    }
+                }
+            }
+            MainMenuButtonAction::SelectOverwrite(save_id) => {
+                if !world_load_state.has_world {
+                    menu_ui.status_text =
+                        "No world loaded. Start or load a world before saving.".to_string();
+                    continue;
+                }
+                menu_ui.return_screen = MainMenuScreen::Save;
+                menu_ui.confirm_state = Some(MainMenuConfirmState::OverwriteSave(save_id.clone()));
+                menu_ui.confirm_text =
+                    "This save slot will be fully overwritten. Continue?".to_string();
+                menu_ui.screen = MainMenuScreen::Confirm;
+            }
+            MainMenuButtonAction::SelectLoad(save_id) => {
+                match load_save(&saves_root_default(), save_id, &gas_registry) {
+                    Ok(loaded) => {
+                        match apply_runtime_world_state(
+                            loaded.state,
+                            &mut world,
+                            &mut gas,
+                            &mut step,
+                            &mut world_changed,
+                        ) {
+                            Ok(_) => {
+                                control.paused = true;
+                                save_session.mark_persisted(step.0, Some(loaded.descriptor.id));
+                                world_load_state.has_world = true;
+                                menu_ui.mode = MainMenuMode::Hidden;
+                                menu_ui.screen = MainMenuScreen::Root;
+                                menu_ui.confirm_state = None;
+                                menu_ui.post_save_action = None;
+                                main_menu.open = false;
+                                menu_ui.status_text.clear();
+                            }
+                            Err(err) => {
+                                menu_ui.status_text = format!("Load apply failed: {}", err);
+                                menu_ui.screen = MainMenuScreen::Load;
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        menu_ui.status_text = format!("Load failed: {}", err);
+                        menu_ui.screen = MainMenuScreen::Load;
+                    }
+                }
+            }
+            MainMenuButtonAction::ConfirmPrimary => {
+                let confirm = menu_ui.confirm_state.clone();
+                menu_ui.confirm_state = None;
+                menu_ui.confirm_text.clear();
+                match confirm {
+                    Some(MainMenuConfirmState::OverwriteSave(save_id)) => {
+                        match overwrite_save(
+                            &saves_root_default(),
+                            &save_id,
+                            &world,
+                            &gas,
+                            &gas_registry,
+                            step.0,
+                        ) {
+                            Ok(descriptor) => {
+                                save_session.mark_persisted(step.0, Some(descriptor.id.clone()));
+                                refresh_saves_cache(&mut menu_ui);
+                                if let Some(post_action) = menu_ui.post_save_action.take() {
+                                    match post_action {
+                                        MainMenuDeferredAction::ExitToMainMenu => {
+                                            let state = new_game_snapshot(&gas_registry);
+                                            match apply_runtime_world_state(
+                                                state,
+                                                &mut world,
+                                                &mut gas,
+                                                &mut step,
+                                                &mut world_changed,
+                                            ) {
+                                                Ok(_) => {
+                                                    control.paused = true;
+                                                    save_session.mark_persisted(step.0, None);
+                                                    world_load_state.has_world = false;
+                                                    menu_ui.mode = MainMenuMode::Main;
+                                                    menu_ui.screen = MainMenuScreen::Root;
+                                                    main_menu.open = true;
+                                                    menu_ui.status_text.clear();
+                                                }
+                                                Err(err) => {
+                                                    menu_ui.status_text =
+                                                        format!("Exit to main failed: {}", err);
+                                                    menu_ui.screen = MainMenuScreen::Save;
+                                                }
+                                            }
+                                        }
+                                        MainMenuDeferredAction::ExitApp => {
+                                            exit_writer.write(AppExit::Success);
+                                        }
+                                    }
+                                } else {
+                                    menu_ui.status_text =
+                                        format!("Overwritten '{}'.", descriptor.display_name);
+                                    menu_ui.screen = MainMenuScreen::Save;
+                                }
+                            }
+                            Err(err) => {
+                                menu_ui.status_text = format!("Overwrite failed: {}", err);
+                                menu_ui.screen = MainMenuScreen::Save;
+                            }
+                        }
+                    }
+                    Some(MainMenuConfirmState::UnsavedChanges(action)) => {
+                        menu_ui.post_save_action = Some(action);
+                        menu_ui.screen = MainMenuScreen::Save;
+                        refresh_saves_cache(&mut menu_ui);
+                    }
+                    None => {
+                        menu_ui.screen = menu_ui.return_screen;
+                    }
+                }
+            }
+            MainMenuButtonAction::ConfirmSecondary => {
+                let confirm = menu_ui.confirm_state.clone();
+                menu_ui.confirm_state = None;
+                menu_ui.confirm_text.clear();
+                match confirm {
+                    Some(MainMenuConfirmState::OverwriteSave(_)) => {
+                        menu_ui.screen = menu_ui.return_screen;
+                    }
+                    Some(MainMenuConfirmState::UnsavedChanges(action)) => match action {
+                        MainMenuDeferredAction::ExitToMainMenu => {
+                            let state = new_game_snapshot(&gas_registry);
+                            match apply_runtime_world_state(
+                                state,
+                                &mut world,
+                                &mut gas,
+                                &mut step,
+                                &mut world_changed,
+                            ) {
+                                Ok(_) => {
+                                    control.paused = true;
+                                    save_session.mark_persisted(step.0, None);
+                                    world_load_state.has_world = false;
+                                    menu_ui.mode = MainMenuMode::Main;
+                                    menu_ui.screen = MainMenuScreen::Root;
+                                    menu_ui.post_save_action = None;
+                                    main_menu.open = true;
+                                    menu_ui.status_text.clear();
+                                }
+                                Err(err) => {
+                                    menu_ui.status_text = format!("Exit to main failed: {}", err);
+                                    menu_ui.screen = MainMenuScreen::Root;
+                                }
+                            }
+                        }
+                        MainMenuDeferredAction::ExitApp => {
+                            exit_writer.write(AppExit::Success);
+                        }
+                    },
+                    None => {
+                        menu_ui.screen = menu_ui.return_screen;
+                    }
+                }
+            }
+            MainMenuButtonAction::ConfirmCancel => {
+                menu_ui.confirm_state = None;
+                menu_ui.confirm_text.clear();
+                menu_ui.post_save_action = None;
+                menu_ui.screen = menu_ui.return_screen;
+            }
+        }
+    }
+}
+
+fn refresh_saves_cache(menu_ui: &mut MainMenuUiState) {
+    match list_saves(&saves_root_default()) {
+        Ok(saves) => {
+            menu_ui.saves = saves;
+            menu_ui.needs_save_list_refresh = true;
+        }
+        Err(err) => {
+            menu_ui.saves.clear();
+            menu_ui.status_text = format!("Failed to read save list: {}", err);
+            menu_ui.needs_save_list_refresh = true;
+        }
+    }
+}
+
+fn apply_runtime_world_state(
+    state: crate::save::RuntimeWorldState,
+    world: &mut WorldGrid,
+    gas: &mut GasField,
+    step: &mut SimulationStep,
+    world_changed: &mut EventWriter<WorldCellChanged>,
+) -> Result<(), String> {
+    world.restore_from_cell_codes(&state.world_cell_codes)?;
+    gas.restore_state(&state.gas_snapshot)?;
+    step.0 = state.simulation_step;
+    emit_full_world_changed(world_changed);
+    Ok(())
+}
+
+fn emit_full_world_changed(world_changed: &mut EventWriter<WorldCellChanged>) {
+    for y in 0..WORLD_HEIGHT {
+        for x in 0..WORLD_WIDTH {
+            world_changed.write(WorldCellChanged {
+                cell: UVec2::new(x, y),
+            });
+        }
+    }
+}
+
+fn refresh_main_menu_ui(
+    mut commands: Commands,
+    main_menu: Res<MainMenuState>,
+    mut menu_ui: ResMut<MainMenuUiState>,
+    mut root_visibility: Single<&mut Visibility, With<MainMenuRoot>>,
+    mut text_set: ParamSet<(
+        Single<&mut Text, With<MainMenuTitleText>>,
+        Single<&mut Text, With<MainMenuStatusText>>,
+        Query<&mut Text>,
+    )>,
+    mut node_set: ParamSet<(
+        Single<&mut Node, With<MainMenuRootActions>>,
+        Single<&mut Node, With<MainMenuSaveActions>>,
+        Single<&mut Node, With<MainMenuLoadActions>>,
+        Single<&mut Node, With<MainMenuConfirmActions>>,
+        Single<&mut Node, With<MainMenuSaveNameRow>>,
+        Single<&mut Node, With<MainMenuSaveListRoot>>,
+        Query<(&MainMenuActionButton, &mut Node), With<Button>>,
+    )>,
+    confirm_button_set: (
+        Single<&Children, With<MainMenuConfirmPrimaryLabel>>,
+        Single<&Children, With<MainMenuConfirmSecondaryLabel>>,
+        Single<&Children, With<MainMenuConfirmCancelLabel>>,
+    ),
+    save_list_root: Single<Entity, With<MainMenuSaveListRoot>>,
+) {
+    **root_visibility = if main_menu.open {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    if !main_menu.open {
+        return;
+    }
+
+    let screen = menu_ui.screen;
+    let mode = menu_ui.mode;
+    {
+        let mut title_text = text_set.p0();
+        title_text.0 = match screen {
+            MainMenuScreen::Root => match mode {
+                MainMenuMode::Main => "Main Menu".to_string(),
+                MainMenuMode::InGame => "Game Menu".to_string(),
+                MainMenuMode::Hidden => "Menu".to_string(),
+            },
+            MainMenuScreen::Save => "Save World".to_string(),
+            MainMenuScreen::Load => "Load World".to_string(),
+            MainMenuScreen::Confirm => "Confirm Action".to_string(),
+        };
+    }
+
+    let status = if screen == MainMenuScreen::Confirm {
+        menu_ui.confirm_text.clone()
+    } else if !menu_ui.status_text.is_empty() {
+        menu_ui.status_text.clone()
+    } else {
+        String::new()
+    };
+    {
+        let mut status_text = text_set.p1();
+        status_text.0 = status;
+    }
+
+    {
+        let mut root_actions_visibility = node_set.p0();
+        root_actions_visibility.display = if screen == MainMenuScreen::Root {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+    for (action_button, mut node) in &mut node_set.p6() {
+        node.display = match screen {
+            MainMenuScreen::Root => match (&action_button.0, mode) {
+                (_, MainMenuMode::Hidden) => Display::None,
+                (MainMenuButtonAction::Continue, MainMenuMode::InGame) => Display::Flex,
+                (MainMenuButtonAction::OpenSaveScreen, MainMenuMode::InGame) => Display::Flex,
+                (MainMenuButtonAction::ExitToMainMenu, MainMenuMode::InGame) => Display::Flex,
+                (MainMenuButtonAction::ExitApp, MainMenuMode::InGame) => Display::Flex,
+                (MainMenuButtonAction::NewGame, MainMenuMode::Main) => Display::Flex,
+                (MainMenuButtonAction::OpenLoadScreen, MainMenuMode::Main) => Display::Flex,
+                (MainMenuButtonAction::ExitApp, MainMenuMode::Main) => Display::Flex,
+                _ => Display::None,
+            },
+            MainMenuScreen::Save => match action_button.0 {
+                MainMenuButtonAction::BackToRoot
+                | MainMenuButtonAction::CreateNewSave
+                | MainMenuButtonAction::SelectOverwrite(_) => Display::Flex,
+                _ => Display::None,
+            },
+            MainMenuScreen::Load => match action_button.0 {
+                MainMenuButtonAction::BackToRoot | MainMenuButtonAction::SelectLoad(_) => {
+                    Display::Flex
+                }
+                _ => Display::None,
+            },
+            MainMenuScreen::Confirm => match action_button.0 {
+                MainMenuButtonAction::ConfirmPrimary
+                | MainMenuButtonAction::ConfirmSecondary
+                | MainMenuButtonAction::ConfirmCancel => Display::Flex,
+                _ => Display::None,
+            },
+        };
+    }
+    {
+        let mut save_actions_visibility = node_set.p1();
+        save_actions_visibility.display = if screen == MainMenuScreen::Save {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+    {
+        let mut load_actions_visibility = node_set.p2();
+        load_actions_visibility.display = if screen == MainMenuScreen::Load {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+    {
+        let mut confirm_actions_visibility = node_set.p3();
+        confirm_actions_visibility.display = if screen == MainMenuScreen::Confirm {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+
+    if screen == MainMenuScreen::Confirm {
+        let mut primary_label = "Yes";
+        let mut secondary_label = "No";
+        let mut show_cancel = false;
+        match menu_ui.confirm_state.as_ref() {
+            Some(MainMenuConfirmState::UnsavedChanges(_)) => {
+                primary_label = "Save";
+                secondary_label = "Don't Save";
+                show_cancel = true;
+            }
+            Some(MainMenuConfirmState::OverwriteSave(_)) => {
+                primary_label = "Overwrite";
+                secondary_label = "Cancel";
+                show_cancel = false;
+            }
+            None => {}
+        }
+
+        let primary_text_entity = confirm_button_set.0.iter().next();
+        if let Some(entity) = primary_text_entity {
+            if let Ok(mut text) = text_set.p2().get_mut(entity) {
+                text.0 = primary_label.to_string();
+            }
+        }
+        let secondary_text_entity = confirm_button_set.1.iter().next();
+        if let Some(entity) = secondary_text_entity {
+            if let Ok(mut text) = text_set.p2().get_mut(entity) {
+                text.0 = secondary_label.to_string();
+            }
+        }
+        let cancel_text_entity = confirm_button_set.2.iter().next();
+        if let Some(entity) = cancel_text_entity {
+            if let Ok(mut text) = text_set.p2().get_mut(entity) {
+                text.0 = "Cancel".to_string();
+            }
+        }
+
+        for (action_button, mut node) in &mut node_set.p6() {
+            if matches!(action_button.0, MainMenuButtonAction::ConfirmCancel) {
+                node.display = if show_cancel {
+                    Display::Flex
+                } else {
+                    Display::None
+                };
+            }
+        }
+    }
+    {
+        let mut save_name_row_visibility = node_set.p4();
+        save_name_row_visibility.display = if screen == MainMenuScreen::Save {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+    {
+        let mut save_list_visibility = node_set.p5();
+        save_list_visibility.display =
+            if matches!(screen, MainMenuScreen::Save | MainMenuScreen::Load) {
+                Display::Flex
+            } else {
+                Display::None
+            };
+    }
+
+    if !matches!(screen, MainMenuScreen::Save | MainMenuScreen::Load) {
+        return;
+    }
+    if !menu_ui.needs_save_list_refresh {
+        return;
+    }
+    menu_ui.needs_save_list_refresh = false;
+
+    for entity in menu_ui.list_item_entities.drain(..) {
+        commands.entity(entity).despawn();
+    }
+
+    let saves = menu_ui.saves.clone();
+    let mut created = Vec::new();
+    let screen_for_buttons = screen;
+    commands.entity(*save_list_root).with_children(|parent| {
+        if saves.is_empty() {
+            let row = parent
+                .spawn((
+                    Node {
+                        width: Val::Px(730.0),
+                        height: Val::Px(32.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(Color::NONE),
+                ))
+                .with_children(|row| {
+                    row.spawn((
+                        Text::new("No saves found."),
+                        TextFont::from_font_size(14.0),
+                        TextColor(Color::srgba(0.15, 0.16, 0.18, 1.0)),
+                        TextLayout::new_with_justify(JustifyText::Center),
+                    ));
+                })
+                .id();
+            created.push(row);
+            return;
+        }
+
+        for descriptor in saves {
+            let action = match screen_for_buttons {
+                MainMenuScreen::Save => {
+                    MainMenuButtonAction::SelectOverwrite(descriptor.id.clone())
+                }
+                MainMenuScreen::Load => MainMenuButtonAction::SelectLoad(descriptor.id.clone()),
+                _ => continue,
+            };
+
+            let label = format!(
+                "{}  |  id={}  |  updated={}",
+                descriptor.display_name, descriptor.id, descriptor.updated_at_unix_ms
+            );
+            let entity = parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(730.0),
+                        height: Val::Px(34.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                        ..default()
+                    },
+                    BackgroundColor(BUTTON_IDLE),
+                    MainMenuActionButton(action),
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new(label),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                        TextLayout::new_with_justify(JustifyText::Center),
+                    ));
+                })
+                .id();
+            created.push(entity);
+        }
+    });
+    menu_ui.list_item_entities = created;
 }
 
 fn update_tool_button_tooltip(
@@ -1464,6 +2493,7 @@ fn refresh_editor_ui(
         Res<CellToolSettings>,
         Res<MainMenuState>,
         Res<DebugMode>,
+        Res<WorldLoadState>,
     ),
     sim_metrics: (
         Res<DebugGasMetrics>,
@@ -1488,11 +2518,9 @@ fn refresh_editor_ui(
         Single<&TextInputField, With<BuoyancyAlphaInputField>>,
     )>,
     buoyancy_cap_input: Single<&TextInputField, With<BuoyancyForceCapInputField>>,
-    mut button_query: Query<
-        (&EditorUiAction, &mut BackgroundColor),
-        (With<Button>, Without<MainMenuExitButton>),
-    >,
+    mut button_query: Query<(&EditorUiAction, &mut BackgroundColor), With<Button>>,
     mut visibility_set: ParamSet<(
+        Single<&mut Visibility, With<MainToolbarRoot>>,
         Single<&mut Visibility, With<CellTypePanelRoot>>,
         Single<&mut Visibility, With<DebugToolbarRoot>>,
         Single<&mut Visibility, With<DebugPanelRoot>>,
@@ -1509,7 +2537,7 @@ fn refresh_editor_ui(
         Single<&mut Text, With<WaveMetricsLabel>>,
     )>,
 ) {
-    let (active_tool, cell_settings, main_menu, debug_mode) = ui_state;
+    let (active_tool, cell_settings, main_menu, debug_mode, world_load_state) = ui_state;
     let (debug_metrics, sim_control, sim_perf) = sim_metrics;
     let selected_tool = active_tool.selected;
 
@@ -1582,8 +2610,8 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut cell_type_panel_root = visibility_set.p0();
-        **cell_type_panel_root = if selected_tool == Some(EditorTool::BuildSolid) {
+        let mut main_toolbar_root = visibility_set.p0();
+        **main_toolbar_root = if world_load_state.has_world {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -1591,8 +2619,18 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut debug_toolbar_root = visibility_set.p1();
-        **debug_toolbar_root = if debug_mode.active {
+        let mut cell_type_panel_root = visibility_set.p1();
+        **cell_type_panel_root =
+            if world_load_state.has_world && selected_tool == Some(EditorTool::BuildSolid) {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
+    }
+
+    {
+        let mut debug_toolbar_root = visibility_set.p2();
+        **debug_toolbar_root = if world_load_state.has_world && debug_mode.active {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -1600,8 +2638,8 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut debug_panel = visibility_set.p2();
-        **debug_panel = if debug_mode.active {
+        let mut debug_panel = visibility_set.p3();
+        **debug_panel = if world_load_state.has_world && debug_mode.active {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -1609,8 +2647,11 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut gas_tool_panel = visibility_set.p3();
-        **gas_tool_panel = if debug_mode.active && selected_tool == Some(EditorTool::AddGas) {
+        let mut gas_tool_panel = visibility_set.p4();
+        **gas_tool_panel = if world_load_state.has_world
+            && debug_mode.active
+            && selected_tool == Some(EditorTool::AddGas)
+        {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -1618,7 +2659,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut main_menu_root = visibility_set.p4();
+        let mut main_menu_root = visibility_set.p5();
         **main_menu_root = if main_menu.open {
             Visibility::Visible
         } else {
@@ -1715,6 +2756,7 @@ fn handle_editor_mouse_input(
     active_tool: Res<ActiveEditorTool>,
     cell_settings: Res<CellToolSettings>,
     main_menu: Res<MainMenuState>,
+    world_load_state: Res<WorldLoadState>,
     debug_mode: Res<DebugMode>,
     gas_settings: Res<GasToolSettings>,
     gas_registry: Res<GasRegistry>,
@@ -1725,7 +2767,7 @@ fn handle_editor_mouse_input(
     mut brush_drag: ResMut<BrushDragState>,
     mut world_changed: EventWriter<WorldCellChanged>,
 ) {
-    if main_menu.open {
+    if main_menu.open || !world_load_state.has_world {
         clear_active_tool_state(&mut selection_drag, &mut brush_drag);
         return;
     }
@@ -1872,6 +2914,7 @@ fn update_editor_cursor_overlays(
     active_tool: Res<ActiveEditorTool>,
     cell_settings: Res<CellToolSettings>,
     main_menu: Res<MainMenuState>,
+    world_load_state: Res<WorldLoadState>,
     icon_set: Res<EditorIconSet>,
     debug_mode: Res<DebugMode>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
@@ -1881,6 +2924,25 @@ fn update_editor_cursor_overlays(
         Single<(&mut Node, &mut Visibility), With<EraseCursorOverlay>>,
     )>,
 ) {
+    if !world_load_state.has_world {
+        {
+            let mut blueprint = overlay_set.p0();
+            let (_, ghost_visibility, _) = &mut *blueprint;
+            **ghost_visibility = Visibility::Hidden;
+        }
+        {
+            let mut erase_highlight = overlay_set.p1();
+            let (_, highlight_visibility) = &mut *erase_highlight;
+            **highlight_visibility = Visibility::Hidden;
+        }
+        {
+            let mut erase_overlay = overlay_set.p2();
+            let (_, erase_visibility) = &mut *erase_overlay;
+            **erase_visibility = Visibility::Hidden;
+        }
+        return;
+    }
+
     let cursor_position = window.cursor_position();
     let is_on_ui = cursor_position
         .map(|cursor| {
@@ -2094,25 +3156,30 @@ impl UiRectPx {
 #[cfg(test)]
 mod tests {
     use super::{escape_action, EscAction};
+    use crate::save::MainMenuMode;
 
     #[test]
-    fn escape_closes_main_menu_when_open() {
+    fn escape_closes_in_game_menu_when_open() {
         assert_eq!(
-            escape_action(true, true),
+            escape_action(MainMenuMode::InGame, true, true),
             EscAction::CloseMenuKeepPaused,
-            "Esc should close main menu first even if a tool is selected"
+            "Esc should close in-game menu first even if a tool is selected"
         );
+    }
+
+    #[test]
+    fn escape_does_not_close_main_menu() {
         assert_eq!(
-            escape_action(true, false),
-            EscAction::CloseMenuKeepPaused,
-            "Esc should close main menu first when no tool is selected"
+            escape_action(MainMenuMode::Main, false, false),
+            EscAction::Ignore,
+            "Esc must not close main menu"
         );
     }
 
     #[test]
     fn escape_clears_selected_tool_before_opening_menu() {
         assert_eq!(
-            escape_action(false, true),
+            escape_action(MainMenuMode::Hidden, true, true),
             EscAction::ClearSelectedTool,
             "Esc should clear selected tool before opening menu"
         );
@@ -2121,9 +3188,18 @@ mod tests {
     #[test]
     fn escape_opens_main_menu_and_pauses_when_no_tool_selected() {
         assert_eq!(
-            escape_action(false, false),
+            escape_action(MainMenuMode::Hidden, false, true),
             EscAction::OpenMenuAndPause,
-            "Esc should open menu and pause when no tool is selected"
+            "Esc should open in-game menu and pause when no tool is selected"
+        );
+    }
+
+    #[test]
+    fn escape_ignores_hidden_mode_when_world_not_loaded() {
+        assert_eq!(
+            escape_action(MainMenuMode::Hidden, false, false),
+            EscAction::Ignore,
+            "Esc should do nothing when no world is loaded"
         );
     }
 }

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::save::WorldLoadState;
 use crate::simulation::{
     backend::{SimulationBackend, SimulationBackendConfig},
     SimulationControl, SimulationSpeed,
@@ -20,6 +21,17 @@ pub(crate) enum SimControlAction {
 #[derive(Component)]
 pub(crate) struct SimPauseLabel;
 
+#[derive(Component)]
+pub(crate) struct SimControlRoot;
+
+fn apply_pause_toggle(control: &mut SimulationControl, world_load_state: &WorldLoadState) {
+    if world_load_state.has_world {
+        control.paused = !control.paused;
+    } else {
+        control.paused = true;
+    }
+}
+
 pub fn setup_sim_control_ui(mut commands: Commands) {
     commands
         .spawn((
@@ -34,6 +46,8 @@ pub fn setup_sim_control_ui(mut commands: Commands) {
                 ..default()
             },
             BackgroundColor(PANEL_BG),
+            Visibility::Hidden,
+            SimControlRoot,
         ))
         .with_children(|parent| {
             parent
@@ -126,10 +140,11 @@ pub fn setup_sim_control_ui(mut commands: Commands) {
 pub fn handle_sim_control_keyboard(
     keys: Res<ButtonInput<KeyCode>>,
     mut control: ResMut<SimulationControl>,
+    world_load_state: Res<WorldLoadState>,
     mut backend: ResMut<SimulationBackendConfig>,
 ) {
     if keys.just_pressed(KeyCode::Space) {
-        control.paused = !control.paused;
+        apply_pause_toggle(&mut control, &world_load_state);
     }
     if keys.just_pressed(KeyCode::Period) {
         control.speed = control.speed.faster();
@@ -151,6 +166,7 @@ pub fn handle_sim_control_buttons(
         (Changed<Interaction>, With<Button>),
     >,
     mut control: ResMut<SimulationControl>,
+    world_load_state: Res<WorldLoadState>,
 ) {
     for (interaction, action) in &mut interactions {
         if *interaction != Interaction::Pressed {
@@ -159,9 +175,20 @@ pub fn handle_sim_control_buttons(
 
         match *action {
             SimControlAction::Speed(speed) => control.speed = speed,
-            SimControlAction::Pause => control.paused = !control.paused,
+            SimControlAction::Pause => apply_pause_toggle(&mut control, &world_load_state),
         }
     }
+}
+
+pub fn refresh_sim_control_visibility(
+    world_load_state: Res<WorldLoadState>,
+    mut root_visibility: Single<&mut Visibility, With<SimControlRoot>>,
+) {
+    **root_visibility = if world_load_state.has_world {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
 }
 
 pub fn refresh_sim_control_ui(
@@ -188,4 +215,31 @@ pub fn refresh_sim_control_ui(
     } else {
         "Pause".to_string()
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pause_toggle_is_blocked_when_world_is_not_loaded() {
+        let mut control = SimulationControl {
+            paused: false,
+            speed: SimulationSpeed::X1,
+        };
+        let world_state = WorldLoadState { has_world: false };
+        apply_pause_toggle(&mut control, &world_state);
+        assert!(control.paused);
+    }
+
+    #[test]
+    fn pause_toggle_works_when_world_is_loaded() {
+        let mut control = SimulationControl {
+            paused: true,
+            speed: SimulationSpeed::X1,
+        };
+        let world_state = WorldLoadState { has_world: true };
+        apply_pause_toggle(&mut control, &world_state);
+        assert!(!control.paused);
+    }
 }

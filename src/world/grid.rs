@@ -79,6 +79,92 @@ impl WorldGrid {
     pub fn set_empty(&mut self, x: u32, y: u32) -> bool {
         self.set_cell_kind(x, y, CellKind::Empty)
     }
+
+    pub fn snapshot_cells(&self) -> Vec<CellKind> {
+        self.cells.clone()
+    }
+
+    pub fn restore_cells(&mut self, cells: &[CellKind]) -> Result<(), String> {
+        let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+        if cells.len() != expected {
+            return Err(format!(
+                "World cell snapshot length mismatch: got {}, expected {}",
+                cells.len(),
+                expected
+            ));
+        }
+        validate_boundary_cells(cells)?;
+        self.cells.clear();
+        self.cells.extend_from_slice(cells);
+        Ok(())
+    }
+
+    pub fn snapshot_cell_codes(&self) -> Vec<u8> {
+        self.cells
+            .iter()
+            .map(|cell| encode_cell_kind(*cell))
+            .collect()
+    }
+
+    pub fn restore_from_cell_codes(&mut self, codes: &[u8]) -> Result<(), String> {
+        let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+        if codes.len() != expected {
+            return Err(format!(
+                "World cell code snapshot length mismatch: got {}, expected {}",
+                codes.len(),
+                expected
+            ));
+        }
+
+        let mut decoded = Vec::with_capacity(codes.len());
+        for (idx, code) in codes.iter().copied().enumerate() {
+            let cell = decode_cell_kind(code).ok_or_else(|| {
+                format!(
+                    "World cell code snapshot contains invalid code {} at index {}",
+                    code, idx
+                )
+            })?;
+            decoded.push(cell);
+        }
+        self.restore_cells(&decoded)
+    }
+}
+
+fn encode_cell_kind(cell: CellKind) -> u8 {
+    match cell {
+        CellKind::Empty => 0,
+        CellKind::Solid(CellMaterial::Boundary) => 1,
+        CellKind::Solid(CellMaterial::Brick) => 2,
+        CellKind::Solid(CellMaterial::Metal) => 3,
+    }
+}
+
+fn decode_cell_kind(code: u8) -> Option<CellKind> {
+    match code {
+        0 => Some(CellKind::Empty),
+        1 => Some(CellKind::Solid(CellMaterial::Boundary)),
+        2 => Some(CellKind::Solid(CellMaterial::Brick)),
+        3 => Some(CellKind::Solid(CellMaterial::Metal)),
+        _ => None,
+    }
+}
+
+fn validate_boundary_cells(cells: &[CellKind]) -> Result<(), String> {
+    for y in 0..WORLD_HEIGHT {
+        for x in 0..WORLD_WIDTH {
+            if !is_boundary(x, y) {
+                continue;
+            }
+            let index = linear_index(x, y);
+            if cells[index] != CellKind::Solid(CellMaterial::Boundary) {
+                return Err(format!(
+                    "Boundary cell ({}, {}) must be Boundary in snapshot",
+                    x, y
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn is_boundary(x: u32, y: u32) -> bool {
@@ -158,5 +244,36 @@ mod tests {
         assert_eq!(world.solid_material(10, 10), Some(CellMaterial::Metal));
         assert!(world.set_solid_with_material(10, 10, CellMaterial::Brick));
         assert_eq!(world.solid_material(10, 10), Some(CellMaterial::Brick));
+    }
+
+    #[test]
+    fn snapshot_codes_roundtrip_world_cells() {
+        let mut world = WorldGrid::default();
+        assert!(world.set_solid_with_material(10, 10, CellMaterial::Brick));
+        assert!(world.set_solid_with_material(11, 10, CellMaterial::Metal));
+        let _ = world.set_empty(12, 10);
+
+        let codes = world.snapshot_cell_codes();
+        let mut restored = WorldGrid::default();
+        restored
+            .restore_from_cell_codes(&codes)
+            .expect("restore from valid snapshot");
+
+        for y in 0..WORLD_HEIGHT {
+            for x in 0..WORLD_WIDTH {
+                assert_eq!(world.cell(x, y), restored.cell(x, y));
+            }
+        }
+    }
+
+    #[test]
+    fn restore_rejects_non_boundary_border_cells() {
+        let mut world = WorldGrid::default();
+        let mut cells = world.snapshot_cells();
+        cells[linear_index(0, 0)] = CellKind::Empty;
+        let err = world
+            .restore_cells(&cells)
+            .expect_err("must reject invalid boundary");
+        assert!(err.contains("Boundary cell"));
     }
 }
