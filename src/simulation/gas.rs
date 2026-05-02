@@ -1,12 +1,11 @@
 use super::gpu_solver::GpuSolverHostState;
 use super::SolverTuning;
+use crate::config::GasRegistry;
 use crate::world::grid::{is_boundary, linear_index, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH};
 use bevy::prelude::*;
 use std::sync::OnceLock;
 
-pub const INITIAL_HYDROGEN_CENTER_PARTICLES: u32 = 10_000;
-pub const INITIAL_OXYGEN_CENTER_PARTICLES: u32 = 0;
-pub const HYDROGEN_GPU_STORAGE_MAX_PARTICLES: u32 = INITIAL_HYDROGEN_CENTER_PARTICLES * 2;
+pub const HYDROGEN_GPU_STORAGE_MAX_PARTICLES: u32 = 20_000;
 
 const LBM_DIRS: [IVec2; 9] = [
     IVec2::new(0, 0),
@@ -38,48 +37,8 @@ const LBM_VELOCITY_CLAMP: f32 = 0.95;
 const BUOYANCY_MIN_ENV_MASS: f32 = 1e-6;
 const SPECIES_RELATIVE_DRIFT_SCALE: f32 = 0.45;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum GasKind {
-    #[default]
-    Hydrogen,
-    Oxygen,
-}
-
-impl GasKind {
-    pub const ALL: [Self; 2] = [Self::Hydrogen, Self::Oxygen];
-
-    pub fn index(self) -> usize {
-        match self {
-            Self::Hydrogen => 0,
-            Self::Oxygen => 1,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Hydrogen => "Hydrogen",
-            Self::Oxygen => "Oxygen",
-        }
-    }
-
-    pub fn next(self) -> Self {
-        match self {
-            Self::Hydrogen => Self::Oxygen,
-            Self::Oxygen => Self::Hydrogen,
-        }
-    }
-
-    pub fn molecular_mass(self) -> f32 {
-        match self {
-            Self::Hydrogen => 2.016,
-            Self::Oxygen => 31.998,
-        }
-    }
-}
-
-const GAS_KIND_COUNT: usize = GasKind::ALL.len();
 pub type GasScalar = f32;
-type GasCell = [GasScalar; GAS_KIND_COUNT];
+pub type GasCell = Vec<GasScalar>;
 
 #[derive(Clone, Copy)]
 struct KernelOffset {
@@ -96,20 +55,33 @@ pub struct GasField {
     lbm_read: Vec<[f32; 9]>,
     lbm_write: Vec<[f32; 9]>,
     velocity: Vec<Vec2>,
+    gas_count: usize,
+    molecular_masses: Vec<f32>,
 }
 
 impl Default for GasField {
     fn default() -> Self {
-        let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-        let mut read = vec![[0.0; GAS_KIND_COUNT]; cells];
+        let gases = vec!["h2", "o2", "co2"];
+        let masses = vec![2.016, 31.998, 44.009];
+        Self::new_with_masses(&gases, &masses)
+    }
+}
 
-        for y in 0..WORLD_HEIGHT {
-            for x in 0..WORLD_WIDTH {
-                let index = linear_index(x, y);
-                read[index][GasKind::Hydrogen.index()] = seeded_hydrogen_amount(x, y) as f32;
-                read[index][GasKind::Oxygen.index()] = seeded_oxygen_amount(x, y) as f32;
-            }
-        }
+impl GasField {
+    pub fn from_registry(registry: &GasRegistry) -> Self {
+        let ids = registry
+            .all()
+            .iter()
+            .map(|g| g.id.as_str())
+            .collect::<Vec<_>>();
+        let masses = registry.molecular_masses();
+        Self::new_with_masses(&ids, &masses)
+    }
+
+    fn new_with_masses(ids: &[&str], molecular_masses: &[f32]) -> Self {
+        let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+        let gas_count = ids.len();
+        let read = vec![vec![0.0; gas_count]; cells];
 
         let mut field = Self {
             write: read.clone(),
@@ -118,6 +90,8 @@ impl Default for GasField {
             lbm_read: vec![[0.0; 9]; cells],
             lbm_write: vec![[0.0; 9]; cells],
             velocity: vec![Vec2::ZERO; cells],
+            gas_count,
+            molecular_masses: molecular_masses.to_vec(),
         };
 
         for y in 0..WORLD_HEIGHT {
@@ -140,15 +114,21 @@ impl Default for GasField {
 
         field
     }
-}
 
-impl GasField {
-    pub fn amount(&self, x: u32, y: u32, kind: GasKind) -> GasScalar {
-        self.read[linear_index(x, y)][kind.index()]
+    pub fn gas_count(&self) -> usize {
+        self.gas_count
     }
 
-    pub fn amount_rounded(&self, x: u32, y: u32, kind: GasKind) -> u32 {
-        self.amount(x, y, kind).max(0.0).round() as u32
+    pub fn molecular_mass(&self, gas_index: usize) -> f32 {
+        self.molecular_masses.get(gas_index).copied().unwrap_or(1.0)
+    }
+
+    pub fn amount(&self, x: u32, y: u32, gas_index: usize) -> GasScalar {
+        self.read[linear_index(x, y)][gas_index]
+    }
+
+    pub fn amount_rounded(&self, x: u32, y: u32, gas_index: usize) -> u32 {
+        self.amount(x, y, gas_index).max(0.0).round() as u32
     }
 
     pub fn total_amount(&self, x: u32, y: u32) -> GasScalar {
@@ -167,26 +147,21 @@ impl GasField {
         self.velocity[linear_index(x, y)]
     }
 
-    pub fn set_amount(&mut self, x: u32, y: u32, kind: GasKind, amount: GasScalar) {
+    pub fn set_amount(&mut self, x: u32, y: u32, gas_index: usize, amount: GasScalar) {
         let index = linear_index(x, y);
         let clamped = amount.max(0.0);
-        self.read[index][kind.index()] = clamped;
-        self.write[index][kind.index()] = clamped;
-    }
-
-    pub fn add_amount(&mut self, x: u32, y: u32, kind: GasKind, amount: GasScalar) {
-        let current = self.amount(x, y, kind);
-        self.set_amount(x, y, kind, (current + amount).max(0.0));
-    }
-
-    pub fn clear_amount(&mut self, x: u32, y: u32, kind: GasKind) {
-        self.set_amount(x, y, kind, 0.0);
+        self.read[index][gas_index] = clamped;
+        self.write[index][gas_index] = clamped;
     }
 
     pub fn clear_cell(&mut self, x: u32, y: u32) {
         let index = linear_index(x, y);
-        self.read[index] = [0.0; GAS_KIND_COUNT];
-        self.write[index] = [0.0; GAS_KIND_COUNT];
+        for v in &mut self.read[index] {
+            *v = 0.0;
+        }
+        for v in &mut self.write[index] {
+            *v = 0.0;
+        }
         self.total_density[index] = 0.0;
         self.lbm_read[index] = [0.0; 9];
         self.lbm_write[index] = [0.0; 9];
@@ -196,10 +171,10 @@ impl GasField {
     pub fn clear_rect(&mut self, min: UVec2, max: UVec2) {
         for y in min.y..=max.y {
             for x in min.x..=max.x {
-                for kind in GasKind::ALL {
-                    let amount = self.amount(x, y, kind);
+                for gas_index in 0..self.gas_count {
+                    let amount = self.amount(x, y, gas_index);
                     if amount > EPSILON_DENSITY {
-                        self.apply_species_delta_with_lbm(x, y, kind, -amount);
+                        self.apply_species_delta_with_lbm(x, y, gas_index, -amount);
                     }
                 }
             }
@@ -210,7 +185,7 @@ impl GasField {
         &mut self,
         min: UVec2,
         max: UVec2,
-        kind: GasKind,
+        gas_index: usize,
         amount: u32,
         replace: bool,
         world: &WorldGrid,
@@ -222,11 +197,11 @@ impl GasField {
                 }
 
                 if replace {
-                    let current = self.amount(x, y, kind);
+                    let current = self.amount(x, y, gas_index);
                     let target = amount as f32;
-                    self.apply_species_delta_with_lbm(x, y, kind, target - current);
+                    self.apply_species_delta_with_lbm(x, y, gas_index, target - current);
                 } else {
-                    self.apply_species_delta_with_lbm(x, y, kind, amount as f32);
+                    self.apply_species_delta_with_lbm(x, y, gas_index, amount as f32);
                 }
             }
         }
@@ -236,7 +211,7 @@ impl GasField {
         &mut self,
         x: u32,
         y: u32,
-        kind: GasKind,
+        gas_index: usize,
         delta: GasScalar,
     ) -> GasScalar {
         if delta.abs() <= EPSILON_DENSITY {
@@ -244,8 +219,7 @@ impl GasField {
         }
 
         let index = linear_index(x, y);
-        let kind_index = kind.index();
-        let before = self.read[index][kind_index];
+        let before = self.read[index][gas_index];
         let unclamped = before + delta;
         let clamped = unclamped.max(0.0);
         let applied = clamped - before;
@@ -253,8 +227,8 @@ impl GasField {
             return 0.0;
         }
 
-        self.read[index][kind_index] = clamped;
-        self.write[index][kind_index] = clamped;
+        self.read[index][gas_index] = clamped;
+        self.write[index][gas_index] = clamped;
         self.apply_total_lbm_delta_at_index(index, applied);
         applied
     }
@@ -297,8 +271,7 @@ impl GasField {
                     self.total_density[index] = 0.0;
                     continue;
                 }
-                let cell = self.read[index];
-                self.total_density[index] = cell.iter().copied().sum();
+                self.total_density[index] = self.read[index].iter().copied().sum();
             }
         }
     }
@@ -378,10 +351,13 @@ impl GasField {
             *entry = [0.0; 9];
         }
         for entry in &mut self.write {
-            *entry = [0.0; GAS_KIND_COUNT];
+            entry.fill(0.0);
         }
 
         let velocity_limit = tuning.target_cfl_like_limit.clamp(0.1, 0.98);
+        let velocity_damping = tuning.velocity_damping.clamp(0.0, 0.95);
+        let velocity_keep = 1.0 - velocity_damping;
+        let species_eq_blend = tuning.species_eq_blend.clamp(0.0, 1.0);
         let omega_plus = (1.0 / tuning.tau_even.max(0.55)).clamp(0.01, 1.99);
         let omega_minus = (1.0 / tuning.tau_odd.max(0.55)).clamp(0.01, 1.99);
         let buoyancy_radius = tuning.buoyancy_window_radius.clamp(1, 3);
@@ -398,12 +374,12 @@ impl GasField {
                 let index = linear_index(x, y);
                 if is_boundary(x, y) || world.is_solid(x, y) {
                     self.velocity[index] = Vec2::ZERO;
-                    self.write[index] = [0.0; GAS_KIND_COUNT];
+                    self.write[index].fill(0.0);
                     continue;
                 }
 
                 let (rho, mut forced_u) = macroscopic_from_distributions(&self.lbm_read[index]);
-                let mut local_species_buoyancy = [0.0f32; GAS_KIND_COUNT];
+                let mut local_species_buoyancy = vec![0.0f32; self.gas_count];
                 let mut local_mix_buoyancy = 0.0f32;
                 let mut has_local_buoyancy_context = false;
                 if !enable_lbm_velocity {
@@ -423,16 +399,16 @@ impl GasField {
                         ) {
                             has_local_buoyancy_context = true;
                             let mut m_cell = 0.0f32;
-                            for kind in GasKind::ALL {
-                                let amount = self.read[index][kind.index()].max(0.0);
+                            for gas_index in 0..self.gas_count {
+                                let amount = self.read[index][gas_index].max(0.0);
                                 if amount <= EPSILON_DENSITY {
                                     continue;
                                 }
                                 let yi = amount / species_total;
-                                m_cell += yi * kind.molecular_mass();
-                                let xi = (m_env - kind.molecular_mass()) / m_env;
+                                m_cell += yi * self.molecular_mass(gas_index);
+                                let xi = (m_env - self.molecular_mass(gas_index)) / m_env;
                                 let bi = (gain * xi).tanh() * xi.abs().powf(alpha);
-                                local_species_buoyancy[kind.index()] = bi;
+                                local_species_buoyancy[gas_index] = bi;
                             }
                             let x_mix = (m_env - m_cell) / m_env;
                             local_mix_buoyancy = (gain * x_mix).tanh() * x_mix.abs().powf(alpha);
@@ -444,11 +420,11 @@ impl GasField {
                         forced_u.y += force_y;
                     }
                 }
-                let forced_u = forced_u.clamp_length_max(velocity_limit);
+                let forced_u = (forced_u * velocity_keep).clamp_length_max(velocity_limit);
                 let feq = equilibrium_distributions(rho, forced_u);
 
                 let mut post = [0.0; 9];
-                // TRT decomposition into even/odd moments for opposite directions.
+                let mut post_sum = 0.0f32;
                 for i in 0..9 {
                     let j = LBM_OPPOSITE[i];
                     let fi = self.lbm_read[index][i];
@@ -463,9 +439,21 @@ impl GasField {
                         - omega_plus * (f_plus - feq_plus)
                         - omega_minus * (f_minus - feq_minus))
                         .max(0.0);
+                    post_sum += post[i];
                 }
 
-                let post_sum: f32 = post.iter().sum();
+                let mut transport_weights = post;
+                let mut transport_sum = post_sum;
+                if species_eq_blend > 0.0 {
+                    transport_sum = 0.0;
+                    for dir in 0..9 {
+                        let blended =
+                            post[dir] * (1.0 - species_eq_blend) + feq[dir].max(0.0) * species_eq_blend;
+                        transport_weights[dir] = blended.max(0.0);
+                        transport_sum += transport_weights[dir];
+                    }
+                }
+
                 let mut species_targets = [index; 9];
 
                 for i in 0..9 {
@@ -493,93 +481,87 @@ impl GasField {
                     }
                 }
 
-                for kind in GasKind::ALL {
-                    let kind_index = kind.index();
-                    let amount = self.read[index][kind_index];
+                for gas_index in 0..self.gas_count {
+                    let amount = self.read[index][gas_index];
                     if amount <= EPSILON_DENSITY {
                         continue;
                     }
 
-                    if !enable_species_relaxation {
-                        self.write[index][kind_index] += amount;
-                        continue;
-                    }
-
-                    if post_sum <= EPSILON_DENSITY {
-                        self.write[index][kind_index] += amount;
+                    if !enable_species_relaxation || transport_sum <= EPSILON_DENSITY {
+                        self.write[index][gas_index] += amount;
                         continue;
                     }
 
                     let mut biased_sum = 0.0f32;
-                    let mut biased_weights = post;
+                    let mut biased_weights = transport_weights;
                     if tuning.enable_buoyancy && has_local_buoyancy_context {
-                        let relative_b = local_species_buoyancy[kind_index] - local_mix_buoyancy;
+                        let relative_b = local_species_buoyancy[gas_index] - local_mix_buoyancy;
                         let drift =
                             (relative_b * tuning.buoyancy_strength * SPECIES_RELATIVE_DRIFT_SCALE)
                                 .clamp(-0.35, 0.35);
                         for dir in 0..9 {
                             let dir_y = LBM_DIRS[dir].y as f32;
                             let multiplier = (1.0 + drift * dir_y).max(0.0);
-                            biased_weights[dir] = post[dir] * multiplier;
+                            biased_weights[dir] = transport_weights[dir] * multiplier;
                             biased_sum += biased_weights[dir];
                         }
                     } else {
-                        biased_sum = post_sum;
+                        biased_sum = transport_sum;
                     }
                     if biased_sum <= EPSILON_DENSITY {
-                        self.write[index][kind_index] += amount;
+                        self.write[index][gas_index] += amount;
                         continue;
                     }
 
-                    for (dir, weight) in biased_weights.into_iter().enumerate() {
-                        if weight <= EPSILON_DENSITY {
+                    let scale = amount / biased_sum;
+                    for dir in 0..9 {
+                        let share = biased_weights[dir].max(0.0) * scale;
+                        if share <= 0.0 {
                             continue;
                         }
-                        let target_index = species_targets[dir];
-                        let share = amount * (weight / biased_sum);
-                        if share <= EPSILON_DENSITY {
-                            continue;
-                        }
-                        self.write[target_index][kind_index] += share;
+                        let target = species_targets[dir];
+                        self.write[target][gas_index] += share;
                     }
                 }
             }
         }
 
-        std::mem::swap(&mut self.lbm_read, &mut self.lbm_write);
         std::mem::swap(&mut self.read, &mut self.write);
 
         for y in 0..WORLD_HEIGHT {
             for x in 0..WORLD_WIDTH {
                 let index = linear_index(x, y);
                 if is_boundary(x, y) || world.is_solid(x, y) {
-                    self.velocity[index] = Vec2::ZERO;
+                    self.read[index].fill(0.0);
+                    self.write[index].fill(0.0);
                     self.total_density[index] = 0.0;
+                    self.velocity[index] = Vec2::ZERO;
                     continue;
                 }
-                let (rho, u) = macroscopic_from_distributions(&self.lbm_read[index]);
+
+                let (rho, u) = macroscopic_from_distributions(&self.lbm_write[index]);
                 self.total_density[index] = rho.max(0.0);
-                self.velocity[index] = u.clamp_length_max(velocity_limit);
+                self.velocity[index] = if enable_lbm_velocity {
+                    (u * velocity_keep).clamp_length_max(velocity_limit)
+                } else {
+                    Vec2::ZERO
+                };
             }
         }
+
+        std::mem::swap(&mut self.lbm_read, &mut self.lbm_write);
     }
 
-    pub fn clear_velocity(&mut self) {
-        for v in &mut self.velocity {
-            *v = Vec2::ZERO;
-        }
-    }
-
-    pub fn species_totals(&self, world: &WorldGrid) -> [GasScalar; GAS_KIND_COUNT] {
-        let mut totals = [0.0; GAS_KIND_COUNT];
+    pub fn species_totals(&self, world: &WorldGrid) -> Vec<GasScalar> {
+        let mut totals = vec![0.0f32; self.gas_count];
         for y in 0..WORLD_HEIGHT {
             for x in 0..WORLD_WIDTH {
                 if is_boundary(x, y) || world.is_solid(x, y) {
                     continue;
                 }
                 let index = linear_index(x, y);
-                for (kind_index, total) in totals.iter_mut().enumerate() {
-                    *total += self.read[index][kind_index];
+                for (gas_index, total) in totals.iter_mut().enumerate() {
+                    *total += self.read[index][gas_index];
                 }
             }
         }
@@ -589,18 +571,18 @@ impl GasField {
     pub fn renormalize_species_mass(
         &mut self,
         world: &WorldGrid,
-        target_totals: [GasScalar; GAS_KIND_COUNT],
-        min_residual: GasScalar,
+        target_totals: &[f32],
+        min_residual: f32,
     ) {
         let current_totals = self.species_totals(world);
-        let mut scales = [1.0; GAS_KIND_COUNT];
-        for kind_index in 0..GAS_KIND_COUNT {
-            if target_totals[kind_index] <= EPSILON_DENSITY
-                || current_totals[kind_index] <= EPSILON_DENSITY
-            {
+        let mut scales = vec![1.0f32; self.gas_count];
+        for gas_index in 0..self.gas_count {
+            let target = target_totals.get(gas_index).copied().unwrap_or(0.0).max(0.0);
+            let current = current_totals.get(gas_index).copied().unwrap_or(0.0).max(0.0);
+            if target <= EPSILON_DENSITY || current <= EPSILON_DENSITY {
                 continue;
             }
-            scales[kind_index] = target_totals[kind_index] / current_totals[kind_index];
+            scales[gas_index] = target / current;
         }
 
         for y in 0..WORLD_HEIGHT {
@@ -609,14 +591,15 @@ impl GasField {
                     continue;
                 }
                 let index = linear_index(x, y);
-                for kind_index in 0..GAS_KIND_COUNT {
-                    self.read[index][kind_index] =
-                        (self.read[index][kind_index] * scales[kind_index]).max(0.0);
+                for gas_index in 0..self.gas_count {
+                    self.read[index][gas_index] =
+                        (self.read[index][gas_index] * scales[gas_index]).max(0.0);
                 }
             }
         }
 
-        let mut corrected_totals = [0.0; GAS_KIND_COUNT];
+        let mut corrected_totals = vec![0.0f32; self.gas_count];
+        let residual_threshold = min_residual.max(0.0);
         let mut fallback_index = None;
         let mut fallback_total = -1.0f32;
         for y in 0..WORLD_HEIGHT {
@@ -630,20 +613,20 @@ impl GasField {
                     fallback_total = cell_total;
                     fallback_index = Some(index);
                 }
-                for (kind_index, total) in corrected_totals.iter_mut().enumerate() {
-                    *total += self.read[index][kind_index];
+                for gas_index in 0..self.gas_count {
+                    corrected_totals[gas_index] += self.read[index][gas_index];
                 }
             }
         }
 
-        let residual_threshold = min_residual.max(0.0);
-        for kind_index in 0..GAS_KIND_COUNT {
-            let residual = target_totals[kind_index] - corrected_totals[kind_index];
+        for gas_index in 0..self.gas_count {
+            let target = target_totals.get(gas_index).copied().unwrap_or(0.0).max(0.0);
+            let residual = target - corrected_totals[gas_index];
             if residual.abs() <= residual_threshold {
                 continue;
             }
 
-            let available = corrected_totals[kind_index];
+            let available = corrected_totals[gas_index];
             if available > EPSILON_DENSITY {
                 let mut last_idx = None;
                 let mut distributed = 0.0f32;
@@ -653,66 +636,62 @@ impl GasField {
                             continue;
                         }
                         let index = linear_index(x, y);
-                        let amount = self.read[index][kind_index];
+                        let amount = self.read[index][gas_index];
                         if amount <= EPSILON_DENSITY {
                             continue;
                         }
-
                         let share = residual * (amount / available);
-                        self.read[index][kind_index] =
-                            (self.read[index][kind_index] + share).max(0.0);
+                        self.read[index][gas_index] =
+                            (self.read[index][gas_index] + share).max(0.0);
                         distributed += share;
                         last_idx = Some(index);
                     }
                 }
+
                 let remnant = residual - distributed;
                 if remnant.abs() > residual_threshold {
                     if let Some(index) = last_idx.or(fallback_index) {
-                        self.read[index][kind_index] =
-                            (self.read[index][kind_index] + remnant).max(0.0);
+                        self.read[index][gas_index] =
+                            (self.read[index][gas_index] + remnant).max(0.0);
                     }
                 }
             } else if let Some(index) = fallback_index {
-                self.read[index][kind_index] = (self.read[index][kind_index] + residual).max(0.0);
+                self.read[index][gas_index] = (self.read[index][gas_index] + residual).max(0.0);
             }
         }
 
-        // Final exactness pass: enforce target totals by assigning tiny remaining residual
-        // to the densest cell of the corresponding species (never to a fixed corner anchor).
-        let mut final_totals = [0.0; GAS_KIND_COUNT];
-        let mut max_kind_index = [None; GAS_KIND_COUNT];
-        let mut max_kind_value = [-1.0f32; GAS_KIND_COUNT];
+        let mut final_totals = vec![0.0f32; self.gas_count];
+        let mut max_kind_index = vec![None; self.gas_count];
+        let mut max_kind_value = vec![-1.0f32; self.gas_count];
         for y in 0..WORLD_HEIGHT {
             for x in 0..WORLD_WIDTH {
                 if is_boundary(x, y) || world.is_solid(x, y) {
                     continue;
                 }
                 let index = linear_index(x, y);
-                for kind_index in 0..GAS_KIND_COUNT {
-                    let amount = self.read[index][kind_index];
-                    final_totals[kind_index] += amount;
-                    if amount > max_kind_value[kind_index] {
-                        max_kind_value[kind_index] = amount;
-                        max_kind_index[kind_index] = Some(index);
+                for gas_index in 0..self.gas_count {
+                    let amount = self.read[index][gas_index];
+                    final_totals[gas_index] += amount;
+                    if amount > max_kind_value[gas_index] {
+                        max_kind_value[gas_index] = amount;
+                        max_kind_index[gas_index] = Some(index);
                     }
                 }
             }
         }
-        for kind_index in 0..GAS_KIND_COUNT {
-            let residual = target_totals[kind_index] - final_totals[kind_index];
+
+        for gas_index in 0..self.gas_count {
+            let target = target_totals.get(gas_index).copied().unwrap_or(0.0).max(0.0);
+            let residual = target - final_totals[gas_index];
             if residual.abs() <= EPSILON_DENSITY {
                 continue;
             }
-            if let Some(index) = max_kind_index[kind_index].or(fallback_index) {
-                self.read[index][kind_index] = (self.read[index][kind_index] + residual).max(0.0);
+            if let Some(index) = max_kind_index[gas_index].or(fallback_index) {
+                self.read[index][gas_index] = (self.read[index][gas_index] + residual).max(0.0);
             }
         }
 
-        self.write.copy_from_slice(&self.read);
-    }
-
-    pub fn lbm_read_snapshot(&self) -> Vec<[f32; 9]> {
-        self.lbm_read.clone()
+        self.write.clone_from(&self.read);
     }
 
     pub fn to_gpu_host_state(&self, world: &WorldGrid) -> GpuSolverHostState {
@@ -722,7 +701,10 @@ impl GasField {
         for y in 0..WORLD_HEIGHT {
             for x in 0..WORLD_WIDTH {
                 let idx = linear_index(x, y);
-                species.push(self.read[idx]);
+                let h2 = self.read[idx].first().copied().unwrap_or(0.0);
+                let o2 = self.read[idx].get(1).copied().unwrap_or(0.0);
+                let co2 = self.read[idx].get(2).copied().unwrap_or(0.0);
+                species.push([h2, o2, co2, 0.0]);
                 let v = self.velocity[idx];
                 velocity.push([v.x, v.y]);
                 let solid = if is_boundary(x, y) || world.is_solid(x, y) {
@@ -740,6 +722,12 @@ impl GasField {
         }
 
         GpuSolverHostState {
+            gas_count: self.gas_count.min(3) as u32,
+            molecular_masses: [
+                self.molecular_mass(0),
+                self.molecular_mass(1),
+                self.molecular_mass(2),
+            ],
             species,
             lbm_flat,
             total_density: self.total_density.clone(),
@@ -759,8 +747,18 @@ impl GasField {
         }
 
         for idx in 0..cells {
-            self.read[idx] = state.species[idx];
-            self.write[idx] = state.species[idx];
+            if self.gas_count > 0 {
+                self.read[idx][0] = state.species[idx][0];
+                self.write[idx][0] = state.species[idx][0];
+            }
+            if self.gas_count > 1 {
+                self.read[idx][1] = state.species[idx][1];
+                self.write[idx][1] = state.species[idx][1];
+            }
+            if self.gas_count > 2 {
+                self.read[idx][2] = state.species[idx][2];
+                self.write[idx][2] = state.species[idx][2];
+            }
             self.total_density[idx] = state.total_density[idx];
             self.velocity[idx] = Vec2::new(state.velocity[idx][0], state.velocity[idx][1]);
         }
@@ -834,12 +832,12 @@ fn estimate_local_env_mix_mass(
         }
 
         let mut m_mix_n = 0.0f32;
-        for kind in GasKind::ALL {
-            let ci = field.read[nidx][kind.index()].max(0.0);
+        for gas_index in 0..field.gas_count {
+            let ci = field.read[nidx][gas_index].max(0.0);
             if ci <= EPSILON_DENSITY {
                 continue;
             }
-            m_mix_n += (ci / rho_n) * kind.molecular_mass();
+            m_mix_n += (ci / rho_n) * field.molecular_mass(gas_index);
         }
         if !m_mix_n.is_finite() || m_mix_n <= BUOYANCY_MIN_ENV_MASS {
             continue;
@@ -860,40 +858,6 @@ fn estimate_local_env_mix_mass(
     } else {
         None
     }
-}
-
-pub fn seeded_hydrogen_amount(x: u32, y: u32) -> u32 {
-    if is_boundary(x, y) {
-        return 0;
-    }
-
-    let center_x = WORLD_WIDTH / 2;
-    let center_y = WORLD_HEIGHT / 2;
-
-    if x == center_x && y == center_y {
-        INITIAL_HYDROGEN_CENTER_PARTICLES
-    } else {
-        0
-    }
-}
-
-pub fn seeded_oxygen_amount(x: u32, y: u32) -> u32 {
-    if is_boundary(x, y) {
-        return 0;
-    }
-
-    let center_x = WORLD_WIDTH / 2;
-    let center_y = WORLD_HEIGHT / 2;
-
-    if x == center_x && y == center_y {
-        INITIAL_OXYGEN_CENTER_PARTICLES
-    } else {
-        0
-    }
-}
-
-pub fn seeded_gas_amount(x: u32, y: u32) -> u32 {
-    seeded_hydrogen_amount(x, y)
 }
 
 fn distribute_scalar_d2q9_runtime(amount: GasScalar) -> [GasScalar; 9] {
@@ -946,168 +910,134 @@ fn macroscopic_from_distributions(f: &[f32; 9]) -> (f32, Vec2) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::grid::linear_index;
+    use crate::config::GasDefinition;
+    use crate::simulation::{do_one_substep, BlockSyncState, GasSimulationConfig, SimulationStep};
+    use crate::world::grid::CellMaterial;
+    use crate::world::grid::WORLD_HEIGHT;
+    use crate::world::grid::WORLD_WIDTH;
 
-    #[test]
-    fn seeded_center_hydrogen_and_zero_oxygen() {
-        let center_x = WORLD_WIDTH / 2;
-        let center_y = WORLD_HEIGHT / 2;
-
-        assert_eq!(
-            seeded_hydrogen_amount(center_x, center_y),
-            INITIAL_HYDROGEN_CENTER_PARTICLES
-        );
-        assert_eq!(
-            seeded_oxygen_amount(center_x, center_y),
-            INITIAL_OXYGEN_CENTER_PARTICLES
-        );
+    fn registry_with_three() -> GasRegistry {
+        GasRegistry::new(vec![
+            GasDefinition {
+                id: "h2".to_string(),
+                label: "Hydrogen".to_string(),
+                molecular_mass: 2.016,
+                color: [0.8, 0.2, 0.9],
+            },
+            GasDefinition {
+                id: "o2".to_string(),
+                label: "Oxygen".to_string(),
+                molecular_mass: 31.998,
+                color: [0.0, 0.8, 0.8],
+            },
+            GasDefinition {
+                id: "co2".to_string(),
+                label: "Carbon dioxide".to_string(),
+                molecular_mass: 44.009,
+                color: [0.5, 0.5, 0.5],
+            },
+        ])
+        .expect("valid registry")
     }
 
     #[test]
-    fn total_equals_sum_of_species_after_recompute() {
-        let mut field = GasField::default();
+    fn creates_from_registry_with_empty_initial_cells() {
+        let registry = registry_with_three();
+        let field = GasField::from_registry(&registry);
+        let cx = WORLD_WIDTH / 2;
+        let cy = WORLD_HEIGHT / 2;
+        assert_eq!(field.gas_count(), 3);
+        assert_eq!(field.amount_rounded(cx, cy, 0), 0);
+        assert_eq!(field.amount_rounded(cx, cy, 1), 0);
+        assert_eq!(field.amount_rounded(cx, cy, 2), 0);
+    }
+
+    #[test]
+    fn totals_include_all_active_species() {
+        let registry = registry_with_three();
+        let mut field = GasField::from_registry(&registry);
+        field.clear_cell(10, 10);
+        field.set_amount(10, 10, 0, 5.0);
+        field.set_amount(10, 10, 1, 7.0);
+        field.set_amount(10, 10, 2, 11.0);
+        assert!((field.total_amount(10, 10) - 23.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn renormalization_does_not_inject_corner_and_matches_targets() {
+        let registry = registry_with_three();
+        let mut field = GasField::from_registry(&registry);
         let world = WorldGrid::default();
-        field.set_amount(10, 10, GasKind::Hydrogen, 17.0);
-        field.set_amount(10, 10, GasKind::Oxygen, 23.0);
 
-        field.recompute_total_density_buffer(&world);
-
-        assert!((field.total_density(10, 10) - 40.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn scalar_d2q9_distribution_preserves_mass() {
-        let distributed = distribute_scalar_d2q9_runtime(360.0);
-        let sum: f32 = distributed.iter().sum();
-        assert!((sum - 360.0).abs() < 1e-4);
-        assert!((distributed[0] - 160.0).abs() < 1e-4);
-    }
-
-    #[test]
-    fn positive_delta_injects_zero_velocity_component_for_multiple_of_36() {
-        let mut field = GasField::default();
-        let x = 12;
-        let y = 12;
-        field.clear_cell(x, y);
-        let index = linear_index(x, y);
-
-        let applied = field.apply_species_delta_with_lbm(x, y, GasKind::Hydrogen, 360.0);
-        assert!((applied - 360.0).abs() < 1e-6);
-
-        let (rho, velocity) = macroscopic_from_distributions(&field.lbm_read[index]);
-        assert_eq!(rho, 360.0);
-        assert!(velocity.length() < 1e-6);
-    }
-
-    #[test]
-    fn negative_delta_scales_lbm_without_flipping_velocity_direction() {
-        let mut field = GasField::default();
-        let x = 14;
-        let y = 14;
-        let index = linear_index(x, y);
-        field.clear_cell(x, y);
-        field.set_amount(x, y, GasKind::Hydrogen, 720.0);
-        field.total_density[index] = 720.0;
-        field.velocity[index] = Vec2::new(0.22, -0.11);
-        let eq = equilibrium_distributions(720.0, field.velocity[index]);
-        field.lbm_read[index] = eq;
-        field.lbm_write[index] = eq;
-
-        let before = macroscopic_from_distributions(&field.lbm_read[index]).1;
-        let applied = field.apply_species_delta_with_lbm(x, y, GasKind::Hydrogen, -180.0);
-        assert!((applied + 180.0).abs() < 1e-6);
-        let after = macroscopic_from_distributions(&field.lbm_read[index]).1;
-
-        assert!(after.x * before.x >= 0.0);
-        assert!(after.y * before.y >= 0.0);
-        assert!((after.x - before.x).abs() < 1e-4);
-        assert!((after.y - before.y).abs() < 1e-4);
-        assert!(field.lbm_read[index].iter().all(|v| *v >= -1e-6));
-    }
-
-    #[test]
-    fn reconciliation_preserves_total_density_consistency() {
-        let mut field = GasField::default();
-        let world = WorldGrid::default();
         field.clear_rect(
             UVec2::new(1, 1),
             UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
         );
-        field.set_amount(20, 20, GasKind::Hydrogen, 123.25);
-        field.set_amount(20, 20, GasKind::Oxygen, 11.75);
-        field.recompute_total_density_buffer(&world);
-        field.sync_lbm_from_total_density(&world);
-        let total_species = field.total_amount(20, 20);
-        assert!((field.total_density(20, 20) - total_species).abs() < 1e-5);
-    }
+        field.set_amount(50, 50, 0, 100.0);
+        field.set_amount(51, 50, 0, 40.0);
+        field.set_amount(51, 51, 0, 15.0);
+        field.set_amount(50, 51, 1, 10.0);
+        field.set_amount(52, 51, 2, 5.0);
 
-    #[test]
-    fn renormalization_does_not_inject_corner_when_residual_exists() {
-        let mut field = GasField::default();
-        let world = WorldGrid::default();
-        field.clear_rect(
-            UVec2::new(1, 1),
-            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
-        );
-        field.set_amount(50, 50, GasKind::Hydrogen, 100.0);
-        field.set_amount(51, 50, GasKind::Hydrogen, 40.0);
-        field.set_amount(51, 51, GasKind::Hydrogen, 15.0);
-
-        // Force a tiny residual correction path.
-        field.renormalize_species_mass(&world, [155.00013, 0.0], 0.0);
+        let targets = vec![155.00013, 10.0, 5.0];
+        field.renormalize_species_mass(&world, &targets, 0.0);
 
         assert!(
-            field.amount(1, 1, GasKind::Hydrogen) <= 1e-6,
-            "Corner cell should stay empty after residual correction"
+            field.amount(1, 1, 0) <= 1e-6,
+            "corner cell should stay empty after residual correction"
         );
-        let total_h2: f32 = field
-            .read
-            .iter()
-            .map(|cell| cell[GasKind::Hydrogen.index()])
-            .sum();
-        assert!((total_h2 - 155.00013).abs() < 1e-4);
+
+        let totals = field.species_totals(&world);
+        for i in 0..targets.len() {
+            assert!(
+                (totals[i] - targets[i]).abs() < 1e-3,
+                "species {} total mismatch: got {}, expected {}",
+                i,
+                totals[i],
+                targets[i]
+            );
+        }
     }
 
     #[test]
-    fn buoyancy_local_env_finite_and_bounded() {
-        let mut field = GasField::default();
+    fn no_nan_inf_long_run_three_species() {
+        let registry = registry_with_three();
         let world = WorldGrid::default();
+        let mut field = GasField::from_registry(&registry);
         field.clear_rect(
             UVec2::new(1, 1),
             UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
         );
-        let x = WORLD_WIDTH / 2;
-        let y = WORLD_HEIGHT / 2;
-        field.set_amount(x, y, GasKind::Hydrogen, 1000.0);
-        field.set_amount(x, y, GasKind::Oxygen, 1000.0);
-        field.recompute_total_density_buffer(&world);
-        field.sync_lbm_from_total_density(&world);
+        let cx = WORLD_WIDTH / 2;
+        let cy = WORLD_HEIGHT / 2;
+        let _ = field.apply_species_delta_with_lbm(cx, cy, 0, 7_000.0);
+        let _ = field.apply_species_delta_with_lbm(cx + 1, cy, 1, 4_000.0);
+        let _ = field.apply_species_delta_with_lbm(cx, cy + 1, 2, 3_000.0);
 
-        let tuning = SolverTuning {
-            enable_buoyancy: true,
-            buoyancy_strength: 0.2,
-            buoyancy_window_radius: 2,
-            buoyancy_window_sigma: 1.2,
-            buoyancy_gain: 2.0,
-            buoyancy_alpha: 0.75,
-            buoyancy_force_cap: 0.2,
-            ..Default::default()
-        };
+        let mut step = SimulationStep(0);
+        let mut block_state = BlockSyncState;
+        let cfg = GasSimulationConfig::default();
+        for _ in 0..2_000 {
+            do_one_substep(&mut block_state, &mut field, &world, &cfg, &mut step);
+        }
 
-        field.step_lbm_unified(&world, &tuning, true, true);
-
-        for yy in 1..WORLD_HEIGHT - 1 {
-            for xx in 1..WORLD_WIDTH - 1 {
-                let v = field.velocity(xx, yy);
+        for y in 1..WORLD_HEIGHT - 1 {
+            for x in 1..WORLD_WIDTH - 1 {
+                for gas_index in 0..field.gas_count() {
+                    let amount = field.amount(x, y, gas_index);
+                    assert!(amount.is_finite());
+                    assert!(amount >= -1e-4);
+                }
+                let v = field.velocity(x, y);
                 assert!(v.x.is_finite() && v.y.is_finite());
-                assert!(v.length() <= tuning.target_cfl_like_limit + 1e-5);
             }
         }
     }
 
     #[test]
-    fn buoyancy_uniform_single_species_near_zero() {
-        let mut field = GasField::default();
+    fn buoyancy_uniform_mixed_three_species_near_zero() {
+        let registry = registry_with_three();
+        let mut field = GasField::from_registry(&registry);
         let world = WorldGrid::default();
         field.clear_rect(
             UVec2::new(1, 1),
@@ -1116,54 +1046,9 @@ mod tests {
 
         for y in 1..WORLD_HEIGHT - 1 {
             for x in 1..WORLD_WIDTH - 1 {
-                field.set_amount(x, y, GasKind::Hydrogen, 10.0);
-            }
-        }
-        field.recompute_total_density_buffer(&world);
-        field.sync_lbm_from_total_density(&world);
-
-        let tuning = SolverTuning {
-            enable_buoyancy: true,
-            buoyancy_strength: 0.4,
-            buoyancy_window_radius: 2,
-            buoyancy_window_sigma: 1.2,
-            buoyancy_gain: 2.0,
-            buoyancy_alpha: 0.75,
-            buoyancy_force_cap: 0.5,
-            ..Default::default()
-        };
-        field.step_lbm_unified(&world, &tuning, true, true);
-
-        let mut sum_abs_vy = 0.0f32;
-        let mut count = 0u32;
-        for y in 3..WORLD_HEIGHT - 3 {
-            for x in 3..WORLD_WIDTH - 3 {
-                let vy = field.velocity(x, y).y;
-                sum_abs_vy += vy.abs();
-                count += 1;
-            }
-        }
-        let avg_abs_vy = sum_abs_vy / count as f32;
-        assert!(
-            avg_abs_vy < 1e-3,
-            "Average |vy| should be near zero for uniform single-species field, got {}",
-            avg_abs_vy
-        );
-    }
-
-    #[test]
-    fn buoyancy_uniform_mixed_species_near_zero() {
-        let mut field = GasField::default();
-        let world = WorldGrid::default();
-        field.clear_rect(
-            UVec2::new(1, 1),
-            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
-        );
-
-        for y in 1..WORLD_HEIGHT - 1 {
-            for x in 1..WORLD_WIDTH - 1 {
-                field.set_amount(x, y, GasKind::Hydrogen, 10.0);
-                field.set_amount(x, y, GasKind::Oxygen, 10.0);
+                field.set_amount(x, y, 0, 10.0);
+                field.set_amount(x, y, 1, 10.0);
+                field.set_amount(x, y, 2, 10.0);
             }
         }
         field.recompute_total_density_buffer(&world);
@@ -1193,64 +1078,141 @@ mod tests {
         let avg_abs_vy = sum_abs_vy / count as f32;
         assert!(
             avg_abs_vy < 1e-3,
-            "Average |vy| should be near zero for uniform mixed field, got {}",
+            "average |vy| should be near zero for uniform mixed field, got {}",
             avg_abs_vy
         );
     }
 
-    #[test]
-    fn buoyancy_light_vs_heavy_relative_sign() {
-        let tuning = SolverTuning {
-            enable_buoyancy: true,
-            buoyancy_strength: 1.0,
-            buoyancy_window_radius: 2,
-            buoyancy_window_sigma: 1.2,
-            buoyancy_gain: 2.0,
-            buoyancy_alpha: 0.75,
-            buoyancy_force_cap: 1.0,
-            ..Default::default()
-        };
-        let m_env = 20.0f32;
-        let h2_x = (m_env - GasKind::Hydrogen.molecular_mass()) / m_env;
-        let o2_x = (m_env - GasKind::Oxygen.molecular_mass()) / m_env;
-        let h2_b = (tuning.buoyancy_gain * h2_x).tanh() * h2_x.abs().powf(tuning.buoyancy_alpha);
-        let o2_b = (tuning.buoyancy_gain * o2_x).tanh() * o2_x.abs().powf(tuning.buoyancy_alpha);
-        assert!(h2_b > 0.0, "Hydrogen should be buoyant in this context");
-        assert!(o2_b < 0.0, "Oxygen should sink in this context");
+    fn add_test_obstacles(world: &mut WorldGrid) {
+        let rects = [
+            (6, 8, 28, 22),
+            (34, 10, 56, 24),
+            (60, 34, 72, 66),
+            (74, 54, 98, 98),
+            (18, 52, 40, 60),
+        ];
+        for (x0, y0, x1, y1) in rects {
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    if x == x0 || x == x1 || y == y0 || y == y1 {
+                        let _ = world.set_solid_with_material(x, y, CellMaterial::Brick);
+                    }
+                }
+            }
+        }
+    }
+
+    fn high_frequency_wave_score(field: &GasField, world: &WorldGrid, gas_index: usize) -> f32 {
+        let mut acc = 0.0f32;
+        let mut count = 0u32;
+        for y in 2..WORLD_HEIGHT - 2 {
+            for x in 2..WORLD_WIDTH - 2 {
+                if world.is_solid(x, y) || is_boundary(x, y) {
+                    continue;
+                }
+                if world.is_solid(x - 1, y)
+                    || world.is_solid(x + 1, y)
+                    || world.is_solid(x, y - 1)
+                    || world.is_solid(x, y + 1)
+                {
+                    continue;
+                }
+
+                let c = field.amount(x, y, gas_index).max(0.0);
+                let lap_like = c
+                    - 0.25
+                        * (field.amount(x - 1, y, gas_index).max(0.0)
+                            + field.amount(x + 1, y, gas_index).max(0.0)
+                            + field.amount(x, y - 1, gas_index).max(0.0)
+                            + field.amount(x, y + 1, gas_index).max(0.0));
+                acc += lap_like.abs();
+                count += 1;
+            }
+        }
+        if count == 0 { 0.0 } else { acc / count as f32 }
     }
 
     #[test]
-    fn buoyancy_window_params_clamped() {
-        let mut field = GasField::default();
-        let world = WorldGrid::default();
+    fn wave_noise_decays_in_obstacle_world() {
+        let registry = registry_with_three();
+        let mut world = WorldGrid::default();
+        add_test_obstacles(&mut world);
+
+        let mut field = GasField::from_registry(&registry);
         field.clear_rect(
             UVec2::new(1, 1),
             UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
         );
-        let x = WORLD_WIDTH / 2;
-        let y = WORLD_HEIGHT / 2;
-        field.set_amount(x, y, GasKind::Hydrogen, 500.0);
-        field.set_amount(x + 1, y, GasKind::Oxygen, 500.0);
+
+        for y in 1..WORLD_HEIGHT - 1 {
+            for x in 1..WORLD_WIDTH - 1 {
+                if world.is_solid(x, y) || is_boundary(x, y) {
+                    continue;
+                }
+                let dx = x as f32 - WORLD_WIDTH as f32 * 0.5;
+                let dy = y as f32 - WORLD_HEIGHT as f32 * 0.52;
+                let r2 = dx * dx + dy * dy;
+                let base = (-(r2 / 520.0)).exp() * 220.0;
+                if base > 0.02 {
+                    field.set_amount(x, y, 0, base);
+                }
+            }
+        }
         field.recompute_total_density_buffer(&world);
         field.sync_lbm_from_total_density(&world);
 
-        let tuning = SolverTuning {
-            enable_buoyancy: true,
-            buoyancy_strength: 0.2,
-            buoyancy_window_radius: 0,
-            buoyancy_window_sigma: 0.01,
-            buoyancy_gain: 2.0,
-            buoyancy_alpha: 0.75,
-            buoyancy_force_cap: 0.2,
-            ..Default::default()
-        };
-        field.step_lbm_unified(&world, &tuning, true, true);
+        let mut step = SimulationStep(0);
+        let mut block_state = BlockSyncState;
+        let cfg = GasSimulationConfig::default();
 
-        for yy in 1..WORLD_HEIGHT - 1 {
-            for xx in 1..WORLD_WIDTH - 1 {
-                let v = field.velocity(xx, yy);
-                assert!(v.x.is_finite() && v.y.is_finite());
+        let mut score_early = 0.0f32;
+        for i in 0..1600 {
+            do_one_substep(&mut block_state, &mut field, &world, &cfg, &mut step);
+            if i == 200 {
+                score_early = high_frequency_wave_score(&field, &world, 0);
             }
         }
+        let score_late = high_frequency_wave_score(&field, &world, 0);
+
+        assert!(
+            score_late <= score_early * 0.65,
+            "high-frequency wave score did not decay enough: early={}, late={}",
+            score_early,
+            score_late
+        );
+    }
+
+    #[test]
+    fn dormant_species_do_not_appear_from_h2_only_initial_state() {
+        let registry = registry_with_three();
+        let world = WorldGrid::default();
+        let mut field = GasField::from_registry(&registry);
+        field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
+
+        let cx = WORLD_WIDTH / 2;
+        let cy = WORLD_HEIGHT / 2;
+        let _ = field.apply_species_delta_with_lbm(cx, cy, 0, 10_000.0);
+
+        let mut step = SimulationStep(0);
+        let mut block_state = BlockSyncState;
+        let cfg = GasSimulationConfig::default();
+        for _ in 0..500 {
+            do_one_substep(&mut block_state, &mut field, &world, &cfg, &mut step);
+        }
+
+        let totals = field.species_totals(&world);
+        assert!(
+            totals.get(1).copied().unwrap_or(0.0) <= 1e-3,
+            "O2 should stay near zero, got {}",
+            totals.get(1).copied().unwrap_or(0.0)
+        );
+        assert!(
+            totals.get(2).copied().unwrap_or(0.0) <= 1e-3,
+            "CO2 should stay near zero, got {}",
+            totals.get(2).copied().unwrap_or(0.0)
+        );
     }
 }

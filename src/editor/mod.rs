@@ -1,13 +1,13 @@
 use bevy::{app::AppExit, prelude::*, window::PrimaryWindow};
 
 use crate::{
+    config::GasRegistry,
     debug::{DebugGasMetrics, DebugMode, DebugOverlaySettings},
     input::camera::MainCamera,
     render::GasVisualSettings,
     simulation::{
-        gas::{GasField, GasKind},
-        GasSimulationConfig, SimulationControl, SimulationPerfStats, SimulationRateConfig,
-        SimulationStep,
+        gas::GasField, GasSimulationConfig, SimulationControl, SimulationPerfStats,
+        SimulationRateConfig,
     },
     ui::input_field::{TextInputDisplay, TextInputField, TextInputStyle},
     world::{
@@ -88,7 +88,7 @@ pub struct MainMenuState {
 
 #[derive(Resource)]
 pub struct GasToolSettings {
-    pub gas_kind: GasKind,
+    pub gas_index: usize,
     pub amount: u32,
     pub replace: bool,
 }
@@ -96,7 +96,7 @@ pub struct GasToolSettings {
 impl Default for GasToolSettings {
     fn default() -> Self {
         Self {
-            gas_kind: GasKind::Hydrogen,
+            gas_index: 0,
             amount: 100,
             replace: false,
         }
@@ -497,7 +497,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
 
             parent.spawn((
                 Text::new(
-                    "Anisotropy: 0.0000 | Radial waves: 0.0000 | Mass err H2/O2: 0.0000 / 0.0000",
+                    "Anisotropy: 0.0000 | Radial waves: 0.0000 | Mass err H2/O2/CO2: 0.0000 / 0.0000 / 0.0000",
                 ),
                 TextFont::from_font_size(13.0),
                 TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
@@ -928,7 +928,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ))
                 .with_children(|button| {
                     button.spawn((
-                        Text::new("Gas: Hydrogen"),
+                        Text::new("Gas: h2"),
                         TextFont::from_font_size(13.0),
                         TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
                         GasKindLabel,
@@ -1388,6 +1388,7 @@ fn update_selection_size_tooltip(
 
 fn handle_editor_ui_actions(
     mut interactions: Query<(&Interaction, &EditorUiAction), (Changed<Interaction>, With<Button>)>,
+    gas_registry: Res<GasRegistry>,
     mut active_tool: ResMut<ActiveEditorTool>,
     mut cell_settings: ResMut<CellToolSettings>,
     mut gas_settings: ResMut<GasToolSettings>,
@@ -1427,7 +1428,9 @@ fn handle_editor_ui_actions(
             }
             EditorUiAction::ToggleGasKind => {
                 unfocus_inputs();
-                gas_settings.gas_kind = gas_settings.gas_kind.next();
+                if gas_registry.count() > 0 {
+                    gas_settings.gas_index = (gas_settings.gas_index + 1) % gas_registry.count();
+                }
             }
             EditorUiAction::ToggleReplace => {
                 unfocus_inputs();
@@ -1472,6 +1475,7 @@ fn refresh_editor_ui(
     debug_overlay: Res<DebugOverlaySettings>,
     mut gas_visual_settings: ResMut<GasVisualSettings>,
     mut gas_settings: ResMut<GasToolSettings>,
+    gas_registry: Res<GasRegistry>,
     gas_input: Single<&TextInputField, With<GasAmountInputField>>,
     mut input_set: ParamSet<(
         Single<&TextInputField, With<GasGammaInputField>>,
@@ -1511,6 +1515,9 @@ fn refresh_editor_ui(
 
     if let Some(amount) = gas_input.parsed_u32() {
         gas_settings.amount = amount;
+    }
+    if gas_registry.count() > 0 && gas_settings.gas_index >= gas_registry.count() {
+        gas_settings.gas_index = gas_registry.count() - 1;
     }
     if let Some(gamma) = input_set.p0().parsed_f32() {
         let next_gamma = gamma.clamp(0.0, 10.0);
@@ -1618,10 +1625,14 @@ fn refresh_editor_ui(
             Visibility::Hidden
         };
     }
-    
+
     {
         let mut gas_kind_text = text_set_primary.p1();
-        gas_kind_text.0 = format!("Gas: {}", gas_settings.gas_kind.label());
+        let gas_label = gas_registry
+            .get(gas_settings.gas_index)
+            .map(|gas| gas.id.to_uppercase())
+            .unwrap_or_else(|| "N/A".to_string());
+        gas_kind_text.0 = format!("Gas: {}", gas_label);
     }
 
     {
@@ -1686,12 +1697,13 @@ fn refresh_editor_ui(
             "Impulse vectors: Off"
         };
         metrics_text.0 = format!(
-            "{} | Anisotropy: {:.4} | Radial waves: {:.4} | Mass err H2/O2: {:.4} / {:.4}",
+            "{} | Anisotropy: {:.4} | Radial waves: {:.4} | Mass err H2/O2/CO2: {:.4} / {:.4} / {:.4}",
             vectors_mode,
             debug_metrics.anisotropy_score,
             debug_metrics.radial_wave_score,
             debug_metrics.mass_error_h2,
-            debug_metrics.mass_error_o2
+            debug_metrics.mass_error_o2,
+            debug_metrics.mass_error_co2
         );
     }
 }
@@ -1705,10 +1717,10 @@ fn handle_editor_mouse_input(
     main_menu: Res<MainMenuState>,
     debug_mode: Res<DebugMode>,
     gas_settings: Res<GasToolSettings>,
+    gas_registry: Res<GasRegistry>,
     gas_input: Single<&TextInputField, With<GasAmountInputField>>,
     mut world: ResMut<WorldGrid>,
     mut gas: ResMut<GasField>,
-    mut step: ResMut<SimulationStep>,
     mut selection_drag: ResMut<SelectionDragState>,
     mut brush_drag: ResMut<BrushDragState>,
     mut world_changed: EventWriter<WorldCellChanged>,
@@ -1744,7 +1756,6 @@ fn handle_editor_mouse_input(
                 |cell| {
                     if world.set_solid_with_material(cell.x, cell.y, cell_settings.material) {
                         gas.clear_cell(cell.x, cell.y);
-                        step.0 = step.0.wrapping_add(1);
                         world_changed.write(WorldCellChanged { cell });
                     }
                 },
@@ -1784,19 +1795,23 @@ fn handle_editor_mouse_input(
                     let amount = gas_input.parsed_u32().unwrap_or(gas_settings.amount);
                     match active_tool.selected {
                         Some(EditorTool::AddGas) => {
+                            if gas_registry.count() == 0 {
+                                selection_drag.active = false;
+                                selection_drag.start = None;
+                                selection_drag.current = None;
+                                return;
+                            }
                             gas.apply_rect(
                                 min,
                                 max,
-                                gas_settings.gas_kind,
+                                gas_settings.gas_index.min(gas_registry.count() - 1),
                                 amount,
                                 gas_settings.replace,
                                 &world,
                             );
-                            step.0 = step.0.wrapping_add(1);
                         }
                         Some(EditorTool::ClearGas) => {
                             gas.clear_rect(min, max);
-                            step.0 = step.0.wrapping_add(1);
                         }
                         _ => {}
                     }

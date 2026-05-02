@@ -7,4 +7,6 @@ edition = "2021"
 bevy = { version = "0.16", default-features = true }
 bytemuck = { version = "1.19", features = ["derive"] }
 pollster = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.9"
 wgpu = "24.0"

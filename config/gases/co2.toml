@@ -1,0 +1,4 @@
+id = "co2"
+label = "Carbon dioxide"
+molecular_mass = 44.009
+color = [0.58, 0.58, 0.58]

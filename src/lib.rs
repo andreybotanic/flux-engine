@@ -1,4 +1,5 @@
 pub mod app;
+pub mod config;
 pub mod debug;
 pub mod editor;
 pub mod input;

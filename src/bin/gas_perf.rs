@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, fs, path::Path, time::Instant};
 
 use flux_engine::simulation::{
     backend::SimulationBackend,
+    gas::GasField,
     gpu_solver::{GpuGasSolver, GpuTransferMode},
     perf_model::PerfGasState,
     GasSimulationConfig,
@@ -105,6 +106,7 @@ fn run_gpu_mode(
     transfer_mode: GpuTransferMode,
     mode_name: &'static str,
 ) -> (Vec<PerfSample>, String) {
+    let fallback_gas = GasField::default();
     let mut out = Vec::new();
     let mut adapter_text = String::new();
 
@@ -132,7 +134,13 @@ fn run_gpu_mode(
         };
 
         for _ in 0..warmup {
-            let params = GpuGasSolver::params_from_config(config, width, height, cpu_state.step);
+            let params = GpuGasSolver::params_from_config(
+                config,
+                width,
+                height,
+                cpu_state.step,
+                &fallback_gas,
+            );
             let _ = solver.step(params, transfer_mode);
             cpu_state.step += 1;
         }
@@ -142,7 +150,13 @@ fn run_gpu_mode(
         let mut total_samples = Vec::with_capacity(measure_steps as usize);
 
         for _ in 0..measure_steps {
-            let params = GpuGasSolver::params_from_config(config, width, height, cpu_state.step);
+            let params = GpuGasSolver::params_from_config(
+                config,
+                width,
+                height,
+                cpu_state.step,
+                &fallback_gas,
+            );
             let timings = match solver.step(params, transfer_mode) {
                 Ok(t) => t,
                 Err(err) => {
@@ -345,7 +359,8 @@ fn main() -> Result<(), String> {
                 .first()
                 .map(|s| s.step_total_ms)
                 .ok_or_else(|| format!("Preflight failed for CPU {}x{}", w, h))?;
-            estimated_total_seconds += estimate_mode_seconds(cpu_step, warmup, measure_steps, repeats);
+            estimated_total_seconds +=
+                estimate_mode_seconds(cpu_step, warmup, measure_steps, repeats);
 
             let (gpu_runtime_pf, _) = run_gpu_mode(
                 *w,
@@ -499,6 +514,8 @@ mod tests {
         assert!(should_abort_preflight(false, 90.0, 180.0, &warnings, &[]));
         assert!(should_abort_preflight(false, 90.0, 180.0, &[], &blockers));
         assert!(!should_abort_preflight(false, 90.0, 180.0, &[], &[]));
-        assert!(!should_abort_preflight(true, 250.0, 180.0, &warnings, &blockers));
+        assert!(!should_abort_preflight(
+            true, 250.0, 180.0, &warnings, &blockers
+        ));
     }
 }

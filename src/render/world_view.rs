@@ -8,6 +8,7 @@ use bevy::{
 };
 
 use crate::{
+    config::{CellTypeVisualConfig, GasMainViewVisualConfig, GasRegistry},
     input::camera::MainCamera,
     simulation::{
         gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
@@ -28,14 +29,14 @@ const GRID_LINE_COLOR: Color = Color::srgba(0.29, 0.32, 0.35, 1.0);
 const CURSOR_GRID_MAX_ALPHA: f32 = 0.24;
 const CURSOR_GRID_RADIUS_CELLS: i32 = 4;
 const CURSOR_GRID_FADE_RADIUS: f32 = 3.9;
-const GAS_VISUAL_MIN_PARTICLES: f32 = 1.0;
-const GAS_VISUAL_MIN_INTENSITY: f32 = 0.05;
 const BACKDROP_TILE_SIZE: f32 = 256.0;
 
 #[derive(Resource, Clone)]
 pub struct GasSimulationImages {
-    pub texture_a: Handle<Image>,
-    pub texture_b: Handle<Image>,
+    pub texture_f2_a: Handle<Image>,
+    pub texture_f2_b: Handle<Image>,
+    pub texture_f1_a: Handle<Image>,
+    pub texture_f1_b: Handle<Image>,
 }
 
 #[derive(Resource, Clone, Copy)]
@@ -53,34 +54,43 @@ impl Default for GasVisualSettings {
     }
 }
 
-fn gas_visual_intensity(particles: f32, gamma: f32, max_particles_for_max_color: u32) -> f32 {
+fn gas_visual_intensity(
+    particles: f32,
+    gamma: f32,
+    max_particles_for_max_color: f32,
+    min_particles: f32,
+    min_intensity: f32,
+) -> f32 {
     if particles <= 0.0 {
         return 0.0;
     }
 
-    let max_particles = max_particles_for_max_color.max(1) as f32;
-    let clamped = particles.clamp(GAS_VISUAL_MIN_PARTICLES, max_particles);
-    let norm = if max_particles <= GAS_VISUAL_MIN_PARTICLES {
+    let max_particles = max_particles_for_max_color.max(1.0);
+    let clamped = particles.clamp(min_particles, max_particles);
+    let norm = if max_particles <= min_particles {
         1.0
     } else {
-        ((clamped - GAS_VISUAL_MIN_PARTICLES) / (max_particles - GAS_VISUAL_MIN_PARTICLES))
-            .clamp(0.0, 1.0)
+        ((clamped - min_particles) / (max_particles - min_particles)).clamp(0.0, 1.0)
     };
-    let base = GAS_VISUAL_MIN_INTENSITY + (1.0 - GAS_VISUAL_MIN_INTENSITY) * norm;
+    let base = min_intensity + (1.0 - min_intensity) * norm;
     base.powf(gamma.clamp(0.0, 10.0))
 }
 
 pub fn setup_simulation_images(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
-    let image_a = images.add(build_seeded_image());
-    let image_b = images.add(build_seeded_image());
+    let image_f2_a = images.add(build_seeded_image_f2());
+    let image_f2_b = images.add(build_seeded_image_f2());
+    let image_f1_a = images.add(build_seeded_image_f1());
+    let image_f1_b = images.add(build_seeded_image_f1());
 
     commands.insert_resource(GasSimulationImages {
-        texture_a: image_a,
-        texture_b: image_b,
+        texture_f2_a: image_f2_a,
+        texture_f2_b: image_f2_b,
+        texture_f1_a: image_f1_a,
+        texture_f1_b: image_f1_b,
     });
 }
 
-fn build_seeded_image() -> Image {
+fn build_seeded_image_f2() -> Image {
     let mut image = Image::new_fill(
         Extent3d {
             width: WORLD_WIDTH,
@@ -102,12 +112,29 @@ fn build_seeded_image() -> Image {
             let particles = 0.0f32;
             let storage_linear =
                 (particles / HYDROGEN_GPU_STORAGE_MAX_PARTICLES as f32).clamp(0.0, 1.0);
-            let visual = GAS_VISUAL_MIN_INTENSITY;
+            let visual = 0.05;
             let color = Color::linear_rgba(visual, wall, storage_linear, 1.0);
             let _ = image.set_color_at(x, y, color);
         }
     }
 
+    image
+}
+
+fn build_seeded_image_f1() -> Image {
+    let mut image = Image::new_fill(
+        Extent3d {
+            width: WORLD_WIDTH,
+            height: WORLD_HEIGHT,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        &[0; 16],
+        TextureFormat::Rgba32Float,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    );
+    image.texture_descriptor.usage =
+        TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
     image
 }
 
@@ -126,6 +153,9 @@ pub(crate) struct BackdropLayer;
 
 #[derive(Component)]
 pub(crate) struct GasOverlaySprite;
+
+#[derive(Component)]
+pub(crate) struct GasMainOverlaySprite;
 
 #[derive(Component)]
 pub(crate) struct WallVisual {
@@ -151,6 +181,7 @@ pub fn setup_world_view(
     simulation_images: Res<GasSimulationImages>,
     world: Res<WorldGrid>,
     asset_server: Res<AssetServer>,
+    cell_visuals: Res<CellTypeVisualConfig>,
 ) {
     let visuals = WorldVisualAssets {
         backdrop_noise: asset_server.load("sprites/world/backdrop_noise.png"),
@@ -196,7 +227,7 @@ pub fn setup_world_view(
 
     commands.spawn((
         Sprite {
-            image: simulation_images.texture_a.clone(),
+            image: simulation_images.texture_f2_a.clone(),
             custom_size: Some(world_size),
             color: Color::srgba(1.0, 0.25, 0.1, 0.88),
             ..default()
@@ -206,11 +237,24 @@ pub fn setup_world_view(
         GasOverlaySprite,
     ));
 
+    commands.spawn((
+        Sprite {
+            image: simulation_images.texture_f1_a.clone(),
+            custom_size: Some(world_size),
+            color: Color::WHITE,
+            ..default()
+        },
+        Transform::from_xyz(0.0, 0.0, 0.8),
+        Visibility::Visible,
+        GasMainOverlaySprite,
+    ));
+
     let mut wall_entities = WallEntities::default();
     for y in 0..WORLD_HEIGHT {
         for x in 0..WORLD_WIDTH {
             if let CellKind::Solid(material) = world.cell(x, y) {
-                let entity = spawn_wall_sprite(&mut commands, &visuals, x, y, material);
+                let entity =
+                    spawn_wall_sprite(&mut commands, &visuals, &cell_visuals, x, y, material);
                 wall_entities.by_cell.insert((x, y), entity);
             }
         }
@@ -221,27 +265,18 @@ pub fn setup_world_view(
 fn spawn_wall_sprite(
     commands: &mut Commands,
     visuals: &WorldVisualAssets,
+    cell_visuals: &CellTypeVisualConfig,
     x: u32,
     y: u32,
     material: CellMaterial,
 ) -> Entity {
-    let (image, main_tint, gas_tint) = match material {
-        CellMaterial::Boundary => (
-            visuals.boundary.clone(),
-            Color::srgb(0.90, 0.90, 0.91),
-            Color::srgb(0.66, 0.66, 0.67),
-        ),
-        CellMaterial::Brick => (
-            visuals.brick.clone(),
-            Color::srgb(0.99, 0.99, 0.99),
-            Color::srgb(0.72, 0.72, 0.74),
-        ),
-        CellMaterial::Metal => (
-            visuals.metal.clone(),
-            Color::srgb(0.99, 0.99, 0.99),
-            Color::srgb(0.71, 0.71, 0.73),
-        ),
+    let image = match material {
+        CellMaterial::Boundary => visuals.boundary.clone(),
+        CellMaterial::Brick => visuals.brick.clone(),
+        CellMaterial::Metal => visuals.metal.clone(),
     };
+    let main_tint = cell_visuals.main_tint(material);
+    let gas_tint = cell_visuals.gas_tint(material);
 
     commands
         .spawn((
@@ -264,6 +299,7 @@ pub fn sync_wall_visuals(
     mut commands: Commands,
     world: Res<WorldGrid>,
     visuals: Res<WorldVisualAssets>,
+    cell_visuals: Res<CellTypeVisualConfig>,
     mut wall_entities: ResMut<WallEntities>,
     mut changes: EventReader<WorldCellChanged>,
 ) {
@@ -275,7 +311,8 @@ pub fn sync_wall_visuals(
 
         match (current_cell, wall_entities.by_cell.get(&key).copied()) {
             (CellKind::Solid(material), None) => {
-                let entity = spawn_wall_sprite(&mut commands, &visuals, x, y, material);
+                let entity =
+                    spawn_wall_sprite(&mut commands, &visuals, &cell_visuals, x, y, material);
                 wall_entities.by_cell.insert(key, entity);
             }
             (CellKind::Empty, Some(entity)) => {
@@ -284,7 +321,8 @@ pub fn sync_wall_visuals(
             }
             (CellKind::Solid(material), Some(entity)) => {
                 commands.entity(entity).despawn();
-                let next_entity = spawn_wall_sprite(&mut commands, &visuals, x, y, material);
+                let next_entity =
+                    spawn_wall_sprite(&mut commands, &visuals, &cell_visuals, x, y, material);
                 wall_entities.by_cell.insert(key, next_entity);
             }
             _ => {}
@@ -311,15 +349,29 @@ pub fn apply_overlay_mode(
         Query<&mut Sprite, (With<BackdropLayer>, Without<BoardLayer>)>,
         Query<(&WallVisual, &mut Sprite)>,
     )>,
-    mut gas_query: Query<&mut Visibility, With<GasOverlaySprite>>,
+    mut gas_query: Query<&mut Visibility, (With<GasOverlaySprite>, Without<GasMainOverlaySprite>)>,
+    mut gas_main_query: Query<
+        &mut Visibility,
+        (With<GasMainOverlaySprite>, Without<GasOverlaySprite>),
+    >,
 ) {
     if !overlay_mode.is_changed() {
         return;
     }
 
-    let (board_color, backdrop_color, gas_visibility) = match *overlay_mode {
-        OverlayMode::Main => (BOARD_MAIN_COLOR, BACKDROP_MAIN_COLOR, Visibility::Hidden),
-        OverlayMode::Gas => (BOARD_GAS_COLOR, BACKDROP_GAS_COLOR, Visibility::Visible),
+    let (board_color, backdrop_color, gas_visibility, gas_main_visibility) = match *overlay_mode {
+        OverlayMode::Main => (
+            BOARD_MAIN_COLOR,
+            BACKDROP_MAIN_COLOR,
+            Visibility::Hidden,
+            Visibility::Visible,
+        ),
+        OverlayMode::Gas => (
+            BOARD_GAS_COLOR,
+            BACKDROP_GAS_COLOR,
+            Visibility::Visible,
+            Visibility::Hidden,
+        ),
     };
 
     for mut board in &mut sprite_sets.p0() {
@@ -330,6 +382,9 @@ pub fn apply_overlay_mode(
     }
     for mut visibility in &mut gas_query {
         *visibility = gas_visibility;
+    }
+    for mut visibility in &mut gas_main_query {
+        *visibility = gas_main_visibility;
     }
     for (wall_visual, mut sprite) in &mut sprite_sets.p2() {
         sprite.color = match *overlay_mode {
@@ -384,16 +439,27 @@ pub fn draw_cursor_grid_overlay(
 pub fn sync_gas_display_texture(
     step: Res<SimulationStep>,
     gas: Res<GasField>,
+    gas_registry: Res<GasRegistry>,
     visual_settings: Res<GasVisualSettings>,
+    main_view_settings: Res<GasMainViewVisualConfig>,
     simulation_images: Res<GasSimulationImages>,
     mut images: ResMut<Assets<Image>>,
-    mut gas_query: Query<&mut Sprite, With<GasOverlaySprite>>,
+    mut gas_query: Query<&mut Sprite, (With<GasOverlaySprite>, Without<GasMainOverlaySprite>)>,
+    mut gas_main_query: Query<&mut Sprite, (With<GasMainOverlaySprite>, Without<GasOverlaySprite>)>,
 ) {
-    if !step.is_changed() && !visual_settings.is_changed() {
+    if !step.is_changed()
+        && !gas.is_changed()
+        && !gas_registry.is_changed()
+        && !visual_settings.is_changed()
+        && !main_view_settings.is_changed()
+    {
         return;
     }
 
-    for image_handle in [&simulation_images.texture_a, &simulation_images.texture_b] {
+    for image_handle in [
+        &simulation_images.texture_f2_a,
+        &simulation_images.texture_f2_b,
+    ] {
         let Some(image) = images.get_mut(image_handle) else {
             continue;
         };
@@ -412,7 +478,9 @@ pub fn sync_gas_display_texture(
                     let visual = gas_visual_intensity(
                         particles,
                         visual_settings.gamma,
-                        visual_settings.max_particles_for_max_color,
+                        visual_settings.max_particles_for_max_color as f32,
+                        1.0,
+                        0.05,
                     );
                     Color::linear_rgba(visual, 0.0, storage_linear, 1.0)
                 };
@@ -423,13 +491,72 @@ pub fn sync_gas_display_texture(
     }
 
     let texture = if step.0 % 2 == 0 {
-        simulation_images.texture_a.clone()
+        simulation_images.texture_f2_a.clone()
     } else {
-        simulation_images.texture_b.clone()
+        simulation_images.texture_f2_b.clone()
     };
 
     for mut sprite in &mut gas_query {
         sprite.image = texture.clone();
+    }
+
+    for image_handle in [
+        &simulation_images.texture_f1_a,
+        &simulation_images.texture_f1_b,
+    ] {
+        let Some(image) = images.get_mut(image_handle) else {
+            continue;
+        };
+        for y in 0..WORLD_HEIGHT {
+            for x in 0..WORLD_WIDTH {
+                let texture_y = WORLD_HEIGHT - 1 - y;
+                let color = if is_boundary(x, y) {
+                    Color::linear_rgba(0.0, 0.0, 0.0, 0.0)
+                } else {
+                    let total = gas.total_amount(x, y).max(0.0);
+                    if total <= 1e-6 {
+                        Color::linear_rgba(0.0, 0.0, 0.0, 0.0)
+                    } else {
+                        let mut weighted_rgb = Vec3::ZERO;
+                        for gas_index in 0..gas.gas_count() {
+                            let amount = gas.amount(x, y, gas_index).max(0.0);
+                            if amount <= 1e-6 {
+                                continue;
+                            }
+                            if let Some(gas_def) = gas_registry.get(gas_index) {
+                                let rgb = Vec3::from_array(gas_def.color);
+                                weighted_rgb += rgb * amount;
+                            }
+                        }
+                        let mix_rgb = if weighted_rgb.length_squared() <= f32::EPSILON {
+                            Vec3::ZERO
+                        } else {
+                            weighted_rgb / total.max(1e-6)
+                        };
+                        let visual = gas_visual_intensity(
+                            total,
+                            visual_settings.gamma,
+                            main_view_settings.max_particles_for_max_intensity,
+                            main_view_settings.min_particles,
+                            main_view_settings.min_intensity,
+                        );
+                        let rgb = (mix_rgb * visual).clamp(Vec3::ZERO, Vec3::ONE);
+                        let alpha = (visual * main_view_settings.alpha).clamp(0.0, 1.0);
+                        Color::linear_rgba(rgb.x, rgb.y, rgb.z, alpha)
+                    }
+                };
+                let _ = image.set_color_at(x, texture_y, color);
+            }
+        }
+    }
+
+    let f1_texture = if step.0 % 2 == 0 {
+        simulation_images.texture_f1_a.clone()
+    } else {
+        simulation_images.texture_f1_b.clone()
+    };
+    for mut sprite in &mut gas_main_query {
+        sprite.image = f1_texture.clone();
     }
 }
 

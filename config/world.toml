@@ -1,0 +1,8 @@
+[[gas_placements]]
+gas_id = "h2"
+x = 51
+y = 51
+width = 1
+height = 1
+amount = 10000
+replace = false

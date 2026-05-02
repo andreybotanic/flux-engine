@@ -7,6 +7,7 @@ use bevy::{
 };
 
 use crate::{
+    config::GameConfig,
     debug::DebugPlugin,
     editor::EditorPlugin,
     input::InputPlugin,
@@ -20,6 +21,10 @@ use crate::{
 };
 
 pub fn run() {
+    let game_config = GameConfig::load_from_default_location().unwrap_or_else(|err| {
+        panic!("Failed to load game config files from ./config: {err}");
+    });
+
     let asset_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("assets")
         .to_string_lossy()
@@ -68,7 +73,14 @@ pub fn run() {
         i += 1;
     }
 
-    app.insert_resource(SimulationBackendConfig { backend })
+    app.insert_resource(game_config.gas_registry.clone())
+        .insert_resource(game_config.world_init.clone())
+        .insert_resource(game_config.simulation_rate)
+        .insert_resource(game_config.gas_simulation)
+        .insert_resource(game_config.gas_visual)
+        .insert_resource(game_config.gas_main_visual)
+        .insert_resource(game_config.cell_visuals)
+        .insert_resource(SimulationBackendConfig { backend })
         .insert_resource(world_size)
         .add_plugins(
             DefaultPlugins

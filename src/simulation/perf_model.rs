@@ -130,11 +130,17 @@ impl PerfGasState {
             dirs.copy_from_slice(&state.lbm_flat[base..base + 9]);
         }
 
+        let species = state
+            .species
+            .iter()
+            .map(|v| [v[0], v[1]])
+            .collect::<Vec<_>>();
+
         Ok(Self {
             width,
             height,
-            species_read: state.species.clone(),
-            species_write: state.species.clone(),
+            species_read: species.clone(),
+            species_write: species,
             lbm_write: lbm_read.clone(),
             lbm_read,
             total_density: state.total_density.clone(),
@@ -181,8 +187,15 @@ impl PerfGasState {
             lbm_flat.extend_from_slice(dirs);
         }
         let velocity = self.velocity.iter().map(|v| [v.x, v.y]).collect::<Vec<_>>();
+        let species = self
+            .species_read
+            .iter()
+            .map(|v| [v[0], v[1], 0.0, 0.0])
+            .collect::<Vec<_>>();
         super::gpu_solver::GpuSolverHostState {
-            species: self.species_read.clone(),
+            gas_count: 2,
+            molecular_masses: [2.016, 31.998, 44.009],
+            species,
             lbm_flat,
             total_density: self.total_density.clone(),
             velocity,
@@ -191,8 +204,17 @@ impl PerfGasState {
     }
 
     pub fn apply_gpu_host_state(&mut self, state: &super::gpu_solver::GpuSolverHostState) {
-        self.species_read.copy_from_slice(&state.species);
-        self.species_write.copy_from_slice(&state.species);
+        for (i, value) in state
+            .species
+            .iter()
+            .enumerate()
+            .take(self.species_read.len())
+        {
+            self.species_read[i][0] = value[0];
+            self.species_read[i][1] = value[1];
+            self.species_write[i][0] = value[0];
+            self.species_write[i][1] = value[1];
+        }
         self.total_density.copy_from_slice(&state.total_density);
         for (dst, src) in self.velocity.iter_mut().zip(state.velocity.iter()) {
             *dst = Vec2::new(src[0], src[1]);

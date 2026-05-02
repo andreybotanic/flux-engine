@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
 use crate::{
+    config::GasRegistry,
     input::camera::MainCamera,
     simulation::{
-        do_one_substep,
-        gas::{GasField, GasKind},
-        BlockSyncState, GasSimulationConfig, SimulationControl, SimulationStep,
+        do_one_substep, gas::GasField, BlockSyncState, GasSimulationConfig, SimulationControl,
+        SimulationStep,
     },
     world::grid::{cell_center, is_boundary, WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH},
 };
@@ -34,13 +34,14 @@ pub struct DebugGasMetrics {
     pub radial_wave_score: f32,
     pub mass_error_h2: f32,
     pub mass_error_o2: f32,
+    pub mass_error_co2: f32,
 }
 
-#[derive(Resource, Default, Clone, Copy)]
+#[derive(Resource, Default, Clone)]
 struct DebugMassBaseline {
     initialized: bool,
-    h2: f32,
-    o2: f32,
+    species: Vec<f32>,
+    last_step: u64,
 }
 
 pub struct DebugPlugin;
@@ -104,6 +105,7 @@ fn handle_debug_keys(
 
 fn update_debug_metrics(
     gas: Res<GasField>,
+    gas_registry: Res<GasRegistry>,
     world: Res<WorldGrid>,
     step: Res<SimulationStep>,
     mut metrics: ResMut<DebugGasMetrics>,
@@ -185,33 +187,50 @@ fn update_debug_metrics(
         0.0
     };
 
-    let h2_total: f32 = gas
-        .read
-        .iter()
-        .map(|cell| cell[GasKind::Hydrogen.index()])
-        .sum();
-    let o2_total: f32 = gas
-        .read
-        .iter()
-        .map(|cell| cell[GasKind::Oxygen.index()])
-        .sum();
+    let totals = gas.species_totals(&world);
+    let h2_index = gas_registry.index_of("h2");
+    let o2_index = gas_registry.index_of("o2");
+    let co2_index = gas_registry.index_of("co2");
 
-    if !baseline.initialized || step.0 == 0 {
+    let external_gas_edit_without_step = baseline.initialized && gas.is_changed() && step.0 == baseline.last_step;
+    if !baseline.initialized || step.0 == 0 || external_gas_edit_without_step {
         baseline.initialized = true;
-        baseline.h2 = h2_total;
-        baseline.o2 = o2_total;
+        baseline.species = totals.clone();
     }
 
-    metrics.mass_error_h2 = if baseline.h2 > 1e-6 {
-        ((h2_total - baseline.h2) / baseline.h2).abs()
+    metrics.mass_error_h2 = if let Some(idx) = h2_index {
+        let base = baseline.species.get(idx).copied().unwrap_or(0.0);
+        mass_error_value(base, totals[idx])
     } else {
         0.0
     };
-    metrics.mass_error_o2 = if baseline.o2 > 1e-6 {
-        ((o2_total - baseline.o2) / baseline.o2).abs()
+    metrics.mass_error_o2 = if let Some(idx) = o2_index {
+        let base = baseline.species.get(idx).copied().unwrap_or(0.0);
+        mass_error_value(base, totals[idx])
     } else {
         0.0
     };
+    metrics.mass_error_co2 = if let Some(idx) = co2_index {
+        let base = baseline.species.get(idx).copied().unwrap_or(0.0);
+        mass_error_value(base, totals[idx])
+    } else {
+        0.0
+    };
+
+    baseline.last_step = step.0;
+}
+
+fn mass_error_value(base: f32, current: f32) -> f32 {
+    let base = base.max(0.0);
+    let current = current.max(0.0);
+    let diff = (current - base).abs();
+    // For tiny baselines, relative error explodes and becomes uninformative.
+    // In that zone, report absolute drift in "particles" instead.
+    if base >= 1.0 {
+        diff / base
+    } else {
+        diff
+    }
 }
 
 fn draw_debug_overlays(
@@ -281,5 +300,28 @@ fn draw_debug_overlays(
             momentum_gizmos.line_2d(end, left, color);
             momentum_gizmos.line_2d(end, right, color);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mass_error_value;
+
+    #[test]
+    fn mass_error_is_relative_for_non_zero_baseline() {
+        let err = mass_error_value(100.0, 110.0);
+        assert!((err - 0.1).abs() < 1e-6);
+    }
+
+    #[test]
+    fn mass_error_is_absolute_for_zero_baseline() {
+        let err = mass_error_value(0.0, 42.0);
+        assert!((err - 42.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn mass_error_is_absolute_for_tiny_baseline() {
+        let err = mass_error_value(1e-5, 1.8);
+        assert!((err - (1.8 - 1e-5)).abs() < 1e-6);
     }
 }
