@@ -1,6 +1,10 @@
 use std::path::Path;
 
-use bevy::{asset::AssetPlugin, prelude::*, window::PresentMode};
+use bevy::{
+    asset::AssetPlugin,
+    prelude::*,
+    window::{MonitorSelection, PresentMode, WindowMode},
+};
 
 use crate::{
     debug::DebugPlugin,
@@ -22,7 +26,7 @@ pub fn run() {
         .to_string();
 
     let mut app = App::new();
-    app.insert_resource(ClearColor(Color::BLACK))
+    app.insert_resource(ClearColor(Color::srgb(0.90, 0.91, 0.92)))
         .insert_resource(Time::<Fixed>::from_hz(30.0));
 
     let args: Vec<String> = std::env::args().collect();
@@ -77,6 +81,7 @@ pub fn run() {
                         title: "FluxEngine".into(),
                         present_mode: PresentMode::AutoVsync,
                         resolution: (1600.0, 900.0).into(),
+                        mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
                         ..default()
                     }),
                     ..default()

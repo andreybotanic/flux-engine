@@ -30,7 +30,18 @@ pub fn camera_pan_zoom(
     let mut scale = 1.0;
     if let Projection::Orthographic(orthographic) = &mut *projection {
         if zoom_delta.abs() > f32::EPSILON {
-            orthographic.scale = (orthographic.scale * 0.9_f32.powf(zoom_delta)).clamp(0.35, 6.0);
+            let prev_scale = orthographic.scale;
+            let next_scale = (orthographic.scale * 0.9_f32.powf(zoom_delta)).clamp(0.12, 8.0);
+            if let Some(cursor_pos) = window.cursor_position() {
+                anchor_zoom_to_cursor(
+                    &mut transform.translation,
+                    cursor_pos,
+                    window.resolution.size(),
+                    prev_scale,
+                    next_scale,
+                );
+            }
+            orthographic.scale = next_scale;
         }
         scale = orthographic.scale;
     }
@@ -50,6 +61,21 @@ pub fn camera_pan_zoom(
     clamp_camera_to_world(&mut transform, scale, window.resolution.size());
 }
 
+fn anchor_zoom_to_cursor(
+    translation: &mut Vec3,
+    cursor: Vec2,
+    window_size: Vec2,
+    old_scale: f32,
+    new_scale: f32,
+) {
+    let delta_scale = old_scale - new_scale;
+    let half = window_size * 0.5;
+    let offset_x = cursor.x - half.x;
+    let offset_y = half.y - cursor.y;
+    translation.x += offset_x * delta_scale;
+    translation.y += offset_y * delta_scale;
+}
+
 fn clamp_camera_to_world(transform: &mut Transform, scale: f32, window_size: Vec2) {
     let world_size = world_dimensions();
     let half_window = window_size * 0.5 * scale;
@@ -60,4 +86,30 @@ fn clamp_camera_to_world(transform: &mut Transform, scale: f32, window_size: Vec
 
     transform.translation.x = transform.translation.x.clamp(-limit_x, limit_x);
     transform.translation.y = transform.translation.y.clamp(-limit_y, limit_y);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::anchor_zoom_to_cursor;
+    use bevy::prelude::*;
+
+    #[test]
+    fn zoom_anchor_keeps_world_point_under_cursor() {
+        let mut translation = Vec3::new(0.0, 0.0, 0.0);
+        let cursor = Vec2::new(1200.0, 700.0);
+        let window = Vec2::new(1600.0, 900.0);
+        let old_scale = 1.5;
+        let new_scale = 0.75;
+
+        let half = window * 0.5;
+        let offset = Vec2::new(cursor.x - half.x, half.y - cursor.y);
+        let world_before = translation.truncate() + offset * old_scale;
+        anchor_zoom_to_cursor(&mut translation, cursor, window, old_scale, new_scale);
+        let world_after = translation.truncate() + offset * new_scale;
+
+        assert!(
+            world_before.abs_diff_eq(world_after, 1e-4),
+            "World point under cursor should stay fixed after zoom"
+        );
+    }
 }

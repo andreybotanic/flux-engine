@@ -7,8 +7,15 @@ pub const CAMERA_MARGIN: f32 = 160.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CellKind {
-    Solid,
+    Solid(CellMaterial),
     Empty,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CellMaterial {
+    Boundary,
+    Brick,
+    Metal,
 }
 
 #[derive(Resource, Clone)]
@@ -23,7 +30,7 @@ impl Default for WorldGrid {
             for x in 0..WORLD_WIDTH {
                 if is_boundary(x, y) {
                     let index = linear_index(x, y);
-                    cells[index] = CellKind::Solid;
+                    cells[index] = CellKind::Solid(CellMaterial::Boundary);
                 }
             }
         }
@@ -37,7 +44,14 @@ impl WorldGrid {
     }
 
     pub fn is_solid(&self, x: u32, y: u32) -> bool {
-        self.cell(x, y) == CellKind::Solid
+        matches!(self.cell(x, y), CellKind::Solid(_))
+    }
+
+    pub fn solid_material(&self, x: u32, y: u32) -> Option<CellMaterial> {
+        match self.cell(x, y) {
+            CellKind::Solid(material) => Some(material),
+            CellKind::Empty => None,
+        }
     }
 
     pub fn set_cell_kind(&mut self, x: u32, y: u32, kind: CellKind) -> bool {
@@ -55,7 +69,11 @@ impl WorldGrid {
     }
 
     pub fn set_solid(&mut self, x: u32, y: u32) -> bool {
-        self.set_cell_kind(x, y, CellKind::Solid)
+        self.set_solid_with_material(x, y, CellMaterial::Brick)
+    }
+
+    pub fn set_solid_with_material(&mut self, x: u32, y: u32, material: CellMaterial) -> bool {
+        self.set_cell_kind(x, y, CellKind::Solid(material))
     }
 
     pub fn set_empty(&mut self, x: u32, y: u32) -> bool {
@@ -104,4 +122,41 @@ pub fn world_to_cell(world_position: Vec2) -> Option<UVec2> {
     }
 
     Some(UVec2::new(x as u32, y as u32))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn boundary_cells_are_technical_material_and_not_editable() {
+        let mut world = WorldGrid::default();
+        assert_eq!(
+            world.solid_material(0, 0),
+            Some(CellMaterial::Boundary),
+            "Boundary cell should be initialized as technical boundary material"
+        );
+        assert!(
+            !world.set_empty(0, 0),
+            "Boundary cell must remain non-editable for tools"
+        );
+        assert!(
+            !world.set_solid_with_material(0, 0, CellMaterial::Metal),
+            "Boundary cell material must not be replaced by editor tools"
+        );
+        assert_eq!(
+            world.solid_material(0, 0),
+            Some(CellMaterial::Boundary),
+            "Boundary material should stay unchanged"
+        );
+    }
+
+    #[test]
+    fn editable_solid_cells_store_selected_material() {
+        let mut world = WorldGrid::default();
+        assert!(world.set_solid_with_material(10, 10, CellMaterial::Metal));
+        assert_eq!(world.solid_material(10, 10), Some(CellMaterial::Metal));
+        assert!(world.set_solid_with_material(10, 10, CellMaterial::Brick));
+        assert_eq!(world.solid_material(10, 10), Some(CellMaterial::Brick));
+    }
 }
