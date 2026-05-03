@@ -100,6 +100,7 @@ pub struct GasSimulationConfig {
     pub mass_fix_every_n_steps: u32,
     pub mass_fix_error_threshold: f32,
     pub mass_fix_min_residual: f32,
+    pub thermal_motion_scale: f32,
     pub solver_tuning: SolverTuning,
 }
 
@@ -112,6 +113,7 @@ impl Default for GasSimulationConfig {
             mass_fix_every_n_steps: 4,
             mass_fix_error_threshold: 1e-4,
             mass_fix_min_residual: 1e-5,
+            thermal_motion_scale: 0.25,
             solver_tuning: SolverTuning::default(),
         }
     }
@@ -346,53 +348,11 @@ pub fn do_one_substep(
     config: &GasSimulationConfig,
     step: &mut SimulationStep,
 ) {
-    let target_species_totals = gas.species_totals(world);
-
-    gas.step_lbm_unified(
+    gas.step_discrete(
         world,
         &config.solver_tuning,
-        config.enable_species_relaxation,
-        config.enable_lbm_velocity,
+        config.thermal_motion_scale,
+        step.0,
     );
-
-    let current_species_totals = gas.species_totals(world);
-    let mass_error = max_relative_mass_error(&target_species_totals, &current_species_totals);
-    let mass_fix_every = config.mass_fix_every_n_steps;
-    let periodic_mass_fix = mass_fix_every > 0 && (step.0 + 1) % u64::from(mass_fix_every) == 0;
-    let event_mass_fix = mass_error > config.mass_fix_error_threshold.max(0.0);
-    let did_mass_fix = periodic_mass_fix || event_mass_fix;
-    if did_mass_fix {
-        gas.renormalize_species_mass(
-            world,
-            &target_species_totals,
-            config.mass_fix_min_residual.max(0.0),
-        );
-    }
-
-    gas.recompute_total_density_buffer(world);
-
-    let reconcile_every = config.reconcile_every_n_steps;
-    let periodic_reconcile = reconcile_every > 0 && (step.0 + 1) % u64::from(reconcile_every) == 0;
-    if config.enable_lbm_velocity && (periodic_reconcile || event_mass_fix) {
-        gas.reconcile_lbm_from_species(world);
-    }
-
     step.0 += 1;
-}
-
-fn max_relative_mass_error(target_totals: &[f32], current_totals: &[f32]) -> f32 {
-    let mut max_error = 0.0f32;
-    let len = target_totals.len().max(current_totals.len());
-    for i in 0..len {
-        let target = target_totals.get(i).copied().unwrap_or(0.0).max(0.0);
-        let current = current_totals.get(i).copied().unwrap_or(0.0).max(0.0);
-        let abs_error = (target - current).abs();
-        let rel = if target > 1e-6 {
-            abs_error / target
-        } else {
-            abs_error
-        };
-        max_error = max_error.max(rel);
-    }
-    max_error
 }

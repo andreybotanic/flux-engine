@@ -2,19 +2,9 @@
 target_hz = 30
 
 [simulation]
-enable_lbm_velocity = true
-enable_species_relaxation = true
-reconcile_every_n_steps = 4
-mass_fix_every_n_steps = 4
-mass_fix_error_threshold = 0.0001
-mass_fix_min_residual = 0.00001
+thermal_motion_scale = 0.25
 
 [solver_tuning]
-tau_even = 0.85
-tau_odd = 1.15
-target_cfl_like_limit = 0.85
-velocity_damping = 0.08
-species_eq_blend = 0.28
 enable_buoyancy = true
 buoyancy_strength = 0.12
 buoyancy_window_radius = 2

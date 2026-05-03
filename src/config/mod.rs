@@ -166,18 +166,19 @@ impl GameConfig {
         };
 
         let gas_simulation = GasSimulationConfig {
-            enable_lbm_velocity: simulation.simulation.enable_lbm_velocity,
-            enable_species_relaxation: simulation.simulation.enable_species_relaxation,
-            reconcile_every_n_steps: simulation.simulation.reconcile_every_n_steps,
-            mass_fix_every_n_steps: simulation.simulation.mass_fix_every_n_steps,
-            mass_fix_error_threshold: simulation.simulation.mass_fix_error_threshold,
-            mass_fix_min_residual: simulation.simulation.mass_fix_min_residual,
+            enable_lbm_velocity: true,
+            enable_species_relaxation: true,
+            reconcile_every_n_steps: 0,
+            mass_fix_every_n_steps: 0,
+            mass_fix_error_threshold: 0.0,
+            mass_fix_min_residual: 0.0,
+            thermal_motion_scale: simulation.simulation.thermal_motion_scale,
             solver_tuning: SolverTuning {
-                tau_even: simulation.solver_tuning.tau_even,
-                tau_odd: simulation.solver_tuning.tau_odd,
-                target_cfl_like_limit: simulation.solver_tuning.target_cfl_like_limit,
-                velocity_damping: simulation.solver_tuning.velocity_damping,
-                species_eq_blend: simulation.solver_tuning.species_eq_blend,
+                tau_even: 0.85,
+                tau_odd: 1.15,
+                target_cfl_like_limit: 0.85,
+                velocity_damping: 0.08,
+                species_eq_blend: 0.28,
                 enable_buoyancy: simulation.solver_tuning.enable_buoyancy,
                 buoyancy_strength: simulation.solver_tuning.buoyancy_strength,
                 buoyancy_window_radius: simulation.solver_tuning.buoyancy_window_radius,
@@ -235,23 +236,11 @@ struct SimulationRateToml {
 
 #[derive(Deserialize)]
 struct GasSimulationToml {
-    enable_lbm_velocity: bool,
-    enable_species_relaxation: bool,
-    reconcile_every_n_steps: u32,
-    mass_fix_every_n_steps: u32,
-    mass_fix_error_threshold: f32,
-    mass_fix_min_residual: f32,
+    thermal_motion_scale: f32,
 }
 
 #[derive(Deserialize)]
 struct SolverTuningToml {
-    tau_even: f32,
-    tau_odd: f32,
-    target_cfl_like_limit: f32,
-    #[serde(default = "default_velocity_damping")]
-    velocity_damping: f32,
-    #[serde(default = "default_species_eq_blend")]
-    species_eq_blend: f32,
     enable_buoyancy: bool,
     buoyancy_strength: f32,
     buoyancy_window_radius: u8,
@@ -269,14 +258,6 @@ struct VisualToml {
     f1_max_particles_for_max_intensity: f32,
     f1_min_intensity: f32,
     f1_alpha: f32,
-}
-
-fn default_velocity_damping() -> f32 {
-    SolverTuning::default().velocity_damping
-}
-
-fn default_species_eq_blend() -> f32 {
-    SolverTuning::default().species_eq_blend
 }
 
 #[derive(Deserialize)]
@@ -399,19 +380,9 @@ mod tests {
 target_hz = 30
 
 [simulation]
-enable_lbm_velocity = true
-enable_species_relaxation = true
-reconcile_every_n_steps = 4
-mass_fix_every_n_steps = 4
-mass_fix_error_threshold = 0.0001
-mass_fix_min_residual = 0.00001
+thermal_motion_scale = 0.25
 
 [solver_tuning]
-tau_even = 0.85
-tau_odd = 1.15
-target_cfl_like_limit = 0.85
-velocity_damping = 0.08
-species_eq_blend = 0.28
 enable_buoyancy = true
 buoyancy_strength = 0.12
 buoyancy_window_radius = 2

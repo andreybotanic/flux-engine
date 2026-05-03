@@ -20,7 +20,7 @@ const SCHEMA_VERSION: u32 = 1;
 const WORLD_CELLS_MAGIC: &[u8; 4] = b"FXWC";
 const GAS_STATE_MAGIC: &[u8; 4] = b"FXGS";
 const WORLD_CELLS_VERSION: u16 = 1;
-const GAS_STATE_VERSION: u16 = 1;
+const GAS_STATE_VERSION: u16 = 2;
 const CHUNK_WORLD_CELLS_ID: &str = "world_cells";
 const CHUNK_GAS_STATE_ID: &str = "gas_state";
 const WORLD_CELLS_FILE: &str = "world_cells.bin";
@@ -371,10 +371,9 @@ struct SavedGasChunk {
     height: u32,
     simulation_step: u64,
     gas_ids: Vec<String>,
-    species: Vec<f32>,
+    species: Vec<u32>,
     velocity: Vec<[f32; 2]>,
     total_density: Vec<f32>,
-    lbm_flat: Vec<f32>,
 }
 
 fn validate_display_name(display_name: &str) -> Result<(), SaveError> {
@@ -469,7 +468,7 @@ fn write_slot(
         SaveChunkMetaToml {
             id: CHUNK_GAS_STATE_ID.to_string(),
             file: GAS_STATE_FILE.to_string(),
-            format: "binary_v1".to_string(),
+            format: "binary_v2".to_string(),
         },
     ];
 
@@ -720,7 +719,6 @@ fn write_gas_chunk(
     }
     if snapshot.velocity.len() != cells
         || snapshot.total_density.len() != cells
-        || snapshot.lbm_flat.len() != cells * 9
     {
         return Err(SaveError::Validation(
             "Gas snapshot buffer length mismatch while writing gas chunk".to_string(),
@@ -756,9 +754,6 @@ fn write_gas_chunk(
         bytes.extend_from_slice(&vy.to_le_bytes());
     }
     for value in &snapshot.total_density {
-        bytes.extend_from_slice(&value.to_le_bytes());
-    }
-    for value in &snapshot.lbm_flat {
         bytes.extend_from_slice(&value.to_le_bytes());
     }
 
@@ -831,7 +826,7 @@ fn read_gas_chunk(path: &Path) -> Result<SavedGasChunk, SaveError> {
     let species_len = cells * gas_count;
     let mut species = Vec::with_capacity(species_len);
     for _ in 0..species_len {
-        species.push(read_f32(&mut cursor)?);
+        species.push(read_u32(&mut cursor)?);
     }
 
     let mut velocity = Vec::with_capacity(cells);
@@ -846,12 +841,6 @@ fn read_gas_chunk(path: &Path) -> Result<SavedGasChunk, SaveError> {
         total_density.push(read_f32(&mut cursor)?);
     }
 
-    let lbm_len = cells * 9;
-    let mut lbm_flat = Vec::with_capacity(lbm_len);
-    for _ in 0..lbm_len {
-        lbm_flat.push(read_f32(&mut cursor)?);
-    }
-
     Ok(SavedGasChunk {
         width,
         height,
@@ -860,7 +849,6 @@ fn read_gas_chunk(path: &Path) -> Result<SavedGasChunk, SaveError> {
         species,
         velocity,
         total_density,
-        lbm_flat,
     })
 }
 
@@ -886,7 +874,7 @@ fn map_saved_gas_snapshot_to_registry(
 
     let current_gas_count = gas_registry.count();
     let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-    let mut mapped_species = vec![0.0f32; cells * current_gas_count];
+    let mut mapped_species = vec![0u32; cells * current_gas_count];
     for (saved_idx, gas_id) in saved.gas_ids.iter().enumerate() {
         let current_idx = gas_registry.index_of(gas_id).ok_or_else(|| {
             SaveError::Validation(format!("Gas chunk references unknown gas id '{}'", gas_id))
@@ -894,7 +882,7 @@ fn map_saved_gas_snapshot_to_registry(
         for cell in 0..cells {
             let saved_value = saved.species[cell * saved.gas_ids.len() + saved_idx];
             let mapped_index = cell * current_gas_count + current_idx;
-            mapped_species[mapped_index] = saved_value.max(0.0);
+            mapped_species[mapped_index] = saved_value;
         }
     }
 
@@ -908,12 +896,6 @@ fn map_saved_gas_snapshot_to_registry(
             .map(|value| value.max(0.0))
             .collect(),
         velocity: saved.velocity.clone(),
-        lbm_flat: saved
-            .lbm_flat
-            .iter()
-            .copied()
-            .map(|value| value.max(0.0))
-            .collect(),
     })
 }
 
@@ -1026,7 +1008,7 @@ mod tests {
         assert_eq!(original.gas_count, restored.gas_count);
         assert_eq!(original.species.len(), restored.species.len());
         for i in 0..original.species.len() {
-            assert!((original.species[i] - restored.species[i]).abs() < 1e-6);
+            assert_eq!(original.species[i], restored.species[i]);
         }
 
         let _ = fs::remove_dir_all(root);

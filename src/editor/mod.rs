@@ -136,8 +136,6 @@ enum EditorUiAction {
     SelectCellMaterial(CellMaterial),
     ToggleGasKind,
     ToggleReplace,
-    ToggleLbmVelocity,
-    ToggleDiffusion,
     ToggleBuoyancy,
     ToggleShowMomentumVectors,
 }
@@ -165,12 +163,6 @@ struct GasKindLabel;
 
 #[derive(Component)]
 struct GasAmountInputField;
-
-#[derive(Component)]
-struct LbmToggleLabel;
-
-#[derive(Component)]
-struct DiffusionToggleLabel;
 
 #[derive(Component)]
 struct BuoyancyToggleLabel;
@@ -489,50 +481,6 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                         ..default()
                     },
                     BackgroundColor(BUTTON_IDLE),
-                    EditorUiAction::ToggleLbmVelocity,
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("LBM/Velocity: On"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                        LbmToggleLabel,
-                    ));
-                });
-
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Px(220.0),
-                        height: Val::Px(32.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(BUTTON_IDLE),
-                    EditorUiAction::ToggleDiffusion,
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("Diffusion: On"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                        DiffusionToggleLabel,
-                    ));
-                });
-
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Px(220.0),
-                        height: Val::Px(32.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(BUTTON_IDLE),
                     EditorUiAction::ToggleBuoyancy,
                 ))
                 .with_children(|button| {
@@ -566,7 +514,9 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                 });
 
             parent.spawn((
-                Text::new("Step ms: 0.000 | avg: 0.000 | Target Hz: 30 x 1 = 30 | Actual Hz: 0"),
+                Text::new(
+                    "Iterations: 0 | Step ms: 0.000 | avg: 0.000 | Target Hz: 30 x 1 = 30 | Actual Hz: 0",
+                ),
                 TextFont::from_font_size(13.0),
                 TextColor(Color::WHITE),
                 SimulationPerfLabel,
@@ -2465,15 +2415,6 @@ fn handle_editor_ui_actions(
                 unfocus_inputs();
                 gas_settings.replace = !gas_settings.replace;
             }
-            EditorUiAction::ToggleLbmVelocity => {
-                unfocus_inputs();
-                gas_simulation.enable_lbm_velocity = !gas_simulation.enable_lbm_velocity;
-            }
-            EditorUiAction::ToggleDiffusion => {
-                unfocus_inputs();
-                gas_simulation.enable_species_relaxation =
-                    !gas_simulation.enable_species_relaxation;
-            }
             EditorUiAction::ToggleBuoyancy => {
                 unfocus_inputs();
                 gas_simulation.solver_tuning.enable_buoyancy =
@@ -2500,6 +2441,7 @@ fn refresh_editor_ui(
         Res<SimulationControl>,
         Res<SimulationPerfStats>,
     ),
+    sim_step: Res<SimulationStep>,
     mut gas_simulation: ResMut<GasSimulationConfig>,
     mut sim_rate: ResMut<SimulationRateConfig>,
     debug_overlay: Res<DebugOverlaySettings>,
@@ -2530,8 +2472,6 @@ fn refresh_editor_ui(
     mut text_set_primary: ParamSet<(
         Single<&mut Text, With<GasReplaceLabel>>,
         Single<&mut Text, With<GasKindLabel>>,
-        Single<&mut Text, With<LbmToggleLabel>>,
-        Single<&mut Text, With<DiffusionToggleLabel>>,
         Single<&mut Text, With<BuoyancyToggleLabel>>,
         Single<&mut Text, With<SimulationPerfLabel>>,
         Single<&mut Text, With<WaveMetricsLabel>>,
@@ -2593,12 +2533,6 @@ fn refresh_editor_ui(
                 BUTTON_ACTIVE
             }
             EditorUiAction::ToggleReplace if gas_settings.replace => BUTTON_ACTIVE,
-            EditorUiAction::ToggleLbmVelocity if gas_simulation.enable_lbm_velocity => {
-                BUTTON_ACTIVE
-            }
-            EditorUiAction::ToggleDiffusion if gas_simulation.enable_species_relaxation => {
-                BUTTON_ACTIVE
-            }
             EditorUiAction::ToggleBuoyancy if gas_simulation.solver_tuning.enable_buoyancy => {
                 BUTTON_ACTIVE
             }
@@ -2686,25 +2620,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut lbm_toggle_text = text_set_primary.p2();
-        lbm_toggle_text.0 = if gas_simulation.enable_lbm_velocity {
-            "LBM/Velocity: On".to_string()
-        } else {
-            "LBM/Velocity: Off".to_string()
-        };
-    }
-
-    {
-        let mut diffusion_toggle_text = text_set_primary.p3();
-        diffusion_toggle_text.0 = if gas_simulation.enable_species_relaxation {
-            "Species relax: On".to_string()
-        } else {
-            "Species relax: Off".to_string()
-        };
-    }
-
-    {
-        let mut buoyancy_toggle_text = text_set_primary.p4();
+        let mut buoyancy_toggle_text = text_set_primary.p2();
         buoyancy_toggle_text.0 = if gas_simulation.solver_tuning.enable_buoyancy {
             "Buoyancy: On".to_string()
         } else {
@@ -2713,10 +2629,11 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut perf_text = text_set_primary.p5();
+        let mut perf_text = text_set_primary.p3();
         let speed_mult = sim_control.speed.multiplier();
         perf_text.0 = format!(
-            "Step ms: {:.3} | avg: {:.3} | Target Hz: {} x {} = {:.1} | Actual Hz: {:.1} | GPU compute/upload/readback/total: {:.3}/{:.3}/{:.3}/{:.3} ms",
+            "Iterations: {} | Step ms: {:.3} | avg: {:.3} | Target Hz: {} x {} = {:.1} | Actual Hz: {:.1} | GPU compute/upload/readback/total: {:.3}/{:.3}/{:.3}/{:.3} ms",
+            sim_step.0,
             sim_perf.last_step_ms,
             sim_perf.avg_step_ms,
             sim_rate.target_hz,
@@ -2731,7 +2648,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut metrics_text = text_set_primary.p6();
+        let mut metrics_text = text_set_primary.p4();
         let vectors_mode = if debug_overlay.show_momentum_vectors {
             "Impulse vectors: On"
         } else {
