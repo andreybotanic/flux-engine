@@ -4,6 +4,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 
+use crate::ui::panels::PanelManager;
 use crate::world::grid::{world_dimensions, CAMERA_MARGIN};
 
 #[derive(Component)]
@@ -19,12 +20,23 @@ pub fn camera_pan_zoom(
     mut mouse_wheel: EventReader<MouseWheel>,
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&mut Projection, &mut Transform), With<MainCamera>>,
+    panels: Option<Res<PanelManager>>,
 ) {
     let (mut projection, mut transform) = camera_query.into_inner();
+    let cursor = window.cursor_position();
+    let blocked_by_panel = cursor
+        .and_then(|cursor| {
+            panels
+                .as_ref()
+                .map(|manager| manager.is_cursor_over_any_panel(cursor))
+        })
+        .unwrap_or(false);
 
     let mut zoom_delta: f32 = 0.0;
     for event in mouse_wheel.read() {
-        zoom_delta += event.y;
+        if !blocked_by_panel {
+            zoom_delta += event.y;
+        }
     }
 
     let mut scale = 1.0;
@@ -46,7 +58,7 @@ pub fn camera_pan_zoom(
         scale = orthographic.scale;
     }
 
-    if mouse_buttons.pressed(MouseButton::Middle) {
+    if mouse_buttons.pressed(MouseButton::Middle) && !blocked_by_panel {
         let mut delta = Vec2::ZERO;
         for event in mouse_motion.read() {
             delta += event.delta;

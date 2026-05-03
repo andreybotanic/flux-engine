@@ -7,6 +7,7 @@ use crate::{
     render::OverlayMode,
     save::WorldLoadState,
     simulation::gas::GasField,
+    ui::panels::PanelManager,
     world::grid::{world_to_cell, WorldGrid},
 };
 
@@ -48,6 +49,7 @@ pub fn update_cell_inspector(
     main_menu: Res<MainMenuState>,
     world_load_state: Res<WorldLoadState>,
     debug_mode: Res<crate::debug::DebugMode>,
+    panel_manager: Res<PanelManager>,
     gas: Res<GasField>,
     gas_registry: Res<GasRegistry>,
     world: Res<WorldGrid>,
@@ -80,6 +82,7 @@ pub fn update_cell_inspector(
         debug_mode.active,
         active_tool.selected,
         main_menu.open,
+        Some(&panel_manager),
     ) {
         **visibility = Visibility::Hidden;
         return;

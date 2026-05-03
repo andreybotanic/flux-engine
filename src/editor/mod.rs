@@ -14,7 +14,13 @@ use crate::{
         gas::GasField, GasSimulationConfig, SimulationControl, SimulationPerfStats,
         SimulationRateConfig, SimulationStep,
     },
-    ui::input_field::{TextInputDisplay, TextInputField, TextInputStyle},
+    ui::{
+        input_field::{TextInputDisplay, TextInputField, TextInputStyle},
+        panels::{
+            PanelControls, PanelCorner, PanelId, PanelManager, PanelOpenOrder, PanelScrollPolicy,
+            PanelSpec,
+        },
+    },
     world::{
         grid::{
             cell_center, world_to_cell, CellMaterial, WorldGrid, CELL_SIZE, WORLD_HEIGHT,
@@ -55,13 +61,12 @@ const DEBUG_TOOLBAR_HEIGHT: f32 = 56.0;
 const DEBUG_PANEL_RIGHT: f32 = 12.0;
 const DEBUG_PANEL_TOP: f32 = 12.0;
 const DEBUG_PANEL_WIDTH: f32 = 286.0;
-const DEBUG_PANEL_HEIGHT: f32 = 620.0;
 const DEBUG_AND_GAS_PANEL_GAP: f32 = 12.0;
 
 const GAS_PANEL_RIGHT: f32 = 12.0;
-const GAS_PANEL_TOP: f32 = DEBUG_PANEL_TOP + DEBUG_PANEL_HEIGHT + DEBUG_AND_GAS_PANEL_GAP;
 const GAS_PANEL_WIDTH: f32 = 286.0;
-const GAS_PANEL_HEIGHT: f32 = 156.0;
+const DEBUG_PANEL_ID: PanelId = PanelId::new("debug_panel");
+const GAS_TOOL_PANEL_ID: PanelId = PanelId::new("gas_tool_panel");
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EditorTool {
@@ -148,12 +153,6 @@ struct DebugToolbarRoot;
 
 #[derive(Component)]
 struct CellTypePanelRoot;
-
-#[derive(Component)]
-struct DebugPanelRoot;
-
-#[derive(Component)]
-struct GasToolPanelRoot;
 
 #[derive(Component)]
 struct GasReplaceLabel;
@@ -343,6 +342,8 @@ fn setup_editor_ui(
     sim_rate: Res<SimulationRateConfig>,
     gas_simulation: Res<GasSimulationConfig>,
     gas_visual_settings: Res<GasVisualSettings>,
+    mut panel_manager: ResMut<PanelManager>,
+    mut panel_open_order: ResMut<PanelOpenOrder>,
 ) {
     let fmt_f32 = |v: f32| {
         let s = format!("{:.3}", v);
@@ -476,588 +477,79 @@ fn setup_editor_ui(
             );
         });
 
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                right: Val::Px(DEBUG_PANEL_RIGHT),
-                top: Val::Px(DEBUG_PANEL_TOP),
-                width: Val::Px(DEBUG_PANEL_WIDTH),
-                height: Val::Px(DEBUG_PANEL_HEIGHT),
-                display: Display::Flex,
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(8.0),
-                padding: UiRect::all(Val::Px(10.0)),
-                ..default()
+    panel_manager.spawn_panel(
+        &mut commands,
+        &mut panel_open_order,
+        PanelSpec {
+            id: DEBUG_PANEL_ID,
+            title: "Debug Panel".to_string(),
+            corner: PanelCorner::TopRight,
+            width: DEBUG_PANEL_WIDTH,
+            margin_x: DEBUG_PANEL_RIGHT,
+            margin_y: DEBUG_PANEL_TOP,
+            stack_gap: DEBUG_AND_GAS_PANEL_GAP,
+            controls: PanelControls {
+                show_collapse: true,
+                show_close: false,
+                custom_actions: Vec::new(),
             },
-            BackgroundColor(PANEL_BG),
-            DebugPanelRoot,
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                Text::new("Debug Panel"),
-                TextFont::from_font_size(14.0),
-                TextColor(Color::srgba(0.13, 0.14, 0.16, 1.0)),
-            ));
+            scroll_policy: PanelScrollPolicy::AutoHalfScreen,
+            background: PANEL_BG,
+            header_background: Color::srgba(0.82, 0.84, 0.87, 0.98),
+            initial_visible: false,
+            initial_collapsed: false,
+        },
+        |parent| {
+            spawn_debug_panel_content(
+                parent,
+                sim_hz_initial,
+                sim_hz_initial_text.clone(),
+                buoyancy_strength_initial,
+                buoyancy_strength_initial_text.clone(),
+                buoyancy_radius_initial,
+                buoyancy_radius_initial_text.clone(),
+                buoyancy_sigma_initial,
+                buoyancy_sigma_initial_text.clone(),
+                buoyancy_gain_initial,
+                buoyancy_gain_initial_text.clone(),
+                buoyancy_alpha_initial,
+                buoyancy_alpha_initial_text.clone(),
+                buoyancy_cap_initial,
+                buoyancy_cap_initial_text.clone(),
+                gamma_initial,
+                gamma_initial_text.clone(),
+                max_color_initial,
+                max_color_initial_text.clone(),
+            );
+        },
+    );
 
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Px(220.0),
-                        height: Val::Px(32.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(BUTTON_IDLE),
-                    EditorUiAction::ToggleBuoyancy,
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("Buoyancy: On"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                        BuoyancyToggleLabel,
-                    ));
-                });
-
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Px(220.0),
-                        height: Val::Px(32.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(BUTTON_IDLE),
-                    EditorUiAction::ToggleShowMomentumVectors,
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("Show impulses"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                    ));
-                });
-
-            parent.spawn((
-                Text::new(
-                    "Iterations: 0 | Step ms: 0.000 | avg: 0.000 | Target Hz: 30 x 1 = 30 | Actual Hz: 0",
-                ),
-                TextFont::from_font_size(13.0),
-                TextColor(Color::WHITE),
-                SimulationPerfLabel,
-            ));
-
-            parent.spawn((
-                Text::new(
-                    "Anisotropy: 0.0000 | Radial waves: 0.0000 | Mass err H2/O2/CO2: 0.0000 / 0.0000 / 0.0000",
-                ),
-                TextFont::from_font_size(13.0),
-                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                WaveMetricsLabel,
-            ));
-
-            parent
-                .spawn((Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("Simulation Hz:"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::WHITE),
-                    ));
-
-                    row.spawn((
-                        Button,
-                        Node {
-                            min_width: Val::Px(92.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                            ..default()
-                        },
-                        BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_u32(sim_hz_initial, 1, 1000, 4),
-                        TextInputStyle {
-                            idle_bg: BUTTON_IDLE,
-                            focused_bg: INPUT_FOCUSED,
-                        },
-                        bevy::ui::RelativeCursorPosition::default(),
-                        SimulationHzInputField,
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(sim_hz_initial_text.clone()),
-                            TextFont::from_font_size(13.0),
-                            TextColor(Color::WHITE),
-                            TextInputDisplay,
-                        ));
-                    });
-                });
-
-            parent
-                .spawn((Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("Buoyancy strength:"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::WHITE),
-                    ));
-                    row.spawn((
-                        Button,
-                        Node {
-                            min_width: Val::Px(92.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                            ..default()
-                        },
-                        BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(buoyancy_strength_initial, 0.0, 5.0, 6, 3),
-                        TextInputStyle {
-                            idle_bg: BUTTON_IDLE,
-                            focused_bg: INPUT_FOCUSED,
-                        },
-                        bevy::ui::RelativeCursorPosition::default(),
-                        BuoyancyStrengthInputField,
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(buoyancy_strength_initial_text.clone()),
-                            TextFont::from_font_size(13.0),
-                            TextColor(Color::WHITE),
-                            TextInputDisplay,
-                        ));
-                    });
-                });
-
-            parent
-                .spawn((Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("Buoyancy radius:"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::WHITE),
-                    ));
-                    row.spawn((
-                        Button,
-                        Node {
-                            min_width: Val::Px(92.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                            ..default()
-                        },
-                        BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_u32(buoyancy_radius_initial, 1, 3, 1),
-                        TextInputStyle {
-                            idle_bg: BUTTON_IDLE,
-                            focused_bg: INPUT_FOCUSED,
-                        },
-                        bevy::ui::RelativeCursorPosition::default(),
-                        BuoyancyWindowRadiusInputField,
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(buoyancy_radius_initial_text.clone()),
-                            TextFont::from_font_size(13.0),
-                            TextColor(Color::WHITE),
-                            TextInputDisplay,
-                        ));
-                    });
-                });
-
-            parent
-                .spawn((Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("Buoyancy sigma:"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::WHITE),
-                    ));
-                    row.spawn((
-                        Button,
-                        Node {
-                            min_width: Val::Px(92.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                            ..default()
-                        },
-                        BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(buoyancy_sigma_initial, 0.5, 3.0, 6, 3),
-                        TextInputStyle {
-                            idle_bg: BUTTON_IDLE,
-                            focused_bg: INPUT_FOCUSED,
-                        },
-                        bevy::ui::RelativeCursorPosition::default(),
-                        BuoyancyWindowSigmaInputField,
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(buoyancy_sigma_initial_text.clone()),
-                            TextFont::from_font_size(13.0),
-                            TextColor(Color::WHITE),
-                            TextInputDisplay,
-                        ));
-                    });
-                });
-
-            parent
-                .spawn((Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("Buoyancy gain:"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::WHITE),
-                    ));
-                    row.spawn((
-                        Button,
-                        Node {
-                            min_width: Val::Px(92.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                            ..default()
-                        },
-                        BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(buoyancy_gain_initial, 0.0, 10.0, 6, 3),
-                        TextInputStyle {
-                            idle_bg: BUTTON_IDLE,
-                            focused_bg: INPUT_FOCUSED,
-                        },
-                        bevy::ui::RelativeCursorPosition::default(),
-                        BuoyancyGainInputField,
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(buoyancy_gain_initial_text.clone()),
-                            TextFont::from_font_size(13.0),
-                            TextColor(Color::WHITE),
-                            TextInputDisplay,
-                        ));
-                    });
-                });
-
-            parent
-                .spawn((Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("Buoyancy alpha:"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::WHITE),
-                    ));
-                    row.spawn((
-                        Button,
-                        Node {
-                            min_width: Val::Px(92.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                            ..default()
-                        },
-                        BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(buoyancy_alpha_initial, 0.0, 4.0, 6, 3),
-                        TextInputStyle {
-                            idle_bg: BUTTON_IDLE,
-                            focused_bg: INPUT_FOCUSED,
-                        },
-                        bevy::ui::RelativeCursorPosition::default(),
-                        BuoyancyAlphaInputField,
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(buoyancy_alpha_initial_text.clone()),
-                            TextFont::from_font_size(13.0),
-                            TextColor(Color::WHITE),
-                            TextInputDisplay,
-                        ));
-                    });
-                });
-
-            parent
-                .spawn((Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("Buoyancy cap:"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::WHITE),
-                    ));
-                    row.spawn((
-                        Button,
-                        Node {
-                            min_width: Val::Px(92.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                            ..default()
-                        },
-                        BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(buoyancy_cap_initial, 0.0, 2.0, 6, 3),
-                        TextInputStyle {
-                            idle_bg: BUTTON_IDLE,
-                            focused_bg: INPUT_FOCUSED,
-                        },
-                        bevy::ui::RelativeCursorPosition::default(),
-                        BuoyancyForceCapInputField,
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(buoyancy_cap_initial_text.clone()),
-                            TextFont::from_font_size(13.0),
-                            TextColor(Color::WHITE),
-                            TextInputDisplay,
-                        ));
-                    });
-                });
-
-            parent
-                .spawn((Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("Gamma:"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                    ));
-
-                    row.spawn((
-                        Button,
-                        Node {
-                            min_width: Val::Px(92.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                            ..default()
-                        },
-                        BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(gamma_initial, 0.0, 10.0, 6, 3),
-                        TextInputStyle {
-                            idle_bg: BUTTON_IDLE,
-                            focused_bg: INPUT_FOCUSED,
-                        },
-                        bevy::ui::RelativeCursorPosition::default(),
-                        GasGammaInputField,
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(gamma_initial_text.clone()),
-                            TextFont::from_font_size(13.0),
-                            TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                            TextInputDisplay,
-                        ));
-                    });
-                });
-
-            parent
-                .spawn((Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("Max color at:"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                    ));
-
-                    row.spawn((
-                        Button,
-                        Node {
-                            min_width: Val::Px(92.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                            ..default()
-                        },
-                        BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_u32(max_color_initial, 1, 10_000, 5),
-                        TextInputStyle {
-                            idle_bg: BUTTON_IDLE,
-                            focused_bg: INPUT_FOCUSED,
-                        },
-                        bevy::ui::RelativeCursorPosition::default(),
-                        GasMaxColorParticlesInputField,
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(max_color_initial_text.clone()),
-                            TextFont::from_font_size(13.0),
-                            TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                            TextInputDisplay,
-                        ));
-                    });
-                });
-        });
-
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                right: Val::Px(GAS_PANEL_RIGHT),
-                top: Val::Px(GAS_PANEL_TOP),
-                width: Val::Px(GAS_PANEL_WIDTH),
-                height: Val::Px(GAS_PANEL_HEIGHT),
-                display: Display::Flex,
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(8.0),
-                padding: UiRect::all(Val::Px(10.0)),
-                ..default()
+    panel_manager.spawn_panel(
+        &mut commands,
+        &mut panel_open_order,
+        PanelSpec {
+            id: GAS_TOOL_PANEL_ID,
+            title: "Gas Panel".to_string(),
+            corner: PanelCorner::TopRight,
+            width: GAS_PANEL_WIDTH,
+            margin_x: GAS_PANEL_RIGHT,
+            margin_y: DEBUG_PANEL_TOP,
+            stack_gap: DEBUG_AND_GAS_PANEL_GAP,
+            controls: PanelControls {
+                show_collapse: true,
+                show_close: false,
+                custom_actions: Vec::new(),
             },
-            BackgroundColor(PANEL_BG),
-            GasToolPanelRoot,
-        ))
-        .with_children(|parent| {
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Px(190.0),
-                        height: Val::Px(32.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(BUTTON_IDLE),
-                    EditorUiAction::ToggleGasKind,
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("Gas: h2"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                        GasKindLabel,
-                    ));
-                });
-
-            parent
-                .spawn((Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("Amount:"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                    ));
-
-                    row.spawn((
-                        Button,
-                        Node {
-                            min_width: Val::Px(112.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                            ..default()
-                        },
-                        BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_u32(100, 1, 1_000_000, 7),
-                        TextInputStyle {
-                            idle_bg: BUTTON_IDLE,
-                            focused_bg: INPUT_FOCUSED,
-                        },
-                        bevy::ui::RelativeCursorPosition::default(),
-                        GasAmountInputField,
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new("100"),
-                            TextFont::from_font_size(13.0),
-                            TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                            TextInputDisplay,
-                        ));
-                    });
-                });
-
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Px(190.0),
-                        height: Val::Px(32.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(BUTTON_IDLE),
-                    EditorUiAction::ToggleReplace,
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("Replace: Off"),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                        GasReplaceLabel,
-                    ));
-                });
-        });
+            scroll_policy: PanelScrollPolicy::AutoHalfScreen,
+            background: PANEL_BG,
+            header_background: Color::srgba(0.82, 0.84, 0.87, 0.98),
+            initial_visible: false,
+            initial_collapsed: false,
+        },
+        |parent| {
+            spawn_gas_tool_panel_content(parent);
+        },
+    );
 
     commands
         .spawn((
@@ -1414,6 +906,403 @@ fn setup_editor_ui(
                 TextColor(Color::WHITE),
                 TextLayout::new_with_justify(JustifyText::Center),
                 SelectionSizeTooltipText,
+            ));
+        });
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_debug_panel_content(
+    parent: &mut ChildSpawnerCommands,
+    sim_hz_initial: u32,
+    sim_hz_initial_text: String,
+    buoyancy_strength_initial: f32,
+    buoyancy_strength_initial_text: String,
+    buoyancy_radius_initial: u32,
+    buoyancy_radius_initial_text: String,
+    buoyancy_sigma_initial: f32,
+    buoyancy_sigma_initial_text: String,
+    buoyancy_gain_initial: f32,
+    buoyancy_gain_initial_text: String,
+    buoyancy_alpha_initial: f32,
+    buoyancy_alpha_initial_text: String,
+    buoyancy_cap_initial: f32,
+    buoyancy_cap_initial_text: String,
+    gamma_initial: f32,
+    gamma_initial_text: String,
+    max_color_initial: u32,
+    max_color_initial_text: String,
+) {
+    parent
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(220.0),
+                height: Val::Px(32.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(BUTTON_IDLE),
+            EditorUiAction::ToggleBuoyancy,
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new("Buoyancy: On"),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                BuoyancyToggleLabel,
+            ));
+        });
+
+    parent
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(220.0),
+                height: Val::Px(32.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(BUTTON_IDLE),
+            EditorUiAction::ToggleShowMomentumVectors,
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new("Show impulses"),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+            ));
+        });
+
+    parent.spawn((
+        Text::new(
+            "Iterations: 0 | Step ms: 0.000 | avg: 0.000 | Target Hz: 30 x 1 = 30 | Actual Hz: 0",
+        ),
+        TextFont::from_font_size(13.0),
+        TextColor(Color::WHITE),
+        SimulationPerfLabel,
+    ));
+
+    parent.spawn((
+        Text::new(
+            "Anisotropy: 0.0000 | Radial waves: 0.0000 | Mass err H2/O2/CO2: 0.0000 / 0.0000 / 0.0000",
+        ),
+        TextFont::from_font_size(13.0),
+        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+        WaveMetricsLabel,
+    ));
+
+    parent
+        .spawn((Node {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Row,
+            column_gap: Val::Px(8.0),
+            align_items: AlignItems::Center,
+            ..default()
+        },))
+        .with_children(|row| {
+            row.spawn((
+                Text::new("Simulation Hz:"),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::WHITE),
+            ));
+
+            row.spawn((
+                Button,
+                Node {
+                    min_width: Val::Px(92.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::FlexStart,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                    ..default()
+                },
+                BackgroundColor(BUTTON_IDLE),
+                TextInputField::new_u32(sim_hz_initial, 1, 1000, 4),
+                TextInputStyle {
+                    idle_bg: BUTTON_IDLE,
+                    focused_bg: INPUT_FOCUSED,
+                },
+                bevy::ui::RelativeCursorPosition::default(),
+                SimulationHzInputField,
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new(sim_hz_initial_text.clone()),
+                    TextFont::from_font_size(13.0),
+                    TextColor(Color::WHITE),
+                    TextInputDisplay,
+                ));
+            });
+        });
+
+    spawn_debug_f32_row(
+        parent,
+        "Buoyancy strength:",
+        buoyancy_strength_initial,
+        buoyancy_strength_initial_text,
+        TextInputField::new_f32(buoyancy_strength_initial, 0.0, 5.0, 6, 3),
+        BuoyancyStrengthInputField,
+        Color::WHITE,
+    );
+    spawn_debug_u32_row(
+        parent,
+        "Buoyancy radius:",
+        buoyancy_radius_initial,
+        buoyancy_radius_initial_text,
+        TextInputField::new_u32(buoyancy_radius_initial, 1, 3, 1),
+        BuoyancyWindowRadiusInputField,
+        Color::WHITE,
+    );
+    spawn_debug_f32_row(
+        parent,
+        "Buoyancy sigma:",
+        buoyancy_sigma_initial,
+        buoyancy_sigma_initial_text,
+        TextInputField::new_f32(buoyancy_sigma_initial, 0.5, 3.0, 6, 3),
+        BuoyancyWindowSigmaInputField,
+        Color::WHITE,
+    );
+    spawn_debug_f32_row(
+        parent,
+        "Buoyancy gain:",
+        buoyancy_gain_initial,
+        buoyancy_gain_initial_text,
+        TextInputField::new_f32(buoyancy_gain_initial, 0.0, 10.0, 6, 3),
+        BuoyancyGainInputField,
+        Color::WHITE,
+    );
+    spawn_debug_f32_row(
+        parent,
+        "Buoyancy alpha:",
+        buoyancy_alpha_initial,
+        buoyancy_alpha_initial_text,
+        TextInputField::new_f32(buoyancy_alpha_initial, 0.0, 4.0, 6, 3),
+        BuoyancyAlphaInputField,
+        Color::WHITE,
+    );
+    spawn_debug_f32_row(
+        parent,
+        "Buoyancy cap:",
+        buoyancy_cap_initial,
+        buoyancy_cap_initial_text,
+        TextInputField::new_f32(buoyancy_cap_initial, 0.0, 2.0, 6, 3),
+        BuoyancyForceCapInputField,
+        Color::WHITE,
+    );
+    spawn_debug_f32_row(
+        parent,
+        "Gamma:",
+        gamma_initial,
+        gamma_initial_text,
+        TextInputField::new_f32(gamma_initial, 0.0, 10.0, 6, 3),
+        GasGammaInputField,
+        Color::srgba(0.10, 0.10, 0.12, 1.0),
+    );
+    spawn_debug_u32_row(
+        parent,
+        "Max color at:",
+        max_color_initial,
+        max_color_initial_text,
+        TextInputField::new_u32(max_color_initial, 1, 10_000, 5),
+        GasMaxColorParticlesInputField,
+        Color::srgba(0.10, 0.10, 0.12, 1.0),
+    );
+}
+
+fn spawn_debug_f32_row<M: Component>(
+    parent: &mut ChildSpawnerCommands,
+    label: &'static str,
+    _initial: f32,
+    initial_text: String,
+    field: TextInputField,
+    marker: M,
+    label_color: Color,
+) {
+    parent
+        .spawn((Node {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Row,
+            column_gap: Val::Px(8.0),
+            align_items: AlignItems::Center,
+            ..default()
+        },))
+        .with_children(|row| {
+            row.spawn((
+                Text::new(label),
+                TextFont::from_font_size(13.0),
+                TextColor(label_color),
+            ));
+            row.spawn((
+                Button,
+                Node {
+                    min_width: Val::Px(92.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::FlexStart,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                    ..default()
+                },
+                BackgroundColor(BUTTON_IDLE),
+                field,
+                TextInputStyle {
+                    idle_bg: BUTTON_IDLE,
+                    focused_bg: INPUT_FOCUSED,
+                },
+                bevy::ui::RelativeCursorPosition::default(),
+                marker,
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new(initial_text.clone()),
+                    TextFont::from_font_size(13.0),
+                    TextColor(label_color),
+                    TextInputDisplay,
+                ));
+            });
+        });
+}
+
+fn spawn_debug_u32_row<M: Component>(
+    parent: &mut ChildSpawnerCommands,
+    label: &'static str,
+    _initial: u32,
+    initial_text: String,
+    field: TextInputField,
+    marker: M,
+    label_color: Color,
+) {
+    parent
+        .spawn((Node {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Row,
+            column_gap: Val::Px(8.0),
+            align_items: AlignItems::Center,
+            ..default()
+        },))
+        .with_children(|row| {
+            row.spawn((
+                Text::new(label),
+                TextFont::from_font_size(13.0),
+                TextColor(label_color),
+            ));
+            row.spawn((
+                Button,
+                Node {
+                    min_width: Val::Px(92.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::FlexStart,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                    ..default()
+                },
+                BackgroundColor(BUTTON_IDLE),
+                field,
+                TextInputStyle {
+                    idle_bg: BUTTON_IDLE,
+                    focused_bg: INPUT_FOCUSED,
+                },
+                bevy::ui::RelativeCursorPosition::default(),
+                marker,
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new(initial_text.clone()),
+                    TextFont::from_font_size(13.0),
+                    TextColor(label_color),
+                    TextInputDisplay,
+                ));
+            });
+        });
+}
+
+fn spawn_gas_tool_panel_content(parent: &mut ChildSpawnerCommands) {
+    parent
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(190.0),
+                height: Val::Px(32.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(BUTTON_IDLE),
+            EditorUiAction::ToggleGasKind,
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new("Gas: h2"),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                GasKindLabel,
+            ));
+        });
+
+    parent
+        .spawn((Node {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Row,
+            column_gap: Val::Px(8.0),
+            align_items: AlignItems::Center,
+            ..default()
+        },))
+        .with_children(|row| {
+            row.spawn((
+                Text::new("Amount:"),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+            ));
+
+            row.spawn((
+                Button,
+                Node {
+                    min_width: Val::Px(112.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::FlexStart,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                    ..default()
+                },
+                BackgroundColor(BUTTON_IDLE),
+                TextInputField::new_u32(100, 1, 1_000_000, 7),
+                TextInputStyle {
+                    idle_bg: BUTTON_IDLE,
+                    focused_bg: INPUT_FOCUSED,
+                },
+                bevy::ui::RelativeCursorPosition::default(),
+                GasAmountInputField,
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new("100"),
+                    TextFont::from_font_size(13.0),
+                    TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                    TextInputDisplay,
+                ));
+            });
+        });
+
+    parent
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(190.0),
+                height: Val::Px(32.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(BUTTON_IDLE),
+            EditorUiAction::ToggleReplace,
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new("Replace: Off"),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                GasReplaceLabel,
             ));
         });
 }
@@ -2491,12 +2380,11 @@ fn refresh_editor_ui(
     )>,
     buoyancy_cap_input: Single<&TextInputField, With<BuoyancyForceCapInputField>>,
     mut button_query: Query<(&EditorUiAction, &mut BackgroundColor), With<Button>>,
+    mut panel_state: (ResMut<PanelManager>, ResMut<PanelOpenOrder>),
     mut visibility_set: ParamSet<(
         Single<&mut Visibility, With<MainToolbarRoot>>,
         Single<&mut Visibility, With<CellTypePanelRoot>>,
         Single<&mut Visibility, With<DebugToolbarRoot>>,
-        Single<&mut Visibility, With<DebugPanelRoot>>,
-        Single<&mut Visibility, With<GasToolPanelRoot>>,
         Single<&mut Visibility, With<MainMenuRoot>>,
     )>,
     mut text_set_primary: ParamSet<(
@@ -2601,29 +2489,23 @@ fn refresh_editor_ui(
         };
     }
 
-    {
-        let mut debug_panel = visibility_set.p3();
-        **debug_panel = if world_load_state.has_world && debug_mode.active {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
+    let debug_panel_visible = world_load_state.has_world && debug_mode.active;
+    panel_state.0.set_visible(
+        DEBUG_PANEL_ID,
+        debug_panel_visible,
+        &mut panel_state.1,
+    );
+
+    let gas_tool_panel_visible =
+        world_load_state.has_world && debug_mode.active && selected_tool == Some(EditorTool::AddGas);
+    panel_state.0.set_visible(
+        GAS_TOOL_PANEL_ID,
+        gas_tool_panel_visible,
+        &mut panel_state.1,
+    );
 
     {
-        let mut gas_tool_panel = visibility_set.p4();
-        **gas_tool_panel = if world_load_state.has_world
-            && debug_mode.active
-            && selected_tool == Some(EditorTool::AddGas)
-        {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-
-    {
-        let mut main_menu_root = visibility_set.p5();
+        let mut main_menu_root = visibility_set.p3();
         **main_menu_root = if main_menu.open {
             Visibility::Visible
         } else {
@@ -2705,8 +2587,7 @@ fn handle_editor_mouse_input(
     main_menu: Res<MainMenuState>,
     world_load_state: Res<WorldLoadState>,
     debug_mode: Res<DebugMode>,
-    gas_settings: Res<GasToolSettings>,
-    gas_registry: Res<GasRegistry>,
+    ui_tool_state: (Res<GasToolSettings>, Res<GasRegistry>, Res<PanelManager>),
     gas_input: Single<&TextInputField, With<GasAmountInputField>>,
     mut world: ResMut<WorldGrid>,
     mut gas: ResMut<GasField>,
@@ -2714,6 +2595,8 @@ fn handle_editor_mouse_input(
     mut brush_drag: ResMut<BrushDragState>,
     mut world_changed: EventWriter<WorldCellChanged>,
 ) {
+    let (gas_settings, gas_registry, panel_manager) = ui_tool_state;
+
     if main_menu.open || !world_load_state.has_world {
         clear_active_tool_state(&mut selection_drag, &mut brush_drag);
         return;
@@ -2728,6 +2611,7 @@ fn handle_editor_mouse_input(
                 debug_mode.active,
                 active_tool.selected,
                 main_menu.open,
+                Some(&panel_manager),
             )
         })
         .unwrap_or(false);
@@ -2862,8 +2746,7 @@ fn update_editor_cursor_overlays(
     cell_settings: Res<CellToolSettings>,
     main_menu: Res<MainMenuState>,
     world_load_state: Res<WorldLoadState>,
-    icon_set: Res<EditorIconSet>,
-    debug_mode: Res<DebugMode>,
+    overlay_ui_state: (Res<EditorIconSet>, Res<DebugMode>, Res<PanelManager>),
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut overlay_set: ParamSet<(
         Single<(&mut Transform, &mut Visibility, &mut Sprite), With<BlueprintGhost>>,
@@ -2871,6 +2754,8 @@ fn update_editor_cursor_overlays(
         Single<(&mut Node, &mut Visibility), With<EraseCursorOverlay>>,
     )>,
 ) {
+    let (icon_set, debug_mode, panel_manager) = overlay_ui_state;
+
     if !world_load_state.has_world {
         {
             let mut blueprint = overlay_set.p0();
@@ -2899,6 +2784,7 @@ fn update_editor_cursor_overlays(
                 debug_mode.active,
                 active_tool.selected,
                 main_menu.open,
+                Some(&panel_manager),
             )
         })
         .unwrap_or(false);
@@ -3012,6 +2898,7 @@ pub(crate) fn is_cursor_over_ui(
     debug_mode_active: bool,
     selected_tool: Option<EditorTool>,
     main_menu_open: bool,
+    panel_manager: Option<&PanelManager>,
 ) -> bool {
     let mut rects = vec![
         UiRectPx::top_left(
@@ -3044,22 +2931,6 @@ pub(crate) fn is_cursor_over_ui(
             DEBUG_TOOLBAR_WIDTH,
             DEBUG_TOOLBAR_HEIGHT,
         ));
-
-        rects.push(UiRectPx::top_left(
-            window.width() - DEBUG_PANEL_RIGHT - DEBUG_PANEL_WIDTH,
-            DEBUG_PANEL_TOP,
-            DEBUG_PANEL_WIDTH,
-            DEBUG_PANEL_HEIGHT,
-        ));
-
-        if selected_tool == Some(EditorTool::AddGas) {
-            rects.push(UiRectPx::top_left(
-                window.width() - GAS_PANEL_RIGHT - GAS_PANEL_WIDTH,
-                GAS_PANEL_TOP,
-                GAS_PANEL_WIDTH,
-                GAS_PANEL_HEIGHT,
-            ));
-        }
     }
 
     if main_menu_open {
@@ -3072,6 +2943,9 @@ pub(crate) fn is_cursor_over_ui(
     }
 
     rects.into_iter().any(|rect| rect.contains(cursor))
+        || panel_manager
+            .map(|panels| panels.is_cursor_over_any_panel(cursor))
+            .unwrap_or(false)
 }
 
 #[derive(Clone, Copy)]
