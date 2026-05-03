@@ -337,7 +337,37 @@ impl Plugin for EditorPlugin {
     }
 }
 
-fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup_editor_ui(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    sim_rate: Res<SimulationRateConfig>,
+    gas_simulation: Res<GasSimulationConfig>,
+    gas_visual_settings: Res<GasVisualSettings>,
+) {
+    let fmt_f32 = |v: f32| {
+        let s = format!("{:.3}", v);
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    };
+    let sim_hz_initial = sim_rate.target_hz.clamp(1, 1000);
+    let buoyancy_strength_initial = gas_simulation.solver_tuning.buoyancy_strength.clamp(0.0, 5.0);
+    let buoyancy_radius_initial =
+        u32::from(gas_simulation.solver_tuning.buoyancy_window_radius.clamp(1, 3));
+    let buoyancy_sigma_initial =
+        gas_simulation.solver_tuning.buoyancy_window_sigma.clamp(0.5, 3.0);
+    let buoyancy_gain_initial = gas_simulation.solver_tuning.buoyancy_gain.clamp(0.0, 10.0);
+    let buoyancy_alpha_initial = gas_simulation.solver_tuning.buoyancy_alpha.clamp(0.0, 4.0);
+    let buoyancy_cap_initial = gas_simulation.solver_tuning.buoyancy_force_cap.clamp(0.0, 2.0);
+    let gamma_initial = gas_visual_settings.gamma.clamp(0.0, 10.0);
+    let max_color_initial = gas_visual_settings.max_particles_for_max_color.clamp(1, 10_000);
+    let sim_hz_initial_text = sim_hz_initial.to_string();
+    let buoyancy_strength_initial_text = fmt_f32(buoyancy_strength_initial);
+    let buoyancy_radius_initial_text = buoyancy_radius_initial.to_string();
+    let buoyancy_sigma_initial_text = fmt_f32(buoyancy_sigma_initial);
+    let buoyancy_gain_initial_text = fmt_f32(buoyancy_gain_initial);
+    let buoyancy_alpha_initial_text = fmt_f32(buoyancy_alpha_initial);
+    let buoyancy_cap_initial_text = fmt_f32(buoyancy_cap_initial);
+    let gamma_initial_text = fmt_f32(gamma_initial);
+    let max_color_initial_text = max_color_initial.to_string();
     let icon_set = EditorIconSet {
         build: asset_server.load("sprites/ui/tool_build.png"),
         erase: asset_server.load("sprites/ui/tool_erase.png"),
@@ -557,7 +587,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_u32(30, 1, 1000, 4),
+                        TextInputField::new_u32(sim_hz_initial, 1, 1000, 4),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -567,7 +597,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("30"),
+                            Text::new(sim_hz_initial_text.clone()),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -600,7 +630,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(0.12, 0.0, 5.0, 6, 3),
+                        TextInputField::new_f32(buoyancy_strength_initial, 0.0, 5.0, 6, 3),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -610,7 +640,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("0.12"),
+                            Text::new(buoyancy_strength_initial_text.clone()),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -643,7 +673,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_u32(2, 1, 3, 1),
+                        TextInputField::new_u32(buoyancy_radius_initial, 1, 3, 1),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -653,7 +683,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("2"),
+                            Text::new(buoyancy_radius_initial_text.clone()),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -686,7 +716,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(1.2, 0.5, 3.0, 6, 3),
+                        TextInputField::new_f32(buoyancy_sigma_initial, 0.5, 3.0, 6, 3),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -696,7 +726,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("1.2"),
+                            Text::new(buoyancy_sigma_initial_text.clone()),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -729,7 +759,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(2.2, 0.0, 10.0, 6, 3),
+                        TextInputField::new_f32(buoyancy_gain_initial, 0.0, 10.0, 6, 3),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -739,7 +769,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("2.2"),
+                            Text::new(buoyancy_gain_initial_text.clone()),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -772,7 +802,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(0.9, 0.0, 4.0, 6, 3),
+                        TextInputField::new_f32(buoyancy_alpha_initial, 0.0, 4.0, 6, 3),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -782,7 +812,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("0.9"),
+                            Text::new(buoyancy_alpha_initial_text.clone()),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -815,7 +845,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(0.2, 0.0, 2.0, 6, 3),
+                        TextInputField::new_f32(buoyancy_cap_initial, 0.0, 2.0, 6, 3),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -825,7 +855,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("0.2"),
+                            Text::new(buoyancy_cap_initial_text.clone()),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::WHITE),
                             TextInputDisplay,
@@ -859,7 +889,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_f32(1.0, 0.0, 10.0, 6, 3),
+                        TextInputField::new_f32(gamma_initial, 0.0, 10.0, 6, 3),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -869,7 +899,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("1"),
+                            Text::new(gamma_initial_text.clone()),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
                             TextInputDisplay,
@@ -903,7 +933,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                             ..default()
                         },
                         BackgroundColor(BUTTON_IDLE),
-                        TextInputField::new_u32(1000, 1, 10_000, 5),
+                        TextInputField::new_u32(max_color_initial, 1, 10_000, 5),
                         TextInputStyle {
                             idle_bg: BUTTON_IDLE,
                             focused_bg: INPUT_FOCUSED,
@@ -913,7 +943,7 @@ fn setup_editor_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ))
                     .with_children(|button| {
                         button.spawn((
-                            Text::new("1000"),
+                            Text::new(max_color_initial_text.clone()),
                             TextFont::from_font_size(13.0),
                             TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
                             TextInputDisplay,

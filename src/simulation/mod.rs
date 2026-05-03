@@ -82,12 +82,12 @@ impl Default for SolverTuning {
             velocity_damping: 0.08,
             species_eq_blend: 0.28,
             enable_buoyancy: true,
-            buoyancy_strength: 0.12,
+            buoyancy_strength: 0.22,
             buoyancy_window_radius: 2,
             buoyancy_window_sigma: 1.2,
-            buoyancy_gain: 2.2,
-            buoyancy_alpha: 0.9,
-            buoyancy_force_cap: 0.20,
+            buoyancy_gain: 3.2,
+            buoyancy_alpha: 1.0,
+            buoyancy_force_cap: 0.30,
         }
     }
 }
@@ -113,7 +113,7 @@ impl Default for GasSimulationConfig {
             mass_fix_every_n_steps: 4,
             mass_fix_error_threshold: 1e-4,
             mass_fix_min_residual: 1e-5,
-            thermal_motion_scale: 0.25,
+            thermal_motion_scale: 0.08,
             solver_tuning: SolverTuning::default(),
         }
     }

@@ -380,16 +380,16 @@ mod tests {
 target_hz = 30
 
 [simulation]
-thermal_motion_scale = 0.25
+thermal_motion_scale = 0.08
 
 [solver_tuning]
 enable_buoyancy = true
-buoyancy_strength = 0.12
+buoyancy_strength = 0.22
 buoyancy_window_radius = 2
 buoyancy_window_sigma = 1.2
-buoyancy_gain = 2.2
-buoyancy_alpha = 0.9
-buoyancy_force_cap = 0.20
+buoyancy_gain = 3.2
+buoyancy_alpha = 1.0
+buoyancy_force_cap = 0.30
 
 [visual]
 gamma = 1.0

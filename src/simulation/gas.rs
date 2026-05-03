@@ -875,7 +875,8 @@ fn weighted_pick(weights: &[f64; 5], sum: f64, rng: &mut Rng64) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::GasDefinition;
+    use crate::config::{GasDefinition, GameConfig};
+    use crate::save::{list_saves, load_save, saves_root_default};
     use crate::simulation::{do_one_substep, BlockSyncState, GasSimulationConfig, SimulationStep};
 
     fn registry_with_three() -> GasRegistry {
@@ -945,6 +946,94 @@ mod tests {
         } else {
             (sum_y_mass / sum_mass) as f32
         }
+    }
+
+    struct RowBandStats {
+        avg: f32,
+        min: u32,
+        max: u32,
+        n: usize,
+    }
+
+    fn band_stats(values: &[u32]) -> Result<RowBandStats, String> {
+        if values.is_empty() {
+            return Err("empty sampling band".to_string());
+        }
+        let sum: u64 = values.iter().map(|&v| u64::from(v)).sum();
+        let min = *values.iter().min().unwrap_or(&0);
+        let max = *values.iter().max().unwrap_or(&0);
+        Ok(RowBandStats {
+            avg: sum as f32 / values.len() as f32,
+            min,
+            max,
+            n: values.len(),
+        })
+    }
+
+    fn hydrogen_inside_outside_equals_row43_after_steps(
+        steps: u64,
+        row_y: u32,
+    ) -> Result<(RowBandStats, RowBandStats), String> {
+        let game_cfg = GameConfig::load_from_default_location()?;
+        let registry = game_cfg.gas_registry.clone();
+        let h2_index = registry
+            .index_of("h2")
+            .ok_or_else(|| "Registry does not contain gas id 'h2'".to_string())?;
+
+        let saves_root = saves_root_default();
+        let saves = list_saves(&saves_root).map_err(|e| e.to_string())?;
+        let equals = saves
+            .iter()
+            .find(|s| s.display_name == "equals")
+            .ok_or_else(|| {
+                format!(
+                    "Save with display_name='equals' not found in '{}'",
+                    saves_root.display()
+                )
+            })?;
+        let loaded = load_save(&saves_root, &equals.id, &registry).map_err(|e| e.to_string())?;
+
+        let mut world = WorldGrid::default();
+        world
+            .restore_from_cell_codes(&loaded.state.world_cell_codes)
+            .map_err(|e| format!("World restore failed: {}", e))?;
+        let mut field = GasField::from_registry(&registry);
+        field
+            .restore_state(&loaded.state.gas_snapshot)
+            .map_err(|e| format!("Gas restore failed: {}", e))?;
+
+        let mut block = BlockSyncState;
+        let mut step = SimulationStep(loaded.state.simulation_step);
+        let cfg = game_cfg.gas_simulation;
+        for _ in 0..steps {
+            do_one_substep(&mut block, &mut field, &world, &cfg, &mut step);
+        }
+
+        let y = row_y;
+        let inside_min_x = 36u32;
+        let inside_max_x = 64u32;
+
+        let mut inside_values = Vec::new();
+        let mut outside_values_user = Vec::new();
+
+        for x in 1..WORLD_WIDTH - 1 {
+            if world.is_solid(x, y) || is_boundary(x, y) {
+                continue;
+            }
+            let v = field.amount_particles(x, y, h2_index);
+            if x >= inside_min_x && x <= inside_max_x {
+                inside_values.push(v);
+            } else {
+                // User-defined "outside": row 43, columns 1..34 and 66..100.
+                if (1..=34).contains(&x) || (66..=100).contains(&x) {
+                    outside_values_user.push(v);
+                }
+            }
+        }
+
+        let inside = band_stats(&inside_values)?;
+        let outside_user = band_stats(&outside_values_user)?;
+        Ok((inside, outside_user))
     }
 
     #[test]
@@ -1475,5 +1564,59 @@ mod tests {
                 i
             );
         }
+    }
+
+    #[test]
+    #[ignore = "long-running scenario check for tuning against the 'equals' save"]
+    fn equals_inverted_cup_hydrogen_retention_after_50k_steps() {
+        let (inside, outside_user_50k) =
+            hydrogen_inside_outside_equals_row43_after_steps(50_000, 43).expect("scenario must run");
+        let (inside_70k, outside_user_70k) =
+            hydrogen_inside_outside_equals_row43_after_steps(70_000, 43).expect("scenario must run");
+        let mirrored_row = (WORLD_HEIGHT - 1).saturating_sub(43);
+        let (inside_70k_m, outside_70k_m) =
+            hydrogen_inside_outside_equals_row43_after_steps(70_000, mirrored_row)
+                .expect("scenario must run");
+        let ratio_user_50k = inside.avg / outside_user_50k.avg.max(1e-6);
+        let ratio_user_70k = inside_70k.avg / outside_user_70k.avg.max(1e-6);
+        let ratio_user_70k_m = inside_70k_m.avg / outside_70k_m.avg.max(1e-6);
+        println!(
+            "equals row43 H2 @50k: inside avg={} min={} max={} (n={}), outside_user avg={} min={} max={} (n={}), ratio_user_50k={}; @70k: inside avg={} min={} max={} (n={}), outside_user avg={} min={} max={} (n={}), ratio_user_70k={}; mirrored_row(y={}) @70k: inside avg={} min={} max={} (n={}), outside_user avg={} min={} max={} (n={}), ratio_user_70k_m={}",
+            inside.avg,
+            inside.min,
+            inside.max,
+            inside.n,
+            outside_user_50k.avg,
+            outside_user_50k.min,
+            outside_user_50k.max,
+            outside_user_50k.n,
+            ratio_user_50k,
+            inside_70k.avg,
+            inside_70k.min,
+            inside_70k.max,
+            inside_70k.n,
+            outside_user_70k.avg,
+            outside_user_70k.min,
+            outside_user_70k.max,
+            outside_user_70k.n,
+            ratio_user_70k,
+            mirrored_row,
+            inside_70k_m.avg,
+            inside_70k_m.min,
+            inside_70k_m.max,
+            inside_70k_m.n,
+            outside_70k_m.avg,
+            outside_70k_m.min,
+            outside_70k_m.max,
+            outside_70k_m.n,
+            ratio_user_70k_m
+        );
+        assert!(
+            ratio_user_50k > 1.0,
+            "expected user-defined inverted-cup H2 retention at row 43 after 50k: ratio_user_50k={} (inside_avg={}, outside_user_avg={})",
+            ratio_user_50k,
+            inside.avg,
+            outside_user_50k.avg
+        );
     }
 }
