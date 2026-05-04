@@ -14,6 +14,7 @@ use crate::{
     render::RenderPlugin,
     simulation::{
         backend::{SimulationBackend, SimulationBackendConfig, WorldSizeConfig},
+        gpu_solver::GpuGasSolver,
         GasSimulationPlugin,
     },
     ui::UiPlugin,
@@ -35,27 +36,13 @@ pub fn run() {
         .insert_resource(Time::<Fixed>::from_hz(30.0));
 
     let args: Vec<String> = std::env::args().collect();
-    let mut backend = std::env::var("FLUX_SIM_BACKEND")
-        .ok()
-        .map(|value| value.to_lowercase())
-        .and_then(|value| match value.as_str() {
-            "cpu" => Some(SimulationBackend::Cpu),
-            "gpu" => Some(SimulationBackend::Gpu),
-            _ => None,
-        })
-        .unwrap_or(SimulationBackend::Gpu);
+    let env_backend = std::env::var("FLUX_SIM_BACKEND").ok();
     let mut world_size = WorldSizeConfig::default();
+    let mut requested_backend = parse_requested_backend(&args, env_backend.as_deref());
 
     let mut i = 1usize;
     while i < args.len() {
         match args[i].as_str() {
-            "--sim-backend" if i + 1 < args.len() => {
-                backend = match args[i + 1].to_lowercase().as_str() {
-                    "gpu" => SimulationBackend::Gpu,
-                    _ => SimulationBackend::Cpu,
-                };
-                i += 1;
-            }
             "--world-size" if i + 1 < args.len() => {
                 let raw = &args[i + 1];
                 if let Some((w, h)) = raw.split_once('x') {
@@ -72,6 +59,15 @@ pub fn run() {
         }
         i += 1;
     }
+    if matches!(requested_backend, SimulationBackend::Gpu)
+        && !gpu_backend_available(world_size.width, world_size.height)
+    {
+        eprintln!(
+            "GPU backend is unavailable during startup for {}x{}; falling back to CPU.",
+            world_size.width, world_size.height
+        );
+        requested_backend = SimulationBackend::Cpu;
+    }
 
     app.insert_resource(game_config.gas_registry.clone())
         .insert_resource(game_config.simulation_rate)
@@ -79,7 +75,9 @@ pub fn run() {
         .insert_resource(game_config.gas_visual)
         .insert_resource(game_config.gas_main_visual)
         .insert_resource(game_config.cell_visuals)
-        .insert_resource(SimulationBackendConfig { backend })
+        .insert_resource(SimulationBackendConfig {
+            backend: requested_backend,
+        })
         .insert_resource(world_size)
         .add_plugins(
             DefaultPlugins
@@ -110,4 +108,69 @@ pub fn run() {
         ));
 
     app.run();
+}
+
+fn gpu_backend_available(width: u32, height: u32) -> bool {
+    GpuGasSolver::new(width, height).is_ok()
+}
+
+fn parse_requested_backend(args: &[String], env_backend: Option<&str>) -> SimulationBackend {
+    let mut backend = env_backend
+        .map(|value| value.to_lowercase())
+        .and_then(|value| match value.as_str() {
+            "cpu" => Some(SimulationBackend::Cpu),
+            "gpu" => Some(SimulationBackend::Gpu),
+            _ => None,
+        })
+        .unwrap_or(SimulationBackend::Gpu);
+    let mut i = 1usize;
+    while i < args.len() {
+        if args[i] == "--sim-backend" && i + 1 < args.len() {
+            backend = match args[i + 1].to_lowercase().as_str() {
+                "gpu" => SimulationBackend::Gpu,
+                _ => SimulationBackend::Cpu,
+            };
+            i += 1;
+        }
+        i += 1;
+    }
+    backend
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_requested_backend;
+    use crate::simulation::backend::SimulationBackend;
+
+    #[test]
+    fn default_backend_is_gpu() {
+        let args = vec!["flux_engine.exe".to_string()];
+        assert_eq!(parse_requested_backend(&args, None), SimulationBackend::Gpu);
+    }
+
+    #[test]
+    fn env_can_switch_backend() {
+        let args = vec!["flux_engine.exe".to_string()];
+        assert_eq!(
+            parse_requested_backend(&args, Some("cpu")),
+            SimulationBackend::Cpu
+        );
+        assert_eq!(
+            parse_requested_backend(&args, Some("gpu")),
+            SimulationBackend::Gpu
+        );
+    }
+
+    #[test]
+    fn cli_overrides_env_backend() {
+        let args = vec![
+            "flux_engine.exe".to_string(),
+            "--sim-backend".to_string(),
+            "cpu".to_string(),
+        ];
+        assert_eq!(
+            parse_requested_backend(&args, Some("gpu")),
+            SimulationBackend::Cpu
+        );
+    }
 }

@@ -351,16 +351,30 @@ fn setup_editor_ui(
         s.trim_end_matches('0').trim_end_matches('.').to_string()
     };
     let sim_hz_initial = sim_rate.target_hz.clamp(1, 1000);
-    let buoyancy_strength_initial = gas_simulation.solver_tuning.buoyancy_strength.clamp(0.0, 5.0);
-    let buoyancy_radius_initial =
-        u32::from(gas_simulation.solver_tuning.buoyancy_window_radius.clamp(1, 3));
-    let buoyancy_sigma_initial =
-        gas_simulation.solver_tuning.buoyancy_window_sigma.clamp(0.5, 3.0);
+    let buoyancy_strength_initial = gas_simulation
+        .solver_tuning
+        .buoyancy_strength
+        .clamp(0.0, 5.0);
+    let buoyancy_radius_initial = u32::from(
+        gas_simulation
+            .solver_tuning
+            .buoyancy_window_radius
+            .clamp(1, 3),
+    );
+    let buoyancy_sigma_initial = gas_simulation
+        .solver_tuning
+        .buoyancy_window_sigma
+        .clamp(0.5, 3.0);
     let buoyancy_gain_initial = gas_simulation.solver_tuning.buoyancy_gain.clamp(0.0, 10.0);
     let buoyancy_alpha_initial = gas_simulation.solver_tuning.buoyancy_alpha.clamp(0.0, 4.0);
-    let buoyancy_cap_initial = gas_simulation.solver_tuning.buoyancy_force_cap.clamp(0.0, 2.0);
+    let buoyancy_cap_initial = gas_simulation
+        .solver_tuning
+        .buoyancy_force_cap
+        .clamp(0.0, 2.0);
     let gamma_initial = gas_visual_settings.gamma.clamp(0.0, 10.0);
-    let max_color_initial = gas_visual_settings.max_particles_for_max_color.clamp(1, 10_000);
+    let max_color_initial = gas_visual_settings
+        .max_particles_for_max_color
+        .clamp(1, 10_000);
     let sim_hz_initial_text = sim_hz_initial.to_string();
     let buoyancy_strength_initial_text = fmt_f32(buoyancy_strength_initial);
     let buoyancy_radius_initial_text = buoyancy_radius_initial.to_string();
@@ -2491,14 +2505,13 @@ fn refresh_editor_ui(
     }
 
     let debug_panel_visible = world_load_state.has_world && debug_mode.active;
-    panel_state.0.set_visible(
-        DEBUG_PANEL_ID,
-        debug_panel_visible,
-        &mut panel_state.1,
-    );
+    panel_state
+        .0
+        .set_visible(DEBUG_PANEL_ID, debug_panel_visible, &mut panel_state.1);
 
-    let gas_tool_panel_visible =
-        world_load_state.has_world && debug_mode.active && selected_tool == Some(EditorTool::AddGas);
+    let gas_tool_panel_visible = world_load_state.has_world
+        && debug_mode.active
+        && selected_tool == Some(EditorTool::AddGas);
     panel_state.0.set_visible(
         GAS_TOOL_PANEL_ID,
         gas_tool_panel_visible,

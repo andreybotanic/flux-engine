@@ -12,13 +12,6 @@ use crate::simulation::gas::GasField;
 use crate::world::grid::WorldGrid;
 
 const SHADER_SOURCE: &str = include_str!("../../assets/shaders/gas_solver.wgsl");
-const REDUCE_META_SLOTS: usize = 4;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GpuTransferMode {
-    RuntimeTransfer,
-    ForcedFullReadback,
-}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GpuStepTimings {
@@ -46,6 +39,8 @@ pub struct ParamsPod {
     height: u32,
     step: u32,
     gas_count: u32,
+    thermal_motion_scale: f32,
+    _pad0: [u32; 3],
 
     enable_species_relaxation: u32,
     enable_lbm_velocity: u32,
@@ -83,45 +78,35 @@ pub struct ParamsPod {
 #[derive(Clone)]
 pub struct GpuSolverHostState {
     pub gas_count: u32,
-    pub molecular_masses: [f32; 3],
-    pub species: Vec<[f32; 4]>,
-    pub lbm_flat: Vec<f32>,
+    pub molecular_masses: Vec<f32>,
+    pub species: Vec<u32>,
     pub total_density: Vec<f32>,
     pub velocity: Vec<[f32; 2]>,
     pub solid_mask: Vec<u32>,
 }
 
 struct Pipelines {
-    reduce_target_partial: wgpu::ComputePipeline,
-    reduce_target_finalize: wgpu::ComputePipeline,
-    compute_post_and_meta: wgpu::ComputePipeline,
-    stream_and_gather: wgpu::ComputePipeline,
-    update_macro_from_lbm: wgpu::ComputePipeline,
-    reduce_current_partial: wgpu::ComputePipeline,
-    reduce_current_finalize: wgpu::ComputePipeline,
-    compute_massfix_flags: wgpu::ComputePipeline,
-    apply_massfix: wgpu::ComputePipeline,
-    recompute_total_density: wgpu::ComputePipeline,
-    reconcile_if_needed: wgpu::ComputePipeline,
+    compute_shares: wgpu::ComputePipeline,
+    step_discrete_exact: wgpu::ComputePipeline,
 }
 
 pub struct GpuGasSolver {
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipelines: Pipelines,
+    bind_group_layout: wgpu::BindGroupLayout,
     bind_groups: [wgpu::BindGroup; 2],
     params_buffer: wgpu::Buffer,
     species_buffers: [wgpu::Buffer; 2],
-    lbm_buffers: [wgpu::Buffer; 2],
+    shares_buffer: wgpu::Buffer,
     total_density_buffer: wgpu::Buffer,
     velocity_buffer: wgpu::Buffer,
     solid_mask_buffer: wgpu::Buffer,
-    _reduce_meta_buffer: wgpu::Buffer,
-    _species_meta_buffer: wgpu::Buffer,
-    _lbm_post_buffer: wgpu::Buffer,
+    molecular_masses_buffer: wgpu::Buffer,
     active_index: usize,
     width: u32,
     height: u32,
+    cells: usize,
     solid_mask_host: Vec<u32>,
     timestamp_period: f32,
     timestamp_enabled: bool,
@@ -132,7 +117,14 @@ pub struct GpuGasSolver {
     timestamp_readback_buffer: Option<wgpu::Buffer>,
     adapter_info: GpuAdapterInfo,
     gas_count: u32,
-    molecular_masses: [f32; 3],
+    gas_capacity: u32,
+    molecular_masses: Vec<f32>,
+}
+
+struct GasBuffers {
+    species_buffers: [wgpu::Buffer; 2],
+    shares_buffer: wgpu::Buffer,
+    molecular_masses_buffer: wgpu::Buffer,
 }
 
 fn map_buffer_blocking(device: &wgpu::Device, buffer: &wgpu::Buffer) -> Result<Vec<u8>, String> {
@@ -153,20 +145,20 @@ fn map_buffer_blocking(device: &wgpu::Device, buffer: &wgpu::Buffer) -> Result<V
     }
 }
 
-fn flatten_lbm(distributions: &[[f32; 9]]) -> Vec<f32> {
-    let mut out = Vec::with_capacity(distributions.len() * 9);
-    for dirs in distributions {
-        out.extend_from_slice(dirs);
-    }
-    out
-}
-
 impl GpuGasSolver {
     pub fn adapter_info(&self) -> GpuAdapterInfo {
         self.adapter_info.clone()
     }
 
     pub fn new(width: u32, height: u32) -> Result<Self, String> {
+        Self::create(width, height, 1)
+    }
+
+    pub fn new_with_gas_count(width: u32, height: u32, gas_count: u32) -> Result<Self, String> {
+        Self::create(width, height, gas_count.max(1))
+    }
+
+    fn create(width: u32, height: u32, gas_capacity: u32) -> Result<Self, String> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -202,9 +194,9 @@ impl GpuGasSolver {
         }
 
         let limits = adapter.limits();
-        if limits.max_storage_buffers_per_shader_stage < 11 {
+        if limits.max_storage_buffers_per_shader_stage < 7 {
             return Err(format!(
-                "GPU limit max_storage_buffers_per_shader_stage={} is too low for solver (need >=11)",
+                "GPU limit max_storage_buffers_per_shader_stage={} is too low for solver (need >=7)",
                 limits.max_storage_buffers_per_shader_stage
             ));
         }
@@ -227,17 +219,14 @@ impl GpuGasSolver {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("gas-solver-bind-group-layout"),
             entries: &[
-                storage_entry(0, false),
+                storage_entry(0, true),
                 storage_entry(1, false),
                 storage_entry(2, false),
                 storage_entry(3, false),
                 storage_entry(4, false),
-                storage_entry(5, false),
-                storage_entry(6, true),
-                uniform_entry(7),
-                storage_entry(8, false),
-                storage_entry(9, false),
-                storage_entry(10, false),
+                storage_entry(5, true),
+                uniform_entry(6),
+                storage_entry(7, true),
             ],
         });
 
@@ -259,44 +248,18 @@ impl GpuGasSolver {
         };
 
         let pipelines = Pipelines {
-            reduce_target_partial: build_pipeline("reduce_species_target_partial"),
-            reduce_target_finalize: build_pipeline("reduce_species_target_finalize"),
-            compute_post_and_meta: build_pipeline("compute_post_and_species_meta"),
-            stream_and_gather: build_pipeline("stream_and_species_gather"),
-            update_macro_from_lbm: build_pipeline("update_macro_from_lbm"),
-            reduce_current_partial: build_pipeline("reduce_species_current_partial"),
-            reduce_current_finalize: build_pipeline("reduce_species_current_finalize"),
-            compute_massfix_flags: build_pipeline("compute_massfix_flags"),
-            apply_massfix: build_pipeline("apply_mass_fix"),
-            recompute_total_density: build_pipeline("recompute_total_density_from_species"),
-            reconcile_if_needed: build_pipeline("reconcile_if_needed"),
+            compute_shares: build_pipeline("compute_shares"),
+            step_discrete_exact: build_pipeline("step_discrete_exact"),
         };
 
         let cells = usize::try_from(width)
             .ok()
             .and_then(|w| usize::try_from(height).ok().map(|h| w * h))
             .ok_or("Failed to compute cells count")?;
-        let partial_count = ((cells as u32) + 63) / 64;
-        let reduce_slots = REDUCE_META_SLOTS as u32 + partial_count;
 
-        let species_size = (cells * size_of::<[f32; 4]>()) as wgpu::BufferAddress;
-        let lbm_size = (cells * 9 * size_of::<f32>()) as wgpu::BufferAddress;
         let total_density_size = (cells * size_of::<f32>()) as wgpu::BufferAddress;
         let velocity_size = (cells * size_of::<[f32; 2]>()) as wgpu::BufferAddress;
         let solid_mask_size = (cells * size_of::<u32>()) as wgpu::BufferAddress;
-        let reduce_meta_size =
-            (reduce_slots as usize * size_of::<[f32; 4]>()) as wgpu::BufferAddress;
-        let species_meta_size = (cells * size_of::<[f32; 4]>()) as wgpu::BufferAddress;
-
-        let species_buffers = [
-            create_storage_buffer(&device, "species-buffer-a", species_size),
-            create_storage_buffer(&device, "species-buffer-b", species_size),
-        ];
-
-        let lbm_buffers = [
-            create_storage_buffer(&device, "lbm-buffer-a", lbm_size),
-            create_storage_buffer(&device, "lbm-buffer-b", lbm_size),
-        ];
 
         let total_density_buffer =
             create_storage_buffer(&device, "total-density-buffer", total_density_size);
@@ -307,72 +270,24 @@ impl GpuGasSolver {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let reduce_meta_buffer =
-            create_storage_buffer(&device, "reduce-meta-buffer", reduce_meta_size);
-        let species_meta_buffer =
-            create_storage_buffer(&device, "species-meta-buffer", species_meta_size);
-        let lbm_post_buffer = create_storage_buffer(&device, "lbm-post-buffer", lbm_size);
-
         let params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("solver-params-buffer"),
             contents: bytemuck::bytes_of(&ParamsPod::zeroed()),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let make_bind_group = |read_idx: usize, write_idx: usize| {
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("gas-solver-bind-group"),
-                layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: species_buffers[read_idx].as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: species_buffers[write_idx].as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: lbm_buffers[read_idx].as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: lbm_buffers[write_idx].as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 4,
-                        resource: total_density_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 5,
-                        resource: velocity_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 6,
-                        resource: solid_mask_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 7,
-                        resource: params_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 8,
-                        resource: reduce_meta_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 9,
-                        resource: species_meta_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 10,
-                        resource: lbm_post_buffer.as_entire_binding(),
-                    },
-                ],
-            })
-        };
-
-        let bind_groups = [make_bind_group(0, 1), make_bind_group(1, 0)];
+        let gas_buffers = create_gas_buffers(&device, cells, gas_capacity)?;
+        let bind_groups = create_bind_groups(
+            &device,
+            &bind_group_layout,
+            &gas_buffers.species_buffers,
+            &gas_buffers.shares_buffer,
+            &total_density_buffer,
+            &velocity_buffer,
+            &solid_mask_buffer,
+            &params_buffer,
+            &gas_buffers.molecular_masses_buffer,
+        );
 
         let (timestamp_query_set, timestamp_resolve_buffer, timestamp_readback_buffer) =
             if timestamp_enabled {
@@ -404,19 +319,19 @@ impl GpuGasSolver {
             device,
             queue,
             pipelines,
+            bind_group_layout,
             bind_groups,
             params_buffer,
-            species_buffers,
-            lbm_buffers,
+            species_buffers: gas_buffers.species_buffers,
+            shares_buffer: gas_buffers.shares_buffer,
             total_density_buffer,
             velocity_buffer,
             solid_mask_buffer,
-            _reduce_meta_buffer: reduce_meta_buffer,
-            _species_meta_buffer: species_meta_buffer,
-            _lbm_post_buffer: lbm_post_buffer,
+            molecular_masses_buffer: gas_buffers.molecular_masses_buffer,
             active_index: 0,
             width,
             height,
+            cells,
             solid_mask_host: vec![0; cells],
             timestamp_period,
             timestamp_enabled,
@@ -426,50 +341,135 @@ impl GpuGasSolver {
             timestamp_resolve_buffer,
             timestamp_readback_buffer,
             adapter_info,
-            gas_count: 3,
-            molecular_masses: [2.016, 31.998, 44.009],
+            gas_count: gas_capacity,
+            gas_capacity,
+            molecular_masses: vec![1.0; gas_capacity as usize],
         })
+    }
+
+    fn ensure_gas_capacity(&mut self, gas_count: u32) -> Result<(), String> {
+        let need = gas_count.max(1);
+        if need <= self.gas_capacity {
+            return Ok(());
+        }
+        let gas_buffers = create_gas_buffers(&self.device, self.cells, need)?;
+        let bind_groups = create_bind_groups(
+            &self.device,
+            &self.bind_group_layout,
+            &gas_buffers.species_buffers,
+            &gas_buffers.shares_buffer,
+            &self.total_density_buffer,
+            &self.velocity_buffer,
+            &self.solid_mask_buffer,
+            &self.params_buffer,
+            &gas_buffers.molecular_masses_buffer,
+        );
+        self.species_buffers = gas_buffers.species_buffers;
+        self.shares_buffer = gas_buffers.shares_buffer;
+        self.molecular_masses_buffer = gas_buffers.molecular_masses_buffer;
+        self.bind_groups = bind_groups;
+        self.active_index = 0;
+        self.gas_capacity = need;
+        Ok(())
     }
 
     pub fn upload_state(&mut self, state: &GpuSolverHostState) -> Result<f32, String> {
         let started = Instant::now();
-        let species_bytes = bytemuck::cast_slice(&state.species);
-        let lbm_bytes = bytemuck::cast_slice(&state.lbm_flat);
-        let total_density_bytes = bytemuck::cast_slice(&state.total_density);
-        let velocity_bytes = bytemuck::cast_slice(&state.velocity);
-        let solid_mask_bytes = bytemuck::cast_slice(&state.solid_mask);
+        let gas_count = state.gas_count.max(1);
+        let expected_species = self
+            .cells
+            .checked_mul(gas_count as usize)
+            .ok_or_else(|| "Species count overflow".to_string())?;
+        if state.species.len() != expected_species {
+            return Err(format!(
+                "GPU upload species length mismatch: got {}, expected {}",
+                state.species.len(),
+                expected_species
+            ));
+        }
+        if state.total_density.len() != self.cells {
+            return Err(format!(
+                "GPU upload total_density length mismatch: got {}, expected {}",
+                state.total_density.len(),
+                self.cells
+            ));
+        }
+        if state.velocity.len() != self.cells {
+            return Err(format!(
+                "GPU upload velocity length mismatch: got {}, expected {}",
+                state.velocity.len(),
+                self.cells
+            ));
+        }
+        if state.solid_mask.len() != self.cells {
+            return Err(format!(
+                "GPU upload solid_mask length mismatch: got {}, expected {}",
+                state.solid_mask.len(),
+                self.cells
+            ));
+        }
 
-        self.queue
-            .write_buffer(&self.species_buffers[self.active_index], 0, species_bytes);
+        self.ensure_gas_capacity(gas_count)?;
+
+        let mut masses = vec![1.0f32; gas_count as usize];
+        for (i, mass) in state.molecular_masses.iter().copied().enumerate() {
+            if i >= masses.len() {
+                break;
+            }
+            masses[i] = mass;
+        }
+
+        self.queue.write_buffer(
+            &self.species_buffers[self.active_index],
+            0,
+            bytemuck::cast_slice(&state.species),
+        );
         self.queue.write_buffer(
             &self.species_buffers[1 - self.active_index],
             0,
-            species_bytes,
+            bytemuck::cast_slice(&state.species),
         );
-        self.queue
-            .write_buffer(&self.lbm_buffers[self.active_index], 0, lbm_bytes);
-        self.queue
-            .write_buffer(&self.lbm_buffers[1 - self.active_index], 0, lbm_bytes);
-        self.queue
-            .write_buffer(&self.total_density_buffer, 0, total_density_bytes);
-        self.queue
-            .write_buffer(&self.velocity_buffer, 0, velocity_bytes);
-        self.queue
-            .write_buffer(&self.solid_mask_buffer, 0, solid_mask_bytes);
+        self.queue.write_buffer(
+            &self.total_density_buffer,
+            0,
+            bytemuck::cast_slice(&state.total_density),
+        );
+        self.queue.write_buffer(
+            &self.velocity_buffer,
+            0,
+            bytemuck::cast_slice(&state.velocity),
+        );
+        self.queue.write_buffer(
+            &self.solid_mask_buffer,
+            0,
+            bytemuck::cast_slice(&state.solid_mask),
+        );
+        self.queue.write_buffer(
+            &self.molecular_masses_buffer,
+            0,
+            bytemuck::cast_slice(&masses),
+        );
 
         self.solid_mask_host = state.solid_mask.clone();
-        self.gas_count = state.gas_count.min(3).max(1);
-        self.molecular_masses = state.molecular_masses;
+        self.gas_count = gas_count;
+        self.molecular_masses = masses;
 
         Ok(started.elapsed().as_secs_f32() * 1000.0)
     }
 
-    pub fn step(
-        &mut self,
-        params: ParamsPod,
-        transfer_mode: GpuTransferMode,
-    ) -> Result<GpuStepTimings, String> {
+    pub fn step(&mut self, params: ParamsPod) -> Result<GpuStepTimings, String> {
         let total_started = Instant::now();
+        if params.gas_count == 0 {
+            return Err("GPU step received gas_count=0".to_string());
+        }
+        if params.gas_count > self.gas_capacity {
+            return Err(format!(
+                "GPU step gas_count {} exceeds uploaded capacity {}",
+                params.gas_count, self.gas_capacity
+            ));
+        }
+        self.gas_count = params.gas_count;
+
         self.queue
             .write_buffer(&self.params_buffer, 0, bytemuck::bytes_of(&params));
 
@@ -500,84 +500,21 @@ impl GpuGasSolver {
 
         dispatch_pipeline(
             &mut encoder,
-            &self.pipelines.reduce_target_partial,
+            &self.pipelines.compute_shares,
+            &self.bind_groups[self.active_index],
+            workgroups.max(1),
+            None,
+        );
+
+        dispatch_pipeline(
+            &mut encoder,
+            &self.pipelines.step_discrete_exact,
             &self.bind_groups[self.active_index],
             workgroups.max(1),
             timestamp_writes.take(),
         );
-        dispatch_pipeline(
-            &mut encoder,
-            &self.pipelines.reduce_target_finalize,
-            &self.bind_groups[self.active_index],
-            1,
-            None,
-        );
-        dispatch_pipeline(
-            &mut encoder,
-            &self.pipelines.compute_post_and_meta,
-            &self.bind_groups[self.active_index],
-            workgroups.max(1),
-            None,
-        );
-        dispatch_pipeline(
-            &mut encoder,
-            &self.pipelines.stream_and_gather,
-            &self.bind_groups[self.active_index],
-            workgroups.max(1),
-            None,
-        );
 
         self.active_index = 1 - self.active_index;
-
-        dispatch_pipeline(
-            &mut encoder,
-            &self.pipelines.update_macro_from_lbm,
-            &self.bind_groups[self.active_index],
-            workgroups.max(1),
-            None,
-        );
-        dispatch_pipeline(
-            &mut encoder,
-            &self.pipelines.reduce_current_partial,
-            &self.bind_groups[self.active_index],
-            workgroups.max(1),
-            None,
-        );
-        dispatch_pipeline(
-            &mut encoder,
-            &self.pipelines.reduce_current_finalize,
-            &self.bind_groups[self.active_index],
-            1,
-            None,
-        );
-        dispatch_pipeline(
-            &mut encoder,
-            &self.pipelines.compute_massfix_flags,
-            &self.bind_groups[self.active_index],
-            1,
-            None,
-        );
-        dispatch_pipeline(
-            &mut encoder,
-            &self.pipelines.apply_massfix,
-            &self.bind_groups[self.active_index],
-            workgroups.max(1),
-            None,
-        );
-        dispatch_pipeline(
-            &mut encoder,
-            &self.pipelines.recompute_total_density,
-            &self.bind_groups[self.active_index],
-            workgroups.max(1),
-            None,
-        );
-        dispatch_pipeline(
-            &mut encoder,
-            &self.pipelines.reconcile_if_needed,
-            &self.bind_groups[self.active_index],
-            workgroups.max(1),
-            None,
-        );
 
         if self.timestamp_enabled && !self.timestamp_inside_passes && self.timestamp_inside_encoders
         {
@@ -599,13 +536,6 @@ impl GpuGasSolver {
         let _ = self.device.poll(wgpu::MaintainBase::Wait);
         let compute_wall_ms = compute_started.elapsed().as_secs_f32() * 1000.0;
 
-        let mut readback_ms = 0.0f32;
-        if transfer_mode == GpuTransferMode::ForcedFullReadback {
-            let rb_started = Instant::now();
-            let _ = self.readback_state()?;
-            readback_ms = rb_started.elapsed().as_secs_f32() * 1000.0;
-        }
-
         let mut compute_gpu_ms = compute_wall_ms;
         if self.timestamp_enabled {
             if let Some(readback) = &self.timestamp_readback_buffer {
@@ -622,27 +552,19 @@ impl GpuGasSolver {
             compute_wall_ms,
             compute_gpu_ms,
             upload_to_gpu_ms: 0.0,
-            readback_from_gpu_ms: readback_ms,
+            readback_from_gpu_ms: 0.0,
             step_total_ms: total_started.elapsed().as_secs_f32() * 1000.0,
         })
     }
 
     pub fn readback_state(&self) -> Result<GpuSolverHostState, String> {
-        let cells = (self.width * self.height) as usize;
-        let species_size = (cells * size_of::<[f32; 4]>()) as u64;
-        let lbm_size = (cells * 9 * size_of::<f32>()) as u64;
-        let total_density_size = (cells * size_of::<f32>()) as u64;
-        let velocity_size = (cells * size_of::<[f32; 2]>()) as u64;
+        let species_size = (self.cells * self.gas_count as usize * size_of::<u32>()) as u64;
+        let total_density_size = (self.cells * size_of::<f32>()) as u64;
+        let velocity_size = (self.cells * size_of::<[f32; 2]>()) as u64;
 
         let species_staging = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("species-staging"),
             size: species_size,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-        let lbm_staging = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("lbm-staging"),
-            size: lbm_size,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -672,13 +594,6 @@ impl GpuGasSolver {
             species_size,
         );
         encoder.copy_buffer_to_buffer(
-            &self.lbm_buffers[self.active_index],
-            0,
-            &lbm_staging,
-            0,
-            lbm_size,
-        );
-        encoder.copy_buffer_to_buffer(
             &self.total_density_buffer,
             0,
             &total_density_staging,
@@ -696,20 +611,17 @@ impl GpuGasSolver {
         let _ = self.device.poll(wgpu::MaintainBase::Wait);
 
         let species_bytes = map_buffer_blocking(&self.device, &species_staging)?;
-        let lbm_bytes = map_buffer_blocking(&self.device, &lbm_staging)?;
         let total_density_bytes = map_buffer_blocking(&self.device, &total_density_staging)?;
         let velocity_bytes = map_buffer_blocking(&self.device, &velocity_staging)?;
 
-        let species = bytemuck::cast_slice::<u8, [f32; 4]>(&species_bytes).to_vec();
-        let lbm_flat = bytemuck::cast_slice::<u8, f32>(&lbm_bytes).to_vec();
+        let species = bytemuck::cast_slice::<u8, u32>(&species_bytes).to_vec();
         let total_density = bytemuck::cast_slice::<u8, f32>(&total_density_bytes).to_vec();
         let velocity = bytemuck::cast_slice::<u8, [f32; 2]>(&velocity_bytes).to_vec();
 
         Ok(GpuSolverHostState {
             gas_count: self.gas_count,
-            molecular_masses: self.molecular_masses,
+            molecular_masses: self.molecular_masses.clone(),
             species,
-            lbm_flat,
             total_density,
             velocity,
             solid_mask: self.solid_mask_host.clone(),
@@ -719,7 +631,7 @@ impl GpuGasSolver {
     pub fn from_cpu_state(world: &WorldGrid, gas: &GasField) -> Result<(Self, f32), String> {
         let width = crate::world::grid::WORLD_WIDTH;
         let height = crate::world::grid::WORLD_HEIGHT;
-        let mut solver = Self::new(width, height)?;
+        let mut solver = Self::new_with_gas_count(width, height, gas.gas_count() as u32)?;
         let host_state = gas.to_gpu_host_state(world);
         let upload_ms = solver.upload_state(&host_state)?;
         Ok((solver, upload_ms))
@@ -735,11 +647,31 @@ impl GpuGasSolver {
         let m0 = gas.molecular_mass(0);
         let m1 = gas.molecular_mass(1);
         let m2 = gas.molecular_mass(2);
+        Self::params_from_raw(
+            config,
+            width,
+            height,
+            step,
+            gas.gas_count() as u32,
+            [m0, m1, m2],
+        )
+    }
+
+    pub fn params_from_raw(
+        config: &super::GasSimulationConfig,
+        width: u32,
+        height: u32,
+        step: u64,
+        gas_count: u32,
+        molecular_masses: [f32; 3],
+    ) -> ParamsPod {
         ParamsPod {
             width,
             height,
             step: step as u32,
-            gas_count: gas.gas_count().min(3) as u32,
+            gas_count: gas_count.max(1),
+            thermal_motion_scale: config.thermal_motion_scale,
+            _pad0: [0, 0, 0],
             enable_species_relaxation: u32::from(config.enable_species_relaxation),
             enable_lbm_velocity: u32::from(config.enable_lbm_velocity),
             enable_buoyancy: u32::from(config.solver_tuning.enable_buoyancy),
@@ -762,9 +694,9 @@ impl GpuGasSolver {
             _pad6: 0,
             mass_fix_error_threshold: config.mass_fix_error_threshold,
             mass_fix_min_residual: config.mass_fix_min_residual,
-            molecular_mass_h2: m0,
-            molecular_mass_o2: m1,
-            molecular_mass_co2: m2,
+            molecular_mass_h2: molecular_masses[0],
+            molecular_mass_o2: molecular_masses[1],
+            molecular_mass_co2: molecular_masses[2],
             _pad8: 0.0,
         }
     }
@@ -772,10 +704,92 @@ impl GpuGasSolver {
     pub fn current_dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
     }
+}
 
-    pub fn flatten_lbm_state(lbm: &[[f32; 9]]) -> Vec<f32> {
-        flatten_lbm(lbm)
+fn create_gas_buffers(
+    device: &wgpu::Device,
+    cells: usize,
+    gas_capacity: u32,
+) -> Result<GasBuffers, String> {
+    if gas_capacity == 0 {
+        return Err("gas_capacity must be > 0".to_string());
     }
+    let species_count = cells
+        .checked_mul(gas_capacity as usize)
+        .ok_or_else(|| "species buffer size overflow".to_string())?;
+    let shares_count = species_count
+        .checked_mul(5)
+        .ok_or_else(|| "shares buffer size overflow".to_string())?;
+    let species_size = (species_count * size_of::<u32>()) as wgpu::BufferAddress;
+    let shares_size = (shares_count * size_of::<u32>()) as wgpu::BufferAddress;
+    let masses_size = (gas_capacity as usize * size_of::<f32>()) as wgpu::BufferAddress;
+
+    let species_buffers = [
+        create_storage_buffer(device, "species-buffer-a", species_size),
+        create_storage_buffer(device, "species-buffer-b", species_size),
+    ];
+    let shares_buffer = create_storage_buffer(device, "shares-buffer", shares_size);
+    let molecular_masses_buffer = create_storage_buffer(device, "molecular-masses", masses_size);
+
+    Ok(GasBuffers {
+        species_buffers,
+        shares_buffer,
+        molecular_masses_buffer,
+    })
+}
+
+fn create_bind_groups(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    species_buffers: &[wgpu::Buffer; 2],
+    shares_buffer: &wgpu::Buffer,
+    total_density_buffer: &wgpu::Buffer,
+    velocity_buffer: &wgpu::Buffer,
+    solid_mask_buffer: &wgpu::Buffer,
+    params_buffer: &wgpu::Buffer,
+    molecular_masses_buffer: &wgpu::Buffer,
+) -> [wgpu::BindGroup; 2] {
+    let make = |read_idx: usize, write_idx: usize| {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("gas-solver-bind-group"),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: species_buffers[read_idx].as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: species_buffers[write_idx].as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: shares_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: total_density_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: velocity_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: solid_mask_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: params_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: molecular_masses_buffer.as_entire_binding(),
+                },
+            ],
+        })
+    };
+    [make(0, 1), make(1, 0)]
 }
 
 fn storage_entry(binding: u32, read_only: bool) -> wgpu::BindGroupLayoutEntry {

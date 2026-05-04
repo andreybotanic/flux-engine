@@ -717,9 +717,7 @@ fn write_gas_chunk(
             cells * snapshot.gas_count
         )));
     }
-    if snapshot.velocity.len() != cells
-        || snapshot.total_density.len() != cells
-    {
+    if snapshot.velocity.len() != cells || snapshot.total_density.len() != cells {
         return Err(SaveError::Validation(
             "Gas snapshot buffer length mismatch while writing gas chunk".to_string(),
         ));

@@ -1,21 +1,17 @@
+use super::discrete_step::{step_discrete_in_place, DiscreteStepParams};
 use super::gpu_solver::GpuSolverHostState;
 use super::SolverTuning;
 use crate::config::GasRegistry;
 use crate::world::grid::{is_boundary, linear_index, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH};
 use bevy::prelude::*;
+#[cfg(test)]
 use std::sync::OnceLock;
 
 pub const HYDROGEN_GPU_STORAGE_MAX_PARTICLES: u32 = 20_000;
 
 const EPSILON: f32 = 1e-6;
+#[cfg(test)]
 const BUOYANCY_MIN_ENV_MASS: f32 = 1e-6;
-const MAX_GASES_IN_GPU_STATE: usize = 3;
-const DIRS_VON_NEUMANN: [IVec2; 4] = [
-    IVec2::new(0, 1),
-    IVec2::new(0, -1),
-    IVec2::new(-1, 0),
-    IVec2::new(1, 0),
-];
 
 pub type GasScalar = f32;
 pub type GasCell = Vec<u32>;
@@ -29,36 +25,11 @@ pub struct GasFieldSnapshot {
 }
 
 #[derive(Clone, Copy)]
+#[cfg(test)]
 struct KernelOffset {
     dx: i32,
     dy: i32,
     dist2: f32,
-}
-
-#[derive(Clone, Copy)]
-struct Rng64 {
-    state: u64,
-}
-
-impl Rng64 {
-    fn seeded(seed: u64) -> Self {
-        Self {
-            state: seed ^ 0x9E37_79B9_7F4A_7C15,
-        }
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        self.state = self.state.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.state;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-
-    fn next_f64(&mut self) -> f64 {
-        let raw = self.next_u64() >> 11;
-        (raw as f64) / ((1u64 << 53) as f64)
-    }
 }
 
 #[derive(Resource, Clone)]
@@ -274,7 +245,8 @@ impl GasField {
                     self.read[index][gas_index] = amount;
                     self.write[index][gas_index] = amount;
                 } else {
-                    self.read[index][gas_index] = self.read[index][gas_index].saturating_add(amount);
+                    self.read[index][gas_index] =
+                        self.read[index][gas_index].saturating_add(amount);
                     self.write[index][gas_index] = self.read[index][gas_index];
                 }
             }
@@ -321,8 +293,6 @@ impl GasField {
         }
     }
 
-    pub fn reconcile_lbm_from_species(&mut self, _world: &WorldGrid) {}
-
     pub fn step_discrete(
         &mut self,
         world: &WorldGrid,
@@ -330,141 +300,40 @@ impl GasField {
         thermal_motion_scale: f32,
         simulation_step: u64,
     ) {
-        for entry in &mut self.write {
-            entry.fill(0);
-        }
+        let cell_count = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+        let mut flat_read = vec![0u32; cell_count * self.gas_count];
+        let mut flat_write = vec![0u32; cell_count * self.gas_count];
 
-        let mut net_momentum = vec![Vec2::ZERO; self.read.len()];
-        let mobility_base = thermal_motion_scale.max(0.0);
-        let buoyancy_radius = tuning.buoyancy_window_radius.clamp(1, 3);
-        let buoyancy_sigma = tuning.buoyancy_window_sigma.clamp(0.5, 3.0);
-        let buoyancy_kernel = kernel_offsets_for_radius(buoyancy_radius);
-        let inv_two_sigma_sq = 1.0 / (2.0 * buoyancy_sigma * buoyancy_sigma);
-        let buoyancy_kernel_weights: Vec<f32> = buoyancy_kernel
-            .iter()
-            .map(|sample| (-sample.dist2 * inv_two_sigma_sq).exp())
-            .collect();
-
-        for y in 0..WORLD_HEIGHT {
-            for x in 0..WORLD_WIDTH {
-                if is_boundary(x, y) || world.is_solid(x, y) {
-                    continue;
-                }
-
-                let idx = linear_index(x, y);
-                let temp_mul = self.temperature_multiplier(x, y).max(0.0);
-                let mobility = (mobility_base * temp_mul).max(0.0);
-
-                let mut neighbor_idx = [idx; 4];
-                let mut neighbor_open = [false; 4];
-                for (dir_i, dir) in DIRS_VON_NEUMANN.iter().enumerate() {
-                    let nx = x as i32 + dir.x;
-                    let ny = y as i32 + dir.y;
-                    if nx < 0 || ny < 0 || nx >= WORLD_WIDTH as i32 || ny >= WORLD_HEIGHT as i32 {
-                        continue;
-                    }
-                    let nx = nx as u32;
-                    let ny = ny as u32;
-                    if is_boundary(nx, ny) || world.is_solid(nx, ny) {
-                        continue;
-                    }
-                    neighbor_open[dir_i] = true;
-                    neighbor_idx[dir_i] = linear_index(nx, ny);
-                }
-
-                let m_env = if tuning.enable_buoyancy {
-                    estimate_local_env_mix_mass(
-                        self,
-                        world,
-                        x,
-                        y,
-                        buoyancy_kernel,
-                        &buoyancy_kernel_weights,
-                    )
-                } else {
-                    None
-                };
-
-                for gas_index in 0..self.gas_count {
-                    let count = self.read[idx][gas_index];
-                    if count == 0 {
-                        continue;
-                    }
-
-                    let seed = simulation_step
-                        .wrapping_mul(0xD6E8_FD50_0A23_1287)
-                        ^ (idx as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
-                        ^ (gas_index as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-                    let mut rng = Rng64::seeded(seed);
-
-                    // Keep the same directional attempt budget near walls as in bulk cells.
-                    // If a direction is blocked, that share is converted to stay.
-                    let mut weights = [mobility; 5];
-                    // Stay weight keeps diffusion finite even when all directions are blocked.
-                    weights[4] = 1.0;
-
-                    if let Some(m_env) = m_env {
-                        if m_env > BUOYANCY_MIN_ENV_MASS && mobility > 0.0 {
-                            let alpha = tuning.buoyancy_alpha.max(0.0);
-                            let gain = tuning.buoyancy_gain.max(0.0);
-                            let xi = (m_env - self.molecular_mass(gas_index)) / m_env;
-                            let bi = (gain * xi).tanh() * xi.abs().powf(alpha);
-                            let cap = tuning.buoyancy_force_cap.abs();
-                            let bias = (tuning.buoyancy_strength * bi).clamp(-cap, cap) * mobility;
-                            if neighbor_open[0] {
-                                weights[0] = (weights[0] + bias.max(0.0)).max(0.0);
-                            }
-                            if neighbor_open[1] {
-                                weights[1] = (weights[1] + (-bias).max(0.0)).max(0.0);
-                            }
-                        }
-                    }
-
-                    let shares = split_count_by_weights(count, &weights, &mut rng);
-                    for dir_i in 0..4 {
-                        let moved = shares[dir_i];
-                        if moved == 0 {
-                            continue;
-                        }
-                        if !neighbor_open[dir_i] {
-                            self.write[idx][gas_index] =
-                                self.write[idx][gas_index].saturating_add(moved);
-                            continue;
-                        }
-                        let target = neighbor_idx[dir_i];
-                        self.write[target][gas_index] =
-                            self.write[target][gas_index].saturating_add(moved);
-                        let dir = DIRS_VON_NEUMANN[dir_i].as_vec2();
-                        let impulse = dir * moved as f32;
-                        net_momentum[idx] -= impulse;
-                        net_momentum[target] += impulse;
-                    }
-                    let stayed = shares[4];
-                    if stayed > 0 {
-                        self.write[idx][gas_index] = self.write[idx][gas_index].saturating_add(stayed);
-                    }
-                }
+        for idx in 0..cell_count {
+            let base = idx * self.gas_count;
+            for gas_index in 0..self.gas_count {
+                flat_read[base + gas_index] = self.read[idx][gas_index];
+                flat_write[base + gas_index] = self.write[idx][gas_index];
             }
         }
 
-        std::mem::swap(&mut self.read, &mut self.write);
+        let solid_query = |x: u32, y: u32| world.is_solid(x, y);
+        step_discrete_in_place(DiscreteStepParams {
+            width: WORLD_WIDTH,
+            height: WORLD_HEIGHT,
+            gas_count: self.gas_count,
+            molecular_masses: &self.molecular_masses,
+            read: &mut flat_read,
+            write: &mut flat_write,
+            total_density: &mut self.total_density,
+            velocity: &mut self.velocity,
+            solid_query: &solid_query,
+            temperature_multiplier: |_x, _y| 1.0,
+            tuning,
+            thermal_motion_scale,
+            simulation_step,
+        });
 
-        for y in 0..WORLD_HEIGHT {
-            for x in 0..WORLD_WIDTH {
-                let idx = linear_index(x, y);
-                if is_boundary(x, y) || world.is_solid(x, y) {
-                    self.total_density[idx] = 0.0;
-                    self.velocity[idx] = Vec2::ZERO;
-                    continue;
-                }
-
-                let mass: f32 = self.read[idx].iter().map(|&v| v as f32).sum();
-                self.total_density[idx] = mass;
-                self.velocity[idx] = if mass > 0.0 {
-                    net_momentum[idx] / mass
-                } else {
-                    Vec2::ZERO
-                };
+        for idx in 0..cell_count {
+            let base = idx * self.gas_count;
+            for gas_index in 0..self.gas_count {
+                self.read[idx][gas_index] = flat_read[base + gas_index];
+                self.write[idx][gas_index] = flat_write[base + gas_index];
             }
         }
     }
@@ -501,17 +370,9 @@ impl GasField {
         totals
     }
 
-    pub fn renormalize_species_mass(
-        &mut self,
-        _world: &WorldGrid,
-        _target_totals: &[f32],
-        _min_residual: f32,
-    ) {
-    }
-
     pub fn to_gpu_host_state(&self, world: &WorldGrid) -> GpuSolverHostState {
         let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-        let mut species = Vec::with_capacity(cells);
+        let mut species = Vec::with_capacity(cells * self.gas_count);
         let mut total_density = Vec::with_capacity(cells);
         let mut velocity = Vec::with_capacity(cells);
         let mut solid_mask = Vec::with_capacity(cells);
@@ -519,15 +380,9 @@ impl GasField {
         for y in 0..WORLD_HEIGHT {
             for x in 0..WORLD_WIDTH {
                 let idx = linear_index(x, y);
-                let mut slot = [0.0f32; 4];
-                for (gas_index, dst) in slot
-                    .iter_mut()
-                    .enumerate()
-                    .take(self.gas_count.min(MAX_GASES_IN_GPU_STATE))
-                {
-                    *dst = self.read[idx][gas_index] as f32;
+                for gas_index in 0..self.gas_count {
+                    species.push(self.read[idx][gas_index]);
                 }
-                species.push(slot);
                 total_density.push(self.total_density[idx]);
                 let v = self.velocity[idx];
                 velocity.push([v.x, v.y]);
@@ -541,14 +396,9 @@ impl GasField {
         }
 
         GpuSolverHostState {
-            gas_count: self.gas_count.min(MAX_GASES_IN_GPU_STATE) as u32,
-            molecular_masses: [
-                self.molecular_mass(0),
-                self.molecular_mass(1),
-                self.molecular_mass(2),
-            ],
+            gas_count: self.gas_count as u32,
+            molecular_masses: self.molecular_masses.clone(),
             species,
-            lbm_flat: vec![0.0; cells * 9],
             total_density,
             velocity,
             solid_mask,
@@ -557,36 +407,30 @@ impl GasField {
 
     pub fn apply_gpu_host_state(&mut self, state: &GpuSolverHostState) {
         let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-        if state.species.len() != cells
+        if state.species.len() != cells.checked_mul(self.gas_count).unwrap_or(usize::MAX)
             || state.total_density.len() != cells
             || state.velocity.len() != cells
         {
             return;
         }
+        if state.gas_count as usize != self.gas_count {
+            return;
+        }
 
         for idx in 0..cells {
-            for gas_index in 0..self.gas_count.min(MAX_GASES_IN_GPU_STATE) {
-                let v = state.species[idx][gas_index]
-                    .max(0.0)
-                    .round()
-                    .clamp(0.0, u32::MAX as f32) as u32;
+            let base = idx * self.gas_count;
+            for gas_index in 0..self.gas_count {
+                let v = state.species[base + gas_index];
                 self.read[idx][gas_index] = v;
                 self.write[idx][gas_index] = v;
-            }
-            for gas_index in MAX_GASES_IN_GPU_STATE..self.gas_count {
-                self.read[idx][gas_index] = 0;
-                self.write[idx][gas_index] = 0;
             }
             self.total_density[idx] = state.total_density[idx].max(0.0);
             self.velocity[idx] = Vec2::new(state.velocity[idx][0], state.velocity[idx][1]);
         }
     }
-
-    fn temperature_multiplier(&self, _x: u32, _y: u32) -> f32 {
-        1.0
-    }
 }
 
+#[cfg(test)]
 fn build_kernel_offsets(radius: i32) -> Vec<KernelOffset> {
     let mut offsets = Vec::new();
     for dy in -radius..=radius {
@@ -601,6 +445,7 @@ fn build_kernel_offsets(radius: i32) -> Vec<KernelOffset> {
     offsets
 }
 
+#[cfg(test)]
 fn kernel_offsets_for_radius(radius: u8) -> &'static [KernelOffset] {
     static KERNELS: OnceLock<Vec<Vec<KernelOffset>>> = OnceLock::new();
     let kernels = KERNELS.get_or_init(|| {
@@ -614,6 +459,7 @@ fn kernel_offsets_for_radius(radius: u8) -> &'static [KernelOffset] {
     kernels[idx].as_slice()
 }
 
+#[cfg(test)]
 fn estimate_local_env_mix_mass(
     field: &GasField,
     world: &WorldGrid,
@@ -624,8 +470,7 @@ fn estimate_local_env_mix_mass(
 ) -> Option<f32> {
     let mut weighted_mass_sum = 0.0f32;
     let mut weighted_rho_sum = 0.0f32;
-    let reachable_samples_mask =
-        kernel_sample_reachability_mask_von_neumann(world, x, y, kernel);
+    let reachable_samples_mask = kernel_sample_reachability_mask_von_neumann(world, x, y, kernel);
 
     for (sample_i, (sample, w)) in kernel
         .iter()
@@ -682,6 +527,7 @@ fn estimate_local_env_mix_mass(
     }
 }
 
+#[cfg(test)]
 fn kernel_sample_reachability_mask_von_neumann(
     world: &WorldGrid,
     x0: u32,
@@ -818,64 +664,10 @@ fn kernel_sample_reachability_mask_von_neumann(
     sample_mask
 }
 
-fn split_count_by_weights(count: u32, weights: &[f32; 5], rng: &mut Rng64) -> [u32; 5] {
-    let mut result = [0u32; 5];
-    if count == 0 {
-        return result;
-    }
-
-    let positive_total: f64 = weights
-        .iter()
-        .map(|w| w.max(0.0) as f64)
-        .sum::<f64>()
-        .max(f64::EPSILON);
-
-    let mut fracs = [0.0f64; 5];
-    let mut base_sum = 0u32;
-    for i in 0..5 {
-        let raw = (count as f64) * (weights[i].max(0.0) as f64) / positive_total;
-        let base = raw.floor() as u32;
-        result[i] = base;
-        fracs[i] = (raw - f64::from(base)).max(0.0);
-        base_sum = base_sum.saturating_add(base);
-    }
-
-    let mut remaining = count.saturating_sub(base_sum);
-    while remaining > 0 {
-        let frac_sum: f64 = fracs.iter().sum();
-        let pick = if frac_sum > f64::EPSILON {
-            weighted_pick(&fracs, frac_sum, rng)
-        } else {
-            let mut ws = [0.0f64; 5];
-            for i in 0..5 {
-                ws[i] = weights[i].max(0.0) as f64;
-            }
-            let ws_sum: f64 = ws.iter().sum::<f64>().max(f64::EPSILON);
-            weighted_pick(&ws, ws_sum, rng)
-        };
-        result[pick] = result[pick].saturating_add(1);
-        fracs[pick] = 0.0;
-        remaining -= 1;
-    }
-
-    result
-}
-
-fn weighted_pick(weights: &[f64; 5], sum: f64, rng: &mut Rng64) -> usize {
-    let mut t = rng.next_f64() * sum;
-    for (i, w) in weights.iter().copied().enumerate() {
-        if t <= w {
-            return i;
-        }
-        t -= w;
-    }
-    4
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{GasDefinition, GameConfig};
+    use crate::config::{GameConfig, GasDefinition};
     use crate::save::{list_saves, load_save, saves_root_default};
     use crate::simulation::{do_one_substep, BlockSyncState, GasSimulationConfig, SimulationStep};
 
@@ -898,6 +690,36 @@ mod tests {
                 label: "Carbon dioxide".to_string(),
                 molecular_mass: 44.009,
                 color: [0.5, 0.5, 0.5],
+            },
+        ])
+        .expect("valid registry")
+    }
+
+    fn registry_with_four() -> GasRegistry {
+        GasRegistry::new(vec![
+            GasDefinition {
+                id: "h2".to_string(),
+                label: "Hydrogen".to_string(),
+                molecular_mass: 2.016,
+                color: [0.8, 0.2, 0.9],
+            },
+            GasDefinition {
+                id: "o2".to_string(),
+                label: "Oxygen".to_string(),
+                molecular_mass: 31.998,
+                color: [0.0, 0.8, 0.8],
+            },
+            GasDefinition {
+                id: "co2".to_string(),
+                label: "Carbon dioxide".to_string(),
+                molecular_mass: 44.009,
+                color: [0.5, 0.5, 0.5],
+            },
+            GasDefinition {
+                id: "n2".to_string(),
+                label: "Nitrogen".to_string(),
+                molecular_mass: 28.014,
+                color: [0.3, 0.7, 1.0],
             },
         ])
         .expect("valid registry")
@@ -1057,6 +879,32 @@ mod tests {
         field.set_amount(10, 10, 1, 7.0);
         field.set_amount(10, 10, 2, 11.0);
         assert_eq!(field.total_amount(10, 10), 23.0);
+    }
+
+    #[test]
+    fn gpu_host_state_preserves_dynamic_gas_count_without_truncation() {
+        let registry = registry_with_four();
+        let world = WorldGrid::default();
+        let mut field = GasField::from_registry(&registry);
+        field.clear_cell(10, 10);
+        field.set_amount(10, 10, 0, 1.0);
+        field.set_amount(10, 10, 1, 2.0);
+        field.set_amount(10, 10, 2, 3.0);
+        field.set_amount(10, 10, 3, 4.0);
+        field.recompute_total_density_buffer(&world);
+
+        let host = field.to_gpu_host_state(&world);
+        let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+        assert_eq!(host.gas_count, 4);
+        assert_eq!(host.molecular_masses.len(), 4);
+        assert_eq!(host.species.len(), cells * 4);
+
+        let idx = linear_index(10, 10);
+        let base = idx * 4;
+        assert_eq!(host.species[base], 1);
+        assert_eq!(host.species[base + 1], 2);
+        assert_eq!(host.species[base + 2], 3);
+        assert_eq!(host.species[base + 3], 4);
     }
 
     #[test]
@@ -1357,8 +1205,11 @@ mod tests {
         let world_open = WorldGrid::default();
 
         for y in 10..=90 {
-            let _ = world_blocked
-                .set_solid_with_material(50, y, crate::world::grid::CellMaterial::Brick);
+            let _ = world_blocked.set_solid_with_material(
+                50,
+                y,
+                crate::world::grid::CellMaterial::Brick,
+            );
         }
 
         let mut field_blocked = GasField::from_registry(&registry);
@@ -1409,15 +1260,9 @@ mod tests {
             &kernel_weights,
         )
         .expect("blocked env mass");
-        let open_env = estimate_local_env_mix_mass(
-            &field_open,
-            &world_open,
-            49,
-            50,
-            kernel,
-            &kernel_weights,
-        )
-        .expect("open env mass");
+        let open_env =
+            estimate_local_env_mix_mass(&field_open, &world_open, 49, 50, kernel, &kernel_weights)
+                .expect("open env mass");
 
         assert!(
             blocked_env < 10.0,
@@ -1439,14 +1284,26 @@ mod tests {
 
         let center_x = 50;
         let center_y = 50;
-        let _ = world_blocked
-            .set_solid_with_material(center_x, center_y - 1, crate::world::grid::CellMaterial::Brick);
-        let _ = world_blocked
-            .set_solid_with_material(center_x, center_y + 1, crate::world::grid::CellMaterial::Brick);
-        let _ = world_blocked
-            .set_solid_with_material(center_x - 1, center_y, crate::world::grid::CellMaterial::Brick);
-        let _ = world_blocked
-            .set_solid_with_material(center_x + 1, center_y, crate::world::grid::CellMaterial::Brick);
+        let _ = world_blocked.set_solid_with_material(
+            center_x,
+            center_y - 1,
+            crate::world::grid::CellMaterial::Brick,
+        );
+        let _ = world_blocked.set_solid_with_material(
+            center_x,
+            center_y + 1,
+            crate::world::grid::CellMaterial::Brick,
+        );
+        let _ = world_blocked.set_solid_with_material(
+            center_x - 1,
+            center_y,
+            crate::world::grid::CellMaterial::Brick,
+        );
+        let _ = world_blocked.set_solid_with_material(
+            center_x + 1,
+            center_y,
+            crate::world::grid::CellMaterial::Brick,
+        );
 
         let mut field_blocked = GasField::from_registry(&registry);
         let mut field_open = GasField::from_registry(&registry);
@@ -1570,9 +1427,11 @@ mod tests {
     #[ignore = "long-running scenario check for tuning against the 'equals' save"]
     fn equals_inverted_cup_hydrogen_retention_after_50k_steps() {
         let (inside, outside_user_50k) =
-            hydrogen_inside_outside_equals_row43_after_steps(50_000, 43).expect("scenario must run");
+            hydrogen_inside_outside_equals_row43_after_steps(50_000, 43)
+                .expect("scenario must run");
         let (inside_70k, outside_user_70k) =
-            hydrogen_inside_outside_equals_row43_after_steps(70_000, 43).expect("scenario must run");
+            hydrogen_inside_outside_equals_row43_after_steps(70_000, 43)
+                .expect("scenario must run");
         let mirrored_row = (WORLD_HEIGHT - 1).saturating_sub(43);
         let (inside_70k_m, outside_70k_m) =
             hydrogen_inside_outside_equals_row43_after_steps(70_000, mirrored_row)

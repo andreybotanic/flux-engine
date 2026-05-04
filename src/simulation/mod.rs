@@ -1,7 +1,8 @@
 pub mod backend;
+pub mod discrete_step;
 pub mod gas;
 pub mod gpu_solver;
-pub mod perf_model;
+pub mod parity;
 
 use std::time::{Duration, Instant};
 
@@ -177,6 +178,8 @@ pub struct GpuRuntimeState {
     steps_since_readback: u32,
 }
 
+const GPU_RUNTIME_READBACK_INTERVAL: u32 = 1;
+
 impl Default for SimulationControl {
     fn default() -> Self {
         Self {
@@ -227,9 +230,6 @@ fn mark_gpu_state_dirty(
     if backend.backend != SimulationBackend::Gpu {
         return;
     }
-    // Avoid re-uploading GPU state during active simulation ticks; otherwise GPU progress
-    // may be overwritten by stale CPU buffers every frame. External editor/world changes
-    // are applied primarily while paused.
     if world.is_changed() {
         gpu_state.needs_full_upload = true;
     }
@@ -251,7 +251,7 @@ fn mark_gpu_state_dirty_from_gas_edits(
 
 fn run_simulation_tick(
     mut control: ResMut<SimulationControl>,
-    mut backend: ResMut<SimulationBackendConfig>,
+    backend: Res<SimulationBackendConfig>,
     world_load_state: Res<WorldLoadState>,
     rate: Res<SimulationRateConfig>,
     config: Res<GasSimulationConfig>,
@@ -295,16 +295,7 @@ fn run_simulation_tick(
                         perf.last_step_total_ms = t.step_total_ms;
                     }
                     Err(err) => {
-                        bevy::log::warn!(
-                            "GPU simulation backend unavailable, switching to CPU fallback: {}",
-                            err
-                        );
-                        backend.backend = SimulationBackend::Cpu;
-                        do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);
-                        perf.last_gpu_compute_ms = 0.0;
-                        perf.last_upload_to_gpu_ms = 0.0;
-                        perf.last_readback_from_gpu_ms = 0.0;
-                        perf.last_step_total_ms = 0.0;
+                        abort_on_gpu_runtime_error(&err);
                     }
                 }
             }
@@ -329,16 +320,57 @@ fn run_simulation_tick(
 }
 
 fn do_one_substep_gpu(
-    _gpu_state: &mut GpuRuntimeState,
-    _gas: &mut GasField,
-    _world: &WorldGrid,
-    _config: &GasSimulationConfig,
-    _step: &mut SimulationStep,
+    gpu_state: &mut GpuRuntimeState,
+    gas: &mut GasField,
+    world: &WorldGrid,
+    config: &GasSimulationConfig,
+    step: &mut SimulationStep,
 ) -> Result<GpuStepTimings, String> {
-    return Err(
-        "GPU backend is temporarily disabled for dynamic gas-count simulation; switching to CPU."
-            .to_string(),
+    let mut upload_ms = 0.0f32;
+    if gpu_state.solver.is_none() {
+        let (solver, first_upload_ms) = GpuGasSolver::from_cpu_state(world, gas)?;
+        upload_ms += first_upload_ms;
+        gpu_state.solver = Some(solver);
+        gpu_state.needs_full_upload = false;
+        gpu_state.steps_since_readback = 0;
+    }
+
+    let solver = gpu_state
+        .solver
+        .as_mut()
+        .ok_or_else(|| "GPU solver missing after initialization".to_string())?;
+    if gpu_state.needs_full_upload {
+        upload_ms += solver.upload_state(&gas.to_gpu_host_state(world))?;
+        gpu_state.needs_full_upload = false;
+        gpu_state.steps_since_readback = 0;
+    }
+
+    let (width, height) = solver.current_dimensions();
+    let params = GpuGasSolver::params_from_config(config, width, height, step.0, gas);
+    let mut timings = solver.step(params)?;
+    timings.upload_to_gpu_ms += upload_ms;
+
+    gpu_state.steps_since_readback = gpu_state.steps_since_readback.saturating_add(1);
+    if gpu_state.steps_since_readback >= GPU_RUNTIME_READBACK_INTERVAL {
+        let readback_started = Instant::now();
+        let host_state = solver.readback_state()?;
+        gas.apply_gpu_host_state(&host_state);
+        let readback_ms = readback_started.elapsed().as_secs_f32() * 1000.0;
+        timings.readback_from_gpu_ms += readback_ms;
+        gpu_state.steps_since_readback = 0;
+    }
+
+    step.0 = step.0.saturating_add(1);
+    timings.step_total_ms += timings.upload_to_gpu_ms + timings.readback_from_gpu_ms;
+    Ok(timings)
+}
+
+fn abort_on_gpu_runtime_error(err: &str) -> ! {
+    bevy::log::error!(
+        "GPU simulation backend failed during runtime. Backend is fixed after startup, aborting process. Details: {}",
+        err
     );
+    panic!("GPU simulation backend failed: {err}");
 }
 
 pub fn do_one_substep(
@@ -355,4 +387,24 @@ pub fn do_one_substep(
         step.0,
     );
     step.0 += 1;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::abort_on_gpu_runtime_error;
+    use crate::simulation::backend::{SimulationBackend, SimulationBackendConfig};
+
+    #[test]
+    fn default_backend_is_gpu() {
+        assert_eq!(
+            SimulationBackendConfig::default().backend,
+            SimulationBackend::Gpu
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "GPU simulation backend failed")]
+    fn gpu_runtime_error_policy_panics_and_aborts() {
+        abort_on_gpu_runtime_error("synthetic failure");
+    }
 }

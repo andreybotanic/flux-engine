@@ -1,10 +1,7 @@
 use bevy::prelude::*;
 
 use crate::save::WorldLoadState;
-use crate::simulation::{
-    backend::{SimulationBackend, SimulationBackendConfig},
-    SimulationControl, SimulationSpeed,
-};
+use crate::simulation::{SimulationControl, SimulationSpeed};
 
 const PANEL_BG: Color = Color::srgba(0.91, 0.92, 0.93, 0.96);
 const BUTTON_IDLE: Color = Color::srgba(0.78, 0.80, 0.83, 0.95);
@@ -141,7 +138,6 @@ pub fn handle_sim_control_keyboard(
     keys: Res<ButtonInput<KeyCode>>,
     mut control: ResMut<SimulationControl>,
     world_load_state: Res<WorldLoadState>,
-    mut backend: ResMut<SimulationBackendConfig>,
 ) {
     if keys.just_pressed(KeyCode::Space) {
         apply_pause_toggle(&mut control, &world_load_state);
@@ -151,12 +147,6 @@ pub fn handle_sim_control_keyboard(
     }
     if keys.just_pressed(KeyCode::Comma) {
         control.speed = control.speed.slower();
-    }
-    if keys.just_pressed(KeyCode::F8) {
-        backend.backend = match backend.backend {
-            SimulationBackend::Cpu => SimulationBackend::Gpu,
-            SimulationBackend::Gpu => SimulationBackend::Cpu,
-        };
     }
 }
 

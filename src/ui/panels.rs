@@ -506,7 +506,10 @@ impl Plugin for PanelPlugin {
 }
 
 fn handle_panel_header_buttons(
-    mut interactions: Query<(&Interaction, &PanelHeaderButton), (Changed<Interaction>, With<Button>)>,
+    mut interactions: Query<
+        (&Interaction, &PanelHeaderButton),
+        (Changed<Interaction>, With<Button>),
+    >,
     mut panels: ResMut<PanelManager>,
     mut action_events: EventWriter<PanelHeaderActionEvent>,
 ) {
@@ -641,7 +644,6 @@ fn apply_panel_layout(
                 corner_bottom_right.offset += panel_height + panel.spec.stack_gap;
             }
         }
-
     }
 
     for panel in panels.panels.values() {
@@ -728,9 +730,9 @@ struct PanelScrollMetrics {
 fn panel_scroll_metrics(computed: &ComputedNode) -> PanelScrollMetrics {
     let viewport_height_px = computed.size().y.max(0.0);
     let content_height_px = computed.content_size().y.max(viewport_height_px);
-    let max_scroll_logical =
-        ((content_height_px - viewport_height_px).max(0.0) * computed.inverse_scale_factor())
-            .max(0.0);
+    let max_scroll_logical = ((content_height_px - viewport_height_px).max(0.0)
+        * computed.inverse_scale_factor())
+    .max(0.0);
 
     PanelScrollMetrics {
         viewport_height_px,
@@ -855,8 +857,10 @@ fn sync_panel_scrollbar_visuals(
             }
 
             let ratio = (metrics.viewport_height_px / metrics.content_height_px).clamp(0.0, 1.0);
-            let thumb_h = (ratio * track_h)
-                .clamp(SCROLLBAR_THUMB_MIN_HEIGHT, track_h.max(SCROLLBAR_THUMB_MIN_HEIGHT));
+            let thumb_h = (ratio * track_h).clamp(
+                SCROLLBAR_THUMB_MIN_HEIGHT,
+                track_h.max(SCROLLBAR_THUMB_MIN_HEIGHT),
+            );
             let travel = (track_h - thumb_h).max(0.0);
             let scroll_ratio = (offset_y / max_scroll).clamp(0.0, 1.0);
             let thumb_top = scroll_ratio * travel;
@@ -973,7 +977,11 @@ mod tests {
 
     use super::{PanelScrollPolicy, PANEL_HEADER_HEIGHT};
 
-    fn should_enable_scroll(policy: PanelScrollPolicy, panel_height: f32, available_h: f32) -> bool {
+    fn should_enable_scroll(
+        policy: PanelScrollPolicy,
+        panel_height: f32,
+        available_h: f32,
+    ) -> bool {
         let threshold = match policy {
             PanelScrollPolicy::Never => return false,
             PanelScrollPolicy::AutoHalfScreen => available_h * 0.5,
