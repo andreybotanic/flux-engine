@@ -485,11 +485,68 @@ fn compute_shares(@builtin(global_invocation_id) gid: vec3<u32>) {
         let left_open = is_open_cell_i32(xy.x - 1, xy.y);
         let right_open = is_open_cell_i32(xy.x + 1, xy.y);
 
-        var w0 = select(0.0, mobility, up_open);
-        var w1 = select(0.0, mobility, down_open);
-        let w2 = select(0.0, mobility, left_open);
-        let w3 = select(0.0, mobility, right_open);
-        let w4 = 1.0;
+        var w0 = 0.0;
+        var w1 = 0.0;
+        var w2 = 0.0;
+        var w3 = 0.0;
+        var w4 = 1.0;
+        let half_mobility = mobility * 0.5;
+
+        // Direction up (0): blocked flow is redistributed along wall (left/right).
+        if (up_open) {
+            w0 = w0 + mobility;
+        } else if (left_open && right_open) {
+            w2 = w2 + half_mobility;
+            w3 = w3 + half_mobility;
+        } else if (left_open) {
+            w2 = w2 + mobility;
+        } else if (right_open) {
+            w3 = w3 + mobility;
+        } else {
+            w4 = w4 + mobility;
+        }
+
+        // Direction down (1): blocked flow is redistributed along wall (left/right).
+        if (down_open) {
+            w1 = w1 + mobility;
+        } else if (left_open && right_open) {
+            w2 = w2 + half_mobility;
+            w3 = w3 + half_mobility;
+        } else if (left_open) {
+            w2 = w2 + mobility;
+        } else if (right_open) {
+            w3 = w3 + mobility;
+        } else {
+            w4 = w4 + mobility;
+        }
+
+        // Direction left (2): blocked flow is redistributed along wall (up/down).
+        if (left_open) {
+            w2 = w2 + mobility;
+        } else if (up_open && down_open) {
+            w0 = w0 + half_mobility;
+            w1 = w1 + half_mobility;
+        } else if (up_open) {
+            w0 = w0 + mobility;
+        } else if (down_open) {
+            w1 = w1 + mobility;
+        } else {
+            w4 = w4 + mobility;
+        }
+
+        // Direction right (3): blocked flow is redistributed along wall (up/down).
+        if (right_open) {
+            w3 = w3 + mobility;
+        } else if (up_open && down_open) {
+            w0 = w0 + half_mobility;
+            w1 = w1 + half_mobility;
+        } else if (up_open) {
+            w0 = w0 + mobility;
+        } else if (down_open) {
+            w1 = w1 + mobility;
+        } else {
+            w4 = w4 + mobility;
+        }
 
         if (m_env > BUOYANCY_MIN_ENV_MASS && mobility > 0.0) {
             let alpha = max(params.buoyancy_alpha, 0.0);

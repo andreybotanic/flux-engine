@@ -277,6 +277,47 @@ pub fn run_cpu_gpu_parity_scenario(
     ))
 }
 
+pub fn run_cpu_cpu_parity_scenario(
+    scenario: ScenarioSpec,
+    steps: u32,
+    radius: u32,
+    step_offset_a: u64,
+    step_offset_b: u64,
+) -> Result<ParityMetrics, String> {
+    let mut world = WorldGrid::default();
+    let registry = test_registry_three_gases();
+    let config = tuned_config();
+
+    let mut base_field = GasField::from_registry(&registry);
+    populate_scenario(&mut world, &mut base_field, scenario.with_internal_walls);
+
+    let mut cpu_a = base_field.clone();
+    let mut cpu_b = base_field;
+    let mut step_a = SimulationStep(step_offset_a);
+    let mut step_b = SimulationStep(step_offset_b);
+    let mut block_sync_a = super::BlockSyncState;
+    let mut block_sync_b = super::BlockSyncState;
+
+    for _ in 0..steps {
+        super::do_one_substep(
+            &mut block_sync_a,
+            &mut cpu_a,
+            &world,
+            &config,
+            &mut step_a,
+        );
+        super::do_one_substep(
+            &mut block_sync_b,
+            &mut cpu_b,
+            &world,
+            &config,
+            &mut step_b,
+        );
+    }
+
+    Ok(compare_cpu_gpu_fields(&cpu_a, &cpu_b, &world, radius))
+}
+
 pub fn parity_passes(metrics: &ParityMetrics, thresholds: ParityThresholds) -> bool {
     if metrics.mean_abs_error > thresholds.mean_abs_error_max {
         return false;
@@ -367,9 +408,14 @@ pub fn run_cpu_only_calibration(
 #[cfg(test)]
 mod tests {
     use super::{
-        parity_passes, run_cpu_gpu_parity_scenario, run_cpu_only_calibration, ParityThresholds,
-        PARITY_SCENARIOS, PARITY_STEPS, PARITY_THRESHOLDS,
+        parity_passes, run_cpu_cpu_parity_scenario, run_cpu_gpu_parity_scenario,
+        run_cpu_only_calibration, ParityThresholds, PARITY_SCENARIOS, PARITY_STEPS,
+        PARITY_THRESHOLDS,
     };
+    use crate::simulation::gas::GasField;
+    use crate::simulation::gpu_solver::GpuGasSolver;
+    use crate::world::grid::{is_boundary, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH};
+    use bevy::prelude::UVec2;
 
     fn gpu_available() -> bool {
         crate::simulation::gpu_solver::GpuGasSolver::new(
@@ -412,6 +458,134 @@ mod tests {
             run_cpu_gpu_parity_scenario(PARITY_SCENARIOS[0], 200, PARITY_THRESHOLDS.radius)
                 .expect("smoke parity scenario");
         assert!(parity_passes(&metrics, thresholds), "metrics={metrics:?}");
+    }
+
+    #[test]
+    fn wall_adjacency_gpu_does_not_create_systematic_concentration_drop() {
+        if !gpu_available() {
+            eprintln!(
+                "Skipping wall_adjacency_gpu_does_not_create_systematic_concentration_drop: GPU is unavailable"
+            );
+            return;
+        }
+
+        let registry = super::test_registry_three_gases();
+        let mut world = WorldGrid::default();
+        for x in 20..=80 {
+            let _ = world.set_solid_with_material(x, 20, CellMaterial::Brick);
+            let _ = world.set_solid_with_material(x, 80, CellMaterial::Brick);
+        }
+        for y in 20..=80 {
+            let _ = world.set_solid_with_material(20, y, CellMaterial::Brick);
+            let _ = world.set_solid_with_material(80, y, CellMaterial::Brick);
+        }
+
+        let mut gpu_field = GasField::from_registry(&registry);
+        gpu_field.clear_rect(
+            UVec2::new(1, 1),
+            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+        );
+        for y in 1..WORLD_HEIGHT - 1 {
+            for x in 1..WORLD_WIDTH - 1 {
+                if world.is_solid(x, y) || is_boundary(x, y) {
+                    continue;
+                }
+                gpu_field.set_amount(x, y, 0, 200.0);
+            }
+        }
+        gpu_field.recompute_total_density_buffer(&world);
+
+        let config = super::tuned_config();
+        let mut solver = GpuGasSolver::from_cpu_state(&world, &gpu_field)
+            .expect("create GPU solver from CPU state")
+            .0;
+        let mut step = crate::simulation::SimulationStep(0);
+        for _ in 0..400 {
+            let params =
+                GpuGasSolver::params_from_config(&config, WORLD_WIDTH, WORLD_HEIGHT, step.0, &gpu_field);
+            solver.step(params).expect("gpu step");
+            step.0 = step.0.saturating_add(1);
+        }
+        let host = solver.readback_state().expect("readback gpu state");
+        gpu_field.apply_gpu_host_state(&host);
+
+        let mut near_sum = 0.0f32;
+        let mut near_n = 0u32;
+        let mut far_sum = 0.0f32;
+        let mut far_n = 0u32;
+
+        for y in 1..WORLD_HEIGHT - 1 {
+            for x in 1..WORLD_WIDTH - 1 {
+                if world.is_solid(x, y) || is_boundary(x, y) {
+                    continue;
+                }
+                let near_inner_wall =
+                    (x >= 21 && x <= 79 && (y == 21 || y == 79))
+                        || (y >= 21 && y <= 79 && (x == 21 || x == 79));
+                let far_from_inner_wall = x >= 30 && x <= 70 && y >= 30 && y <= 70;
+                if near_inner_wall {
+                    near_sum += gpu_field.amount(x, y, 0);
+                    near_n += 1;
+                } else if far_from_inner_wall {
+                    far_sum += gpu_field.amount(x, y, 0);
+                    far_n += 1;
+                }
+            }
+        }
+
+        let near_avg = near_sum / near_n as f32;
+        let far_avg = far_sum / far_n as f32;
+        assert!(
+            near_avg >= far_avg * 0.95,
+            "GPU wall-adjacent concentration is too low: near_avg={}, far_avg={}",
+            near_avg,
+            far_avg
+        );
+    }
+
+    #[test]
+    #[ignore = "Manual metrics report for CPU-vs-CPU and CPU-vs-GPU scenarios."]
+    fn parity_metrics_report_cpu_cpu_and_cpu_gpu() {
+        if !gpu_available() {
+            eprintln!("Skipping parity_metrics_report_cpu_cpu_and_cpu_gpu: GPU is unavailable");
+            return;
+        }
+
+        let steps = PARITY_STEPS;
+        let radius = PARITY_THRESHOLDS.radius;
+        let cpu_offsets = (0u64, 41u64);
+
+        for scenario in PARITY_SCENARIOS {
+            let cpu_cpu = run_cpu_cpu_parity_scenario(
+                scenario,
+                steps,
+                radius,
+                cpu_offsets.0,
+                cpu_offsets.1,
+            )
+            .expect("cpu-vs-cpu scenario");
+            println!(
+                "CPUvsCPU [{}]: cells={}, mae={:.3}, p95={:.3}, max={:.3}, mass={:?}",
+                scenario.name,
+                cpu_cpu.compared_cells,
+                cpu_cpu.mean_abs_error,
+                cpu_cpu.p95_abs_error,
+                cpu_cpu.max_abs_error,
+                cpu_cpu.mass_rel_errors
+            );
+
+            let cpu_gpu =
+                run_cpu_gpu_parity_scenario(scenario, steps, radius).expect("cpu-vs-gpu scenario");
+            println!(
+                "CPUvsGPU [{}]: cells={}, mae={:.3}, p95={:.3}, max={:.3}, mass={:?}",
+                scenario.name,
+                cpu_gpu.compared_cells,
+                cpu_gpu.mean_abs_error,
+                cpu_gpu.p95_abs_error,
+                cpu_gpu.max_abs_error,
+                cpu_gpu.mass_rel_errors
+            );
+        }
     }
 
     #[test]
