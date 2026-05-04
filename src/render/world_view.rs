@@ -15,6 +15,7 @@ use crate::{
         gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
         SimulationStep,
     },
+    ui::panels::PanelManager,
     world::grid::{
         cell_center, is_boundary, world_dimensions, world_to_cell, CellKind, CellMaterial,
         WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH,
@@ -494,6 +495,7 @@ pub fn draw_cursor_grid_overlay(
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     world_load_state: Res<WorldLoadState>,
+    panels: Option<Res<PanelManager>>,
     mut gizmos: Gizmos,
 ) {
     if !world_load_state.has_world {
@@ -503,6 +505,13 @@ pub fn draw_cursor_grid_overlay(
     let Some(cursor_pos) = window.cursor_position() else {
         return;
     };
+    if panels
+        .as_ref()
+        .map(|panel_manager| panel_manager.is_cursor_over_any_panel(cursor_pos))
+        .unwrap_or(false)
+    {
+        return;
+    }
 
     let (camera, camera_transform) = *camera_query;
     let Ok(cursor_world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) else {

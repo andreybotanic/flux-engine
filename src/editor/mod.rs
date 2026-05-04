@@ -34,6 +34,7 @@ const PANEL_BG: Color = Color::srgba(0.91, 0.92, 0.93, 0.96);
 const BUTTON_IDLE: Color = Color::srgba(0.78, 0.80, 0.83, 0.95);
 const BUTTON_ACTIVE: Color = Color::srgba(0.58, 0.68, 0.58, 0.96);
 const INPUT_FOCUSED: Color = Color::srgba(0.66, 0.76, 0.86, 0.96);
+const DEBUG_PANEL_TEXT_COLOR: Color = Color::srgba(0.10, 0.10, 0.12, 1.0);
 const TOOL_BUTTON_SIZE: f32 = 40.0;
 const TOOL_ICON_SIZE: f32 = 20.0;
 const TOOLTIP_BG: Color = Color::srgba(0.12, 0.14, 0.16, 0.94);
@@ -949,7 +950,7 @@ fn spawn_debug_panel_content(
             button.spawn((
                 Text::new("Buoyancy: On"),
                 TextFont::from_font_size(13.0),
-                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                TextColor(DEBUG_PANEL_TEXT_COLOR),
                 BuoyancyToggleLabel,
             ));
         });
@@ -971,7 +972,7 @@ fn spawn_debug_panel_content(
             button.spawn((
                 Text::new("Show impulses"),
                 TextFont::from_font_size(13.0),
-                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                TextColor(DEBUG_PANEL_TEXT_COLOR),
             ));
         });
 
@@ -980,7 +981,7 @@ fn spawn_debug_panel_content(
             "Iterations: 0 | Step ms: 0.000 | avg: 0.000 | Target Hz: 30 x 1 = 30 | Actual Hz: 0",
         ),
         TextFont::from_font_size(13.0),
-        TextColor(Color::WHITE),
+        TextColor(DEBUG_PANEL_TEXT_COLOR),
         SimulationPerfLabel,
     ));
 
@@ -989,7 +990,7 @@ fn spawn_debug_panel_content(
             "Anisotropy: 0.0000 | Radial waves: 0.0000 | Mass err H2/O2/CO2: 0.0000 / 0.0000 / 0.0000",
         ),
         TextFont::from_font_size(13.0),
-        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+        TextColor(DEBUG_PANEL_TEXT_COLOR),
         WaveMetricsLabel,
     ));
 
@@ -1005,7 +1006,7 @@ fn spawn_debug_panel_content(
             row.spawn((
                 Text::new("Simulation Hz:"),
                 TextFont::from_font_size(13.0),
-                TextColor(Color::WHITE),
+                TextColor(DEBUG_PANEL_TEXT_COLOR),
             ));
 
             row.spawn((
@@ -1031,7 +1032,7 @@ fn spawn_debug_panel_content(
                 button.spawn((
                     Text::new(sim_hz_initial_text.clone()),
                     TextFont::from_font_size(13.0),
-                    TextColor(Color::WHITE),
+                    TextColor(DEBUG_PANEL_TEXT_COLOR),
                     TextInputDisplay,
                 ));
             });
@@ -1044,7 +1045,7 @@ fn spawn_debug_panel_content(
         buoyancy_strength_initial_text,
         TextInputField::new_f32(buoyancy_strength_initial, 0.0, 5.0, 6, 3),
         BuoyancyStrengthInputField,
-        Color::WHITE,
+        DEBUG_PANEL_TEXT_COLOR,
     );
     spawn_debug_u32_row(
         parent,
@@ -1053,7 +1054,7 @@ fn spawn_debug_panel_content(
         buoyancy_radius_initial_text,
         TextInputField::new_u32(buoyancy_radius_initial, 1, 3, 1),
         BuoyancyWindowRadiusInputField,
-        Color::WHITE,
+        DEBUG_PANEL_TEXT_COLOR,
     );
     spawn_debug_f32_row(
         parent,
@@ -1062,7 +1063,7 @@ fn spawn_debug_panel_content(
         buoyancy_sigma_initial_text,
         TextInputField::new_f32(buoyancy_sigma_initial, 0.5, 3.0, 6, 3),
         BuoyancyWindowSigmaInputField,
-        Color::WHITE,
+        DEBUG_PANEL_TEXT_COLOR,
     );
     spawn_debug_f32_row(
         parent,
@@ -1071,7 +1072,7 @@ fn spawn_debug_panel_content(
         buoyancy_gain_initial_text,
         TextInputField::new_f32(buoyancy_gain_initial, 0.0, 10.0, 6, 3),
         BuoyancyGainInputField,
-        Color::WHITE,
+        DEBUG_PANEL_TEXT_COLOR,
     );
     spawn_debug_f32_row(
         parent,
@@ -1080,7 +1081,7 @@ fn spawn_debug_panel_content(
         buoyancy_alpha_initial_text,
         TextInputField::new_f32(buoyancy_alpha_initial, 0.0, 4.0, 6, 3),
         BuoyancyAlphaInputField,
-        Color::WHITE,
+        DEBUG_PANEL_TEXT_COLOR,
     );
     spawn_debug_f32_row(
         parent,
@@ -1089,7 +1090,7 @@ fn spawn_debug_panel_content(
         buoyancy_cap_initial_text,
         TextInputField::new_f32(buoyancy_cap_initial, 0.0, 2.0, 6, 3),
         BuoyancyForceCapInputField,
-        Color::WHITE,
+        DEBUG_PANEL_TEXT_COLOR,
     );
     spawn_debug_f32_row(
         parent,
@@ -1098,7 +1099,7 @@ fn spawn_debug_panel_content(
         gamma_initial_text,
         TextInputField::new_f32(gamma_initial, 0.0, 10.0, 6, 3),
         GasGammaInputField,
-        Color::srgba(0.10, 0.10, 0.12, 1.0),
+        DEBUG_PANEL_TEXT_COLOR,
     );
     spawn_debug_u32_row(
         parent,
@@ -1107,7 +1108,7 @@ fn spawn_debug_panel_content(
         max_color_initial_text,
         TextInputField::new_u32(max_color_initial, 1, 10_000, 5),
         GasMaxColorParticlesInputField,
-        Color::srgba(0.10, 0.10, 0.12, 1.0),
+        DEBUG_PANEL_TEXT_COLOR,
     );
 }
 
