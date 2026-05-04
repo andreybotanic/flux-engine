@@ -47,6 +47,9 @@
 - В кодовой базе оставлен ровно один исполняемый вариант на backend:
   - CPU: `simulation::discrete_step::step_discrete_in_place` (runtime и perf используют этот же путь);
   - GPU: `GpuGasSolver` + WGSL `assets/shaders/gas_solver.wgsl` (единый runtime compute-путь, без альтернативных transfer-режимов).
+- Управление скоростью симуляции (`x1/x2/x5`) выполняется через частоту `FixedUpdate`:
+  - в каждом тикe симуляции выполняется ровно один шаг;
+  - ускорение достигается повышением частоты тиков (`target_hz * multiplier`), а не выполнением нескольких шагов в одном тикe.
 
 ### CPU/GPU parity и калибровка
 

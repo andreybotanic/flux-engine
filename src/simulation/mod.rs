@@ -210,15 +210,24 @@ impl Plugin for GasSimulationPlugin {
     }
 }
 
+fn effective_target_hz(base_hz: u32, speed: SimulationSpeed) -> f64 {
+    let base = base_hz.clamp(1, 1000) as f64;
+    base * speed.multiplier() as f64
+}
+
 fn initialize_gas_field_from_registry(mut commands: Commands, registry: Res<GasRegistry>) {
     commands.insert_resource(GasField::from_registry(&registry));
 }
 
-fn apply_fixed_rate_config(config: Res<SimulationRateConfig>, mut fixed_time: ResMut<Time<Fixed>>) {
-    if !config.is_changed() {
+fn apply_fixed_rate_config(
+    config: Res<SimulationRateConfig>,
+    control: Res<SimulationControl>,
+    mut fixed_time: ResMut<Time<Fixed>>,
+) {
+    if !config.is_changed() && !control.is_changed() {
         return;
     }
-    let hz = config.target_hz.clamp(1, 1000) as f64;
+    let hz = effective_target_hz(config.target_hz, control.speed);
     fixed_time.set_timestep_hz(hz);
 }
 
@@ -262,8 +271,7 @@ fn run_simulation_tick(
     mut perf: ResMut<SimulationPerfStats>,
     mut gpu_state: ResMut<GpuRuntimeState>,
 ) {
-    let speed_mult = control.speed.multiplier() as f32;
-    perf.target_hz_effective = rate.target_hz.clamp(1, 1000) as f32 * speed_mult;
+    perf.target_hz_effective = effective_target_hz(rate.target_hz, control.speed) as f32;
 
     if !world_load_state.has_world {
         control.paused = true;
@@ -274,41 +282,38 @@ fn run_simulation_tick(
         return;
     }
 
-    for _ in 0..control.speed.multiplier() {
-        let started_at = Instant::now();
-        match backend.backend {
-            SimulationBackend::Cpu => {
-                do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);
-                perf.last_gpu_compute_ms = 0.0;
-                perf.last_upload_to_gpu_ms = 0.0;
-                perf.last_readback_from_gpu_ms = 0.0;
-                perf.last_step_total_ms = 0.0;
-            }
-            SimulationBackend::Gpu => {
-                let timings =
-                    do_one_substep_gpu(&mut gpu_state, &mut gas, &world, &config, &mut step);
-                match timings {
-                    Ok(t) => {
-                        perf.last_gpu_compute_ms = t.compute_gpu_ms;
-                        perf.last_upload_to_gpu_ms = t.upload_to_gpu_ms;
-                        perf.last_readback_from_gpu_ms = t.readback_from_gpu_ms;
-                        perf.last_step_total_ms = t.step_total_ms;
-                    }
-                    Err(err) => {
-                        abort_on_gpu_runtime_error(&err);
-                    }
+    let started_at = Instant::now();
+    match backend.backend {
+        SimulationBackend::Cpu => {
+            do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);
+            perf.last_gpu_compute_ms = 0.0;
+            perf.last_upload_to_gpu_ms = 0.0;
+            perf.last_readback_from_gpu_ms = 0.0;
+            perf.last_step_total_ms = 0.0;
+        }
+        SimulationBackend::Gpu => {
+            let timings = do_one_substep_gpu(&mut gpu_state, &mut gas, &world, &config, &mut step);
+            match timings {
+                Ok(t) => {
+                    perf.last_gpu_compute_ms = t.compute_gpu_ms;
+                    perf.last_upload_to_gpu_ms = t.upload_to_gpu_ms;
+                    perf.last_readback_from_gpu_ms = t.readback_from_gpu_ms;
+                    perf.last_step_total_ms = t.step_total_ms;
+                }
+                Err(err) => {
+                    abort_on_gpu_runtime_error(&err);
                 }
             }
         }
-        let elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
-        perf.last_step_ms = elapsed_ms;
-        perf.avg_step_ms = if perf.avg_step_ms <= f32::EPSILON {
-            elapsed_ms
-        } else {
-            perf.avg_step_ms * 0.9 + elapsed_ms * 0.1
-        };
-        perf.window_steps = perf.window_steps.saturating_add(1);
     }
+    let elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
+    perf.last_step_ms = elapsed_ms;
+    perf.avg_step_ms = if perf.avg_step_ms <= f32::EPSILON {
+        elapsed_ms
+    } else {
+        perf.avg_step_ms * 0.9 + elapsed_ms * 0.1
+    };
+    perf.window_steps = perf.window_steps.saturating_add(1);
 
     let window_elapsed = perf.window_started_at.elapsed();
     if window_elapsed >= Duration::from_millis(500) {
@@ -391,6 +396,7 @@ pub fn do_one_substep(
 
 #[cfg(test)]
 mod tests {
+    use super::{effective_target_hz, SimulationRateConfig, SimulationSpeed};
     use super::abort_on_gpu_runtime_error;
     use crate::simulation::backend::{SimulationBackend, SimulationBackendConfig};
 
@@ -406,5 +412,22 @@ mod tests {
     #[should_panic(expected = "GPU simulation backend failed")]
     fn gpu_runtime_error_policy_panics_and_aborts() {
         abort_on_gpu_runtime_error("synthetic failure");
+    }
+
+    #[test]
+    fn effective_target_hz_scales_with_speed() {
+        let base = 30;
+        assert!((effective_target_hz(base, SimulationSpeed::X1) - 30.0).abs() <= f64::EPSILON);
+        assert!((effective_target_hz(base, SimulationSpeed::X2) - 60.0).abs() <= f64::EPSILON);
+        assert!((effective_target_hz(base, SimulationSpeed::X5) - 150.0).abs() <= f64::EPSILON);
+    }
+
+    #[test]
+    fn effective_target_hz_clamps_base_rate_before_scaling() {
+        let zero_base = SimulationRateConfig { target_hz: 0 };
+        assert!((effective_target_hz(zero_base.target_hz, SimulationSpeed::X2) - 2.0).abs() <= f64::EPSILON);
+
+        let huge_base = SimulationRateConfig { target_hz: 9_999 };
+        assert!((effective_target_hz(huge_base.target_hz, SimulationSpeed::X5) - 5000.0).abs() <= f64::EPSILON);
     }
 }
