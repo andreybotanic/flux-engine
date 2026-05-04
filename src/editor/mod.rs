@@ -1,4 +1,4 @@
-use bevy::{app::AppExit, prelude::*, window::PrimaryWindow};
+use bevy::{app::AppExit, ecs::system::SystemParam, prelude::*, window::PrimaryWindow};
 
 use crate::{
     config::GasRegistry,
@@ -20,8 +20,10 @@ use crate::{
             PanelControls, PanelCorner, PanelId, PanelManager, PanelOpenOrder, PanelScrollPolicy,
             PanelSpec,
         },
+        select_field::{spawn_select_field, SelectFieldConfig, SelectFieldId, SelectFieldState},
     },
     world::{
+        gas_structures::{GasStructureCell, GasStructureGrid},
         grid::{
             cell_center, world_to_cell, CellMaterial, WorldGrid, CELL_SIZE, WORLD_HEIGHT,
             WORLD_WIDTH,
@@ -56,7 +58,7 @@ const CELL_TYPE_PANEL_WIDTH: f32 = 120.0;
 
 const DEBUG_TOOLBAR_LEFT: f32 = 306.0;
 const DEBUG_TOOLBAR_TOP: f32 = 12.0;
-const DEBUG_TOOLBAR_WIDTH: f32 = 104.0;
+const DEBUG_TOOLBAR_WIDTH: f32 = 200.0;
 const DEBUG_TOOLBAR_HEIGHT: f32 = 56.0;
 
 const DEBUG_PANEL_RIGHT: f32 = 12.0;
@@ -66,8 +68,13 @@ const DEBUG_AND_GAS_PANEL_GAP: f32 = 12.0;
 
 const GAS_PANEL_RIGHT: f32 = 12.0;
 const GAS_PANEL_WIDTH: f32 = 286.0;
+const STRUCTURE_PANEL_RIGHT: f32 = 12.0;
+const STRUCTURE_PANEL_WIDTH: f32 = 286.0;
 const DEBUG_PANEL_ID: PanelId = PanelId::new("debug_panel");
 const GAS_TOOL_PANEL_ID: PanelId = PanelId::new("gas_tool_panel");
+const STRUCTURE_TOOL_PANEL_ID: PanelId = PanelId::new("structure_tool_panel");
+const GAS_SELECT_ADD_ID: SelectFieldId = SelectFieldId::new("gas_select_add");
+const GAS_SELECT_SOURCE_ID: SelectFieldId = SelectFieldId::new("gas_select_source");
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EditorTool {
@@ -75,6 +82,8 @@ pub enum EditorTool {
     EraseSolid,
     AddGas,
     ClearGas,
+    CreateGasSource,
+    CreateGasSink,
 }
 
 #[derive(Resource, Default)]
@@ -123,6 +132,37 @@ impl Default for GasToolSettings {
     }
 }
 
+#[derive(Resource)]
+pub struct SourceStructureToolSettings {
+    pub gas_index: usize,
+    pub amount: u32,
+}
+
+impl Default for SourceStructureToolSettings {
+    fn default() -> Self {
+        Self {
+            gas_index: 0,
+            amount: 100,
+        }
+    }
+}
+
+#[derive(Resource)]
+pub struct SinkStructureToolSettings {
+    pub amount: u32,
+}
+
+impl Default for SinkStructureToolSettings {
+    fn default() -> Self {
+        Self { amount: 100 }
+    }
+}
+
+#[derive(Resource, Default, Clone, Copy)]
+pub struct StructureEditState {
+    pub selected_cell: Option<UVec2>,
+}
+
 #[derive(Resource, Default)]
 pub struct SelectionDragState {
     pub active: bool,
@@ -140,7 +180,6 @@ struct BrushDragState {
 enum EditorUiAction {
     SelectTool(EditorTool),
     SelectCellMaterial(CellMaterial),
-    ToggleGasKind,
     ToggleReplace,
     ToggleBuoyancy,
     ToggleShowMomentumVectors,
@@ -159,10 +198,22 @@ struct CellTypePanelRoot;
 struct GasReplaceLabel;
 
 #[derive(Component)]
-struct GasKindLabel;
+struct GasAmountInputField;
 
 #[derive(Component)]
-struct GasAmountInputField;
+struct SourceAmountInputField;
+
+#[derive(Component)]
+struct SinkAmountInputField;
+
+#[derive(Component)]
+struct StructureSourceSection;
+
+#[derive(Component)]
+struct StructureSinkSection;
+
+#[derive(Component)]
+struct StructureModeLabel;
 
 #[derive(Component)]
 struct BuoyancyToggleLabel;
@@ -291,15 +342,21 @@ struct EditorIconSet {
     erase: Handle<Image>,
     add_gas: Handle<Image>,
     clear_gas: Handle<Image>,
+    source: Handle<Image>,
+    sink: Handle<Image>,
     brick: Handle<Image>,
     metal: Handle<Image>,
     brick_silhouette: Handle<Image>,
     metal_silhouette: Handle<Image>,
+    source_silhouette: Handle<Image>,
+    sink_silhouette: Handle<Image>,
+    select_arrow: Handle<Image>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum EscAction {
     CloseMenuKeepPaused,
+    CloseStructureEditor,
     ClearSelectedTool,
     OpenMenuAndPause,
     Ignore,
@@ -316,6 +373,9 @@ impl Plugin for EditorPlugin {
             .init_resource::<SaveSessionState>()
             .init_resource::<WorldLoadState>()
             .init_resource::<GasToolSettings>()
+            .init_resource::<SourceStructureToolSettings>()
+            .init_resource::<SinkStructureToolSettings>()
+            .init_resource::<StructureEditState>()
             .init_resource::<SelectionDragState>()
             .init_resource::<BrushDragState>()
             .add_systems(Startup, (setup_editor_ui, setup_editor_overlays))
@@ -340,11 +400,13 @@ impl Plugin for EditorPlugin {
 fn setup_editor_ui(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    gas_registry: Res<GasRegistry>,
     sim_rate: Res<SimulationRateConfig>,
     gas_simulation: Res<GasSimulationConfig>,
     gas_visual_settings: Res<GasVisualSettings>,
     mut panel_manager: ResMut<PanelManager>,
     mut panel_open_order: ResMut<PanelOpenOrder>,
+    mut select_fields: ResMut<SelectFieldState>,
 ) {
     let fmt_f32 = |v: f32| {
         let s = format!("{:.3}", v);
@@ -375,6 +437,11 @@ fn setup_editor_ui(
     let max_color_initial = gas_visual_settings
         .max_particles_for_max_color
         .clamp(1, 10_000);
+    let gas_select_options: Vec<String> = gas_registry
+        .all()
+        .iter()
+        .map(|gas| gas.id.to_uppercase())
+        .collect();
     let sim_hz_initial_text = sim_hz_initial.to_string();
     let buoyancy_strength_initial_text = fmt_f32(buoyancy_strength_initial);
     let buoyancy_radius_initial_text = buoyancy_radius_initial.to_string();
@@ -389,12 +456,28 @@ fn setup_editor_ui(
         erase: asset_server.load("sprites/ui/tool_erase.png"),
         add_gas: asset_server.load("sprites/ui/tool_add_gas.png"),
         clear_gas: asset_server.load("sprites/ui/tool_clear_gas.png"),
+        source: asset_server.load("sprites/ui/tool_gas_source.png"),
+        sink: asset_server.load("sprites/ui/tool_gas_sink.png"),
         brick: asset_server.load("sprites/ui/tool_brick.png"),
         metal: asset_server.load("sprites/ui/tool_metal.png"),
         brick_silhouette: asset_server.load("sprites/ui/silhouette_brick.png"),
         metal_silhouette: asset_server.load("sprites/ui/silhouette_metal.png"),
+        source_silhouette: asset_server.load("sprites/world/tile_gas_source.png"),
+        sink_silhouette: asset_server.load("sprites/world/tile_gas_sink.png"),
+        select_arrow: asset_server.load("sprites/ui/select_arrow.png"),
     };
     commands.insert_resource(icon_set.clone());
+
+    select_fields.register_field(SelectFieldConfig {
+        id: GAS_SELECT_ADD_ID,
+        options: gas_select_options.clone(),
+        selected: 0,
+    });
+    select_fields.register_field(SelectFieldConfig {
+        id: GAS_SELECT_SOURCE_ID,
+        options: gas_select_options.clone(),
+        selected: 0,
+    });
 
     commands
         .spawn((
@@ -490,6 +573,18 @@ fn setup_editor_ui(
                 EditorTool::ClearGas,
                 icon_set.clear_gas.clone(),
             );
+            spawn_tool_button(
+                parent,
+                "Create Gas Source",
+                EditorTool::CreateGasSource,
+                icon_set.source.clone(),
+            );
+            spawn_tool_button(
+                parent,
+                "Create Gas Sink",
+                EditorTool::CreateGasSink,
+                icon_set.sink.clone(),
+            );
         });
 
     panel_manager.spawn_panel(
@@ -508,7 +603,7 @@ fn setup_editor_ui(
                 show_close: false,
                 custom_actions: Vec::new(),
             },
-            scroll_policy: PanelScrollPolicy::AutoHalfScreen,
+            scroll_policy: PanelScrollPolicy::Never,
             background: PANEL_BG,
             header_background: Color::srgba(0.82, 0.84, 0.87, 0.98),
             initial_visible: false,
@@ -562,7 +657,38 @@ fn setup_editor_ui(
             initial_collapsed: false,
         },
         |parent| {
-            spawn_gas_tool_panel_content(parent);
+            spawn_gas_tool_panel_content(parent, &gas_select_options, icon_set.select_arrow.clone());
+        },
+    );
+
+    panel_manager.spawn_panel(
+        &mut commands,
+        &mut panel_open_order,
+        PanelSpec {
+            id: STRUCTURE_TOOL_PANEL_ID,
+            title: "Structure Panel".to_string(),
+            corner: PanelCorner::TopRight,
+            width: STRUCTURE_PANEL_WIDTH,
+            margin_x: STRUCTURE_PANEL_RIGHT,
+            margin_y: DEBUG_PANEL_TOP,
+            stack_gap: DEBUG_AND_GAS_PANEL_GAP,
+            controls: PanelControls {
+                show_collapse: true,
+                show_close: false,
+                custom_actions: Vec::new(),
+            },
+            scroll_policy: PanelScrollPolicy::Never,
+            background: PANEL_BG,
+            header_background: Color::srgba(0.82, 0.84, 0.87, 0.98),
+            initial_visible: false,
+            initial_collapsed: false,
+        },
+        |parent| {
+            spawn_structure_tool_panel_content(
+                parent,
+                &gas_select_options,
+                icon_set.select_arrow.clone(),
+            );
         },
     );
 
@@ -1232,28 +1358,21 @@ fn spawn_debug_u32_row<M: Component>(
         });
 }
 
-fn spawn_gas_tool_panel_content(parent: &mut ChildSpawnerCommands) {
-    parent
-        .spawn((
-            Button,
-            Node {
-                width: Val::Px(190.0),
-                height: Val::Px(32.0),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            BackgroundColor(BUTTON_IDLE),
-            EditorUiAction::ToggleGasKind,
-        ))
-        .with_children(|button| {
-            button.spawn((
-                Text::new("Gas: h2"),
-                TextFont::from_font_size(13.0),
-                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                GasKindLabel,
-            ));
-        });
+fn spawn_gas_tool_panel_content(
+    parent: &mut ChildSpawnerCommands,
+    gas_options: &[String],
+    select_arrow: Handle<Image>,
+) {
+    spawn_select_field(
+        parent,
+        &SelectFieldConfig {
+            id: GAS_SELECT_ADD_ID,
+            options: gas_options.to_vec(),
+            selected: 0,
+        },
+        "Gas:",
+        select_arrow,
+    );
 
     parent
         .spawn((Node {
@@ -1319,6 +1438,129 @@ fn spawn_gas_tool_panel_content(parent: &mut ChildSpawnerCommands) {
                 TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
                 GasReplaceLabel,
             ));
+        });
+}
+
+fn spawn_structure_tool_panel_content(
+    parent: &mut ChildSpawnerCommands,
+    gas_options: &[String],
+    select_arrow: Handle<Image>,
+) {
+    parent.spawn((
+        Text::new("No structure selected"),
+        TextFont::from_font_size(13.0),
+        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+        StructureModeLabel,
+    ));
+
+    parent
+        .spawn((
+            Node {
+                display: Display::None,
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(8.0),
+                ..default()
+            },
+            StructureSourceSection,
+        ))
+        .with_children(|source| {
+            spawn_select_field(
+                source,
+                &SelectFieldConfig {
+                    id: GAS_SELECT_SOURCE_ID,
+                    options: gas_options.to_vec(),
+                    selected: 0,
+                },
+                "Source gas:",
+                select_arrow,
+            );
+            source
+                .spawn((Node {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(8.0),
+                    align_items: AlignItems::Center,
+                    ..default()
+                },))
+                .with_children(|row| {
+                    row.spawn((
+                        Text::new("Amount:"),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                    ));
+                    row.spawn((
+                        Button,
+                        Node {
+                            min_width: Val::Px(112.0),
+                            height: Val::Px(30.0),
+                            justify_content: JustifyContent::FlexStart,
+                            align_items: AlignItems::Center,
+                            padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                            ..default()
+                        },
+                        BackgroundColor(BUTTON_IDLE),
+                        TextInputField::new_u32(100, 1, 1_000_000, 7),
+                        TextInputStyle {
+                            idle_bg: BUTTON_IDLE,
+                            focused_bg: INPUT_FOCUSED,
+                        },
+                        bevy::ui::RelativeCursorPosition::default(),
+                        SourceAmountInputField,
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new("100"),
+                            TextFont::from_font_size(13.0),
+                            TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                            TextInputDisplay,
+                        ));
+                    });
+                });
+        });
+
+    parent
+        .spawn((
+            Node {
+                display: Display::None,
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(8.0),
+                ..default()
+            },
+            StructureSinkSection,
+        ))
+        .with_children(|sink| {
+            sink.spawn((
+                Text::new("Sink amount per step"),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+            ));
+            sink.spawn((
+                Button,
+                Node {
+                    min_width: Val::Px(112.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::FlexStart,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                    ..default()
+                },
+                BackgroundColor(BUTTON_IDLE),
+                TextInputField::new_u32(100, 1, 1_000_000, 7),
+                TextInputStyle {
+                    idle_bg: BUTTON_IDLE,
+                    focused_bg: INPUT_FOCUSED,
+                },
+                bevy::ui::RelativeCursorPosition::default(),
+                SinkAmountInputField,
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new("100"),
+                    TextFont::from_font_size(13.0),
+                    TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                    TextInputDisplay,
+                ));
+            });
         });
 }
 
@@ -1471,13 +1713,20 @@ fn clear_active_tool_state(
     brush_drag.last_cell = None;
 }
 
-fn escape_action(menu_mode: MainMenuMode, has_selected_tool: bool, has_world: bool) -> EscAction {
+fn escape_action(
+    menu_mode: MainMenuMode,
+    has_selected_tool: bool,
+    has_structure_editor: bool,
+    has_world: bool,
+) -> EscAction {
     match menu_mode {
         MainMenuMode::Main => EscAction::Ignore,
         MainMenuMode::InGame => EscAction::CloseMenuKeepPaused,
         MainMenuMode::Hidden => {
             if !has_world {
                 EscAction::Ignore
+            } else if has_structure_editor {
+                EscAction::CloseStructureEditor
             } else if has_selected_tool {
                 EscAction::ClearSelectedTool
             } else {
@@ -1493,6 +1742,7 @@ fn handle_escape_and_main_menu(
     mut main_menu: ResMut<MainMenuState>,
     mut menu_ui: ResMut<MainMenuUiState>,
     world_load_state: Res<WorldLoadState>,
+    mut structure_edit: ResMut<StructureEditState>,
     mut control: ResMut<crate::simulation::SimulationControl>,
     mut input_fields: Query<&mut TextInputField>,
     mut selection_drag: ResMut<SelectionDragState>,
@@ -1516,12 +1766,16 @@ fn handle_escape_and_main_menu(
     match escape_action(
         menu_ui.mode,
         active_tool.selected.is_some(),
+        structure_edit.selected_cell.is_some(),
         world_load_state.has_world,
     ) {
         EscAction::CloseMenuKeepPaused => {
             menu_ui.mode = MainMenuMode::Hidden;
             menu_ui.screen = MainMenuScreen::Root;
             main_menu.open = false;
+        }
+        EscAction::CloseStructureEditor => {
+            structure_edit.selected_cell = None;
         }
         EscAction::ClearSelectedTool => {
             active_tool.selected = None;
@@ -1547,6 +1801,7 @@ fn handle_main_menu_actions(
     mut control: ResMut<SimulationControl>,
     gas_registry: Res<GasRegistry>,
     mut world: ResMut<WorldGrid>,
+    mut structures: ResMut<GasStructureGrid>,
     mut gas: ResMut<GasField>,
     mut step: ResMut<SimulationStep>,
     mut save_session: ResMut<SaveSessionState>,
@@ -1585,6 +1840,7 @@ fn handle_main_menu_actions(
                 match apply_runtime_world_state(
                     state,
                     &mut world,
+                    &mut structures,
                     &mut gas,
                     &mut step,
                     &mut world_changed,
@@ -1634,6 +1890,7 @@ fn handle_main_menu_actions(
                     match apply_runtime_world_state(
                         state,
                         &mut world,
+                        &mut structures,
                         &mut gas,
                         &mut step,
                         &mut world_changed,
@@ -1686,6 +1943,7 @@ fn handle_main_menu_actions(
                     &name,
                     &world,
                     &gas,
+                    &structures,
                     &gas_registry,
                     step.0,
                 ) {
@@ -1699,6 +1957,7 @@ fn handle_main_menu_actions(
                                     match apply_runtime_world_state(
                                         state,
                                         &mut world,
+                                        &mut structures,
                                         &mut gas,
                                         &mut step,
                                         &mut world_changed,
@@ -1750,6 +2009,7 @@ fn handle_main_menu_actions(
                         match apply_runtime_world_state(
                             loaded.state,
                             &mut world,
+                            &mut structures,
                             &mut gas,
                             &mut step,
                             &mut world_changed,
@@ -1788,6 +2048,7 @@ fn handle_main_menu_actions(
                             &save_id,
                             &world,
                             &gas,
+                            &structures,
                             &gas_registry,
                             step.0,
                         ) {
@@ -1801,6 +2062,7 @@ fn handle_main_menu_actions(
                                             match apply_runtime_world_state(
                                                 state,
                                                 &mut world,
+                                                &mut structures,
                                                 &mut gas,
                                                 &mut step,
                                                 &mut world_changed,
@@ -1861,6 +2123,7 @@ fn handle_main_menu_actions(
                             match apply_runtime_world_state(
                                 state,
                                 &mut world,
+                                &mut structures,
                                 &mut gas,
                                 &mut step,
                                 &mut world_changed,
@@ -1917,11 +2180,13 @@ fn refresh_saves_cache(menu_ui: &mut MainMenuUiState) {
 fn apply_runtime_world_state(
     state: crate::save::RuntimeWorldState,
     world: &mut WorldGrid,
+    structures: &mut GasStructureGrid,
     gas: &mut GasField,
     step: &mut SimulationStep,
     world_changed: &mut EventWriter<WorldCellChanged>,
 ) -> Result<(), String> {
     world.restore_from_cell_codes(&state.world_cell_codes)?;
+    structures.restore_state(&state.gas_structures_snapshot, world)?;
     gas.restore_state(&state.gas_snapshot)?;
     step.0 = state.simulation_step;
     emit_full_world_changed(world_changed);
@@ -2301,14 +2566,17 @@ fn update_selection_size_tooltip(
 
 fn handle_editor_ui_actions(
     mut interactions: Query<(&Interaction, &EditorUiAction), (Changed<Interaction>, With<Button>)>,
-    gas_registry: Res<GasRegistry>,
     mut active_tool: ResMut<ActiveEditorTool>,
     mut cell_settings: ResMut<CellToolSettings>,
     mut gas_settings: ResMut<GasToolSettings>,
     mut gas_simulation: ResMut<GasSimulationConfig>,
     mut debug_overlay: ResMut<DebugOverlaySettings>,
+    mut structure_edit: ResMut<StructureEditState>,
+    mut select_fields: ResMut<SelectFieldState>,
     mut input_set: ParamSet<(
         Single<&mut TextInputField, With<GasAmountInputField>>,
+        Single<&mut TextInputField, With<SourceAmountInputField>>,
+        Single<&mut TextInputField, With<SinkAmountInputField>>,
         Single<&mut TextInputField, With<GasGammaInputField>>,
         Single<&mut TextInputField, With<GasMaxColorParticlesInputField>>,
     )>,
@@ -2318,9 +2586,13 @@ fn handle_editor_ui_actions(
     let mut unfocus_inputs = || {
         let mut gas_input = input_set.p0();
         gas_input.focused = false;
-        let mut gamma_input = input_set.p1();
+        let mut source_input = input_set.p1();
+        source_input.focused = false;
+        let mut sink_input = input_set.p2();
+        sink_input.focused = false;
+        let mut gamma_input = input_set.p3();
         gamma_input.focused = false;
-        let mut max_color_particles_input = input_set.p2();
+        let mut max_color_particles_input = input_set.p4();
         max_color_particles_input.focused = false;
     };
 
@@ -2332,18 +2604,14 @@ fn handle_editor_ui_actions(
         match *action {
             EditorUiAction::SelectTool(next_tool) => {
                 active_tool.selected = Some(next_tool);
+                structure_edit.selected_cell = None;
+                select_fields.close_all();
                 unfocus_inputs();
                 clear_active_tool_state(&mut selection_drag, &mut brush_drag);
             }
             EditorUiAction::SelectCellMaterial(next_material) => {
                 unfocus_inputs();
                 cell_settings.material = next_material;
-            }
-            EditorUiAction::ToggleGasKind => {
-                unfocus_inputs();
-                if gas_registry.count() > 0 {
-                    gas_settings.gas_index = (gas_settings.gas_index + 1) % gas_registry.count();
-                }
             }
             EditorUiAction::ToggleReplace => {
                 unfocus_inputs();
@@ -2381,88 +2649,106 @@ fn refresh_editor_ui(
     debug_overlay: Res<DebugOverlaySettings>,
     mut gas_visual_settings: ResMut<GasVisualSettings>,
     mut gas_settings: ResMut<GasToolSettings>,
+    mut source_settings: ResMut<SourceStructureToolSettings>,
+    mut sink_settings: ResMut<SinkStructureToolSettings>,
+    mut structure_edit: ResMut<StructureEditState>,
+    mut structures: ResMut<GasStructureGrid>,
+    select_fields: Res<SelectFieldState>,
+    world: Res<WorldGrid>,
     gas_registry: Res<GasRegistry>,
-    gas_input: Single<&TextInputField, With<GasAmountInputField>>,
-    mut input_set: ParamSet<(
-        Single<&TextInputField, With<GasGammaInputField>>,
-        Single<&TextInputField, With<GasMaxColorParticlesInputField>>,
-        Single<&TextInputField, With<SimulationHzInputField>>,
-        Single<&TextInputField, With<BuoyancyStrengthInputField>>,
-        Single<&TextInputField, With<BuoyancyWindowRadiusInputField>>,
-        Single<&TextInputField, With<BuoyancyWindowSigmaInputField>>,
-        Single<&TextInputField, With<BuoyancyGainInputField>>,
-        Single<&TextInputField, With<BuoyancyAlphaInputField>>,
-    )>,
-    buoyancy_cap_input: Single<&TextInputField, With<BuoyancyForceCapInputField>>,
-    mut button_query: Query<(&EditorUiAction, &mut BackgroundColor), With<Button>>,
-    mut panel_state: (ResMut<PanelManager>, ResMut<PanelOpenOrder>),
-    mut visibility_set: ParamSet<(
-        Single<&mut Visibility, With<MainToolbarRoot>>,
-        Single<&mut Visibility, With<CellTypePanelRoot>>,
-        Single<&mut Visibility, With<DebugToolbarRoot>>,
-        Single<&mut Visibility, With<MainMenuRoot>>,
-    )>,
-    mut text_set_primary: ParamSet<(
-        Single<&mut Text, With<GasReplaceLabel>>,
-        Single<&mut Text, With<GasKindLabel>>,
-        Single<&mut Text, With<BuoyancyToggleLabel>>,
-        Single<&mut Text, With<SimulationPerfLabel>>,
-        Single<&mut Text, With<WaveMetricsLabel>>,
-    )>,
+    mut ui: RefreshEditorUiSystemParams,
 ) {
     let (active_tool, cell_settings, main_menu, debug_mode, world_load_state) = ui_state;
     let (debug_metrics, sim_control, sim_perf) = sim_metrics;
     let selected_tool = active_tool.selected;
 
-    if let Some(amount) = gas_input.parsed_u32() {
+    if let Some(selected) = select_fields.selected_index(GAS_SELECT_ADD_ID) {
+        gas_settings.gas_index = selected;
+    }
+    if let Some(selected) = select_fields.selected_index(GAS_SELECT_SOURCE_ID) {
+        source_settings.gas_index = selected;
+    }
+
+    if let Some(amount) = ui.gas_input.parsed_u32() {
         gas_settings.amount = amount;
+    }
+    if let Some(amount) = ui.source_input.parsed_u32() {
+        source_settings.amount = amount.max(1);
+    }
+    if let Some(amount) = ui.sink_input.parsed_u32() {
+        sink_settings.amount = amount.max(1);
     }
     if gas_registry.count() > 0 && gas_settings.gas_index >= gas_registry.count() {
         gas_settings.gas_index = gas_registry.count() - 1;
     }
-    if let Some(gamma) = input_set.p0().parsed_f32() {
+    if gas_registry.count() > 0 && source_settings.gas_index >= gas_registry.count() {
+        source_settings.gas_index = gas_registry.count() - 1;
+    }
+    if let Some(gamma) = ui.input_set.p0().parsed_f32() {
         let next_gamma = gamma.clamp(0.0, 10.0);
         if (gas_visual_settings.gamma - next_gamma).abs() > f32::EPSILON {
             gas_visual_settings.gamma = next_gamma;
         }
     }
-    if let Some(max_particles) = input_set.p1().parsed_u32() {
+    if let Some(max_particles) = ui.input_set.p1().parsed_u32() {
         let next_max_particles = max_particles.clamp(1, 10_000);
         if gas_visual_settings.max_particles_for_max_color != next_max_particles {
             gas_visual_settings.max_particles_for_max_color = next_max_particles;
         }
     }
-    if let Some(target_hz) = input_set.p2().parsed_u32() {
+    if let Some(target_hz) = ui.input_set.p2().parsed_u32() {
         sim_rate.target_hz = target_hz.clamp(1, 1000);
     }
-    if let Some(value) = input_set.p3().parsed_f32() {
+    if let Some(value) = ui.input_set.p3().parsed_f32() {
         gas_simulation.solver_tuning.buoyancy_strength = value.clamp(0.0, 5.0);
     }
-    if let Some(value) = input_set.p4().parsed_u32() {
+    if let Some(value) = ui.input_set.p4().parsed_u32() {
         gas_simulation.solver_tuning.buoyancy_window_radius = value.clamp(1, 3) as u8;
     }
-    if let Some(value) = input_set.p5().parsed_f32() {
+    if let Some(value) = ui.input_set.p5().parsed_f32() {
         gas_simulation.solver_tuning.buoyancy_window_sigma = value.clamp(0.5, 3.0);
     }
-    if let Some(value) = input_set.p6().parsed_f32() {
+    if let Some(value) = ui.input_set.p6().parsed_f32() {
         gas_simulation.solver_tuning.buoyancy_gain = value.clamp(0.0, 10.0);
     }
-    if let Some(value) = input_set.p7().parsed_f32() {
+    if let Some(value) = ui.input_set.p7().parsed_f32() {
         gas_simulation.solver_tuning.buoyancy_alpha = value.clamp(0.0, 4.0);
     }
-    if let Some(value) = buoyancy_cap_input.parsed_f32() {
+    if let Some(value) = ui.buoyancy_cap_input.parsed_f32() {
         gas_simulation.solver_tuning.buoyancy_force_cap = value.clamp(0.0, 2.0);
     }
 
-    for (action, mut bg) in &mut button_query {
+    if let Some(cell) = structure_edit.selected_cell {
+        match structures.cell(cell.x, cell.y) {
+            Some(GasStructureCell::Source { .. }) => {
+                let gas_index = if gas_registry.count() == 0 {
+                    0
+                } else {
+                    source_settings.gas_index.min(gas_registry.count() - 1)
+                };
+                let _ = structures.update_source(
+                    cell.x,
+                    cell.y,
+                    gas_index,
+                    source_settings.amount.max(1),
+                    &world,
+                );
+            }
+            Some(GasStructureCell::Sink { .. }) => {
+                let _ = structures.update_sink(cell.x, cell.y, sink_settings.amount.max(1), &world);
+            }
+            None => {
+                structure_edit.selected_cell = None;
+            }
+        }
+    }
+
+    for (action, mut bg) in &mut ui.button_query {
         bg.0 = match action {
             EditorUiAction::SelectTool(action_tool) if Some(*action_tool) == selected_tool => {
                 BUTTON_ACTIVE
             }
             EditorUiAction::SelectCellMaterial(material) if *material == cell_settings.material => {
-                BUTTON_ACTIVE
-            }
-            EditorUiAction::ToggleGasKind if selected_tool == Some(EditorTool::AddGas) => {
                 BUTTON_ACTIVE
             }
             EditorUiAction::ToggleReplace if gas_settings.replace => BUTTON_ACTIVE,
@@ -2477,7 +2763,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut main_toolbar_root = visibility_set.p0();
+        let mut main_toolbar_root = ui.visibility_set.p0();
         **main_toolbar_root = if world_load_state.has_world {
             Visibility::Visible
         } else {
@@ -2486,7 +2772,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut cell_type_panel_root = visibility_set.p1();
+        let mut cell_type_panel_root = ui.visibility_set.p1();
         **cell_type_panel_root =
             if world_load_state.has_world && selected_tool == Some(EditorTool::BuildSolid) {
                 Visibility::Visible
@@ -2496,7 +2782,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut debug_toolbar_root = visibility_set.p2();
+        let mut debug_toolbar_root = ui.visibility_set.p2();
         **debug_toolbar_root = if world_load_state.has_world && debug_mode.active {
             Visibility::Visible
         } else {
@@ -2505,21 +2791,33 @@ fn refresh_editor_ui(
     }
 
     let debug_panel_visible = world_load_state.has_world && debug_mode.active;
-    panel_state
-        .0
-        .set_visible(DEBUG_PANEL_ID, debug_panel_visible, &mut panel_state.1);
+    ui.panel_manager.set_visible(
+        DEBUG_PANEL_ID,
+        debug_panel_visible,
+        &mut ui.panel_open_order,
+    );
 
     let gas_tool_panel_visible = world_load_state.has_world
         && debug_mode.active
         && selected_tool == Some(EditorTool::AddGas);
-    panel_state.0.set_visible(
+    ui.panel_manager.set_visible(
         GAS_TOOL_PANEL_ID,
         gas_tool_panel_visible,
-        &mut panel_state.1,
+        &mut ui.panel_open_order,
+    );
+    let editing_structure = structure_edit
+        .selected_cell
+        .and_then(|cell| structures.cell(cell.x, cell.y).map(|s| (cell, s)));
+    let structure_panel_visible =
+        world_load_state.has_world && debug_mode.active && editing_structure.is_some();
+    ui.panel_manager.set_visible(
+        STRUCTURE_TOOL_PANEL_ID,
+        structure_panel_visible,
+        &mut ui.panel_open_order,
     );
 
     {
-        let mut main_menu_root = visibility_set.p3();
+        let mut main_menu_root = ui.visibility_set.p3();
         **main_menu_root = if main_menu.open {
             Visibility::Visible
         } else {
@@ -2528,16 +2826,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut gas_kind_text = text_set_primary.p1();
-        let gas_label = gas_registry
-            .get(gas_settings.gas_index)
-            .map(|gas| gas.id.to_uppercase())
-            .unwrap_or_else(|| "N/A".to_string());
-        gas_kind_text.0 = format!("Gas: {}", gas_label);
-    }
-
-    {
-        let mut replace_text = text_set_primary.p0();
+        let mut replace_text = ui.text_set_primary.p0();
         replace_text.0 = if gas_settings.replace {
             "Replace: On".to_string()
         } else {
@@ -2546,7 +2835,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut buoyancy_toggle_text = text_set_primary.p2();
+        let mut buoyancy_toggle_text = ui.text_set_primary.p1();
         buoyancy_toggle_text.0 = if gas_simulation.solver_tuning.enable_buoyancy {
             "Buoyancy: On".to_string()
         } else {
@@ -2555,7 +2844,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut perf_text = text_set_primary.p3();
+        let mut perf_text = ui.text_set_primary.p2();
         let speed_mult = sim_control.speed.multiplier();
         perf_text.0 = format!(
             "Iterations: {} | Step ms: {:.3} | avg: {:.3} | Target Hz: {} x {} = {:.1} | Actual Hz: {:.1} | GPU compute/upload/readback/total: {:.3}/{:.3}/{:.3}/{:.3} ms",
@@ -2574,7 +2863,7 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut metrics_text = text_set_primary.p4();
+        let mut metrics_text = ui.text_set_primary.p3();
         let vectors_mode = if debug_overlay.show_momentum_vectors {
             "Impulse vectors: On"
         } else {
@@ -2590,28 +2879,155 @@ fn refresh_editor_ui(
             debug_metrics.mass_error_co2
         );
     }
+
+    let structure_mode = match (selected_tool, editing_structure) {
+        (_, Some((cell, GasStructureCell::Source { .. }))) => {
+            let mut src = ui.node_set.p0();
+            src.display = Display::Flex;
+            let mut sink = ui.node_set.p1();
+            sink.display = Display::None;
+            format!("Editing Source at ({}, {})", cell.x, cell.y)
+        }
+        (_, Some((cell, GasStructureCell::Sink { .. }))) => {
+            let mut src = ui.node_set.p0();
+            src.display = Display::None;
+            let mut sink = ui.node_set.p1();
+            sink.display = Display::Flex;
+            format!("Editing Sink at ({}, {})", cell.x, cell.y)
+        }
+        _ => {
+            let mut src = ui.node_set.p0();
+            src.display = Display::None;
+            let mut sink = ui.node_set.p1();
+            sink.display = Display::None;
+            "No structure selected".to_string()
+        }
+    };
+    {
+        let mut mode_text = ui.text_set_primary.p4();
+        mode_text.0 = structure_mode;
+    }
+
+}
+
+#[derive(SystemParam)]
+struct RefreshEditorUiSystemParams<'w, 's> {
+    gas_input: Single<'w, &'static TextInputField, With<GasAmountInputField>>,
+    source_input: Single<'w, &'static TextInputField, With<SourceAmountInputField>>,
+    sink_input: Single<'w, &'static TextInputField, With<SinkAmountInputField>>,
+    input_set: ParamSet<
+        'w,
+        's,
+        (
+            Single<'w, &'static TextInputField, With<GasGammaInputField>>,
+            Single<'w, &'static TextInputField, With<GasMaxColorParticlesInputField>>,
+            Single<'w, &'static TextInputField, With<SimulationHzInputField>>,
+            Single<'w, &'static TextInputField, With<BuoyancyStrengthInputField>>,
+            Single<'w, &'static TextInputField, With<BuoyancyWindowRadiusInputField>>,
+            Single<'w, &'static TextInputField, With<BuoyancyWindowSigmaInputField>>,
+            Single<'w, &'static TextInputField, With<BuoyancyGainInputField>>,
+            Single<'w, &'static TextInputField, With<BuoyancyAlphaInputField>>,
+        ),
+    >,
+    buoyancy_cap_input: Single<'w, &'static TextInputField, With<BuoyancyForceCapInputField>>,
+    button_query: Query<
+        'w,
+        's,
+        (&'static EditorUiAction, &'static mut BackgroundColor),
+        With<Button>,
+    >,
+    panel_manager: ResMut<'w, PanelManager>,
+    panel_open_order: ResMut<'w, PanelOpenOrder>,
+    visibility_set: ParamSet<
+        'w,
+        's,
+        (
+            Single<'w, &'static mut Visibility, With<MainToolbarRoot>>,
+            Single<'w, &'static mut Visibility, With<CellTypePanelRoot>>,
+            Single<'w, &'static mut Visibility, With<DebugToolbarRoot>>,
+            Single<'w, &'static mut Visibility, With<MainMenuRoot>>,
+        ),
+    >,
+    text_set_primary: ParamSet<
+        'w,
+        's,
+        (
+            Single<'w, &'static mut Text, With<GasReplaceLabel>>,
+            Single<'w, &'static mut Text, With<BuoyancyToggleLabel>>,
+            Single<'w, &'static mut Text, With<SimulationPerfLabel>>,
+            Single<'w, &'static mut Text, With<WaveMetricsLabel>>,
+            Single<'w, &'static mut Text, With<StructureModeLabel>>,
+        ),
+    >,
+    node_set: ParamSet<
+        'w,
+        's,
+        (
+            Single<'w, &'static mut Node, With<StructureSourceSection>>,
+            Single<'w, &'static mut Node, With<StructureSinkSection>>,
+        ),
+    >,
 }
 
 fn handle_editor_mouse_input(
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
-    window: Single<&Window, With<PrimaryWindow>>,
-    camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
-    active_tool: Res<ActiveEditorTool>,
-    cell_settings: Res<CellToolSettings>,
-    main_menu: Res<MainMenuState>,
-    world_load_state: Res<WorldLoadState>,
-    debug_mode: Res<DebugMode>,
-    ui_tool_state: (Res<GasToolSettings>, Res<GasRegistry>, Res<PanelManager>),
-    gas_input: Single<&TextInputField, With<GasAmountInputField>>,
-    mut world: ResMut<WorldGrid>,
-    mut gas: ResMut<GasField>,
-    mut selection_drag: ResMut<SelectionDragState>,
-    mut brush_drag: ResMut<BrushDragState>,
-    mut world_changed: EventWriter<WorldCellChanged>,
+    input_state: (
+        Res<ButtonInput<MouseButton>>,
+        Single<&Window, With<PrimaryWindow>>,
+        Single<(&Camera, &GlobalTransform), With<MainCamera>>,
+    ),
+    tool_state: (
+        Res<ActiveEditorTool>,
+        Res<CellToolSettings>,
+        ResMut<SourceStructureToolSettings>,
+        ResMut<SinkStructureToolSettings>,
+        Res<MainMenuState>,
+        Res<WorldLoadState>,
+        Res<DebugMode>,
+    ),
+    ui_tool_state: (
+        Res<GasToolSettings>,
+        Res<GasRegistry>,
+        Res<PanelManager>,
+        ResMut<SelectFieldState>,
+    ),
+    mut field_state: ParamSet<(
+        Query<&TextInputField, With<GasAmountInputField>>,
+        Query<&mut TextInputField, With<SourceAmountInputField>>,
+        Query<&mut TextInputField, With<SinkAmountInputField>>,
+    )>,
+    data_state: (
+        ResMut<WorldGrid>,
+        ResMut<GasStructureGrid>,
+        ResMut<GasField>,
+        ResMut<StructureEditState>,
+        ResMut<SelectionDragState>,
+        ResMut<BrushDragState>,
+        EventWriter<WorldCellChanged>,
+    ),
 ) {
-    let (gas_settings, gas_registry, panel_manager) = ui_tool_state;
+    let (mouse_buttons, window, camera_query) = input_state;
+    let (
+        active_tool,
+        cell_settings,
+        mut source_settings,
+        mut sink_settings,
+        main_menu,
+        world_load_state,
+        debug_mode,
+    ) = tool_state;
+    let (gas_settings, gas_registry, panel_manager, mut select_fields) = ui_tool_state;
+    let (
+        mut world,
+        mut structures,
+        mut gas,
+        mut structure_edit,
+        mut selection_drag,
+        mut brush_drag,
+        mut world_changed,
+    ) = data_state;
 
     if main_menu.open || !world_load_state.has_world {
+        structure_edit.selected_cell = None;
         clear_active_tool_state(&mut selection_drag, &mut brush_drag);
         return;
     }
@@ -2635,12 +3051,16 @@ fn handle_editor_mouse_input(
 
     match active_tool.selected {
         Some(EditorTool::BuildSolid) => {
+            structure_edit.selected_cell = None;
             apply_brush_tool(
                 &mouse_buttons,
                 blocked_by_ui,
                 hovered_cell,
                 &mut brush_drag,
                 |cell| {
+                    if structures.blocks_solid_placement(cell.x, cell.y) {
+                        return;
+                    }
                     if world.set_solid_with_material(cell.x, cell.y, cell_settings.material) {
                         gas.clear_cell(cell.x, cell.y);
                         world_changed.write(WorldCellChanged { cell });
@@ -2649,12 +3069,14 @@ fn handle_editor_mouse_input(
             );
         }
         Some(EditorTool::EraseSolid) => {
+            structure_edit.selected_cell = None;
             apply_brush_tool(
                 &mouse_buttons,
                 blocked_by_ui,
                 hovered_cell,
                 &mut brush_drag,
                 |cell| {
+                    let _ = structures.clear(cell.x, cell.y);
                     if world.set_empty(cell.x, cell.y) {
                         world_changed.write(WorldCellChanged { cell });
                     }
@@ -2662,6 +3084,7 @@ fn handle_editor_mouse_input(
             );
         }
         Some(EditorTool::AddGas) | Some(EditorTool::ClearGas) => {
+            structure_edit.selected_cell = None;
             if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
                 if let Some(cell) = hovered_cell {
                     selection_drag.active = true;
@@ -2679,7 +3102,12 @@ fn handle_editor_mouse_input(
             if selection_drag.active && mouse_buttons.just_released(MouseButton::Left) {
                 if let (Some(start), Some(end)) = (selection_drag.start, selection_drag.current) {
                     let (min, max) = normalized_rect(start, end);
-                    let amount = gas_input.parsed_u32().unwrap_or(gas_settings.amount);
+                    let amount = field_state
+                        .p0()
+                        .single()
+                        .ok()
+                        .and_then(|f| f.parsed_u32())
+                        .unwrap_or(gas_settings.amount);
                     match active_tool.selected {
                         Some(EditorTool::AddGas) => {
                             if gas_registry.count() == 0 {
@@ -2709,8 +3137,71 @@ fn handle_editor_mouse_input(
                 selection_drag.current = None;
             }
         }
+        Some(EditorTool::CreateGasSource) => {
+            clear_active_tool_state(&mut selection_drag, &mut brush_drag);
+            if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
+                if let Some(cell) = hovered_cell {
+                    if gas_registry.count() > 0 {
+                        let gas_index = source_settings.gas_index.min(gas_registry.count() - 1);
+                        if structures.set_source(
+                            cell.x,
+                            cell.y,
+                            gas_index,
+                            source_settings.amount.max(1),
+                            &world,
+                        ) {
+                            structure_edit.selected_cell = Some(cell);
+                        }
+                    }
+                }
+            }
+        }
+        Some(EditorTool::CreateGasSink) => {
+            clear_active_tool_state(&mut selection_drag, &mut brush_drag);
+            if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
+                if let Some(cell) = hovered_cell {
+                    if structures.set_sink(cell.x, cell.y, sink_settings.amount.max(1), &world) {
+                        structure_edit.selected_cell = Some(cell);
+                    }
+                }
+            }
+        }
         None => {
             clear_active_tool_state(&mut selection_drag, &mut brush_drag);
+            if debug_mode.active
+                && mouse_buttons.just_pressed(MouseButton::Left)
+                && !blocked_by_ui
+            {
+                structure_edit.selected_cell =
+                    hovered_cell.filter(|cell| structures.cell(cell.x, cell.y).is_some());
+                if let Some(cell) = structure_edit.selected_cell {
+                    match structures.cell(cell.x, cell.y) {
+                        Some(GasStructureCell::Source { gas_index, amount }) => {
+                            source_settings.gas_index = gas_index;
+                            select_fields.set_selected(GAS_SELECT_SOURCE_ID, gas_index);
+                            source_settings.amount = amount.max(1);
+                            if let Ok(mut source_amount_input) = field_state.p1().single_mut() {
+                                source_amount_input.text = source_settings.amount.to_string();
+                                source_amount_input.cursor = source_amount_input.text.chars().count();
+                                source_amount_input.value =
+                                    crate::ui::input_field::ParsedInputValue::U32(
+                                        source_settings.amount,
+                                    );
+                            }
+                        }
+                        Some(GasStructureCell::Sink { amount }) => {
+                            sink_settings.amount = amount.max(1);
+                            if let Ok(mut sink_amount_input) = field_state.p2().single_mut() {
+                                sink_amount_input.text = sink_settings.amount.to_string();
+                                sink_amount_input.cursor = sink_amount_input.text.chars().count();
+                                sink_amount_input.value =
+                                    crate::ui::input_field::ParsedInputValue::U32(sink_settings.amount);
+                            }
+                        }
+                        None => {}
+                    }
+                }
+            }
         }
     }
 }
@@ -2809,17 +3300,19 @@ fn update_editor_cursor_overlays(
     {
         let mut blueprint = overlay_set.p0();
         let (ghost_transform, ghost_visibility, ghost_sprite) = &mut *blueprint;
-        if active_tool.selected == Some(EditorTool::BuildSolid)
-            && !is_on_ui
-            && !main_menu.open
-            && !mouse_buttons.pressed(MouseButton::Left)
-        {
-            if let Some(cell) = world_cell {
-                ghost_sprite.image = match cell_settings.material {
-                    CellMaterial::Brick => icon_set.brick_silhouette.clone(),
-                    CellMaterial::Metal => icon_set.metal_silhouette.clone(),
-                    CellMaterial::Boundary => icon_set.brick_silhouette.clone(),
-                };
+        let ghost_image = match active_tool.selected {
+            Some(EditorTool::BuildSolid) => Some(match cell_settings.material {
+                CellMaterial::Brick => icon_set.brick_silhouette.clone(),
+                CellMaterial::Metal => icon_set.metal_silhouette.clone(),
+                CellMaterial::Boundary => icon_set.brick_silhouette.clone(),
+            }),
+            Some(EditorTool::CreateGasSource) => Some(icon_set.source_silhouette.clone()),
+            Some(EditorTool::CreateGasSink) => Some(icon_set.sink_silhouette.clone()),
+            _ => None,
+        };
+        if !is_on_ui && !main_menu.open && !mouse_buttons.pressed(MouseButton::Left) {
+            if let (Some(image), Some(cell)) = (ghost_image, world_cell) {
+                ghost_sprite.image = image;
                 **ghost_transform =
                     Transform::from_translation(cell_center(cell.x, cell.y).extend(1.8));
                 **ghost_visibility = Visibility::Visible;
@@ -2996,7 +3489,7 @@ mod tests {
     #[test]
     fn escape_closes_in_game_menu_when_open() {
         assert_eq!(
-            escape_action(MainMenuMode::InGame, true, true),
+            escape_action(MainMenuMode::InGame, true, false, true),
             EscAction::CloseMenuKeepPaused,
             "Esc should close in-game menu first even if a tool is selected"
         );
@@ -3005,7 +3498,7 @@ mod tests {
     #[test]
     fn escape_does_not_close_main_menu() {
         assert_eq!(
-            escape_action(MainMenuMode::Main, false, false),
+            escape_action(MainMenuMode::Main, false, false, false),
             EscAction::Ignore,
             "Esc must not close main menu"
         );
@@ -3014,7 +3507,7 @@ mod tests {
     #[test]
     fn escape_clears_selected_tool_before_opening_menu() {
         assert_eq!(
-            escape_action(MainMenuMode::Hidden, true, true),
+            escape_action(MainMenuMode::Hidden, true, false, true),
             EscAction::ClearSelectedTool,
             "Esc should clear selected tool before opening menu"
         );
@@ -3023,7 +3516,7 @@ mod tests {
     #[test]
     fn escape_opens_main_menu_and_pauses_when_no_tool_selected() {
         assert_eq!(
-            escape_action(MainMenuMode::Hidden, false, true),
+            escape_action(MainMenuMode::Hidden, false, false, true),
             EscAction::OpenMenuAndPause,
             "Esc should open in-game menu and pause when no tool is selected"
         );
@@ -3032,9 +3525,18 @@ mod tests {
     #[test]
     fn escape_ignores_hidden_mode_when_world_not_loaded() {
         assert_eq!(
-            escape_action(MainMenuMode::Hidden, false, false),
+            escape_action(MainMenuMode::Hidden, false, false, false),
             EscAction::Ignore,
             "Esc should do nothing when no world is loaded"
+        );
+    }
+
+    #[test]
+    fn escape_closes_structure_editor_before_menu_actions() {
+        assert_eq!(
+            escape_action(MainMenuMode::Hidden, false, true, true),
+            EscAction::CloseStructureEditor,
+            "Esc must close structure editor first"
         );
     }
 }

@@ -254,6 +254,103 @@ impl GasField {
         self.recompute_total_density_buffer(world);
     }
 
+    pub fn add_particles_no_impulse(
+        &mut self,
+        x: u32,
+        y: u32,
+        gas_index: usize,
+        amount: u32,
+        world: &WorldGrid,
+    ) -> u32 {
+        if amount == 0
+            || gas_index >= self.gas_count
+            || is_boundary(x, y)
+            || world.is_solid(x, y)
+        {
+            return 0;
+        }
+        let idx = linear_index(x, y);
+        let before = self.read[idx][gas_index];
+        let after = before.saturating_add(amount);
+        self.read[idx][gas_index] = after;
+        self.write[idx][gas_index] = after;
+        after.saturating_sub(before)
+    }
+
+    pub fn remove_particles_proportional(
+        &mut self,
+        x: u32,
+        y: u32,
+        amount: u32,
+        world: &WorldGrid,
+    ) -> u32 {
+        if amount == 0 || is_boundary(x, y) || world.is_solid(x, y) {
+            return 0;
+        }
+
+        let idx = linear_index(x, y);
+        let species = &mut self.read[idx];
+        let total: u64 = species.iter().map(|&v| u64::from(v)).sum();
+        if total == 0 {
+            return 0;
+        }
+
+        let remove = u64::from(amount).min(total);
+        if remove == total {
+            for v in species.iter_mut() {
+                *v = 0;
+            }
+            self.write[idx].fill(0);
+            return remove as u32;
+        }
+
+        let mut base_remove = vec![0u32; self.gas_count];
+        let mut remainders = vec![0u64; self.gas_count];
+        let mut removed_base = 0u64;
+
+        for gas_index in 0..self.gas_count {
+            let numerator = u128::from(species[gas_index]) * u128::from(remove);
+            let base = (numerator / u128::from(total)) as u64;
+            let remainder = (numerator % u128::from(total)) as u64;
+            base_remove[gas_index] = base.min(u64::from(species[gas_index])) as u32;
+            remainders[gas_index] = remainder;
+            removed_base = removed_base.saturating_add(u64::from(base_remove[gas_index]));
+        }
+
+        let mut remaining = remove.saturating_sub(removed_base);
+        while remaining > 0 {
+            let mut best_index = None;
+            let mut best_remainder = 0u64;
+            for gas_index in 0..self.gas_count {
+                if base_remove[gas_index] >= species[gas_index] {
+                    continue;
+                }
+                let rem = remainders[gas_index];
+                if best_index.is_none() || rem > best_remainder {
+                    best_index = Some(gas_index);
+                    best_remainder = rem;
+                }
+            }
+
+            let Some(best) = best_index else {
+                break;
+            };
+            base_remove[best] = base_remove[best].saturating_add(1);
+            remainders[best] = 0;
+            remaining -= 1;
+        }
+
+        let mut removed_total = 0u64;
+        for gas_index in 0..self.gas_count {
+            let remove_i = base_remove[gas_index].min(species[gas_index]);
+            species[gas_index] = species[gas_index].saturating_sub(remove_i);
+            self.write[idx][gas_index] = species[gas_index];
+            removed_total = removed_total.saturating_add(u64::from(remove_i));
+        }
+
+        removed_total.min(u64::from(u32::MAX)) as u32
+    }
+
     pub fn apply_species_delta_with_lbm(
         &mut self,
         x: u32,

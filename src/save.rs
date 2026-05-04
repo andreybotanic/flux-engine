@@ -13,18 +13,25 @@ use serde::{Deserialize, Serialize};
 use crate::{
     config::GasRegistry,
     simulation::gas::{GasField, GasFieldSnapshot},
-    world::grid::{WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
+    world::{
+        gas_structures::{GasStructureGrid, GasStructureSnapshot},
+        grid::{WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
+    },
 };
 
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 const WORLD_CELLS_MAGIC: &[u8; 4] = b"FXWC";
 const GAS_STATE_MAGIC: &[u8; 4] = b"FXGS";
+const GAS_STRUCTURES_MAGIC: &[u8; 4] = b"FXST";
 const WORLD_CELLS_VERSION: u16 = 1;
 const GAS_STATE_VERSION: u16 = 2;
+const GAS_STRUCTURES_VERSION: u16 = 1;
 const CHUNK_WORLD_CELLS_ID: &str = "world_cells";
 const CHUNK_GAS_STATE_ID: &str = "gas_state";
+const CHUNK_GAS_STRUCTURES_ID: &str = "gas_structures";
 const WORLD_CELLS_FILE: &str = "world_cells.bin";
 const GAS_STATE_FILE: &str = "gas_state.bin";
+const GAS_STRUCTURES_FILE: &str = "gas_structures.bin";
 const META_FILE: &str = "meta.toml";
 
 static SAVE_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -129,6 +136,7 @@ pub struct SaveDescriptor {
 pub struct RuntimeWorldState {
     pub world_cell_codes: Vec<u8>,
     pub gas_snapshot: GasFieldSnapshot,
+    pub gas_structures_snapshot: GasStructureSnapshot,
     pub simulation_step: u64,
 }
 
@@ -213,6 +221,7 @@ pub fn create_save(
     display_name: &str,
     world: &WorldGrid,
     gas: &GasField,
+    structures: &GasStructureGrid,
     gas_registry: &GasRegistry,
     simulation_step: u64,
 ) -> Result<SaveDescriptor, SaveError> {
@@ -243,6 +252,7 @@ pub fn create_save(
         &descriptor,
         world,
         gas,
+        structures,
         gas_registry,
         simulation_step,
         false,
@@ -255,6 +265,7 @@ pub fn overwrite_save(
     save_id: &str,
     world: &WorldGrid,
     gas: &GasField,
+    structures: &GasStructureGrid,
     gas_registry: &GasRegistry,
     simulation_step: u64,
 ) -> Result<SaveDescriptor, SaveError> {
@@ -278,6 +289,7 @@ pub fn overwrite_save(
         &descriptor,
         world,
         gas,
+        structures,
         gas_registry,
         simulation_step,
         true,
@@ -309,9 +321,14 @@ pub fn load_save(
         slot_dir.join(chunk_map.get(CHUNK_GAS_STATE_ID).ok_or_else(|| {
             SaveError::Validation("Save meta missing gas_state chunk".to_string())
         })?);
+    let structures_path =
+        slot_dir.join(chunk_map.get(CHUNK_GAS_STRUCTURES_ID).ok_or_else(|| {
+            SaveError::Validation("Save meta missing gas_structures chunk".to_string())
+        })?);
 
     let world_codes = read_world_cells_chunk(&world_path)?;
     let gas_file = read_gas_chunk(&gas_path)?;
+    let structures_snapshot = read_gas_structures_chunk(&structures_path)?;
 
     if gas_file.width != WORLD_WIDTH || gas_file.height != WORLD_HEIGHT {
         return Err(SaveError::Validation(format!(
@@ -332,6 +349,7 @@ pub fn load_save(
         state: RuntimeWorldState {
             world_cell_codes: world_codes,
             gas_snapshot: mapped_snapshot,
+            gas_structures_snapshot: structures_snapshot,
             simulation_step: gas_file.simulation_step,
         },
     })
@@ -340,9 +358,11 @@ pub fn load_save(
 pub fn new_game_snapshot(gas_registry: &GasRegistry) -> RuntimeWorldState {
     let world = WorldGrid::default();
     let gas = GasField::from_registry(gas_registry);
+    let structures = GasStructureGrid::default();
     RuntimeWorldState {
         world_cell_codes: world.snapshot_cell_codes(),
         gas_snapshot: gas.snapshot_state(),
+        gas_structures_snapshot: structures.snapshot_state(),
         simulation_step: 0,
     }
 }
@@ -447,6 +467,7 @@ fn write_slot(
     descriptor: &SaveDescriptor,
     world: &WorldGrid,
     gas: &GasField,
+    structures: &GasStructureGrid,
     gas_registry: &GasRegistry,
     simulation_step: u64,
     allow_overwrite: bool,
@@ -470,6 +491,11 @@ fn write_slot(
             file: GAS_STATE_FILE.to_string(),
             format: "binary_v2".to_string(),
         },
+        SaveChunkMetaToml {
+            id: CHUNK_GAS_STRUCTURES_ID.to_string(),
+            file: GAS_STRUCTURES_FILE.to_string(),
+            format: "binary_v1".to_string(),
+        },
     ];
 
     let meta = SaveMetaToml {
@@ -485,6 +511,7 @@ fn write_slot(
 
     let world_codes = world.snapshot_cell_codes();
     let gas_snapshot = gas.snapshot_state();
+    let structures_snapshot = structures.snapshot_state();
     let gas_ids = gas_registry
         .all()
         .iter()
@@ -530,6 +557,7 @@ fn write_slot(
             &gas_ids,
             &gas_snapshot,
         )?;
+        write_gas_structures_chunk(&tmp_dir.join(GAS_STRUCTURES_FILE), &structures_snapshot)?;
         Ok(())
     })();
 
@@ -850,6 +878,96 @@ fn read_gas_chunk(path: &Path) -> Result<SavedGasChunk, SaveError> {
     })
 }
 
+fn write_gas_structures_chunk(
+    path: &Path,
+    snapshot: &GasStructureSnapshot,
+) -> Result<(), SaveError> {
+    let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+    if snapshot.kinds.len() != cells
+        || snapshot.gas_indices.len() != cells
+        || snapshot.amounts.len() != cells
+    {
+        return Err(SaveError::Validation(format!(
+            "Gas structures snapshot length mismatch while writing chunk: kinds={}, gas_indices={}, amounts={}, expected={}",
+            snapshot.kinds.len(),
+            snapshot.gas_indices.len(),
+            snapshot.amounts.len(),
+            cells
+        )));
+    }
+
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(GAS_STRUCTURES_MAGIC);
+    bytes.extend_from_slice(&GAS_STRUCTURES_VERSION.to_le_bytes());
+    bytes.extend_from_slice(&WORLD_WIDTH.to_le_bytes());
+    bytes.extend_from_slice(&WORLD_HEIGHT.to_le_bytes());
+    bytes.extend_from_slice(&(cells as u32).to_le_bytes());
+    for idx in 0..cells {
+        bytes.push(snapshot.kinds[idx]);
+        bytes.extend_from_slice(&snapshot.gas_indices[idx].to_le_bytes());
+        bytes.extend_from_slice(&snapshot.amounts[idx].to_le_bytes());
+    }
+
+    fs::write(path, bytes)
+        .map_err(|err| SaveError::Io(format!("Failed to write '{}': {}", path.display(), err)))
+}
+
+fn read_gas_structures_chunk(path: &Path) -> Result<GasStructureSnapshot, SaveError> {
+    let bytes = fs::read(path)
+        .map_err(|err| SaveError::Io(format!("Failed to read '{}': {}", path.display(), err)))?;
+    let mut cursor = Cursor::new(bytes.as_slice());
+
+    let magic = read_exact_array::<4>(&mut cursor)?;
+    if &magic != GAS_STRUCTURES_MAGIC {
+        return Err(SaveError::Validation(format!(
+            "Invalid gas structures chunk magic in '{}'",
+            path.display()
+        )));
+    }
+    let version = read_u16(&mut cursor)?;
+    if version != GAS_STRUCTURES_VERSION {
+        return Err(SaveError::Validation(format!(
+            "Unsupported gas structures chunk version {} in '{}'",
+            version,
+            path.display()
+        )));
+    }
+    let width = read_u32(&mut cursor)?;
+    let height = read_u32(&mut cursor)?;
+    let cells = read_u32(&mut cursor)? as usize;
+    let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+    if width != WORLD_WIDTH || height != WORLD_HEIGHT || cells != expected {
+        return Err(SaveError::Validation(format!(
+            "Gas structures chunk dimensions mismatch in '{}': got {}x{} cells={}, expected {}x{} cells={}",
+            path.display(),
+            width,
+            height,
+            cells,
+            WORLD_WIDTH,
+            WORLD_HEIGHT,
+            expected
+        )));
+    }
+
+    let mut kinds = Vec::with_capacity(cells);
+    let mut gas_indices = Vec::with_capacity(cells);
+    let mut amounts = Vec::with_capacity(cells);
+    for _ in 0..cells {
+        let kind = read_exact_array::<1>(&mut cursor)?[0];
+        let gas_index = read_u32(&mut cursor)?;
+        let amount = read_u32(&mut cursor)?;
+        kinds.push(kind);
+        gas_indices.push(gas_index);
+        amounts.push(amount);
+    }
+
+    Ok(GasStructureSnapshot {
+        kinds,
+        gas_indices,
+        amounts,
+    })
+}
+
 fn map_saved_gas_snapshot_to_registry(
     saved: &SavedGasChunk,
     gas_registry: &GasRegistry,
@@ -926,7 +1044,7 @@ mod tests {
     use super::*;
     use crate::{
         config::GasDefinition,
-        world::grid::{CellMaterial, WorldGrid},
+        world::{gas_structures::GasStructureGrid, grid::{CellMaterial, WorldGrid}},
     };
 
     fn test_registry() -> GasRegistry {
@@ -977,12 +1095,15 @@ mod tests {
         assert!(world.set_solid_with_material(11, 10, CellMaterial::Metal));
 
         let mut gas = GasField::from_registry(&registry);
+        let mut structures = GasStructureGrid::default();
         let _ = gas.apply_species_delta_with_lbm(50, 50, 0, 7_000.0);
         let _ = gas.apply_species_delta_with_lbm(51, 50, 1, 4_000.0);
         let _ = gas.apply_species_delta_with_lbm(52, 50, 2, 2_000.0);
+        assert!(structures.set_source(14, 14, 0, 10, &world));
+        assert!(structures.set_sink(15, 14, 5, &world));
 
-        let descriptor =
-            create_save(&root, "Test Save", &world, &gas, &registry, 123).expect("create save");
+        let descriptor = create_save(&root, "Test Save", &world, &gas, &structures, &registry, 123)
+            .expect("create save");
         let loaded = load_save(&root, &descriptor.id, &registry).expect("load save");
         assert_eq!(loaded.state.simulation_step, 123);
         assert_eq!(
@@ -1001,6 +1122,10 @@ mod tests {
         restored_gas
             .restore_state(&loaded.state.gas_snapshot)
             .expect("restore gas");
+        let mut restored_structures = GasStructureGrid::default();
+        restored_structures
+            .restore_state(&loaded.state.gas_structures_snapshot, &restored_world)
+            .expect("restore structures");
         let original = gas.snapshot_state();
         let restored = restored_gas.snapshot_state();
         assert_eq!(original.gas_count, restored.gas_count);
@@ -1008,6 +1133,8 @@ mod tests {
         for i in 0..original.species.len() {
             assert_eq!(original.species[i], restored.species[i]);
         }
+        assert_eq!(restored_structures.cell(14, 14).is_some(), true);
+        assert_eq!(restored_structures.cell(15, 14).is_some(), true);
 
         let _ = fs::remove_dir_all(root);
     }
@@ -1018,10 +1145,13 @@ mod tests {
         let registry = test_registry();
         let world = WorldGrid::default();
         let gas = GasField::from_registry(&registry);
+        let structures = GasStructureGrid::default();
 
-        let first = create_save(&root, "first", &world, &gas, &registry, 1).expect("first save");
+        let first =
+            create_save(&root, "first", &world, &gas, &structures, &registry, 1).expect("first save");
         std::thread::sleep(std::time::Duration::from_millis(2));
-        let second = create_save(&root, "second", &world, &gas, &registry, 2).expect("second save");
+        let second = create_save(&root, "second", &world, &gas, &structures, &registry, 2)
+            .expect("second save");
 
         let saves = list_saves(&root).expect("list saves");
         assert_eq!(saves.len(), 2);
@@ -1037,9 +1167,18 @@ mod tests {
         let registry = test_registry();
         let world = WorldGrid::default();
         let gas = GasField::from_registry(&registry);
+        let structures = GasStructureGrid::default();
 
-        let descriptor =
-            create_save(&root, "unknown-gas", &world, &gas, &registry, 5).expect("save");
+        let descriptor = create_save(
+            &root,
+            "unknown-gas",
+            &world,
+            &gas,
+            &structures,
+            &registry,
+            5,
+        )
+        .expect("save");
         let gas_path = root.join(&descriptor.id).join(GAS_STATE_FILE);
         let mut bytes = fs::read(&gas_path).expect("read gas chunk");
         // Header: magic(4)+version(2)+width(4)+height(4)+step(8)+gas_count(4)+cells(4) = 30
@@ -1063,8 +1202,17 @@ mod tests {
         let registry = test_registry();
         let world = WorldGrid::default();
         let gas = GasField::from_registry(&registry);
-        let descriptor =
-            create_save(&root, "bad-world-magic", &world, &gas, &registry, 7).expect("save");
+        let structures = GasStructureGrid::default();
+        let descriptor = create_save(
+            &root,
+            "bad-world-magic",
+            &world,
+            &gas,
+            &structures,
+            &registry,
+            7,
+        )
+        .expect("save");
 
         let world_path = root.join(&descriptor.id).join(WORLD_CELLS_FILE);
         let mut bytes = fs::read(&world_path).expect("read world chunk");
@@ -1083,8 +1231,17 @@ mod tests {
         let registry = test_registry();
         let world = WorldGrid::default();
         let gas = GasField::from_registry(&registry);
-        let descriptor =
-            create_save(&root, "bad-gas-version", &world, &gas, &registry, 11).expect("save");
+        let structures = GasStructureGrid::default();
+        let descriptor = create_save(
+            &root,
+            "bad-gas-version",
+            &world,
+            &gas,
+            &structures,
+            &registry,
+            11,
+        )
+        .expect("save");
 
         let gas_path = root.join(&descriptor.id).join(GAS_STATE_FILE);
         let mut bytes = fs::read(&gas_path).expect("read gas chunk");

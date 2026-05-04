@@ -1,9 +1,13 @@
 use crate::{
     config::{GasDefinition, GasRegistry},
     simulation::{
-        gas::GasField, gpu_solver::GpuGasSolver, GasSimulationConfig, SimulationStep, SolverTuning,
+        apply_gas_structures_pre_step, gas::GasField, gpu_solver::GpuGasSolver,
+        GasSimulationConfig, SimulationStep, SolverTuning,
     },
-    world::grid::{is_boundary, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
+    world::{
+        gas_structures::GasStructureGrid,
+        grid::{is_boundary, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
+    },
 };
 use bevy::prelude::UVec2;
 
@@ -29,6 +33,7 @@ pub struct ParityMetrics {
 pub struct ScenarioSpec {
     pub name: &'static str,
     pub with_internal_walls: bool,
+    pub with_structures: bool,
 }
 
 pub const PARITY_STEPS: u32 = 5_000;
@@ -40,14 +45,21 @@ pub const PARITY_THRESHOLDS: ParityThresholds = ParityThresholds {
     mass_rel_error_max: 0.50,
 };
 
-pub const PARITY_SCENARIOS: [ScenarioSpec; 2] = [
+pub const PARITY_SCENARIOS: [ScenarioSpec; 3] = [
     ScenarioSpec {
         name: "open-field",
         with_internal_walls: false,
+        with_structures: false,
     },
     ScenarioSpec {
         name: "inner-walls",
         with_internal_walls: true,
+        with_structures: false,
+    },
+    ScenarioSpec {
+        name: "inner-walls-with-structures",
+        with_internal_walls: true,
+        with_structures: true,
     },
 ];
 
@@ -83,11 +95,18 @@ fn tuned_config() -> GasSimulationConfig {
     }
 }
 
-fn populate_scenario(world: &mut WorldGrid, gas: &mut GasField, with_internal_walls: bool) {
+fn populate_scenario(
+    world: &mut WorldGrid,
+    structures: &mut GasStructureGrid,
+    gas: &mut GasField,
+    with_internal_walls: bool,
+    with_structures: bool,
+) {
     gas.clear_rect(
         UVec2::new(1, 1),
         UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
     );
+    *structures = GasStructureGrid::default();
     if with_internal_walls {
         for x in 20..=80 {
             let _ = world.set_solid_with_material(x, 20, CellMaterial::Brick);
@@ -105,6 +124,13 @@ fn populate_scenario(world: &mut WorldGrid, gas: &mut GasField, with_internal_wa
         }
         let _ = world.set_empty(50, 52);
         let _ = world.set_empty(50, 53);
+    }
+
+    if with_structures {
+        let _ = structures.set_source(28, 28, 0, 8, world);
+        let _ = structures.set_source(74, 74, 2, 11, world);
+        let _ = structures.set_sink(28, 74, 7, world);
+        let _ = structures.set_sink(74, 28, 9, world);
     }
 
     for y in 1..WORLD_HEIGHT - 1 {
@@ -236,11 +262,18 @@ pub fn run_cpu_gpu_parity_scenario(
     radius: u32,
 ) -> Result<ParityMetrics, String> {
     let mut world = WorldGrid::default();
+    let mut structures = GasStructureGrid::default();
     let registry = test_registry_three_gases();
     let config = tuned_config();
 
     let mut cpu_field = GasField::from_registry(&registry);
-    populate_scenario(&mut world, &mut cpu_field, scenario.with_internal_walls);
+    populate_scenario(
+        &mut world,
+        &mut structures,
+        &mut cpu_field,
+        scenario.with_internal_walls,
+        scenario.with_structures,
+    );
 
     let mut gpu_field = cpu_field.clone();
     let mut cpu_step = SimulationStep(0);
@@ -248,6 +281,7 @@ pub fn run_cpu_gpu_parity_scenario(
     let mut block_sync = super::BlockSyncState;
 
     for _ in 0..steps {
+        let _ = apply_gas_structures_pre_step(&structures, &mut cpu_field, &world);
         super::do_one_substep(
             &mut block_sync,
             &mut cpu_field,
@@ -259,6 +293,10 @@ pub fn run_cpu_gpu_parity_scenario(
 
     let mut solver = GpuGasSolver::from_cpu_state(&world, &gpu_field)?.0;
     for _ in 0..steps {
+        let changed = apply_gas_structures_pre_step(&structures, &mut gpu_field, &world);
+        if changed {
+            let _ = solver.upload_state(&gpu_field.to_gpu_host_state(&world))?;
+        }
         let params = GpuGasSolver::params_from_config(
             &config,
             WORLD_WIDTH,
@@ -285,11 +323,18 @@ pub fn run_cpu_cpu_parity_scenario(
     step_offset_b: u64,
 ) -> Result<ParityMetrics, String> {
     let mut world = WorldGrid::default();
+    let mut structures = GasStructureGrid::default();
     let registry = test_registry_three_gases();
     let config = tuned_config();
 
     let mut base_field = GasField::from_registry(&registry);
-    populate_scenario(&mut world, &mut base_field, scenario.with_internal_walls);
+    populate_scenario(
+        &mut world,
+        &mut structures,
+        &mut base_field,
+        scenario.with_internal_walls,
+        scenario.with_structures,
+    );
 
     let mut cpu_a = base_field.clone();
     let mut cpu_b = base_field;
@@ -299,6 +344,7 @@ pub fn run_cpu_cpu_parity_scenario(
     let mut block_sync_b = super::BlockSyncState;
 
     for _ in 0..steps {
+        let _ = apply_gas_structures_pre_step(&structures, &mut cpu_a, &world);
         super::do_one_substep(
             &mut block_sync_a,
             &mut cpu_a,
@@ -306,6 +352,7 @@ pub fn run_cpu_cpu_parity_scenario(
             &config,
             &mut step_a,
         );
+        let _ = apply_gas_structures_pre_step(&structures, &mut cpu_b, &world);
         super::do_one_substep(
             &mut block_sync_b,
             &mut cpu_b,
@@ -362,16 +409,18 @@ pub fn run_cpu_only_calibration(
         return Err("Calibration requires at least two CPU runs".to_string());
     }
     let mut world = WorldGrid::default();
+    let mut structures = GasStructureGrid::default();
     let registry = test_registry_three_gases();
     let config = tuned_config();
 
     let mut states = Vec::new();
     for offset in step_offsets {
         let mut field = GasField::from_registry(&registry);
-        populate_scenario(&mut world, &mut field, true);
+        populate_scenario(&mut world, &mut structures, &mut field, true, false);
         let mut step = SimulationStep(*offset);
         let mut block_sync = super::BlockSyncState;
         for _ in 0..PARITY_STEPS {
+            let _ = apply_gas_structures_pre_step(&structures, &mut field, &world);
             super::do_one_substep(&mut block_sync, &mut field, &world, &config, &mut step);
         }
         states.push(field);

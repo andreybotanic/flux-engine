@@ -9,6 +9,7 @@ use bevy::{
 
 use crate::{
     config::{CellTypeVisualConfig, GasMainViewVisualConfig, GasRegistry},
+    editor::StructureEditState,
     input::camera::MainCamera,
     save::WorldLoadState,
     simulation::{
@@ -20,6 +21,7 @@ use crate::{
         cell_center, is_boundary, world_dimensions, world_to_cell, CellKind, CellMaterial,
         WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH,
     },
+    world::gas_structures::{GasStructureCell, GasStructureGrid},
     world::WorldCellChanged,
 };
 
@@ -171,6 +173,8 @@ pub(crate) struct WorldVisualAssets {
     brick: Handle<Image>,
     metal: Handle<Image>,
     boundary: Handle<Image>,
+    source: Handle<Image>,
+    sink: Handle<Image>,
 }
 
 #[derive(Resource, Default)]
@@ -178,10 +182,22 @@ pub(crate) struct WallEntities {
     by_cell: HashMap<(u32, u32), Entity>,
 }
 
+#[derive(Component)]
+struct GasStructureVisual;
+
+#[derive(Component)]
+pub(crate) struct GasStructureEditHighlight;
+
+#[derive(Resource, Default)]
+pub(crate) struct GasStructureEntities {
+    by_cell: HashMap<(u32, u32), Entity>,
+}
+
 pub fn setup_world_view(
     mut commands: Commands,
     simulation_images: Res<GasSimulationImages>,
     world: Res<WorldGrid>,
+    structures: Res<GasStructureGrid>,
     world_load_state: Res<WorldLoadState>,
     asset_server: Res<AssetServer>,
     cell_visuals: Res<CellTypeVisualConfig>,
@@ -192,6 +208,8 @@ pub fn setup_world_view(
         brick: asset_server.load("sprites/world/tile_brick.png"),
         metal: asset_server.load("sprites/world/tile_metal.png"),
         boundary: asset_server.load("sprites/world/tile_boundary.png"),
+        source: asset_server.load("sprites/world/tile_gas_source.png"),
+        sink: asset_server.load("sprites/world/tile_gas_sink.png"),
     };
     commands.insert_resource(visuals.clone());
 
@@ -285,6 +303,22 @@ pub fn setup_world_view(
         }
     }
     commands.insert_resource(wall_entities);
+
+    let mut structure_entities = GasStructureEntities::default();
+    for (x, y, structure) in structures.iter_cells() {
+        let entity = spawn_gas_structure_sprite(&mut commands, &visuals, x, y, structure, show_world);
+        structure_entities.by_cell.insert((x, y), entity);
+    }
+    commands.insert_resource(structure_entities);
+    commands.spawn((
+        Sprite::from_color(
+            Color::srgba(1.0, 0.93, 0.30, 0.36),
+            Vec2::splat(CELL_SIZE - 2.0),
+        ),
+        Transform::from_xyz(0.0, 0.0, 0.91),
+        Visibility::Hidden,
+        GasStructureEditHighlight,
+    ));
 }
 
 fn spawn_wall_sprite(
@@ -326,7 +360,38 @@ fn spawn_wall_sprite(
         .id()
 }
 
-pub fn sync_wall_visuals(
+fn spawn_gas_structure_sprite(
+    commands: &mut Commands,
+    visuals: &WorldVisualAssets,
+    x: u32,
+    y: u32,
+    structure: GasStructureCell,
+    show_world: bool,
+) -> Entity {
+    let image = match structure {
+        GasStructureCell::Source { .. } => visuals.source.clone(),
+        GasStructureCell::Sink { .. } => visuals.sink.clone(),
+    };
+    commands
+        .spawn((
+            Sprite {
+                image,
+                custom_size: Some(Vec2::splat(CELL_SIZE)),
+                color: Color::WHITE,
+                ..default()
+            },
+            Transform::from_translation(cell_center(x, y).extend(0.9)),
+            if show_world {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            },
+            GasStructureVisual,
+        ))
+        .id()
+}
+
+pub(crate) fn sync_wall_visuals(
     mut commands: Commands,
     world: Res<WorldGrid>,
     visuals: Res<WorldVisualAssets>,
@@ -359,6 +424,56 @@ pub fn sync_wall_visuals(
             _ => {}
         }
     }
+}
+
+pub(crate) fn sync_gas_structure_visuals(
+    mut commands: Commands,
+    structures: Res<GasStructureGrid>,
+    world_load_state: Res<WorldLoadState>,
+    visuals: Res<WorldVisualAssets>,
+    mut structure_entities: ResMut<GasStructureEntities>,
+) {
+    if !structures.is_changed() && !world_load_state.is_changed() {
+        return;
+    }
+
+    for entity in structure_entities.by_cell.values().copied() {
+        commands.entity(entity).despawn();
+    }
+    structure_entities.by_cell.clear();
+
+    if !world_load_state.has_world {
+        return;
+    }
+
+    for (x, y, structure) in structures.iter_cells() {
+        let entity =
+            spawn_gas_structure_sprite(&mut commands, &visuals, x, y, structure, world_load_state.has_world);
+        structure_entities.by_cell.insert((x, y), entity);
+    }
+}
+
+pub(crate) fn sync_structure_edit_highlight(
+    world_load_state: Res<WorldLoadState>,
+    structure_edit: Res<StructureEditState>,
+    structures: Res<GasStructureGrid>,
+    mut highlight: Single<(&mut Transform, &mut Visibility), With<GasStructureEditHighlight>>,
+) {
+    let (transform, visibility) = &mut *highlight;
+    if !world_load_state.has_world {
+        **visibility = Visibility::Hidden;
+        return;
+    }
+    let Some(cell) = structure_edit.selected_cell else {
+        **visibility = Visibility::Hidden;
+        return;
+    };
+    if structures.cell(cell.x, cell.y).is_none() {
+        **visibility = Visibility::Hidden;
+        return;
+    }
+    **transform = Transform::from_translation(cell_center(cell.x, cell.y).extend(0.91));
+    **visibility = Visibility::Visible;
 }
 
 pub fn update_overlay_mode(

@@ -679,7 +679,7 @@ fn sync_panel_visual_state(
         node.overflow = if panel.state.scroll_enabled {
             Overflow::scroll_y()
         } else {
-            Overflow::clip_y()
+            Overflow::visible()
         };
         if panel.state.scroll_enabled {
             let available_height = (window.height() - panel.spec.margin_y * 2.0).max(0.0);

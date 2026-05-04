@@ -13,7 +13,11 @@ use self::{
     gas::GasField,
     gpu_solver::{GpuGasSolver, GpuStepTimings},
 };
-use crate::{config::GasRegistry, save::WorldLoadState, world::grid::WorldGrid};
+use crate::{
+    config::GasRegistry,
+    save::WorldLoadState,
+    world::{gas_structures::{GasStructureCell, GasStructureGrid}, grid::WorldGrid},
+};
 
 #[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
 pub struct SimulationStep(pub u64);
@@ -266,6 +270,7 @@ fn run_simulation_tick(
     config: Res<GasSimulationConfig>,
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
+    structures: Res<GasStructureGrid>,
     world: Res<WorldGrid>,
     mut step: ResMut<SimulationStep>,
     mut perf: ResMut<SimulationPerfStats>,
@@ -280,6 +285,11 @@ fn run_simulation_tick(
 
     if control.paused {
         return;
+    }
+
+    let changed_by_structures = apply_gas_structures_pre_step(&structures, &mut gas, &world);
+    if changed_by_structures && backend.backend == SimulationBackend::Gpu {
+        gpu_state.needs_full_upload = true;
     }
 
     let started_at = Instant::now();
@@ -322,6 +332,34 @@ fn run_simulation_tick(
         perf.window_steps = 0;
         perf.window_started_at = Instant::now();
     }
+}
+
+pub(crate) fn apply_gas_structures_pre_step(
+    structures: &GasStructureGrid,
+    gas: &mut GasField,
+    world: &WorldGrid,
+) -> bool {
+    let mut changed = false;
+    for (x, y, structure) in structures.iter_cells() {
+        match structure {
+            GasStructureCell::Source { gas_index, amount } => {
+                if gas.add_particles_no_impulse(x, y, gas_index, amount, world) > 0 {
+                    changed = true;
+                }
+            }
+            GasStructureCell::Sink { amount } => {
+                if gas.remove_particles_proportional(x, y, amount, world) > 0 {
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    if changed {
+        gas.recompute_total_density_buffer(world);
+    }
+
+    changed
 }
 
 fn do_one_substep_gpu(
@@ -397,8 +435,35 @@ pub fn do_one_substep(
 #[cfg(test)]
 mod tests {
     use super::{effective_target_hz, SimulationRateConfig, SimulationSpeed};
-    use super::abort_on_gpu_runtime_error;
+    use super::{abort_on_gpu_runtime_error, apply_gas_structures_pre_step};
+    use crate::config::{GasDefinition, GasRegistry};
+    use crate::simulation::gas::GasField;
     use crate::simulation::backend::{SimulationBackend, SimulationBackendConfig};
+    use crate::world::{gas_structures::GasStructureGrid, grid::WorldGrid};
+
+    fn test_registry() -> GasRegistry {
+        GasRegistry::new(vec![
+            GasDefinition {
+                id: "h2".to_string(),
+                label: "Hydrogen".to_string(),
+                molecular_mass: 2.016,
+                color: [0.6, 0.8, 1.0],
+            },
+            GasDefinition {
+                id: "o2".to_string(),
+                label: "Oxygen".to_string(),
+                molecular_mass: 31.998,
+                color: [0.6, 0.8, 1.0],
+            },
+            GasDefinition {
+                id: "co2".to_string(),
+                label: "Carbon Dioxide".to_string(),
+                molecular_mass: 44.009,
+                color: [0.9, 0.6, 0.4],
+            },
+        ])
+        .expect("valid test registry")
+    }
 
     #[test]
     fn default_backend_is_gpu() {
@@ -429,5 +494,41 @@ mod tests {
 
         let huge_base = SimulationRateConfig { target_hz: 9_999 };
         assert!((effective_target_hz(huge_base.target_hz, SimulationSpeed::X5) - 5000.0).abs() <= f64::EPSILON);
+    }
+
+    #[test]
+    fn source_structure_adds_selected_gas_each_step() {
+        let world = WorldGrid::default();
+        let registry = test_registry();
+        let mut gas = GasField::from_registry(&registry);
+        let mut structures = GasStructureGrid::default();
+        assert!(structures.set_source(10, 10, 1, 25, &world));
+
+        let changed = apply_gas_structures_pre_step(&structures, &mut gas, &world);
+        assert!(changed);
+        assert_eq!(gas.amount_particles(10, 10, 0), 0);
+        assert_eq!(gas.amount_particles(10, 10, 1), 25);
+        assert_eq!(gas.total_amount_particles(10, 10), 25);
+    }
+
+    #[test]
+    fn sink_structure_removes_proportionally_and_is_deterministic() {
+        let world = WorldGrid::default();
+        let registry = test_registry();
+        let mut gas = GasField::from_registry(&registry);
+        let mut structures = GasStructureGrid::default();
+        assert!(structures.set_sink(12, 12, 10, &world));
+
+        gas.set_amount(12, 12, 0, 10.0);
+        gas.set_amount(12, 12, 1, 20.0);
+        gas.set_amount(12, 12, 2, 30.0);
+        gas.recompute_total_density_buffer(&world);
+
+        let changed = apply_gas_structures_pre_step(&structures, &mut gas, &world);
+        assert!(changed);
+        assert_eq!(gas.total_amount_particles(12, 12), 50);
+        assert_eq!(gas.amount_particles(12, 12, 0), 8);
+        assert_eq!(gas.amount_particles(12, 12, 1), 17);
+        assert_eq!(gas.amount_particles(12, 12, 2), 25);
     }
 }

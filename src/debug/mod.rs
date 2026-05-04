@@ -4,10 +4,13 @@ use crate::{
     config::GasRegistry,
     input::camera::MainCamera,
     simulation::{
-        do_one_substep, gas::GasField, BlockSyncState, GasSimulationConfig, SimulationControl,
-        SimulationStep,
+        apply_gas_structures_pre_step, do_one_substep, gas::GasField, BlockSyncState,
+        GasSimulationConfig, SimulationControl, SimulationStep,
     },
-    world::grid::{cell_center, is_boundary, WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH},
+    world::{
+        gas_structures::GasStructureGrid,
+        grid::{cell_center, is_boundary, WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH},
+    },
 };
 
 #[derive(Resource, Default)]
@@ -88,6 +91,7 @@ fn handle_debug_keys(
     config: Res<GasSimulationConfig>,
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
+    structures: Res<GasStructureGrid>,
     world: Res<WorldGrid>,
     mut step: ResMut<SimulationStep>,
 ) {
@@ -99,6 +103,7 @@ fn handle_debug_keys(
     }
 
     if debug_mode.active && keys.just_pressed(KeyCode::Enter) {
+        let _ = apply_gas_structures_pre_step(&structures, &mut gas, &world);
         do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);
     }
 }
