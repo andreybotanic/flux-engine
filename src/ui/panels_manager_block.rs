@@ -87,7 +87,9 @@ impl PanelManager {
             },
             BackgroundColor(spec.background),
             GlobalZIndex(0),
-            PanelRoot { panel_id },
+            PanelRoot {
+                _panel_id: panel_id,
+            },
         ));
 
         let mut close_button_entity = None;
@@ -238,7 +240,9 @@ impl PanelManager {
                             row_gap: Val::Px(8.0),
                             ..default()
                         },
-                        PanelContentInner { panel_id },
+                        PanelContentInner {
+                            _panel_id: panel_id,
+                        },
                     ))
                     .with_children(build_content)
                     .id();
@@ -328,7 +332,7 @@ impl PanelManager {
 
 #[derive(Component, Clone, Copy)]
 struct PanelRoot {
-    panel_id: PanelId,
+    _panel_id: PanelId,
 }
 
 #[derive(Component, Clone, Copy)]
@@ -338,7 +342,7 @@ struct PanelContentViewport {
 
 #[derive(Component, Clone, Copy)]
 struct PanelContentInner {
-    panel_id: PanelId,
+    _panel_id: PanelId,
 }
 
 #[derive(Component, Clone, Copy)]

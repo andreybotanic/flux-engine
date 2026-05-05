@@ -21,7 +21,7 @@ pub struct GasRegistry {
 }
 
 impl GasRegistry {
-/// Runs `new` logic.
+    /// Runs `new` logic.
     pub fn new(mut gases: Vec<GasDefinition>) -> Result<Self, String> {
         if gases.is_empty() {
             return Err("Gas registry is empty. Add at least one gas config file.".to_string());
@@ -43,27 +43,27 @@ impl GasRegistry {
         Ok(Self { gases, by_id })
     }
 
-/// Runs `all` logic.
+    /// Runs `all` logic.
     pub fn all(&self) -> &[GasDefinition] {
         &self.gases
     }
 
-/// Runs `count` logic.
+    /// Runs `count` logic.
     pub fn count(&self) -> usize {
         self.gases.len()
     }
 
-/// Runs `get` logic.
+    /// Runs `get` logic.
     pub fn get(&self, index: usize) -> Option<&GasDefinition> {
         self.gases.get(index)
     }
 
-/// Runs `index_of` logic.
+    /// Runs `index_of` logic.
     pub fn index_of(&self, id: &str) -> Option<usize> {
         self.by_id.get(id).copied()
     }
 
-/// Runs `molecular_masses` logic.
+    /// Runs `molecular_masses` logic.
     pub fn molecular_masses(&self) -> Vec<f32> {
         self.gases.iter().map(|gas| gas.molecular_mass).collect()
     }
@@ -79,7 +79,7 @@ pub struct GasDefinition {
 }
 
 impl GasDefinition {
-/// Runs `color_as_bevy` logic.
+    /// Runs `color_as_bevy` logic.
     pub fn color_as_bevy(&self) -> Color {
         Color::srgb(self.color[0], self.color[1], self.color[2])
     }
@@ -130,7 +130,7 @@ impl Default for CellTypeVisualConfig {
 }
 
 impl CellTypeVisualConfig {
-/// Runs `main_tint` logic.
+    /// Runs `main_tint` logic.
     pub fn main_tint(self, material: CellMaterial) -> Color {
         let rgb = match material {
             CellMaterial::Boundary => self.boundary_main_tint,
@@ -140,7 +140,7 @@ impl CellTypeVisualConfig {
         Color::srgb(rgb[0], rgb[1], rgb[2])
     }
 
-/// Runs `gas_tint` logic.
+    /// Runs `gas_tint` logic.
     pub fn gas_tint(self, material: CellMaterial) -> Color {
         let rgb = match material {
             CellMaterial::Boundary => self.boundary_gas_tint,
@@ -163,13 +163,13 @@ pub struct GameConfig {
 }
 
 impl GameConfig {
-/// Runs `load_from_default_location` logic.
+    /// Runs `load_from_default_location` logic.
     pub fn load_from_default_location() -> Result<Self, String> {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
         Self::load_from_root(&root)
     }
 
-/// Runs `load_from_root` logic.
+    /// Runs `load_from_root` logic.
     pub fn load_from_root(root: &Path) -> Result<Self, String> {
         let simulation = read_toml::<SimulationToml>(&root.join("simulation.toml"))?;
         let cell_types = read_toml::<CellTypesToml>(&root.join("cell_types.toml"))?;
@@ -236,7 +236,6 @@ impl GameConfig {
         })
     }
 }
-
 
 include!("config_loader_block.rs");
 include!("config_tests_block.rs");

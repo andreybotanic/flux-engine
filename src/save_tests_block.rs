@@ -3,8 +3,14 @@ mod tests {
     use super::*;
     use crate::{
         config::GasDefinition,
-        world::{gas_structures::GasStructureGrid, grid::{CellMaterial, WorldGrid}},
+        simulation::pipes::PipeGasField,
+        world::{
+            gas_structures::GasStructureGrid,
+            grid::{CellMaterial, WorldGrid},
+            pipes::PipeGrid,
+        },
     };
+    use bevy::prelude::UVec2;
 
     fn test_registry() -> GasRegistry {
         GasRegistry::new(vec![
@@ -55,14 +61,33 @@ mod tests {
 
         let mut gas = GasField::from_registry(&registry);
         let mut structures = GasStructureGrid::default();
+        let mut pipe_layout = PipeGrid::default();
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
         let _ = gas.apply_species_delta_with_lbm(50, 50, 0, 7_000.0);
         let _ = gas.apply_species_delta_with_lbm(51, 50, 1, 4_000.0);
         let _ = gas.apply_species_delta_with_lbm(52, 50, 2, 2_000.0);
         assert!(structures.set_source(14, 14, 0, 10, &world));
         assert!(structures.set_sink(15, 14, 5, &world));
+        assert!(pipe_layout.set_pipe(20, 20, &world, &structures));
+        assert!(pipe_layout.set_pipe(21, 20, &world, &structures));
+        assert!(pipe_layout.set_vent(20, 20, &world, &structures));
+        assert!(pipe_layout.set_vent(21, 20, &world, &structures));
+        assert!(pipe_layout.add_connection(UVec2::new(20, 20), UVec2::new(21, 20)));
+        let accepted = pipe_gas.add_species_counts_limited(20, 20, &[70, 30, 0]);
+        assert_eq!(accepted.iter().copied().sum::<u32>(), 100);
 
-        let descriptor = create_save(&root, "Test Save", &world, &gas, &structures, &registry, 123)
-            .expect("create save");
+        let descriptor = create_save(
+            &root,
+            "Test Save",
+            &world,
+            &gas,
+            &structures,
+            &pipe_layout,
+            &pipe_gas,
+            &registry,
+            123,
+        )
+        .expect("create save");
         let loaded = load_save(&root, &descriptor.id, &registry).expect("load save");
         assert_eq!(loaded.state.simulation_step, 123);
         assert_eq!(
@@ -85,6 +110,14 @@ mod tests {
         restored_structures
             .restore_state(&loaded.state.gas_structures_snapshot, &restored_world)
             .expect("restore structures");
+        let mut restored_pipe_layout = PipeGrid::default();
+        restored_pipe_layout
+            .restore_state(&loaded.state.pipe_layout_snapshot, &restored_world, &restored_structures)
+            .expect("restore pipe layout");
+        let mut restored_pipe_gas = PipeGasField::from_registry(&registry);
+        restored_pipe_gas
+            .restore_state(&loaded.state.pipe_gas_snapshot)
+            .expect("restore pipe gas");
         let original = gas.snapshot_state();
         let restored = restored_gas.snapshot_state();
         assert_eq!(original.gas_count, restored.gas_count);
@@ -94,6 +127,9 @@ mod tests {
         }
         assert_eq!(restored_structures.cell(14, 14).is_some(), true);
         assert_eq!(restored_structures.cell(15, 14).is_some(), true);
+        assert!(restored_pipe_layout.has_pipe(20, 20));
+        assert!(restored_pipe_layout.has_vent(20, 20));
+        assert_eq!(restored_pipe_gas.total_amount_particles(20, 20), 100);
 
         let _ = fs::remove_dir_all(root);
     }
@@ -105,11 +141,17 @@ mod tests {
         let world = WorldGrid::default();
         let gas = GasField::from_registry(&registry);
         let structures = GasStructureGrid::default();
+        let pipe_layout = PipeGrid::default();
+        let pipe_gas = PipeGasField::from_registry(&registry);
 
-        let first =
-            create_save(&root, "first", &world, &gas, &structures, &registry, 1).expect("first save");
+        let first = create_save(
+            &root, "first", &world, &gas, &structures, &pipe_layout, &pipe_gas, &registry, 1,
+        )
+        .expect("first save");
         std::thread::sleep(std::time::Duration::from_millis(2));
-        let second = create_save(&root, "second", &world, &gas, &structures, &registry, 2)
+        let second = create_save(
+            &root, "second", &world, &gas, &structures, &pipe_layout, &pipe_gas, &registry, 2,
+        )
             .expect("second save");
 
         let saves = list_saves(&root).expect("list saves");
@@ -127,6 +169,8 @@ mod tests {
         let world = WorldGrid::default();
         let gas = GasField::from_registry(&registry);
         let structures = GasStructureGrid::default();
+        let pipe_layout = PipeGrid::default();
+        let pipe_gas = PipeGasField::from_registry(&registry);
 
         let descriptor = create_save(
             &root,
@@ -134,6 +178,8 @@ mod tests {
             &world,
             &gas,
             &structures,
+            &pipe_layout,
+            &pipe_gas,
             &registry,
             5,
         )
@@ -162,12 +208,16 @@ mod tests {
         let world = WorldGrid::default();
         let gas = GasField::from_registry(&registry);
         let structures = GasStructureGrid::default();
+        let pipe_layout = PipeGrid::default();
+        let pipe_gas = PipeGasField::from_registry(&registry);
         let descriptor = create_save(
             &root,
             "bad-world-magic",
             &world,
             &gas,
             &structures,
+            &pipe_layout,
+            &pipe_gas,
             &registry,
             7,
         )
@@ -191,12 +241,16 @@ mod tests {
         let world = WorldGrid::default();
         let gas = GasField::from_registry(&registry);
         let structures = GasStructureGrid::default();
+        let pipe_layout = PipeGrid::default();
+        let pipe_gas = PipeGasField::from_registry(&registry);
         let descriptor = create_save(
             &root,
             "bad-gas-version",
             &world,
             &gas,
             &structures,
+            &pipe_layout,
+            &pipe_gas,
             &registry,
             11,
         )
@@ -230,9 +284,13 @@ mod tests {
         let world = WorldGrid::default();
         let gas = GasField::from_registry(&registry);
         let structures = GasStructureGrid::default();
+        let pipe_layout = PipeGrid::default();
+        let pipe_gas = PipeGasField::from_registry(&registry);
 
-        let descriptor = create_save(&root, "to-delete", &world, &gas, &structures, &registry, 9)
-            .expect("save should be created");
+        let descriptor = create_save(
+            &root, "to-delete", &world, &gas, &structures, &pipe_layout, &pipe_gas, &registry, 9,
+        )
+        .expect("save should be created");
         assert!(root.join(&descriptor.id).exists());
 
         delete_save(&root, &descriptor.id).expect("existing save should be deleted");

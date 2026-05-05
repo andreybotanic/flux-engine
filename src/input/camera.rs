@@ -1,8 +1,4 @@
-use bevy::{
-    input::mouse::MouseWheel,
-    prelude::*,
-    window::PrimaryWindow,
-};
+use bevy::{input::mouse::MouseWheel, prelude::*, window::PrimaryWindow};
 
 use crate::editor::MainMenuState;
 use crate::ui::panels::PanelManager;

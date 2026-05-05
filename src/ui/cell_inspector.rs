@@ -72,6 +72,7 @@ pub(crate) fn update_cell_inspector(
     let overlay_name = match *overlay_mode {
         OverlayMode::Main => "F1 Main",
         OverlayMode::Gas => "F2 Gas",
+        OverlayMode::Pipes => "F3 Pipes",
     };
 
     let Some(cursor_position) = window.cursor_position() else {

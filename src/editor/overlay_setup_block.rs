@@ -1,5 +1,5 @@
 fn setup_editor_overlays(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let brick_silhouette = asset_server.load("sprites/ui/silhouette_brick.png");
+    let brick_silhouette = asset_server.load("sprites/world/silhouette_brick.png");
     commands.spawn((
         Sprite {
             image: brick_silhouette,
@@ -38,6 +38,7 @@ fn setup_editor_overlays(mut commands: Commands, asset_server: Res<AssetServer>)
                 Text::new("X"),
                 TextFont::from_font_size(24.0),
                 TextColor(crate::ui::palette::DANGER_TEXT),
+                EraseCursorOverlayText,
             ));
         });
 }

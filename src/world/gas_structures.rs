@@ -32,12 +32,12 @@ impl Default for GasStructureGrid {
 }
 
 impl GasStructureGrid {
-/// Runs `cell` logic.
+    /// Runs `cell` logic.
     pub fn cell(&self, x: u32, y: u32) -> Option<GasStructureCell> {
         self.cells[linear_index(x, y)]
     }
 
-/// Runs `can_place_at` logic.
+    /// Runs `can_place_at` logic.
     pub fn can_place_at(&self, x: u32, y: u32, world: &WorldGrid) -> bool {
         if !is_editable_cell(x, y) || is_boundary(x, y) {
             return false;
@@ -48,12 +48,12 @@ impl GasStructureGrid {
         matches!(world.cell(x, y), CellKind::Empty)
     }
 
-/// Runs `blocks_solid_placement` logic.
+    /// Runs `blocks_solid_placement` logic.
     pub fn blocks_solid_placement(&self, x: u32, y: u32) -> bool {
         self.cell(x, y).is_some()
     }
 
-/// Runs `set_source` logic.
+    /// Runs `set_source` logic.
     pub fn set_source(
         &mut self,
         x: u32,
@@ -70,7 +70,7 @@ impl GasStructureGrid {
         true
     }
 
-/// Runs `set_sink` logic.
+    /// Runs `set_sink` logic.
     pub fn set_sink(&mut self, x: u32, y: u32, amount: u32, world: &WorldGrid) -> bool {
         if amount == 0 || !self.can_place_at(x, y, world) {
             return false;
@@ -80,7 +80,7 @@ impl GasStructureGrid {
         true
     }
 
-/// Runs `clear` logic.
+    /// Runs `clear` logic.
     pub fn clear(&mut self, x: u32, y: u32) -> bool {
         let idx = linear_index(x, y);
         if self.cells[idx].is_none() {
@@ -90,7 +90,7 @@ impl GasStructureGrid {
         true
     }
 
-/// Runs `update_source` logic.
+    /// Runs `update_source` logic.
     pub fn update_source(
         &mut self,
         x: u32,
@@ -112,7 +112,7 @@ impl GasStructureGrid {
         }
     }
 
-/// Runs `update_sink` logic.
+    /// Runs `update_sink` logic.
     pub fn update_sink(&mut self, x: u32, y: u32, amount: u32, world: &WorldGrid) -> bool {
         if amount == 0 || is_boundary(x, y) || world.is_solid(x, y) {
             return false;
@@ -127,7 +127,7 @@ impl GasStructureGrid {
         }
     }
 
-/// Runs `iter_cells` logic.
+    /// Runs `iter_cells` logic.
     pub fn iter_cells(&self) -> impl Iterator<Item = (u32, u32, GasStructureCell)> + '_ {
         self.cells.iter().enumerate().filter_map(|(idx, value)| {
             value.map(|cell| {
@@ -138,7 +138,7 @@ impl GasStructureGrid {
         })
     }
 
-/// Runs `snapshot_state` logic.
+    /// Runs `snapshot_state` logic.
     pub fn snapshot_state(&self) -> GasStructureSnapshot {
         let mut kinds = Vec::with_capacity(self.cells.len());
         let mut gas_indices = Vec::with_capacity(self.cells.len());
@@ -171,7 +171,7 @@ impl GasStructureGrid {
         }
     }
 
-/// Runs `restore_state` logic.
+    /// Runs `restore_state` logic.
     pub fn restore_state(
         &mut self,
         snapshot: &GasStructureSnapshot,
@@ -276,6 +276,9 @@ mod tests {
                 amount: 99
             })
         );
-        assert_eq!(restored.cell(22, 21), Some(GasStructureCell::Sink { amount: 50 }));
+        assert_eq!(
+            restored.cell(22, 21),
+            Some(GasStructureCell::Sink { amount: 50 })
+        );
     }
 }

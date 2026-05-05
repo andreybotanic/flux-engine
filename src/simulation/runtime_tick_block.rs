@@ -3,8 +3,9 @@ fn effective_target_hz(base_hz: u32, speed: SimulationSpeed) -> f64 {
     base * speed.multiplier() as f64
 }
 
-fn initialize_gas_field_from_registry(mut commands: Commands, registry: Res<GasRegistry>) {
+fn initialize_gas_state_from_registry(mut commands: Commands, registry: Res<GasRegistry>) {
     commands.insert_resource(GasField::from_registry(&registry));
+    commands.insert_resource(crate::simulation::pipes::PipeGasField::from_registry(&registry));
 }
 
 fn apply_fixed_rate_config(
@@ -55,6 +56,9 @@ fn run_simulation_tick(
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
     structures: Res<GasStructureGrid>,
+    pipes: Res<PipeGrid>,
+    mut pipe_gas: ResMut<crate::simulation::pipes::PipeGasField>,
+    mut pipe_flow_visuals: ResMut<crate::simulation::pipes::PipeFlowVisualState>,
     world: Res<WorldGrid>,
     mut step: ResMut<SimulationStep>,
     mut perf: ResMut<SimulationPerfStats>,
@@ -71,8 +75,15 @@ fn run_simulation_tick(
         return;
     }
 
+    let changed_by_pipes = crate::simulation::pipes::apply_pipe_network_step(
+        &pipes,
+        &mut pipe_gas,
+        &mut gas,
+        &world,
+        &mut pipe_flow_visuals,
+    );
     let changed_by_structures = apply_gas_structures_pre_step(&structures, &mut gas, &world);
-    if changed_by_structures && backend.backend == SimulationBackend::Gpu {
+    if (changed_by_pipes || changed_by_structures) && backend.backend == SimulationBackend::Gpu {
         gpu_state.needs_full_upload = true;
     }
 

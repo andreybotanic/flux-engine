@@ -27,6 +27,11 @@ struct SavedGasChunk {
     total_density: Vec<f32>,
 }
 
+struct SavedPipeGasChunk {
+    gas_ids: Vec<String>,
+    species: Vec<u32>,
+}
+
 fn validate_display_name(display_name: &str) -> Result<(), SaveError> {
     let len = display_name.chars().count();
     if len == 0 {
@@ -78,7 +83,7 @@ fn read_meta(path: &Path) -> Result<SaveMetaToml, SaveError> {
 }
 
 fn validate_meta_dimensions(meta: &SaveMetaToml) -> Result<(), SaveError> {
-    if meta.schema_version != SCHEMA_VERSION {
+    if meta.schema_version < 2 || meta.schema_version > SCHEMA_VERSION {
         return Err(SaveError::Validation(format!(
             "Unsupported save schema version {}",
             meta.schema_version
@@ -99,6 +104,8 @@ fn write_slot(
     world: &WorldGrid,
     gas: &GasField,
     structures: &GasStructureGrid,
+    pipe_layout: &crate::world::pipes::PipeGrid,
+    pipe_gas: &crate::simulation::pipes::PipeGasField,
     gas_registry: &GasRegistry,
     simulation_step: u64,
     allow_overwrite: bool,
@@ -127,6 +134,16 @@ fn write_slot(
             file: GAS_STRUCTURES_FILE.to_string(),
             format: "binary_v1".to_string(),
         },
+        SaveChunkMetaToml {
+            id: CHUNK_PIPE_LAYOUT_ID.to_string(),
+            file: PIPE_LAYOUT_FILE.to_string(),
+            format: "binary_v1".to_string(),
+        },
+        SaveChunkMetaToml {
+            id: CHUNK_PIPE_GAS_ID.to_string(),
+            file: PIPE_GAS_FILE.to_string(),
+            format: "binary_v1".to_string(),
+        },
     ];
 
     let meta = SaveMetaToml {
@@ -143,6 +160,8 @@ fn write_slot(
     let world_codes = world.snapshot_cell_codes();
     let gas_snapshot = gas.snapshot_state();
     let structures_snapshot = structures.snapshot_state();
+    let pipe_layout_snapshot = pipe_layout.snapshot_state();
+    let pipe_gas_snapshot = pipe_gas.snapshot_state();
     let gas_ids = gas_registry
         .all()
         .iter()
@@ -189,6 +208,12 @@ fn write_slot(
             &gas_snapshot,
         )?;
         write_gas_structures_chunk(&tmp_dir.join(GAS_STRUCTURES_FILE), &structures_snapshot)?;
+        write_pipe_layout_chunk(&tmp_dir.join(PIPE_LAYOUT_FILE), &pipe_layout_snapshot)?;
+        write_pipe_gas_chunk(
+            &tmp_dir.join(PIPE_GAS_FILE),
+            &gas_ids,
+            &pipe_gas_snapshot,
+        )?;
         Ok(())
     })();
 

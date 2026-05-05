@@ -40,17 +40,17 @@ impl Default for WorldGrid {
 }
 
 impl WorldGrid {
-/// Runs `cell` logic.
+    /// Runs `cell` logic.
     pub fn cell(&self, x: u32, y: u32) -> CellKind {
         self.cells[linear_index(x, y)]
     }
 
-/// Runs `is_solid` logic.
+    /// Runs `is_solid` logic.
     pub fn is_solid(&self, x: u32, y: u32) -> bool {
         matches!(self.cell(x, y), CellKind::Solid(_))
     }
 
-/// Runs `solid_material` logic.
+    /// Runs `solid_material` logic.
     pub fn solid_material(&self, x: u32, y: u32) -> Option<CellMaterial> {
         match self.cell(x, y) {
             CellKind::Solid(material) => Some(material),
@@ -58,7 +58,7 @@ impl WorldGrid {
         }
     }
 
-/// Runs `set_cell_kind` logic.
+    /// Runs `set_cell_kind` logic.
     pub fn set_cell_kind(&mut self, x: u32, y: u32, kind: CellKind) -> bool {
         if !is_editable_cell(x, y) {
             return false;
@@ -73,27 +73,27 @@ impl WorldGrid {
         true
     }
 
-/// Runs `set_solid` logic.
+    /// Runs `set_solid` logic.
     pub fn set_solid(&mut self, x: u32, y: u32) -> bool {
         self.set_solid_with_material(x, y, CellMaterial::Brick)
     }
 
-/// Runs `set_solid_with_material` logic.
+    /// Runs `set_solid_with_material` logic.
     pub fn set_solid_with_material(&mut self, x: u32, y: u32, material: CellMaterial) -> bool {
         self.set_cell_kind(x, y, CellKind::Solid(material))
     }
 
-/// Runs `set_empty` logic.
+    /// Runs `set_empty` logic.
     pub fn set_empty(&mut self, x: u32, y: u32) -> bool {
         self.set_cell_kind(x, y, CellKind::Empty)
     }
 
-/// Runs `snapshot_cells` logic.
+    /// Runs `snapshot_cells` logic.
     pub fn snapshot_cells(&self) -> Vec<CellKind> {
         self.cells.clone()
     }
 
-/// Runs `restore_cells` logic.
+    /// Runs `restore_cells` logic.
     pub fn restore_cells(&mut self, cells: &[CellKind]) -> Result<(), String> {
         let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
         if cells.len() != expected {
@@ -109,7 +109,7 @@ impl WorldGrid {
         Ok(())
     }
 
-/// Runs `snapshot_cell_codes` logic.
+    /// Runs `snapshot_cell_codes` logic.
     pub fn snapshot_cell_codes(&self) -> Vec<u8> {
         self.cells
             .iter()
@@ -117,7 +117,7 @@ impl WorldGrid {
             .collect()
     }
 
-/// Runs `restore_from_cell_codes` logic.
+    /// Runs `restore_from_cell_codes` logic.
     pub fn restore_from_cell_codes(&mut self, codes: &[u8]) -> Result<(), String> {
         let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
         if codes.len() != expected {

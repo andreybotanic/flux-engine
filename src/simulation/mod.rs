@@ -3,6 +3,7 @@ pub mod discrete_step;
 pub mod gas;
 pub mod gpu_solver;
 pub mod parity;
+pub mod pipes;
 
 use std::time::{Duration, Instant};
 
@@ -12,11 +13,16 @@ use self::{
     backend::{SimulationBackend, SimulationBackendConfig, WorldSizeConfig},
     gas::GasField,
     gpu_solver::{GpuGasSolver, GpuStepTimings},
+    pipes::PipeFlowVisualState,
 };
 use crate::{
     config::GasRegistry,
     save::WorldLoadState,
-    world::{gas_structures::{GasStructureCell, GasStructureGrid}, grid::WorldGrid},
+    world::{
+        gas_structures::{GasStructureCell, GasStructureGrid},
+        grid::WorldGrid,
+        pipes::PipeGrid,
+    },
 };
 
 #[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
@@ -32,7 +38,7 @@ pub enum SimulationSpeed {
 }
 
 impl SimulationSpeed {
-/// Runs `multiplier` logic.
+    /// Runs `multiplier` logic.
     pub fn multiplier(self) -> u32 {
         match self {
             Self::X1 => 1,
@@ -41,7 +47,7 @@ impl SimulationSpeed {
         }
     }
 
-/// Runs `faster` logic.
+    /// Runs `faster` logic.
     pub fn faster(self) -> Self {
         match self {
             Self::X1 => Self::X2,
@@ -50,7 +56,7 @@ impl SimulationSpeed {
         }
     }
 
-/// Runs `slower` logic.
+    /// Runs `slower` logic.
     pub fn slower(self) -> Self {
         match self {
             Self::X1 => Self::X1,
@@ -218,14 +224,14 @@ impl Plugin for GasSimulationPlugin {
             .init_resource::<SimulationPerfStats>()
             .init_resource::<BlockSyncState>()
             .init_resource::<GpuRuntimeState>()
-            .add_systems(Startup, initialize_gas_field_from_registry)
+            .init_resource::<PipeFlowVisualState>()
+            .add_systems(Startup, initialize_gas_state_from_registry)
             .add_systems(Update, apply_fixed_rate_config)
             .add_systems(Update, mark_gpu_state_dirty)
             .add_systems(Update, mark_gpu_state_dirty_from_gas_edits)
             .add_systems(FixedUpdate, run_simulation_tick);
     }
 }
-
 
 include!("runtime_tick_block.rs");
 include!("simulation_tests_block.rs");

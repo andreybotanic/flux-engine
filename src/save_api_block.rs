@@ -58,6 +58,8 @@ pub fn create_save(
     world: &WorldGrid,
     gas: &GasField,
     structures: &GasStructureGrid,
+    pipe_layout: &crate::world::pipes::PipeGrid,
+    pipe_gas: &crate::simulation::pipes::PipeGasField,
     gas_registry: &GasRegistry,
     simulation_step: u64,
 ) -> Result<SaveDescriptor, SaveError> {
@@ -89,6 +91,8 @@ pub fn create_save(
         world,
         gas,
         structures,
+        pipe_layout,
+        pipe_gas,
         gas_registry,
         simulation_step,
         false,
@@ -103,6 +107,8 @@ pub fn overwrite_save(
     world: &WorldGrid,
     gas: &GasField,
     structures: &GasStructureGrid,
+    pipe_layout: &crate::world::pipes::PipeGrid,
+    pipe_gas: &crate::simulation::pipes::PipeGasField,
     gas_registry: &GasRegistry,
     simulation_step: u64,
 ) -> Result<SaveDescriptor, SaveError> {
@@ -127,6 +133,8 @@ pub fn overwrite_save(
         world,
         gas,
         structures,
+        pipe_layout,
+        pipe_gas,
         gas_registry,
         simulation_step,
         true,
@@ -159,14 +167,27 @@ pub fn load_save(
         slot_dir.join(chunk_map.get(CHUNK_GAS_STATE_ID).ok_or_else(|| {
             SaveError::Validation("Save meta missing gas_state chunk".to_string())
         })?);
-    let structures_path =
-        slot_dir.join(chunk_map.get(CHUNK_GAS_STRUCTURES_ID).ok_or_else(|| {
-            SaveError::Validation("Save meta missing gas_structures chunk".to_string())
-        })?);
+    let structures_path = slot_dir.join(chunk_map.get(CHUNK_GAS_STRUCTURES_ID).ok_or_else(|| {
+        SaveError::Validation("Save meta missing gas_structures chunk".to_string())
+    })?);
+    let pipe_layout_path = chunk_map
+        .get(CHUNK_PIPE_LAYOUT_ID)
+        .map(|file| slot_dir.join(file));
+    let pipe_gas_path = chunk_map.get(CHUNK_PIPE_GAS_ID).map(|file| slot_dir.join(file));
 
     let world_codes = read_world_cells_chunk(&world_path)?;
     let gas_file = read_gas_chunk(&gas_path)?;
     let structures_snapshot = read_gas_structures_chunk(&structures_path)?;
+    let pipe_layout_snapshot = if let Some(path) = pipe_layout_path {
+        read_pipe_layout_chunk(&path)?
+    } else {
+        crate::world::pipes::PipeGrid::default().snapshot_state()
+    };
+    let pipe_gas_snapshot = if let Some(path) = pipe_gas_path {
+        read_pipe_gas_chunk(&path, gas_registry)?
+    } else {
+        crate::simulation::pipes::PipeGasField::from_registry(gas_registry).snapshot_state()
+    };
 
     if gas_file.width != WORLD_WIDTH || gas_file.height != WORLD_HEIGHT {
         return Err(SaveError::Validation(format!(
@@ -188,6 +209,8 @@ pub fn load_save(
             world_cell_codes: world_codes,
             gas_snapshot: mapped_snapshot,
             gas_structures_snapshot: structures_snapshot,
+            pipe_layout_snapshot,
+            pipe_gas_snapshot,
             simulation_step: gas_file.simulation_step,
         },
     })
@@ -198,10 +221,14 @@ pub fn new_game_snapshot(gas_registry: &GasRegistry) -> RuntimeWorldState {
     let world = WorldGrid::default();
     let gas = GasField::from_registry(gas_registry);
     let structures = GasStructureGrid::default();
+    let pipe_layout = crate::world::pipes::PipeGrid::default();
+    let pipe_gas = crate::simulation::pipes::PipeGasField::from_registry(gas_registry);
     RuntimeWorldState {
         world_cell_codes: world.snapshot_cell_codes(),
         gas_snapshot: gas.snapshot_state(),
         gas_structures_snapshot: structures.snapshot_state(),
+        pipe_layout_snapshot: pipe_layout.snapshot_state(),
+        pipe_gas_snapshot: pipe_gas.snapshot_state(),
         simulation_step: 0,
     }
 }

@@ -12,26 +12,38 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::GasRegistry,
-    simulation::gas::{GasField, GasFieldSnapshot},
+    simulation::{
+        gas::{GasField, GasFieldSnapshot},
+        pipes::PipeGasSnapshot,
+    },
     world::{
         gas_structures::{GasStructureGrid, GasStructureSnapshot},
         grid::{WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
+        pipes::PipeLayoutSnapshot,
     },
 };
 
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
 const WORLD_CELLS_MAGIC: &[u8; 4] = b"FXWC";
 const GAS_STATE_MAGIC: &[u8; 4] = b"FXGS";
 const GAS_STRUCTURES_MAGIC: &[u8; 4] = b"FXST";
+const PIPE_LAYOUT_MAGIC: &[u8; 4] = b"FXPL";
+const PIPE_GAS_MAGIC: &[u8; 4] = b"FXPG";
 const WORLD_CELLS_VERSION: u16 = 1;
 const GAS_STATE_VERSION: u16 = 2;
 const GAS_STRUCTURES_VERSION: u16 = 1;
+const PIPE_LAYOUT_VERSION: u16 = 1;
+const PIPE_GAS_VERSION: u16 = 1;
 const CHUNK_WORLD_CELLS_ID: &str = "world_cells";
 const CHUNK_GAS_STATE_ID: &str = "gas_state";
 const CHUNK_GAS_STRUCTURES_ID: &str = "gas_structures";
+const CHUNK_PIPE_LAYOUT_ID: &str = "pipe_layout";
+const CHUNK_PIPE_GAS_ID: &str = "pipe_gas";
 const WORLD_CELLS_FILE: &str = "world_cells.bin";
 const GAS_STATE_FILE: &str = "gas_state.bin";
 const GAS_STRUCTURES_FILE: &str = "gas_structures.bin";
+const PIPE_LAYOUT_FILE: &str = "pipe_layout.bin";
+const PIPE_GAS_FILE: &str = "pipe_gas.bin";
 const META_FILE: &str = "meta.toml";
 
 static SAVE_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -145,6 +157,8 @@ pub struct RuntimeWorldState {
     pub world_cell_codes: Vec<u8>,
     pub gas_snapshot: GasFieldSnapshot,
     pub gas_structures_snapshot: GasStructureSnapshot,
+    pub pipe_layout_snapshot: PipeLayoutSnapshot,
+    pub pipe_gas_snapshot: PipeGasSnapshot,
     pub simulation_step: u64,
 }
 

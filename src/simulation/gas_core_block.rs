@@ -251,24 +251,38 @@ impl GasField {
         amount: u32,
         world: &WorldGrid,
     ) -> u32 {
+        self.remove_particles_proportional_counts(x, y, amount, world)
+            .into_iter()
+            .sum()
+    }
+
+/// Runs `remove_particles_proportional_counts` logic.
+    pub fn remove_particles_proportional_counts(
+        &mut self,
+        x: u32,
+        y: u32,
+        amount: u32,
+        world: &WorldGrid,
+    ) -> Vec<u32> {
         if amount == 0 || is_boundary(x, y) || world.is_solid(x, y) {
-            return 0;
+            return vec![0; self.gas_count];
         }
 
         let idx = linear_index(x, y);
         let species = &mut self.read[idx];
         let total: u64 = species.iter().map(|&v| u64::from(v)).sum();
         if total == 0 {
-            return 0;
+            return vec![0; self.gas_count];
         }
 
         let remove = u64::from(amount).min(total);
         if remove == total {
+            let removed = species.clone();
             for v in species.iter_mut() {
                 *v = 0;
             }
             self.write[idx].fill(0);
-            return remove as u32;
+            return removed;
         }
 
         let mut base_remove = vec![0u32; self.gas_count];
@@ -307,15 +321,13 @@ impl GasField {
             remaining -= 1;
         }
 
-        let mut removed_total = 0u64;
         for gas_index in 0..self.gas_count {
             let remove_i = base_remove[gas_index].min(species[gas_index]);
             species[gas_index] = species[gas_index].saturating_sub(remove_i);
             self.write[idx][gas_index] = species[gas_index];
-            removed_total = removed_total.saturating_add(u64::from(remove_i));
         }
 
-        removed_total.min(u64::from(u32::MAX)) as u32
+        base_remove
     }
 
 /// Runs `apply_species_delta_with_lbm` logic.

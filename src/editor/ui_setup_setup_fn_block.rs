@@ -54,15 +54,20 @@ fn setup_editor_ui(
     let max_color_initial_text = max_color_initial.to_string();
     let icon_set = EditorIconSet {
         build: asset_server.load("sprites/ui/tool_build.png"),
+        gases: asset_server.load("sprites/world/pipe_mask_10.png"),
         erase: asset_server.load("sprites/ui/tool_erase.png"),
+        pipe: asset_server.load("sprites/world/pipe_mask_10.png"),
+        vent: asset_server.load("sprites/world/tile_vent.png"),
         add_gas: asset_server.load("sprites/ui/tool_add_gas.png"),
         clear_gas: asset_server.load("sprites/ui/tool_clear_gas.png"),
         source: asset_server.load("sprites/world/tile_gas_source.png"),
         sink: asset_server.load("sprites/world/tile_gas_sink.png"),
         brick: asset_server.load("sprites/world/tile_brick.png"),
         metal: asset_server.load("sprites/world/tile_metal.png"),
-        brick_silhouette: asset_server.load("sprites/ui/silhouette_brick.png"),
-        metal_silhouette: asset_server.load("sprites/ui/silhouette_metal.png"),
+        brick_silhouette: asset_server.load("sprites/world/silhouette_brick.png"),
+        metal_silhouette: asset_server.load("sprites/world/silhouette_metal.png"),
+        pipe_silhouette: asset_server.load("sprites/world/pipe_silhouette_mask_00.png"),
+        vent_silhouette: asset_server.load("sprites/world/silhouette_vent.png"),
         source_silhouette: asset_server.load("sprites/world/tile_gas_source.png"),
         sink_silhouette: asset_server.load("sprites/world/tile_gas_sink.png"),
         select_arrow: asset_server.load("sprites/ui/select_arrow.png"),
@@ -106,10 +111,38 @@ fn setup_editor_ui(
             );
             spawn_tool_button(
                 parent,
+                "Gases",
+                EditorTool::Gases,
+                icon_set.gases.clone(),
+            );
+            spawn_tool_button(
+                parent,
                 "Erase",
                 EditorTool::EraseSolid,
                 icon_set.erase.clone(),
             );
+        });
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(MAIN_TOOLBAR_LEFT),
+                bottom: Val::Px(CELL_TYPE_PANEL_BOTTOM),
+                display: Display::Flex,
+                flex_direction: FlexDirection::Row,
+                column_gap: Val::Px(8.0),
+                width: Val::Px(CELL_TYPE_PANEL_WIDTH),
+                height: Val::Px(CELL_TYPE_PANEL_HEIGHT),
+                padding: UiRect::all(Val::Px(8.0)),
+                ..default()
+            },
+            BackgroundColor(PANEL_BG),
+            GasesTypePanelRoot,
+        ))
+        .with_children(|parent| {
+            spawn_pipe_tool_button(parent, "Pipe", PipeToolKind::Pipe, icon_set.pipe.clone());
+            spawn_pipe_tool_button(parent, "Vent", PipeToolKind::Vent, icon_set.vent.clone());
         });
 
     commands

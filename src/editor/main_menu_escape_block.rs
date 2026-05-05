@@ -1,6 +1,6 @@
 fn clear_active_tool_state(
-    selection_drag: &mut ResMut<SelectionDragState>,
-    brush_drag: &mut ResMut<BrushDragState>,
+    selection_drag: &mut SelectionDragState,
+    brush_drag: &mut BrushDragState,
 ) {
     selection_drag.active = false;
     selection_drag.start = None;

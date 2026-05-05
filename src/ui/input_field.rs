@@ -363,11 +363,19 @@ mod tests {
 
         buffer.set_text(&mut font_system, "SaveName", attrs, Shaping::Advanced);
         buffer.shape_until_scroll(&mut font_system, false);
-        let without_space_width = buffer.layout_runs().next().map(|run| run.line_w).unwrap_or(0.0);
+        let without_space_width = buffer
+            .layout_runs()
+            .next()
+            .map(|run| run.line_w)
+            .unwrap_or(0.0);
 
         buffer.set_text(&mut font_system, "SaveName ", attrs, Shaping::Advanced);
         buffer.shape_until_scroll(&mut font_system, false);
-        let with_space_width = buffer.layout_runs().next().map(|run| run.line_w).unwrap_or(0.0);
+        let with_space_width = buffer
+            .layout_runs()
+            .next()
+            .map(|run| run.line_w)
+            .unwrap_or(0.0);
 
         assert!(
             with_space_width > without_space_width,

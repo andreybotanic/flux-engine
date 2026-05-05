@@ -1,12 +1,14 @@
 fn handle_editor_mouse_input(
     input_state: (
         Res<ButtonInput<MouseButton>>,
+        Res<ButtonInput<KeyCode>>,
         Single<&Window, With<PrimaryWindow>>,
         Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     ),
     tool_state: (
-        Res<ActiveEditorTool>,
+        ResMut<ActiveEditorTool>,
         Res<CellToolSettings>,
+        Res<PipeToolSettings>,
         ResMut<SourceStructureToolSettings>,
         ResMut<SinkStructureToolSettings>,
         Res<MainMenuState>,
@@ -27,17 +29,20 @@ fn handle_editor_mouse_input(
     data_state: (
         ResMut<WorldGrid>,
         ResMut<GasStructureGrid>,
+        ResMut<crate::world::pipes::PipeGrid>,
         ResMut<GasField>,
+        ResMut<crate::simulation::pipes::PipeGasField>,
         ResMut<StructureEditState>,
         ResMut<SelectionDragState>,
         ResMut<BrushDragState>,
         EventWriter<WorldCellChanged>,
     ),
 ) {
-    let (mouse_buttons, window, camera_query) = input_state;
+    let (mouse_buttons, keyboard, window, camera_query) = input_state;
     let (
-        active_tool,
+        mut active_tool,
         cell_settings,
+        pipe_settings,
         mut source_settings,
         mut sink_settings,
         main_menu,
@@ -48,12 +53,23 @@ fn handle_editor_mouse_input(
     let (
         mut world,
         mut structures,
+        mut pipes,
         mut gas,
+        mut pipe_gas,
         mut structure_edit,
         mut selection_drag,
         mut brush_drag,
         mut world_changed,
     ) = data_state;
+
+    if keyboard.just_pressed(KeyCode::KeyX) && !main_menu.open && world_load_state.has_world {
+        active_tool_toggle_scissors(
+            &mut selection_drag,
+            &mut brush_drag,
+            &mut active_tool,
+            &mut structure_edit,
+        );
+    }
 
     if main_menu.open || !world_load_state.has_world {
         structure_edit.selected_cell = None;
@@ -87,7 +103,9 @@ fn handle_editor_mouse_input(
                 hovered_cell,
                 &mut brush_drag,
                 |cell| {
-                    if structures.blocks_solid_placement(cell.x, cell.y) {
+                    if structures.blocks_solid_placement(cell.x, cell.y)
+                        || pipes.blocks_solid_placement(cell.x, cell.y)
+                    {
                         return;
                     }
                     if world.set_solid_with_material(cell.x, cell.y, cell_settings.material) {
@@ -106,8 +124,61 @@ fn handle_editor_mouse_input(
                 &mut brush_drag,
                 |cell| {
                     let _ = structures.clear(cell.x, cell.y);
+                    let pipe_cleared = pipes.clear_cell(cell.x, cell.y);
+                    if pipe_cleared {
+                        pipe_gas.clear_cell(cell.x, cell.y);
+                    }
                     if world.set_empty(cell.x, cell.y) {
                         world_changed.write(WorldCellChanged { cell });
+                    }
+                },
+            );
+        }
+        Some(EditorTool::Gases) => match pipe_settings.selected {
+            PipeToolKind::Pipe => {
+                structure_edit.selected_cell = None;
+                apply_path_tool(
+                    &mouse_buttons,
+                    blocked_by_ui,
+                    hovered_cell,
+                    &mut brush_drag,
+                    |path| {
+                        if let Some(&first) = path.first() {
+                            let _ = pipes.set_pipe(first.x, first.y, &world, &structures);
+                        }
+                        for &cell in path.iter().skip(1) {
+                            let _ = pipes.set_pipe(cell.x, cell.y, &world, &structures);
+                        }
+                        for pair in path.windows(2) {
+                            let a = pair[0];
+                            let b = pair[1];
+                            let _ = pipes.set_pipe(a.x, a.y, &world, &structures);
+                            let _ = pipes.set_pipe(b.x, b.y, &world, &structures);
+                            let _ = pipes.add_connection(a, b);
+                        }
+                    },
+                );
+            }
+            PipeToolKind::Vent => {
+                clear_active_tool_state(&mut selection_drag, &mut brush_drag);
+                structure_edit.selected_cell = None;
+                if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
+                    if let Some(cell) = hovered_cell {
+                        let _ = pipes.set_vent(cell.x, cell.y, &world, &structures);
+                    }
+                }
+            }
+        },
+        Some(EditorTool::Scissors) => {
+            structure_edit.selected_cell = None;
+            apply_path_tool(
+                &mouse_buttons,
+                blocked_by_ui,
+                hovered_cell,
+                &mut brush_drag,
+                |path| {
+                    for pair in path.windows(2) {
+                        let _ = pipes.remove_connection(pair[0], pair[1]);
                     }
                 },
             );
@@ -170,7 +241,7 @@ fn handle_editor_mouse_input(
             clear_active_tool_state(&mut selection_drag, &mut brush_drag);
             if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
                 if let Some(cell) = hovered_cell {
-                    if gas_registry.count() > 0 {
+                    if gas_registry.count() > 0 && !pipes.blocks_solid_placement(cell.x, cell.y) {
                         let gas_index = source_settings.gas_index.min(gas_registry.count() - 1);
                         if structures.set_source(
                             cell.x,
@@ -189,7 +260,9 @@ fn handle_editor_mouse_input(
             clear_active_tool_state(&mut selection_drag, &mut brush_drag);
             if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
                 if let Some(cell) = hovered_cell {
-                    if structures.set_sink(cell.x, cell.y, sink_settings.amount.max(1), &world) {
+                    if !pipes.blocks_solid_placement(cell.x, cell.y)
+                        && structures.set_sink(cell.x, cell.y, sink_settings.amount.max(1), &world)
+                    {
                         structure_edit.selected_cell = Some(cell);
                     }
                 }
@@ -273,11 +346,124 @@ fn apply_brush_tool(
     brush_drag.last_cell = Some(cell);
 }
 
+fn apply_path_tool(
+    mouse_buttons: &ButtonInput<MouseButton>,
+    blocked_by_ui: bool,
+    hovered_cell: Option<UVec2>,
+    brush_drag: &mut BrushDragState,
+    mut apply_path: impl FnMut(&[UVec2]),
+) {
+    if mouse_buttons.just_released(MouseButton::Left) {
+        brush_drag.active = false;
+        brush_drag.last_cell = None;
+        return;
+    }
+
+    if blocked_by_ui {
+        return;
+    }
+
+    if mouse_buttons.just_pressed(MouseButton::Left) {
+        brush_drag.active = true;
+        brush_drag.last_cell = None;
+    }
+
+    if !brush_drag.active || !mouse_buttons.pressed(MouseButton::Left) {
+        return;
+    }
+
+    let Some(cell) = hovered_cell else {
+        return;
+    };
+
+    let path = if let Some(last_cell) = brush_drag.last_cell {
+        rasterize_grid_path(last_cell, cell)
+    } else {
+        vec![cell]
+    };
+    if path.is_empty() {
+        return;
+    }
+    apply_path(&path);
+    brush_drag.last_cell = Some(cell);
+}
+
+fn rasterize_grid_path(from: UVec2, to: UVec2) -> Vec<UVec2> {
+    let mut path = Vec::new();
+    let mut x0 = from.x as i32;
+    let mut y0 = from.y as i32;
+    let x1 = to.x as i32;
+    let y1 = to.y as i32;
+    let dx = (x1 - x0).abs();
+    let sx = if x0 < x1 { 1 } else { -1 };
+    let dy = -(y1 - y0).abs();
+    let sy = if y0 < y1 { 1 } else { -1 };
+    let mut err = dx + dy;
+
+    loop {
+        let cell = UVec2::new(x0 as u32, y0 as u32);
+        if path.last().copied() != Some(cell) {
+            path.push(cell);
+        }
+        if x0 == x1 && y0 == y1 {
+            break;
+        }
+        let e2 = err * 2;
+        if e2 >= dy {
+            err += dy;
+            x0 += sx;
+        }
+        if e2 <= dx {
+            err += dx;
+            y0 += sy;
+        }
+    }
+
+    let mut expanded = Vec::new();
+    if let Some(first) = path.first().copied() {
+        expanded.push(first);
+    }
+    for pair in path.windows(2) {
+        let mut current = pair[0];
+        let target = pair[1];
+        while current != target {
+            let dx = target.x as i32 - current.x as i32;
+            let dy = target.y as i32 - current.y as i32;
+            let next = if dx != 0 {
+                UVec2::new((current.x as i32 + dx.signum()) as u32, current.y)
+            } else {
+                UVec2::new(current.x, (current.y as i32 + dy.signum()) as u32)
+            };
+            if expanded.last().copied() != Some(next) {
+                expanded.push(next);
+            }
+            current = next;
+        }
+    }
+    expanded
+}
+
+fn active_tool_toggle_scissors(
+    selection_drag: &mut SelectionDragState,
+    brush_drag: &mut BrushDragState,
+    active_tool: &mut ActiveEditorTool,
+    structure_edit: &mut StructureEditState,
+) {
+    active_tool.selected = if active_tool.selected == Some(EditorTool::Scissors) {
+        None
+    } else {
+        Some(EditorTool::Scissors)
+    };
+    structure_edit.selected_cell = None;
+    clear_active_tool_state(selection_drag, brush_drag);
+}
+
 fn update_editor_cursor_overlays(
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     active_tool: Res<ActiveEditorTool>,
     cell_settings: Res<CellToolSettings>,
+    pipe_settings: Res<PipeToolSettings>,
     main_menu: Res<MainMenuState>,
     world_load_state: Res<WorldLoadState>,
     overlay_ui_state: (Res<EditorIconSet>, Res<DebugMode>, Res<PanelManager>),
@@ -287,6 +473,7 @@ fn update_editor_cursor_overlays(
         Single<(&mut Transform, &mut Visibility), With<EraseCellHighlight>>,
         Single<(&mut Node, &mut Visibility), With<EraseCursorOverlay>>,
     )>,
+    mut overlay_text: Single<&mut Text, With<EraseCursorOverlayText>>,
 ) {
     let (icon_set, debug_mode, panel_manager) = overlay_ui_state;
 
@@ -335,6 +522,10 @@ fn update_editor_cursor_overlays(
                 CellMaterial::Metal => icon_set.metal_silhouette.clone(),
                 CellMaterial::Boundary => icon_set.brick_silhouette.clone(),
             }),
+            Some(EditorTool::Gases) => Some(match pipe_settings.selected {
+                PipeToolKind::Pipe => icon_set.pipe_silhouette.clone(),
+                PipeToolKind::Vent => icon_set.vent_silhouette.clone(),
+            }),
             Some(EditorTool::CreateGasSource) => Some(icon_set.source_silhouette.clone()),
             Some(EditorTool::CreateGasSink) => Some(icon_set.sink_silhouette.clone()),
             _ => None,
@@ -372,10 +563,19 @@ fn update_editor_cursor_overlays(
     {
         let mut erase_overlay = overlay_set.p2();
         let (erase_node, erase_visibility) = &mut *erase_overlay;
-        if active_tool.selected == Some(EditorTool::EraseSolid) && !main_menu.open {
+        if matches!(
+            active_tool.selected,
+            Some(EditorTool::EraseSolid) | Some(EditorTool::Scissors)
+        ) && !main_menu.open
+        {
             if let Some(cursor) = cursor_position {
                 erase_node.left = Val::Px(cursor.x + 10.0);
                 erase_node.top = Val::Px(cursor.y + 8.0);
+                overlay_text.0 = if active_tool.selected == Some(EditorTool::Scissors) {
+                    "8<".to_string()
+                } else {
+                    "X".to_string()
+                };
                 **erase_visibility = Visibility::Visible;
             } else {
                 **erase_visibility = Visibility::Hidden;
@@ -452,6 +652,15 @@ pub(crate) fn is_cursor_over_ui(
     ];
 
     if selected_tool == Some(EditorTool::BuildSolid) {
+        rects.push(UiRectPx::top_left(
+            MAIN_TOOLBAR_LEFT,
+            window.height() - CELL_TYPE_PANEL_BOTTOM - CELL_TYPE_PANEL_HEIGHT,
+            CELL_TYPE_PANEL_WIDTH,
+            CELL_TYPE_PANEL_HEIGHT,
+        ));
+    }
+
+    if selected_tool == Some(EditorTool::Gases) {
         rects.push(UiRectPx::top_left(
             MAIN_TOOLBAR_LEFT,
             window.height() - CELL_TYPE_PANEL_BOTTOM - CELL_TYPE_PANEL_HEIGHT,

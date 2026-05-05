@@ -52,7 +52,6 @@ impl Default for GasField {
     }
 }
 
-
 include!("gas_core_block.rs");
 include!("gas_test_support_block.rs");
 include!("gas_tests_block.rs");

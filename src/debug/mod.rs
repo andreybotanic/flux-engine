@@ -4,12 +4,15 @@ use crate::{
     config::GasRegistry,
     input::camera::MainCamera,
     simulation::{
-        apply_gas_structures_pre_step, do_one_substep, gas::GasField, BlockSyncState,
-        GasSimulationConfig, SimulationControl, SimulationStep,
+        apply_gas_structures_pre_step, do_one_substep,
+        gas::GasField,
+        pipes::{apply_pipe_network_step, PipeFlowVisualState, PipeGasField},
+        BlockSyncState, GasSimulationConfig, SimulationControl, SimulationStep,
     },
     world::{
         gas_structures::GasStructureGrid,
         grid::{cell_center, is_boundary, WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH},
+        pipes::PipeGrid,
     },
 };
 
@@ -96,6 +99,9 @@ fn handle_debug_keys(
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
     structures: Res<GasStructureGrid>,
+    pipes: Res<PipeGrid>,
+    mut pipe_gas: ResMut<PipeGasField>,
+    mut pipe_flow_visuals: ResMut<PipeFlowVisualState>,
     world: Res<WorldGrid>,
     mut step: ResMut<SimulationStep>,
     main_menu: Option<Res<crate::editor::MainMenuState>>,
@@ -111,6 +117,13 @@ fn handle_debug_keys(
     }
 
     if debug_mode.active && keys.just_pressed(KeyCode::Enter) {
+        let _ = apply_pipe_network_step(
+            &pipes,
+            &mut pipe_gas,
+            &mut gas,
+            &world,
+            &mut pipe_flow_visuals,
+        );
         let _ = apply_gas_structures_pre_step(&structures, &mut gas, &world);
         do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);
     }

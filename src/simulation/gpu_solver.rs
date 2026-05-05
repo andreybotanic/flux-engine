@@ -150,7 +150,6 @@ fn map_buffer_blocking(device: &wgpu::Device, buffer: &wgpu::Buffer) -> Result<V
     }
 }
 
-
 include!("gpu_solver_impl_core_block.rs");
 include!("gpu_solver_impl_exec_block.rs");
 include!("gpu_solver_helpers_block.rs");

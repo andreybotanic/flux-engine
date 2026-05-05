@@ -1,13 +1,20 @@
 #[cfg(test)]
 mod tests {
     use super::{
-        parity_passes, run_cpu_cpu_parity_scenario, run_cpu_gpu_parity_scenario,
+        compare_cpu_gpu_fields, parity_passes, run_cpu_cpu_parity_scenario, run_cpu_gpu_parity_scenario,
         run_cpu_only_calibration, ParityThresholds, PARITY_SCENARIOS, PARITY_STEPS,
         PARITY_THRESHOLDS,
     };
-    use crate::simulation::gas::GasField;
+    use crate::simulation::{
+        gas::GasField,
+        pipes::{apply_pipe_network_step, PipeFlowVisualState, PipeGasField},
+    };
     use crate::simulation::gpu_solver::GpuGasSolver;
-    use crate::world::grid::{is_boundary, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH};
+    use crate::world::{
+        gas_structures::GasStructureGrid,
+        grid::{is_boundary, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
+        pipes::PipeGrid,
+    };
     use bevy::prelude::UVec2;
 
     fn gpu_available() -> bool {
@@ -51,6 +58,106 @@ mod tests {
             run_cpu_gpu_parity_scenario(PARITY_SCENARIOS[0], 200, PARITY_THRESHOLDS.radius)
                 .expect("smoke parity scenario");
         assert!(parity_passes(&metrics, thresholds), "metrics={metrics:?}");
+    }
+
+    #[test]
+    fn pipe_runtime_cpu_gpu_smoke_stays_aligned() {
+        if !gpu_available() {
+            eprintln!("Skipping pipe_runtime_cpu_gpu_smoke_stays_aligned: GPU is unavailable");
+            return;
+        }
+
+        let registry = super::test_registry_three_gases();
+        let config = super::tuned_config();
+        let world = WorldGrid::default();
+        let structures = GasStructureGrid::default();
+        let mut layout = PipeGrid::default();
+        for cell in [
+            UVec2::new(30, 30),
+            UVec2::new(31, 30),
+            UVec2::new(32, 30),
+            UVec2::new(31, 29),
+        ] {
+            assert!(layout.set_pipe(cell.x, cell.y, &world, &structures));
+        }
+        assert!(layout.add_connection(UVec2::new(30, 30), UVec2::new(31, 30)));
+        assert!(layout.add_connection(UVec2::new(31, 30), UVec2::new(32, 30)));
+        assert!(layout.add_connection(UVec2::new(31, 30), UVec2::new(31, 29)));
+        assert!(layout.set_vent(30, 30, &world, &structures));
+        assert!(layout.set_vent(32, 30, &world, &structures));
+        assert!(layout.set_vent(31, 29, &world, &structures));
+
+        let mut cpu_field = GasField::from_registry(&registry);
+        cpu_field.set_amount(30, 30, 0, 180.0);
+        cpu_field.set_amount(31, 29, 1, 40.0);
+        cpu_field.recompute_total_density_buffer(&world);
+        let mut gpu_field = cpu_field.clone();
+        let mut cpu_pipe = PipeGasField::from_registry(&registry);
+        let mut gpu_pipe = PipeGasField::from_registry(&registry);
+        let mut cpu_visuals = PipeFlowVisualState::default();
+        let mut gpu_visuals = PipeFlowVisualState::default();
+        let mut cpu_step = crate::simulation::SimulationStep(0);
+        let mut gpu_step = crate::simulation::SimulationStep(0);
+        let mut block_sync = crate::simulation::BlockSyncState;
+        let mut solver = GpuGasSolver::from_cpu_state(&world, &gpu_field)
+            .expect("gpu solver from initial state")
+            .0;
+
+        for _ in 0..8 {
+            let _ = apply_pipe_network_step(
+                &layout,
+                &mut cpu_pipe,
+                &mut cpu_field,
+                &world,
+                &mut cpu_visuals,
+            );
+            crate::simulation::do_one_substep(
+                &mut block_sync,
+                &mut cpu_field,
+                &world,
+                &config,
+                &mut cpu_step,
+            );
+
+            let changed = apply_pipe_network_step(
+                &layout,
+                &mut gpu_pipe,
+                &mut gpu_field,
+                &world,
+                &mut gpu_visuals,
+            );
+            if changed {
+                let _ = solver
+                    .upload_state(&gpu_field.to_gpu_host_state(&world))
+                    .expect("upload gpu state after pipe pre-step");
+            }
+            let params = GpuGasSolver::params_from_config(
+                &config,
+                WORLD_WIDTH,
+                WORLD_HEIGHT,
+                gpu_step.0,
+                &gpu_field,
+            );
+            solver.step(params).expect("gpu step");
+            gpu_step.0 = gpu_step.0.saturating_add(1);
+        }
+
+        let host = solver.readback_state().expect("readback gpu state");
+        gpu_field.apply_gpu_host_state(&host);
+        let metrics = compare_cpu_gpu_fields(&cpu_field, &gpu_field, &world, PARITY_THRESHOLDS.radius);
+        assert!(
+            parity_passes(
+                &metrics,
+                ParityThresholds {
+                    radius: PARITY_THRESHOLDS.radius,
+                    mean_abs_error_max: PARITY_THRESHOLDS.mean_abs_error_max * 2.5,
+                    p95_abs_error_max: PARITY_THRESHOLDS.p95_abs_error_max * 2.5,
+                    max_abs_error_max: PARITY_THRESHOLDS.max_abs_error_max * 2.5,
+                    mass_rel_error_max: PARITY_THRESHOLDS.mass_rel_error_max * 2.5,
+                }
+            ),
+            "pipe parity metrics={metrics:?}"
+        );
     }
 
     #[test]

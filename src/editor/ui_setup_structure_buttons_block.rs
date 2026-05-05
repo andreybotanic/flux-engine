@@ -268,3 +268,35 @@ fn spawn_cell_material_button(
         });
 }
 
+fn spawn_pipe_tool_button(
+    parent: &mut ChildSpawnerCommands,
+    label: &'static str,
+    pipe_tool: PipeToolKind,
+    icon: Handle<Image>,
+) {
+    parent
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(TOOL_BUTTON_SIZE),
+                height: Val::Px(TOOL_BUTTON_SIZE),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(BUTTON_IDLE),
+            EditorUiAction::SelectPipeTool(pipe_tool),
+            ToolButtonMeta { label },
+        ))
+        .with_children(|button| {
+            button.spawn((
+                ImageNode::new(icon),
+                Node {
+                    width: Val::Px(TOOL_ICON_SIZE),
+                    height: Val::Px(TOOL_ICON_SIZE),
+                    ..default()
+                },
+            ));
+        });
+}
+

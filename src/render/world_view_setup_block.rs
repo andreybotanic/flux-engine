@@ -1,15 +1,37 @@
 /// Runs `setup_world_view` logic.
 pub fn setup_world_view(
     mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
     simulation_images: Res<GasSimulationImages>,
     world: Res<WorldGrid>,
     structures: Res<GasStructureGrid>,
+    pipes: Res<PipeGrid>,
     world_load_state: Res<WorldLoadState>,
+    overlay_mode: Res<OverlayMode>,
     asset_server: Res<AssetServer>,
+    mut images: ResMut<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut pipe_highlight_materials:
+        ResMut<Assets<crate::render::pipe_highlight_material::PipeHighlightMaterial>>,
     cell_visuals: Res<CellTypeVisualConfig>,
 ) {
     let show_world = world_load_state.has_world;
+    let pipe_masks = (0u8..=0b1111)
+        .map(|mask| asset_server.load(format!("sprites/world/pipe_mask_{mask:02}.png")))
+        .collect::<Vec<_>>();
+    let vent_world = asset_server.load("sprites/world/tile_vent.png");
+    let vent_overlay = images.add(build_vent_overlay_image());
+    let pipe_highlight = crate::render::pipe_highlight_material::PipeHighlightRenderAssets {
+        quad: meshes.add(bevy::math::primitives::Rectangle::new(CELL_SIZE, CELL_SIZE)),
+        materials: pipe_masks
+            .iter()
+            .cloned()
+            .map(|mask| {
+                pipe_highlight_materials.add(
+                    crate::render::pipe_highlight_material::PipeHighlightMaterial::from_pipe_mask(mask),
+                )
+            })
+            .collect(),
+    };
     let visuals = WorldVisualAssets {
         backdrop_noise: asset_server.load("sprites/world/backdrop_noise.png"),
         brick: asset_server.load("sprites/world/tile_brick.png"),
@@ -17,6 +39,10 @@ pub fn setup_world_view(
         boundary: asset_server.load("sprites/world/tile_boundary.png"),
         source: asset_server.load("sprites/world/tile_gas_source.png"),
         sink: asset_server.load("sprites/world/tile_gas_sink.png"),
+        pipe_masks,
+        vent_world,
+        vent_overlay,
+        pipe_highlight,
     };
     commands.insert_resource(visuals.clone());
 
@@ -145,6 +171,21 @@ pub fn setup_world_view(
         structure_entities.by_cell.insert((x, y), entity);
     }
     commands.insert_resource(structure_entities);
+
+    let mut pipe_entities = PipeEntities::default();
+    for (x, y, pipe_cell) in pipes.iter_cells() {
+        spawn_pipe_visual_bundle(
+            &mut commands,
+            &visuals,
+            &mut pipe_entities,
+            x,
+            y,
+            pipe_cell,
+            show_world,
+            *overlay_mode,
+        );
+    }
+    commands.insert_resource(pipe_entities);
     commands.spawn((
         Sprite::from_color(
             Color::srgba(1.0, 0.93, 0.30, 0.36),
@@ -276,6 +317,142 @@ fn spawn_gas_structure_sprite(
         .id()
 }
 
+fn spawn_pipe_visual_bundle(
+    commands: &mut Commands,
+    visuals: &WorldVisualAssets,
+    entities: &mut PipeEntities,
+    x: u32,
+    y: u32,
+    pipe_cell: PipeCell,
+    show_world: bool,
+    overlay_mode: OverlayMode,
+) {
+    let center = cell_center(x, y);
+    let pipe_visual = PipeWorldVisual {
+        main_tint: Color::srgba(0.42, 0.50, 0.56, 0.96),
+        gas_tint: Color::srgba(0.74, 0.82, 0.88, 0.96),
+        pipe_tint: Color::srgba(0.96, 0.985, 1.0, 1.0),
+    };
+    if pipe_cell.has_pipe {
+        let mask = (pipe_cell.connections & 0b1111) as usize;
+        let pipe_tint = pipe_sprite_tint(overlay_mode, &pipe_visual);
+        let entity = commands
+            .spawn((
+                Sprite {
+                    image: visuals.pipe_masks[mask].clone(),
+                    custom_size: Some(Vec2::splat(CELL_SIZE)),
+                    color: pipe_tint,
+                    ..default()
+                },
+                Transform::from_translation(center.extend(pipe_world_z(overlay_mode))),
+                world_layer_visibility(show_world),
+                pipe_visual,
+            ))
+            .id();
+        entities.pipes.insert((x, y), entity);
+
+        let highlight_entity = crate::render::pipe_highlight_material::spawn_pipe_highlight_entity(
+            commands,
+            &visuals.pipe_highlight,
+            mask,
+            Transform::from_translation(center.extend(pipe_highlight_z())),
+            pipe_highlight_visibility(show_world, overlay_mode),
+        );
+        commands.entity(highlight_entity).insert(PipeHighlightOverlayVisual);
+        entities.pipe_highlights.insert((x, y), highlight_entity);
+
+        let gas_overlay = commands
+            .spawn((
+                Sprite::from_color(Color::NONE, Vec2::splat(CELL_SIZE * 0.7)),
+                Transform::from_translation(center.extend(1.05)),
+                Visibility::Hidden,
+                PipeGasOverlayVisual,
+            ))
+            .id();
+        entities.gas_overlays.insert((x, y), gas_overlay);
+    }
+
+    if pipe_cell.has_vent {
+        let world_entity = commands
+            .spawn((
+                Sprite {
+                    image: visuals.vent_world.clone(),
+                    custom_size: Some(Vec2::splat(CELL_SIZE)),
+                    color: Color::WHITE,
+                    ..default()
+                },
+                Transform::from_translation(center.extend(0.95)),
+                vent_world_visibility(show_world, overlay_mode),
+                VentWorldVisual,
+            ))
+            .id();
+        entities.vents.insert((x, y), world_entity);
+
+        let overlay_entity = commands
+            .spawn((
+                Sprite {
+                    image: visuals.vent_overlay.clone(),
+                    custom_size: Some(Vec2::splat(CELL_SIZE * 0.92)),
+                    color: pipe_overlay_vent_tint(),
+                    ..default()
+                },
+                Transform::from_translation(center.extend(1.15)),
+                Visibility::Hidden,
+                PipeVentOverlayVisual,
+            ))
+            .id();
+        entities.vent_overlays.insert((x, y), overlay_entity);
+    }
+}
+
+fn world_layer_visibility(show_world: bool) -> Visibility {
+    if show_world {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    }
+}
+
+fn pipe_sprite_tint(overlay_mode: OverlayMode, pipe_visual: &PipeWorldVisual) -> Color {
+    match overlay_mode {
+        OverlayMode::Main => pipe_visual.main_tint,
+        OverlayMode::Gas => pipe_visual.gas_tint,
+        OverlayMode::Pipes => pipe_visual.pipe_tint,
+    }
+}
+
+fn pipe_highlight_visibility(show_world: bool, overlay_mode: OverlayMode) -> Visibility {
+    if show_world && overlay_mode == OverlayMode::Pipes {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    }
+}
+
+fn pipe_highlight_z() -> f32 {
+    0.97
+}
+
+fn pipe_world_z(overlay_mode: OverlayMode) -> f32 {
+    match overlay_mode {
+        OverlayMode::Pipes => 0.92,
+        OverlayMode::Main | OverlayMode::Gas => 0.45,
+    }
+}
+
+fn pipe_overlay_vent_tint() -> Color {
+    Color::srgba(1.0, 0.88, 0.28, 1.0)
+}
+
+fn vent_world_visibility(show_world: bool, overlay_mode: OverlayMode) -> Visibility {
+    let _ = overlay_mode;
+    if show_world {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    }
+}
+
 pub(crate) fn sync_wall_visuals(
     mut commands: Commands,
     world: Res<WorldGrid>,
@@ -353,6 +530,54 @@ pub(crate) fn sync_gas_structure_visuals(
     }
 }
 
+pub(crate) fn sync_pipe_world_visuals(
+    mut commands: Commands,
+    pipes: Res<PipeGrid>,
+    world_load_state: Res<WorldLoadState>,
+    overlay_mode: Res<OverlayMode>,
+    visuals: Res<WorldVisualAssets>,
+    mut pipe_entities: ResMut<PipeEntities>,
+) {
+    if !pipes.is_changed() && !world_load_state.is_changed() && !overlay_mode.is_changed() {
+        return;
+    }
+
+    for entity in pipe_entities
+        .pipes
+        .values()
+        .chain(pipe_entities.pipe_highlights.values())
+        .chain(pipe_entities.vents.values())
+        .chain(pipe_entities.gas_overlays.values())
+        .chain(pipe_entities.vent_overlays.values())
+        .copied()
+        .collect::<Vec<_>>()
+    {
+        commands.entity(entity).despawn();
+    }
+    pipe_entities.pipes.clear();
+    pipe_entities.pipe_highlights.clear();
+    pipe_entities.vents.clear();
+    pipe_entities.gas_overlays.clear();
+    pipe_entities.vent_overlays.clear();
+
+    if !world_load_state.has_world {
+        return;
+    }
+
+    for (x, y, pipe_cell) in pipes.iter_cells() {
+        spawn_pipe_visual_bundle(
+            &mut commands,
+            &visuals,
+            &mut pipe_entities,
+            x,
+            y,
+            pipe_cell,
+            world_load_state.has_world,
+            *overlay_mode,
+        );
+    }
+}
+
 pub(crate) fn sync_structure_edit_highlight(
     world_load_state: Res<WorldLoadState>,
     structure_edit: Res<StructureEditState>,
@@ -379,5 +604,184 @@ pub(crate) fn sync_structure_edit_highlight(
 fn outer_cell_center(x: i32, y: i32) -> Vec2 {
     crate::world::grid::world_origin()
         + Vec2::new((x as f32 + 0.5) * CELL_SIZE, (y as f32 + 0.5) * CELL_SIZE)
+}
+
+#[cfg(test)]
+fn build_pipe_mask_image(mask: u8) -> Image {
+    let size = 64u32;
+    let mut data = vec![0u8; (size * size * 4) as usize];
+    let thickness = 14i32;
+    let half = size as i32 / 2;
+    let hub_radius = 10i32;
+
+    let draw_rect = |data: &mut [u8], min_x: i32, min_y: i32, max_x: i32, max_y: i32| {
+        for y in min_y.max(0)..max_y.min(size as i32) {
+            for x in min_x.max(0)..max_x.min(size as i32) {
+                let idx = ((y as u32 * size + x as u32) * 4) as usize;
+                data[idx] = 255;
+                data[idx + 1] = 255;
+                data[idx + 2] = 255;
+                data[idx + 3] = 255;
+            }
+        }
+    };
+    let draw_circle = |data: &mut [u8], cx: i32, cy: i32, radius: i32| {
+        let r2 = radius * radius;
+        for y in (cy - radius).max(0)..=(cy + radius).min(size as i32 - 1) {
+            for x in (cx - radius).max(0)..=(cx + radius).min(size as i32 - 1) {
+                let dx = x - cx;
+                let dy = y - cy;
+                if dx * dx + dy * dy > r2 {
+                    continue;
+                }
+                let idx = ((y as u32 * size + x as u32) * 4) as usize;
+                data[idx] = 255;
+                data[idx + 1] = 255;
+                data[idx + 2] = 255;
+                data[idx + 3] = 255;
+            }
+        }
+    };
+
+    let arm_half = thickness / 2;
+
+    if mask == 0 {
+        draw_circle(&mut data, half, half, hub_radius);
+    } else {
+        if (mask & 0b0001) != 0 {
+            draw_rect(
+                &mut data,
+                half - arm_half,
+                half,
+                half + arm_half,
+                size as i32,
+            );
+        }
+        if (mask & 0b0010) != 0 {
+            draw_rect(
+                &mut data,
+                half,
+                half - arm_half,
+                size as i32,
+                half + arm_half,
+            );
+        }
+        if (mask & 0b0100) != 0 {
+            draw_rect(&mut data, half - arm_half, 0, half + arm_half, half);
+        }
+        if (mask & 0b1000) != 0 {
+            draw_rect(&mut data, 0, half - arm_half, half, half + arm_half);
+        }
+
+        draw_circle(&mut data, half, half, hub_radius);
+    }
+
+    Image::new(
+        Extent3d {
+            width: size,
+            height: size,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    )
+}
+
+fn build_vent_overlay_image() -> Image {
+    build_vent_image(true)
+}
+
+fn build_vent_image(with_arrows: bool) -> Image {
+    let size = 64u32;
+    let mut data = vec![0u8; (size * size * 4) as usize];
+    let draw_rect = |data: &mut [u8], min_x: i32, min_y: i32, max_x: i32, max_y: i32| {
+        for y in min_y.max(0)..max_y.min(size as i32) {
+            for x in min_x.max(0)..max_x.min(size as i32) {
+                let idx = ((y as u32 * size + x as u32) * 4) as usize;
+                data[idx] = 255;
+                data[idx + 1] = 255;
+                data[idx + 2] = 255;
+                data[idx + 3] = 255;
+            }
+        }
+    };
+    let draw_line = |data: &mut [u8], x0: i32, y0: i32, x1: i32, y1: i32, thickness: i32| {
+        let dx = x1 - x0;
+        let dy = y1 - y0;
+        let steps = dx.abs().max(dy.abs()).max(1);
+        for step in 0..=steps {
+            let t = step as f32 / steps as f32;
+            let x = x0 as f32 + dx as f32 * t;
+            let y = y0 as f32 + dy as f32 * t;
+            let half = thickness / 2;
+            draw_rect(
+                data,
+                x.round() as i32 - half,
+                y.round() as i32 - half,
+                x.round() as i32 + half + 1,
+                y.round() as i32 + half + 1,
+            );
+        }
+    };
+    let draw_arrow_head =
+        |data: &mut [u8], tip_x: i32, tip_y: i32, dir_x: i32, dir_y: i32, size_px: i32, thickness: i32| {
+            let (left_x, left_y, right_x, right_y) = match (dir_x, dir_y) {
+                (0, -1) => (
+                    tip_x - size_px,
+                    tip_y + size_px,
+                    tip_x + size_px,
+                    tip_y + size_px,
+                ),
+                (0, 1) => (
+                    tip_x - size_px,
+                    tip_y - size_px,
+                    tip_x + size_px,
+                    tip_y - size_px,
+                ),
+                _ => (tip_x, tip_y, tip_x, tip_y),
+            };
+            draw_line(data, tip_x, tip_y, left_x, left_y, thickness);
+            draw_line(data, tip_x, tip_y, right_x, right_y, thickness);
+        };
+
+    if with_arrows {
+        let border = 4;
+        let left = 12;
+        let top = 18;
+        let right = 52;
+        let bottom = 58;
+        draw_rect(&mut data, left, top, right, top + border);
+        draw_rect(&mut data, left, bottom - border, right, bottom);
+        draw_rect(&mut data, left, top, left + border, bottom);
+        draw_rect(&mut data, right - border, top, right, bottom);
+
+        let shaft_x = 32;
+        let shaft_thickness = 4;
+        draw_rect(&mut data, shaft_x - 2, 8, shaft_x + 2, 42);
+        draw_arrow_head(&mut data, shaft_x, 4, 0, -1, 7, shaft_thickness);
+        draw_arrow_head(&mut data, shaft_x, 46, 0, 1, 7, shaft_thickness);
+    } else {
+        draw_rect(&mut data, 10, 16, 54, 48);
+        for offset in [18, 26, 34, 42] {
+            draw_rect(&mut data, offset, 18, offset + 3, 46);
+        }
+        for offset in [22, 32, 42] {
+            draw_rect(&mut data, 12, offset, 52, offset + 2);
+        }
+    }
+
+    Image::new(
+        Extent3d {
+            width: size,
+            height: size,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    )
 }
 

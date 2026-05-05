@@ -51,7 +51,7 @@ const TOP_LEFT_SIM_PANEL_HEIGHT: f32 = 112.0;
 
 const MAIN_TOOLBAR_LEFT: f32 = 12.0;
 const MAIN_TOOLBAR_BOTTOM: f32 = 12.0;
-const MAIN_TOOLBAR_WIDTH: f32 = 120.0;
+const MAIN_TOOLBAR_WIDTH: f32 = 176.0;
 const MAIN_TOOLBAR_HEIGHT: f32 = 56.0;
 const CELL_TYPE_PANEL_HEIGHT: f32 = 56.0;
 const CELL_TYPE_PANEL_BOTTOM: f32 = MAIN_TOOLBAR_BOTTOM + MAIN_TOOLBAR_HEIGHT + 10.0;
@@ -80,11 +80,19 @@ const GAS_SELECT_SOURCE_ID: SelectFieldId = SelectFieldId::new("gas_select_sourc
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EditorTool {
     BuildSolid,
+    Gases,
     EraseSolid,
+    Scissors,
     AddGas,
     ClearGas,
     CreateGasSource,
     CreateGasSink,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PipeToolKind {
+    Pipe,
+    Vent,
 }
 
 #[derive(Resource, Default)]
@@ -103,6 +111,20 @@ impl Default for CellToolSettings {
     fn default() -> Self {
         Self {
             material: CellMaterial::Brick,
+        }
+    }
+}
+
+#[derive(Resource)]
+/// Stores `PipeToolSettings` state.
+pub struct PipeToolSettings {
+    selected: PipeToolKind,
+}
+
+impl Default for PipeToolSettings {
+    fn default() -> Self {
+        Self {
+            selected: PipeToolKind::Pipe,
         }
     }
 }
@@ -189,6 +211,7 @@ struct BrushDragState {
 enum EditorUiAction {
     SelectTool(EditorTool),
     SelectCellMaterial(CellMaterial),
+    SelectPipeTool(PipeToolKind),
     ToggleReplace,
     ToggleBuoyancy,
     ToggleShowMomentumVectors,
@@ -202,6 +225,9 @@ struct DebugToolbarRoot;
 
 #[derive(Component)]
 struct CellTypePanelRoot;
+
+#[derive(Component)]
+struct GasesTypePanelRoot;
 
 #[derive(Component)]
 struct GasReplaceLabel;
@@ -265,6 +291,9 @@ struct BlueprintGhost;
 
 #[derive(Component)]
 struct EraseCursorOverlay;
+
+#[derive(Component)]
+struct EraseCursorOverlayText;
 
 #[derive(Component)]
 struct EraseCellHighlight;
@@ -352,7 +381,10 @@ struct SelectionSizeTooltipText;
 #[derive(Resource, Clone)]
 struct EditorIconSet {
     build: Handle<Image>,
+    gases: Handle<Image>,
     erase: Handle<Image>,
+    pipe: Handle<Image>,
+    vent: Handle<Image>,
     add_gas: Handle<Image>,
     clear_gas: Handle<Image>,
     source: Handle<Image>,
@@ -361,6 +393,8 @@ struct EditorIconSet {
     metal: Handle<Image>,
     brick_silhouette: Handle<Image>,
     metal_silhouette: Handle<Image>,
+    pipe_silhouette: Handle<Image>,
+    vent_silhouette: Handle<Image>,
     source_silhouette: Handle<Image>,
     sink_silhouette: Handle<Image>,
     select_arrow: Handle<Image>,
@@ -382,6 +416,7 @@ impl Plugin for EditorPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ActiveEditorTool>()
             .init_resource::<CellToolSettings>()
+            .init_resource::<PipeToolSettings>()
             .init_resource::<MainMenuState>()
             .init_resource::<MainMenuUiState>()
             .init_resource::<SaveSessionState>()

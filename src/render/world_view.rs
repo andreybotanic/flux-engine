@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use bevy::{
     image::ImageSampler,
     prelude::*,
+    render::mesh::Mesh,
     render::render_asset::RenderAssetUsages,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
     window::PrimaryWindow,
@@ -12,24 +13,31 @@ use crate::{
     config::{CellTypeVisualConfig, GasMainViewVisualConfig, GasRegistry},
     editor::StructureEditState,
     input::camera::MainCamera,
+    render::pipe_highlight_material::PipeHighlightRenderAssets,
     save::WorldLoadState,
     simulation::{
         gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
+        pipes::{PipeFlowVisualState, PipeGasField},
         SimulationStep,
     },
     ui::panels::PanelManager,
-    world::gas_structures::{GasStructureCell, GasStructureGrid},
     world::grid::{
         cell_center, is_boundary, world_dimensions, world_to_cell, CellKind, CellMaterial,
         WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH,
     },
     world::WorldCellChanged,
+    world::{
+        gas_structures::{GasStructureCell, GasStructureGrid},
+        pipes::{PipeCell, PipeGrid},
+    },
 };
 
 const BOARD_MAIN_COLOR: Color = Color::srgba(0.96, 0.96, 0.96, 0.88);
 const BOARD_GAS_COLOR: Color = Color::srgba(0.80, 0.81, 0.82, 0.78);
+const BOARD_PIPE_COLOR: Color = Color::srgba(0.10, 0.12, 0.14, 0.96);
 const BACKDROP_MAIN_COLOR: Color = Color::srgba(0.96, 0.96, 0.96, 1.0);
 const BACKDROP_GAS_COLOR: Color = Color::srgba(0.84, 0.84, 0.85, 1.0);
+const BACKDROP_PIPE_COLOR: Color = Color::srgba(0.08, 0.09, 0.10, 1.0);
 const GRID_LINE_COLOR: Color = Color::srgba(0.29, 0.32, 0.35, 1.0);
 const CURSOR_GRID_MAX_ALPHA: f32 = 0.24;
 const CURSOR_GRID_RADIUS_CELLS: i32 = 4;
@@ -222,6 +230,7 @@ pub enum OverlayMode {
     #[default]
     Main,
     Gas,
+    Pipes,
 }
 
 #[derive(Component)]
@@ -259,6 +268,10 @@ pub(crate) struct WorldVisualAssets {
     boundary: Handle<Image>,
     source: Handle<Image>,
     sink: Handle<Image>,
+    pipe_masks: Vec<Handle<Image>>,
+    vent_world: Handle<Image>,
+    vent_overlay: Handle<Image>,
+    pipe_highlight: PipeHighlightRenderAssets,
 }
 
 #[derive(Resource, Default)]
@@ -275,6 +288,38 @@ pub(crate) struct GasStructureEditHighlight;
 #[derive(Resource, Default)]
 pub(crate) struct GasStructureEntities {
     by_cell: HashMap<(u32, u32), Entity>,
+}
+
+#[derive(Component)]
+pub(crate) struct PipeWorldVisual {
+    main_tint: Color,
+    gas_tint: Color,
+    pipe_tint: Color,
+}
+
+#[derive(Component)]
+pub(crate) struct VentWorldVisual;
+
+#[derive(Component)]
+pub(crate) struct PipeGasOverlayVisual;
+
+#[derive(Component)]
+pub(crate) struct PipeVentOverlayVisual;
+
+#[derive(Component)]
+pub(crate) struct PipeHighlightOverlayVisual;
+
+#[derive(Component)]
+pub(crate) struct PipeFlowPacketVisual;
+
+#[derive(Resource, Default)]
+pub(crate) struct PipeEntities {
+    pipes: HashMap<(u32, u32), Entity>,
+    pipe_highlights: HashMap<(u32, u32), Entity>,
+    vents: HashMap<(u32, u32), Entity>,
+    gas_overlays: HashMap<(u32, u32), Entity>,
+    vent_overlays: HashMap<(u32, u32), Entity>,
+    flow_packets: Vec<Entity>,
 }
 
 include!("world_view_setup_block.rs");

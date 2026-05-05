@@ -12,44 +12,191 @@ pub fn update_overlay_mode(
     if input.just_pressed(KeyCode::F2) {
         *overlay_mode = OverlayMode::Gas;
     }
+    if input.just_pressed(KeyCode::F3) {
+        *overlay_mode = OverlayMode::Pipes;
+    }
 }
 
 /// Runs `apply_overlay_mode` logic.
 pub(crate) fn apply_overlay_mode(
     overlay_mode: Res<OverlayMode>,
     world_load_state: Res<WorldLoadState>,
-    mut sprite_sets: ParamSet<(
+    mut visuals: ParamSet<(
         Query<
+            '_,
+            '_,
             (&mut Sprite, &mut Visibility),
             (
                 With<BoardLayer>,
                 Without<BackdropLayer>,
                 Without<WallVisual>,
+                Without<OuterBorderVisual>,
+                Without<PipeWorldVisual>,
+                Without<VentWorldVisual>,
+                Without<WorldFadeMaskLayer>,
                 Without<GasOverlaySprite>,
                 Without<GasMainOverlaySprite>,
             ),
         >,
         Query<
+            '_,
+            '_,
             (&mut Sprite, &mut Visibility),
             (
                 With<BackdropLayer>,
                 Without<BoardLayer>,
                 Without<WallVisual>,
+                Without<OuterBorderVisual>,
+                Without<PipeWorldVisual>,
+                Without<VentWorldVisual>,
+                Without<WorldFadeMaskLayer>,
                 Without<GasOverlaySprite>,
                 Without<GasMainOverlaySprite>,
             ),
         >,
         Query<
+            '_,
+            '_,
             (&WallVisual, &mut Sprite, &mut Visibility),
             (
                 Without<BoardLayer>,
                 Without<BackdropLayer>,
+                Without<OuterBorderVisual>,
+                Without<PipeWorldVisual>,
+                Without<VentWorldVisual>,
+                Without<WorldFadeMaskLayer>,
                 Without<GasOverlaySprite>,
                 Without<GasMainOverlaySprite>,
             ),
         >,
-        Query<(&OuterBorderVisual, &mut Sprite, &mut Visibility)>,
         Query<
+            '_,
+            '_,
+            (&OuterBorderVisual, &mut Sprite, &mut Visibility),
+            (
+                Without<BoardLayer>,
+                Without<BackdropLayer>,
+                Without<WallVisual>,
+                Without<PipeWorldVisual>,
+                Without<VentWorldVisual>,
+                Without<WorldFadeMaskLayer>,
+                Without<GasOverlaySprite>,
+                Without<GasMainOverlaySprite>,
+            ),
+        >,
+        Query<
+            '_,
+            '_,
+            (&PipeWorldVisual, &mut Sprite, &mut Visibility, &mut Transform),
+            (
+                Without<BoardLayer>,
+                Without<BackdropLayer>,
+                Without<WallVisual>,
+                Without<OuterBorderVisual>,
+                Without<VentWorldVisual>,
+                Without<WorldFadeMaskLayer>,
+                Without<GasOverlaySprite>,
+                Without<GasMainOverlaySprite>,
+            ),
+        >,
+        Query<
+            '_,
+            '_,
+            (&mut Visibility, &mut Transform),
+            (
+                With<PipeHighlightOverlayVisual>,
+                Without<BoardLayer>,
+                Without<BackdropLayer>,
+                Without<WallVisual>,
+                Without<OuterBorderVisual>,
+                Without<PipeWorldVisual>,
+                Without<VentWorldVisual>,
+                Without<WorldFadeMaskLayer>,
+                Without<GasOverlaySprite>,
+                Without<GasMainOverlaySprite>,
+            ),
+        >,
+        Query<
+            '_,
+            '_,
+            (&mut Visibility, &mut Sprite),
+            (
+                With<VentWorldVisual>,
+                Without<BoardLayer>,
+                Without<BackdropLayer>,
+                Without<WallVisual>,
+                Without<OuterBorderVisual>,
+                Without<PipeWorldVisual>,
+                Without<WorldFadeMaskLayer>,
+                Without<GasOverlaySprite>,
+                Without<GasMainOverlaySprite>,
+            ),
+        >,
+    )>,
+) {
+    let show_world = world_load_state.has_world;
+    let (board_color, backdrop_color) = match *overlay_mode {
+        OverlayMode::Main => (
+            BOARD_MAIN_COLOR,
+            BACKDROP_MAIN_COLOR,
+        ),
+        OverlayMode::Gas => (
+            BOARD_GAS_COLOR,
+            BACKDROP_GAS_COLOR,
+        ),
+        OverlayMode::Pipes => (
+            BOARD_PIPE_COLOR,
+            BACKDROP_PIPE_COLOR,
+        ),
+    };
+
+    for (mut board, mut visibility) in &mut visuals.p0() {
+        board.color = board_color;
+        *visibility = world_layer_visibility(show_world);
+    }
+    for (mut backdrop, mut visibility) in &mut visuals.p1() {
+        backdrop.color = backdrop_color;
+        *visibility = world_layer_visibility(show_world);
+    }
+    for (wall_visual, mut sprite, mut visibility) in &mut visuals.p2() {
+        sprite.color = match *overlay_mode {
+            OverlayMode::Main => wall_visual.main_tint,
+            OverlayMode::Gas => wall_visual.gas_tint,
+            OverlayMode::Pipes => wall_visual.main_tint.with_alpha(0.18),
+        };
+        *visibility = world_layer_visibility(show_world);
+    }
+    for (outer_border_visual, mut sprite, mut visibility) in &mut visuals.p3() {
+        sprite.color = match *overlay_mode {
+            OverlayMode::Main => outer_border_visual.main_tint,
+            OverlayMode::Gas => outer_border_visual.gas_tint,
+            OverlayMode::Pipes => outer_border_visual.main_tint.with_alpha(0.12),
+        };
+        *visibility = world_layer_visibility(show_world);
+    }
+    for (pipe_visual, mut sprite, mut visibility, mut transform) in &mut visuals.p4() {
+        sprite.color = pipe_sprite_tint(*overlay_mode, pipe_visual);
+        transform.translation.z = pipe_world_z(*overlay_mode);
+        *visibility = world_layer_visibility(show_world);
+    }
+    for (mut visibility, mut transform) in &mut visuals.p5() {
+        transform.translation.z = pipe_highlight_z();
+        *visibility = pipe_highlight_visibility(show_world, *overlay_mode);
+    }
+    for (mut visibility, mut sprite) in &mut visuals.p6() {
+        *visibility = vent_world_visibility(show_world, *overlay_mode);
+        sprite.color = Color::WHITE;
+    }
+}
+
+/// Runs `apply_overlay_visibility_mode` logic.
+pub(crate) fn apply_overlay_visibility_mode(
+    overlay_mode: Res<OverlayMode>,
+    world_load_state: Res<WorldLoadState>,
+    mut visuals: ParamSet<(
+        Query<
+            '_,
+            '_,
             &mut Visibility,
             (
                 With<GasOverlaySprite>,
@@ -57,9 +204,15 @@ pub(crate) fn apply_overlay_mode(
                 Without<BoardLayer>,
                 Without<BackdropLayer>,
                 Without<WallVisual>,
+                Without<OuterBorderVisual>,
+                Without<PipeWorldVisual>,
+                Without<VentWorldVisual>,
+                Without<WorldFadeMaskLayer>,
             ),
         >,
         Query<
+            '_,
+            '_,
             &mut Visibility,
             (
                 With<GasMainOverlaySprite>,
@@ -67,80 +220,52 @@ pub(crate) fn apply_overlay_mode(
                 Without<BoardLayer>,
                 Without<BackdropLayer>,
                 Without<WallVisual>,
+                Without<OuterBorderVisual>,
+                Without<PipeWorldVisual>,
+                Without<VentWorldVisual>,
+                Without<WorldFadeMaskLayer>,
             ),
         >,
-        Query<&mut Visibility, With<WorldFadeMaskLayer>>,
+        Query<
+            '_,
+            '_,
+            &mut Visibility,
+            (
+                With<WorldFadeMaskLayer>,
+                Without<BoardLayer>,
+                Without<BackdropLayer>,
+                Without<WallVisual>,
+                Without<OuterBorderVisual>,
+                Without<PipeWorldVisual>,
+                Without<VentWorldVisual>,
+                Without<GasOverlaySprite>,
+                Without<GasMainOverlaySprite>,
+            ),
+        >,
     )>,
 ) {
     let show_world = world_load_state.has_world;
-    let (board_color, backdrop_color, gas_visibility, gas_main_visibility) = match *overlay_mode {
-        OverlayMode::Main => (
-            BOARD_MAIN_COLOR,
-            BACKDROP_MAIN_COLOR,
-            Visibility::Hidden,
-            Visibility::Visible,
-        ),
-        OverlayMode::Gas => (
-            BOARD_GAS_COLOR,
-            BACKDROP_GAS_COLOR,
-            Visibility::Visible,
-            Visibility::Hidden,
-        ),
+    let (gas_visibility, gas_main_mode_visibility) = match *overlay_mode {
+        OverlayMode::Main => (Visibility::Hidden, Visibility::Visible),
+        OverlayMode::Gas => (Visibility::Visible, Visibility::Hidden),
+        OverlayMode::Pipes => (Visibility::Hidden, Visibility::Hidden),
     };
 
-    for (mut board, mut visibility) in &mut sprite_sets.p0() {
-        board.color = board_color;
-        *visibility = if show_world {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-    for (mut backdrop, mut visibility) in &mut sprite_sets.p1() {
-        backdrop.color = backdrop_color;
-        *visibility = if show_world {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-    for mut visibility in &mut sprite_sets.p4() {
+    for mut visibility in &mut visuals.p0() {
         *visibility = if show_world {
             gas_visibility
         } else {
             Visibility::Hidden
         };
     }
-    for mut visibility in &mut sprite_sets.p5() {
+    for mut visibility in &mut visuals.p1() {
         *visibility = if show_world {
-            gas_main_visibility
+            gas_main_mode_visibility
         } else {
             Visibility::Hidden
         };
     }
-    for mut visibility in &mut sprite_sets.p6() {
-        *visibility = if show_world {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-    for (wall_visual, mut sprite, mut visibility) in &mut sprite_sets.p2() {
-        sprite.color = match *overlay_mode {
-            OverlayMode::Main => wall_visual.main_tint,
-            OverlayMode::Gas => wall_visual.gas_tint,
-        };
-        *visibility = if show_world {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-    for (outer_border_visual, mut sprite, mut visibility) in &mut sprite_sets.p3() {
-        sprite.color = match *overlay_mode {
-            OverlayMode::Main => outer_border_visual.main_tint,
-            OverlayMode::Gas => outer_border_visual.gas_tint,
-        };
+    for mut visibility in &mut visuals.p2() {
         *visibility = if show_world {
             Visibility::Visible
         } else {
@@ -345,5 +470,130 @@ fn grid_fade(distance_cells: f32, fade_radius_cells: f32) -> f32 {
     let t = (distance_cells / fade_radius_cells).clamp(0.0, 1.0);
     let smooth = 1.0 - t * t;
     smooth * smooth
+}
+
+pub(crate) fn sync_pipe_overlay_visuals(
+    overlay_mode: Res<OverlayMode>,
+    world_load_state: Res<WorldLoadState>,
+    pipe_layout: Res<PipeGrid>,
+    pipe_gas: Res<PipeGasField>,
+    gas_registry: Res<GasRegistry>,
+    visual_settings: Res<GasVisualSettings>,
+    main_view_settings: Res<GasMainViewVisualConfig>,
+    pipe_entities: Res<PipeEntities>,
+    mut gas_query: Query<(&mut Sprite, &mut Visibility), With<PipeGasOverlayVisual>>,
+    mut vent_query: Query<&mut Visibility, (With<PipeVentOverlayVisual>, Without<PipeGasOverlayVisual>)>,
+) {
+    let show_pipe_overlay = world_load_state.has_world && *overlay_mode == OverlayMode::Pipes;
+
+    for ((x, y), entity) in &pipe_entities.gas_overlays {
+        let Ok((mut sprite, mut visibility)) = gas_query.get_mut(*entity) else {
+            continue;
+        };
+        if !show_pipe_overlay {
+            *visibility = Visibility::Hidden;
+            continue;
+        }
+        let total = pipe_gas.total_amount_particles(*x, *y);
+        if total == 0 {
+            *visibility = Visibility::Hidden;
+            continue;
+        }
+        let total_f = total as f32;
+        let mut weighted_rgb = Vec3::ZERO;
+        for gas_index in 0..pipe_gas.gas_count() {
+            let amount = pipe_gas.amount_particles(*x, *y, gas_index) as f32;
+            if amount <= 0.0 {
+                continue;
+            }
+            if let Some(gas_def) = gas_registry.get(gas_index) {
+                weighted_rgb += Vec3::from_array(gas_def.color) * amount;
+            }
+        }
+        let mix_rgb = if weighted_rgb.length_squared() <= f32::EPSILON {
+            Vec3::ZERO
+        } else {
+            weighted_rgb / total_f.max(1.0)
+        };
+        let visual = gas_visual_intensity(
+            total_f,
+            visual_settings.gamma,
+            main_view_settings.max_particles_for_max_intensity,
+            1.0,
+            0.12,
+        );
+        let rgb = (mix_rgb * visual).clamp(Vec3::ZERO, Vec3::ONE);
+        sprite.color = Color::linear_rgba(rgb.x, rgb.y, rgb.z, (0.42 + visual * 0.5).clamp(0.0, 1.0));
+        *visibility = Visibility::Visible;
+    }
+
+    for ((x, y), entity) in &pipe_entities.vent_overlays {
+        let Ok(mut visibility) = vent_query.get_mut(*entity) else {
+            continue;
+        };
+        let cell = pipe_layout.cell(*x, *y);
+        *visibility = if show_pipe_overlay && cell.has_vent {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+}
+
+pub(crate) fn sync_pipe_flow_packets(
+    mut commands: Commands,
+    overlay_mode: Res<OverlayMode>,
+    world_load_state: Res<WorldLoadState>,
+    flow_state: Res<PipeFlowVisualState>,
+    control: Res<crate::simulation::SimulationControl>,
+    gas_registry: Res<GasRegistry>,
+    time: Res<Time>,
+    mut pipe_entities: ResMut<PipeEntities>,
+) {
+    for entity in pipe_entities.flow_packets.drain(..) {
+        commands.entity(entity).despawn();
+    }
+
+    if !world_load_state.has_world || *overlay_mode != OverlayMode::Pipes || control.paused {
+        return;
+    }
+
+    let progress = (time.elapsed_secs() * 2.0).fract();
+    for transfer in &flow_state.transfers {
+        if transfer.total_amount == 0 {
+            continue;
+        }
+        let from = cell_center(transfer.from.x, transfer.from.y);
+        let to = cell_center(transfer.to.x, transfer.to.y);
+        let position = from.lerp(to, progress);
+        let total = transfer.total_amount as f32;
+        let mut weighted_rgb = Vec3::ZERO;
+        for (gas_index, amount) in transfer.gas_counts.iter().copied().enumerate() {
+            if amount == 0 {
+                continue;
+            }
+            if let Some(gas_def) = gas_registry.get(gas_index) {
+                weighted_rgb += Vec3::from_array(gas_def.color) * amount as f32;
+            }
+        }
+        let mix_rgb = if weighted_rgb.length_squared() <= f32::EPSILON {
+            Vec3::splat(0.9)
+        } else {
+            weighted_rgb / total.max(1.0)
+        };
+        let size = (CELL_SIZE * 0.12 + (transfer.total_amount.min(1000) as f32 / 1000.0) * CELL_SIZE * 0.38)
+            .clamp(CELL_SIZE * 0.12, CELL_SIZE * 0.5);
+        let entity = commands
+            .spawn((
+                Sprite::from_color(
+                    Color::linear_rgba(mix_rgb.x, mix_rgb.y, mix_rgb.z, 0.92),
+                    Vec2::splat(size),
+                ),
+                Transform::from_translation(position.extend(1.22)),
+                PipeFlowPacketVisual,
+            ))
+            .id();
+        pipe_entities.flow_packets.push(entity);
+    }
 }
 

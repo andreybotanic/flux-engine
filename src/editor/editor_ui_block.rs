@@ -86,6 +86,7 @@ fn handle_editor_ui_actions(
     mut interactions: Query<(&Interaction, &EditorUiAction), (Changed<Interaction>, With<Button>)>,
     mut active_tool: ResMut<ActiveEditorTool>,
     mut cell_settings: ResMut<CellToolSettings>,
+    mut pipe_settings: ResMut<PipeToolSettings>,
     mut gas_settings: ResMut<GasToolSettings>,
     mut gas_simulation: ResMut<GasSimulationConfig>,
     mut debug_overlay: ResMut<DebugOverlaySettings>,
@@ -131,6 +132,13 @@ fn handle_editor_ui_actions(
                 unfocus_inputs();
                 cell_settings.material = next_material;
             }
+            EditorUiAction::SelectPipeTool(next_pipe_tool) => {
+                unfocus_inputs();
+                pipe_settings.selected = next_pipe_tool;
+                active_tool.selected = Some(EditorTool::Gases);
+                structure_edit.selected_cell = None;
+                clear_active_tool_state(&mut selection_drag, &mut brush_drag);
+            }
             EditorUiAction::ToggleReplace => {
                 unfocus_inputs();
                 gas_settings.replace = !gas_settings.replace;
@@ -152,6 +160,7 @@ fn refresh_editor_ui(
     ui_state: (
         Res<ActiveEditorTool>,
         Res<CellToolSettings>,
+        Res<PipeToolSettings>,
         Res<MainMenuState>,
         Res<DebugMode>,
         Res<WorldLoadState>,
@@ -176,7 +185,8 @@ fn refresh_editor_ui(
     gas_registry: Res<GasRegistry>,
     mut ui: RefreshEditorUiSystemParams,
 ) {
-    let (active_tool, cell_settings, main_menu, debug_mode, world_load_state) = ui_state;
+    let (active_tool, cell_settings, pipe_settings, main_menu, debug_mode, world_load_state) =
+        ui_state;
     let (debug_metrics, sim_control, sim_perf) = sim_metrics;
     let selected_tool = active_tool.selected;
 
@@ -269,6 +279,11 @@ fn refresh_editor_ui(
             EditorUiAction::SelectCellMaterial(material) if *material == cell_settings.material => {
                 BUTTON_ACTIVE
             }
+            EditorUiAction::SelectPipeTool(kind)
+                if selected_tool == Some(EditorTool::Gases) && *kind == pipe_settings.selected =>
+            {
+                BUTTON_ACTIVE
+            }
             EditorUiAction::ToggleReplace if gas_settings.replace => BUTTON_ACTIVE,
             EditorUiAction::ToggleBuoyancy if gas_simulation.solver_tuning.enable_buoyancy => {
                 BUTTON_ACTIVE
@@ -300,7 +315,17 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut debug_toolbar_root = ui.visibility_set.p2();
+        let mut gases_type_panel_root = ui.visibility_set.p2();
+        **gases_type_panel_root =
+            if world_load_state.has_world && selected_tool == Some(EditorTool::Gases) {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
+    }
+
+    {
+        let mut debug_toolbar_root = ui.visibility_set.p3();
         **debug_toolbar_root = if world_load_state.has_world && debug_mode.active {
             Visibility::Visible
         } else {
@@ -335,7 +360,7 @@ fn refresh_editor_ui(
     );
 
     {
-        let mut main_menu_root = ui.visibility_set.p3();
+        let mut main_menu_root = ui.visibility_set.p4();
         **main_menu_root = if main_menu.open {
             Visibility::Visible
         } else {
@@ -462,6 +487,7 @@ struct RefreshEditorUiSystemParams<'w, 's> {
         (
             Single<'w, &'static mut Visibility, With<MainToolbarRoot>>,
             Single<'w, &'static mut Visibility, With<CellTypePanelRoot>>,
+            Single<'w, &'static mut Visibility, With<GasesTypePanelRoot>>,
             Single<'w, &'static mut Visibility, With<DebugToolbarRoot>>,
             Single<'w, &'static mut Visibility, With<MainMenuRoot>>,
         ),
