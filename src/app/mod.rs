@@ -33,7 +33,7 @@ pub fn run() {
         .to_string();
 
     let mut app = App::new();
-    app.insert_resource(ClearColor(Color::srgb(0.90, 0.91, 0.92)))
+    app.insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Time::<Fixed>::from_hz(30.0));
 
     let args: Vec<String> = std::env::args().collect();

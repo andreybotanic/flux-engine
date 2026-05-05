@@ -59,8 +59,8 @@ fn setup_editor_ui(
         clear_gas: asset_server.load("sprites/ui/tool_clear_gas.png"),
         source: asset_server.load("sprites/ui/tool_gas_source.png"),
         sink: asset_server.load("sprites/ui/tool_gas_sink.png"),
-        brick: asset_server.load("sprites/ui/tool_brick.png"),
-        metal: asset_server.load("sprites/ui/tool_metal.png"),
+        brick: asset_server.load("sprites/world/tile_brick.png"),
+        metal: asset_server.load("sprites/world/tile_metal.png"),
         brick_silhouette: asset_server.load("sprites/ui/silhouette_brick.png"),
         metal_silhouette: asset_server.load("sprites/ui/silhouette_metal.png"),
         source_silhouette: asset_server.load("sprites/world/tile_gas_source.png"),
@@ -206,7 +206,7 @@ fn setup_editor_ui(
             },
             scroll_policy: PanelScrollPolicy::Never,
             background: PANEL_BG,
-            header_background: Color::srgba(0.82, 0.84, 0.87, 0.98),
+            header_background: crate::ui::palette::PANEL_HEADER_BG,
             initial_visible: false,
             initial_collapsed: false,
         },
@@ -253,7 +253,7 @@ fn setup_editor_ui(
             },
             scroll_policy: PanelScrollPolicy::AutoHalfScreen,
             background: PANEL_BG,
-            header_background: Color::srgba(0.82, 0.84, 0.87, 0.98),
+            header_background: crate::ui::palette::PANEL_HEADER_BG,
             initial_visible: false,
             initial_collapsed: false,
         },
@@ -280,7 +280,7 @@ fn setup_editor_ui(
             },
             scroll_policy: PanelScrollPolicy::Never,
             background: PANEL_BG,
-            header_background: Color::srgba(0.82, 0.84, 0.87, 0.98),
+            header_background: crate::ui::palette::PANEL_HEADER_BG,
             initial_visible: false,
             initial_collapsed: false,
         },
@@ -311,6 +311,18 @@ fn setup_editor_ui(
             MainMenuRoot,
         ))
         .with_children(|parent| {
+            parent.spawn((
+                ImageNode::new(asset_server.load("sprites/ui/main_menu_background.png")),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    right: Val::Px(0.0),
+                    top: Val::Px(0.0),
+                    bottom: Val::Px(0.0),
+                    ..default()
+                },
+                MainMenuBackdrop,
+            ));
             parent
                 .spawn((
                     Node {
@@ -335,7 +347,7 @@ fn setup_editor_ui(
                         },
                         Text::new("Main Menu"),
                         TextFont::from_font_size(24.0),
-                        TextColor(Color::srgba(0.08, 0.09, 0.11, 1.0)),
+                        TextColor(crate::ui::palette::TEXT_HEADER),
                         TextLayout::new_with_justify(JustifyText::Center),
                         MainMenuTitleText,
                     ));
@@ -347,7 +359,7 @@ fn setup_editor_ui(
                         },
                         Text::new(""),
                         TextFont::from_font_size(14.0),
-                        TextColor(Color::srgba(0.20, 0.22, 0.26, 1.0)),
+                        TextColor(crate::ui::palette::TEXT_SECONDARY),
                         TextLayout::new_with_justify(JustifyText::Center),
                         MainMenuStatusText,
                     ));
@@ -420,7 +432,7 @@ fn setup_editor_ui(
                             row.spawn((
                                 Text::new("Save Name:"),
                                 TextFont::from_font_size(14.0),
-                                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                                TextColor(crate::ui::palette::TEXT_PRIMARY),
                                 TextLayout::new_with_justify(JustifyText::Center),
                             ));
                             row.spawn((
@@ -450,7 +462,7 @@ fn setup_editor_ui(
                                 button.spawn((
                                     Text::new("New Save"),
                                     TextFont::from_font_size(14.0),
-                                    TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                                    TextColor(crate::ui::palette::TEXT_PRIMARY),
                                     TextInputDisplay,
                                 ));
                             });
@@ -535,7 +547,7 @@ fn setup_editor_ui(
                                     button.spawn((
                                         Text::new("Yes"),
                                         TextFont::from_font_size(15.0),
-                                        TextColor(Color::WHITE),
+                                        TextColor(crate::ui::palette::TEXT_ON_DARK),
                                         TextLayout::new_with_justify(JustifyText::Center),
                                     ));
                                 });
@@ -557,7 +569,7 @@ fn setup_editor_ui(
                                     button.spawn((
                                         Text::new("No"),
                                         TextFont::from_font_size(15.0),
-                                        TextColor(Color::WHITE),
+                                        TextColor(crate::ui::palette::TEXT_ON_DARK),
                                         TextLayout::new_with_justify(JustifyText::Center),
                                     ));
                                 });
@@ -579,7 +591,7 @@ fn setup_editor_ui(
                                     button.spawn((
                                         Text::new("Cancel"),
                                         TextFont::from_font_size(15.0),
-                                        TextColor(Color::WHITE),
+                                        TextColor(crate::ui::palette::TEXT_ON_DARK),
                                         TextLayout::new_with_justify(JustifyText::Center),
                                     ));
                                 });
@@ -619,7 +631,7 @@ fn setup_editor_ui(
             parent.spawn((
                 Text::new(""),
                 TextFont::from_font_size(12.0),
-                TextColor(Color::WHITE),
+                TextColor(crate::ui::palette::TEXT_ON_DARK),
                 UiTooltipText,
             ));
         });
@@ -645,7 +657,7 @@ fn setup_editor_ui(
             parent.spawn((
                 Text::new(""),
                 TextFont::from_font_size(12.0),
-                TextColor(Color::WHITE),
+                TextColor(crate::ui::palette::TEXT_ON_DARK),
                 TextLayout::new_with_justify(JustifyText::Center),
                 SelectionSizeTooltipText,
             ));

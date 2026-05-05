@@ -98,7 +98,11 @@ fn handle_debug_keys(
     structures: Res<GasStructureGrid>,
     world: Res<WorldGrid>,
     mut step: ResMut<SimulationStep>,
+    main_menu: Option<Res<crate::editor::MainMenuState>>,
 ) {
+    if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
+        return;
+    }
     if keys.just_pressed(KeyCode::Backquote) {
         debug_mode.active = !debug_mode.active;
         if debug_mode.active {

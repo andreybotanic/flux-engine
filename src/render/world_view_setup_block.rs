@@ -20,11 +20,12 @@ pub fn setup_world_view(
     commands.insert_resource(visuals.clone());
 
     let world_size = world_dimensions();
+    let fade_sprite_size = world_size + Vec2::splat(CELL_SIZE * WORLD_FADE_WIDTH_CELLS * 2.0);
 
     commands.spawn((
         Sprite {
             image: visuals.backdrop_noise.clone(),
-            custom_size: Some(world_size + Vec2::splat(CELL_SIZE * 6.0)),
+            custom_size: Some(world_size),
             color: BACKDROP_MAIN_COLOR,
             image_mode: SpriteImageMode::Tiled {
                 tile_x: true,
@@ -61,6 +62,23 @@ pub fn setup_world_view(
             Visibility::Hidden
         },
         BoardLayer,
+    ));
+
+    commands.spawn((
+        Sprite {
+            image: asset_server.load("sprites/world/world_fade_mask.png"),
+            custom_size: Some(fade_sprite_size),
+            color: Color::WHITE,
+            ..default()
+        },
+        // Keep fade mask above world sprites so edge darkening is smooth and continuous.
+        Transform::from_xyz(0.0, 0.0, 1.2),
+        if show_world {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        },
+        WorldFadeMaskLayer,
     ));
 
     commands.spawn((
@@ -109,6 +127,15 @@ pub fn setup_world_view(
         }
     }
     commands.insert_resource(wall_entities);
+    let boundary_main_tint = cell_visuals.main_tint(CellMaterial::Boundary);
+    let boundary_gas_tint = cell_visuals.gas_tint(CellMaterial::Boundary);
+    spawn_outer_border_layers(
+        &mut commands,
+        &visuals,
+        boundary_main_tint,
+        boundary_gas_tint,
+        show_world,
+    );
 
     let mut structure_entities = GasStructureEntities::default();
     for (x, y, structure) in structures.iter_cells() {
@@ -125,6 +152,56 @@ pub fn setup_world_view(
         Visibility::Hidden,
         GasStructureEditHighlight,
     ));
+}
+
+fn spawn_outer_border_layers(
+    commands: &mut Commands,
+    visuals: &WorldVisualAssets,
+    boundary_main_tint: Color,
+    boundary_gas_tint: Color,
+    show_world: bool,
+) {
+    let min_x = 0_i32;
+    let min_y = 0_i32;
+    let max_x = WORLD_WIDTH as i32 - 1;
+    let max_y = WORLD_HEIGHT as i32 - 1;
+
+    for layer in 1..=OUTER_BORDER_LAYERS {
+        let ring_min_x = min_x - layer as i32;
+        let ring_min_y = min_y - layer as i32;
+        let ring_max_x = max_x + layer as i32;
+        let ring_max_y = max_y + layer as i32;
+
+        for y in ring_min_y..=ring_max_y {
+            for x in ring_min_x..=ring_max_x {
+                let is_in_previous_ring = x >= ring_min_x + 1
+                    && x <= ring_max_x - 1
+                    && y >= ring_min_y + 1
+                    && y <= ring_max_y - 1;
+                if is_in_previous_ring {
+                    continue;
+                }
+                commands.spawn((
+                    Sprite {
+                        image: visuals.boundary.clone(),
+                        custom_size: Some(Vec2::splat(CELL_SIZE)),
+                        color: boundary_main_tint,
+                        ..default()
+                    },
+                    Transform::from_translation(outer_cell_center(x, y).extend(0.2)),
+                    if show_world {
+                        Visibility::Visible
+                    } else {
+                        Visibility::Hidden
+                    },
+                    OuterBorderVisual {
+                        main_tint: boundary_main_tint,
+                        gas_tint: boundary_gas_tint,
+                    },
+                ));
+            }
+        }
+    }
 }
 
 fn spawn_wall_sprite(
@@ -200,6 +277,7 @@ fn spawn_gas_structure_sprite(
 pub(crate) fn sync_wall_visuals(
     mut commands: Commands,
     world: Res<WorldGrid>,
+    world_load_state: Res<WorldLoadState>,
     visuals: Res<WorldVisualAssets>,
     cell_visuals: Res<CellTypeVisualConfig>,
     mut wall_entities: ResMut<WallEntities>,
@@ -213,8 +291,15 @@ pub(crate) fn sync_wall_visuals(
 
         match (current_cell, wall_entities.by_cell.get(&key).copied()) {
             (CellKind::Solid(material), None) => {
-                let entity =
-                    spawn_wall_sprite(&mut commands, &visuals, &cell_visuals, x, y, material, true);
+                let entity = spawn_wall_sprite(
+                    &mut commands,
+                    &visuals,
+                    &cell_visuals,
+                    x,
+                    y,
+                    material,
+                    world_load_state.has_world,
+                );
                 wall_entities.by_cell.insert(key, entity);
             }
             (CellKind::Empty, Some(entity)) => {
@@ -223,8 +308,15 @@ pub(crate) fn sync_wall_visuals(
             }
             (CellKind::Solid(material), Some(entity)) => {
                 commands.entity(entity).despawn();
-                let next_entity =
-                    spawn_wall_sprite(&mut commands, &visuals, &cell_visuals, x, y, material, true);
+                let next_entity = spawn_wall_sprite(
+                    &mut commands,
+                    &visuals,
+                    &cell_visuals,
+                    x,
+                    y,
+                    material,
+                    world_load_state.has_world,
+                );
                 wall_entities.by_cell.insert(key, next_entity);
             }
             _ => {}
@@ -280,5 +372,10 @@ pub(crate) fn sync_structure_edit_highlight(
     }
     **transform = Transform::from_translation(cell_center(cell.x, cell.y).extend(0.91));
     **visibility = Visibility::Visible;
+}
+
+fn outer_cell_center(x: i32, y: i32) -> Vec2 {
+    crate::world::grid::world_origin()
+        + Vec2::new((x as f32 + 0.5) * CELL_SIZE, (y as f32 + 0.5) * CELL_SIZE)
 }
 

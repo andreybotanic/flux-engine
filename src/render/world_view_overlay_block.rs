@@ -1,7 +1,11 @@
 pub fn update_overlay_mode(
     input: Res<ButtonInput<KeyCode>>,
     mut overlay_mode: ResMut<OverlayMode>,
+    main_menu: Option<Res<crate::editor::MainMenuState>>,
 ) {
+    if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
+        return;
+    }
     if input.just_pressed(KeyCode::F1) {
         *overlay_mode = OverlayMode::Main;
     }
@@ -44,6 +48,7 @@ pub(crate) fn apply_overlay_mode(
                 Without<GasMainOverlaySprite>,
             ),
         >,
+        Query<(&OuterBorderVisual, &mut Sprite, &mut Visibility)>,
         Query<
             &mut Visibility,
             (
@@ -64,12 +69,9 @@ pub(crate) fn apply_overlay_mode(
                 Without<WallVisual>,
             ),
         >,
+        Query<&mut Visibility, With<WorldFadeMaskLayer>>,
     )>,
 ) {
-    if !overlay_mode.is_changed() && !world_load_state.is_changed() {
-        return;
-    }
-
     let show_world = world_load_state.has_world;
     let (board_color, backdrop_color, gas_visibility, gas_main_visibility) = match *overlay_mode {
         OverlayMode::Main => (
@@ -102,16 +104,23 @@ pub(crate) fn apply_overlay_mode(
             Visibility::Hidden
         };
     }
-    for mut visibility in &mut sprite_sets.p3() {
+    for mut visibility in &mut sprite_sets.p4() {
         *visibility = if show_world {
             gas_visibility
         } else {
             Visibility::Hidden
         };
     }
-    for mut visibility in &mut sprite_sets.p4() {
+    for mut visibility in &mut sprite_sets.p5() {
         *visibility = if show_world {
             gas_main_visibility
+        } else {
+            Visibility::Hidden
+        };
+    }
+    for mut visibility in &mut sprite_sets.p6() {
+        *visibility = if show_world {
+            Visibility::Visible
         } else {
             Visibility::Hidden
         };
@@ -127,6 +136,17 @@ pub(crate) fn apply_overlay_mode(
             Visibility::Hidden
         };
     }
+    for (outer_border_visual, mut sprite, mut visibility) in &mut sprite_sets.p3() {
+        sprite.color = match *overlay_mode {
+            OverlayMode::Main => outer_border_visual.main_tint,
+            OverlayMode::Gas => outer_border_visual.gas_tint,
+        };
+        *visibility = if show_world {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
 }
 
 /// Runs `draw_cursor_grid_overlay` logic.
@@ -135,9 +155,13 @@ pub fn draw_cursor_grid_overlay(
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     world_load_state: Res<WorldLoadState>,
     panels: Option<Res<PanelManager>>,
+    main_menu: Option<Res<crate::editor::MainMenuState>>,
     mut gizmos: Gizmos,
 ) {
     if !world_load_state.has_world {
+        return;
+    }
+    if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
         return;
     }
 

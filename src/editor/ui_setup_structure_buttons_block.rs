@@ -26,7 +26,7 @@ fn spawn_gas_tool_panel_content(
             row.spawn((
                 Text::new("Amount:"),
                 TextFont::from_font_size(13.0),
-                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                TextColor(crate::ui::palette::TEXT_PRIMARY),
             ));
 
             row.spawn((
@@ -52,7 +52,7 @@ fn spawn_gas_tool_panel_content(
                 button.spawn((
                     Text::new("100"),
                     TextFont::from_font_size(13.0),
-                    TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                    TextColor(crate::ui::palette::TEXT_PRIMARY),
                     TextInputDisplay,
                 ));
             });
@@ -75,7 +75,7 @@ fn spawn_gas_tool_panel_content(
             button.spawn((
                 Text::new("Replace: Off"),
                 TextFont::from_font_size(13.0),
-                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                TextColor(crate::ui::palette::TEXT_PRIMARY),
                 GasReplaceLabel,
             ));
         });
@@ -89,7 +89,7 @@ fn spawn_structure_tool_panel_content(
     parent.spawn((
         Text::new("No structure selected"),
         TextFont::from_font_size(13.0),
-        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+        TextColor(crate::ui::palette::TEXT_PRIMARY),
         StructureModeLabel,
     ));
 
@@ -126,7 +126,7 @@ fn spawn_structure_tool_panel_content(
                     row.spawn((
                         Text::new("Amount:"),
                         TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                        TextColor(crate::ui::palette::TEXT_PRIMARY),
                     ));
                     row.spawn((
                         Button,
@@ -151,7 +151,7 @@ fn spawn_structure_tool_panel_content(
                         button.spawn((
                             Text::new("100"),
                             TextFont::from_font_size(13.0),
-                            TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                            TextColor(crate::ui::palette::TEXT_PRIMARY),
                             TextInputDisplay,
                         ));
                     });
@@ -172,7 +172,7 @@ fn spawn_structure_tool_panel_content(
             sink.spawn((
                 Text::new("Sink amount per step"),
                 TextFont::from_font_size(13.0),
-                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                TextColor(crate::ui::palette::TEXT_PRIMARY),
             ));
             sink.spawn((
                 Button,
@@ -197,7 +197,7 @@ fn spawn_structure_tool_panel_content(
                 button.spawn((
                     Text::new("100"),
                     TextFont::from_font_size(13.0),
-                    TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                    TextColor(crate::ui::palette::TEXT_PRIMARY),
                     TextInputDisplay,
                 ));
             });

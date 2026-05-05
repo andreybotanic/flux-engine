@@ -34,7 +34,7 @@ fn ensure_text_input_caret(
                     height: Val::Px(CARET_MIN_HEIGHT_PX),
                     ..default()
                 },
-                BackgroundColor(Color::WHITE),
+                BackgroundColor(crate::ui::palette::TEXT_ON_DARK),
                 Visibility::Hidden,
                 TextInputCaret,
             ));
@@ -51,15 +51,10 @@ fn focus_text_input_on_click(
         >,
         Query<(Entity, &mut TextInputField, &ComputedNode)>,
     )>,
-    display_layout_query: Query<(&TextLayoutInfo, &ChildOf), With<TextInputDisplay>>,
+    display_layout_query: Query<(&bevy::text::ComputedTextBlock, &ChildOf), With<TextInputDisplay>>,
 ) {
     if !mouse_buttons.just_pressed(MouseButton::Left) {
         return;
-    }
-
-    let mut display_layout_by_input = std::collections::HashMap::<Entity, &TextLayoutInfo>::new();
-    for (layout_info, child_of) in &display_layout_query {
-        display_layout_by_input.insert(child_of.parent(), layout_info);
     }
 
     let mut clicked: Option<(Entity, Option<Vec2>)> = None;
@@ -76,23 +71,19 @@ fn focus_text_input_on_click(
             if entity == clicked_entity {
                 field.focused = true;
                 let input_width = input_node.size().x.max(1.0);
+                let input_height = input_node.size().y.max(1.0);
                 let content_left = input_node.content_inset().left;
+                let content_top = input_node.content_inset().top;
                 let relative_x = normalized.map(|p| p.x.clamp(0.0, 1.0) * input_width);
-
-                if let Some(layout_info) = display_layout_by_input.get(&entity) {
-                    let click_x = relative_x.unwrap_or(input_width) - content_left;
-                    field.cursor = cursor_index_from_click_x(
-                        &field.text,
-                        field.char_count(),
-                        layout_info,
-                        click_x,
-                    );
-                } else {
-                    let len = field.char_count();
-                    let cursor_pos = normalized.map(|p| p.x.clamp(0.0, 1.0)).unwrap_or(1.0);
-                    let next_cursor = (cursor_pos * len as f32).round() as usize;
-                    field.cursor = next_cursor.min(len);
-                }
+                let relative_y = normalized.map(|p| p.y.clamp(0.0, 1.0) * input_height);
+                let click_x = (relative_x.unwrap_or(input_width) - content_left).max(0.0);
+                let click_y = (relative_y.unwrap_or(0.0) - content_top).max(0.0);
+                let text_layout = display_layout_query
+                    .iter()
+                    .find(|(_, child_of)| child_of.parent() == entity)
+                    .map(|(layout, _)| layout);
+                field.cursor =
+                    cursor_index_from_click_position_exact(&field.text, click_x, click_y, text_layout);
 
                 field.clamp_cursor();
             } else {
@@ -107,6 +98,7 @@ fn focus_text_input_on_click(
 fn handle_text_input_keyboard(
     mut keyboard_events: EventReader<KeyboardInput>,
     mut inputs: Query<&mut TextInputField>,
+    mut blink: ResMut<TextInputCaretBlink>,
 ) {
     let mut target: Option<Mut<TextInputField>> = None;
     for field in &mut inputs {
@@ -127,24 +119,60 @@ fn handle_text_input_keyboard(
             continue;
         }
 
+        let mut edited = false;
         match &event.logical_key {
-            Key::ArrowLeft => field.move_left(),
-            Key::ArrowRight => field.move_right(),
-            Key::Home => field.cursor = 0,
-            Key::End => field.cursor = field.char_count(),
-            Key::Backspace => field.backspace(),
-            Key::Delete => field.delete(),
+            Key::ArrowLeft => {
+                field.move_left();
+                edited = true;
+            }
+            Key::ArrowRight => {
+                field.move_right();
+                edited = true;
+            }
+            Key::Home => {
+                field.cursor = 0;
+                edited = true;
+            }
+            Key::End => {
+                field.cursor = field.char_count();
+                edited = true;
+            }
+            Key::Backspace => {
+                field.backspace();
+                edited = true;
+            }
+            Key::Delete => {
+                field.delete();
+                edited = true;
+            }
             Key::Enter | Key::Escape => {
                 field.focused = false;
+                edited = true;
             }
-            Key::Character(chars) => {
-                for ch in chars.chars() {
-                    field.insert_char(ch);
+            _ => {
+                if let Some(text) = &event.text {
+                    for ch in text.chars() {
+                        field.insert_char(ch);
+                        edited = true;
+                    }
+                } else if let Key::Character(chars) = &event.logical_key {
+                    for ch in chars.chars() {
+                        field.insert_char(ch);
+                        edited = true;
+                    }
                 }
             }
-            _ => {}
+        }
+
+        if edited {
+            wake_caret(&mut blink);
         }
     }
+}
+
+fn wake_caret(blink: &mut TextInputCaretBlink) {
+    blink.visible = true;
+    blink.timer.reset();
 }
 
 fn sync_text_input_display(
@@ -186,7 +214,7 @@ fn sync_text_input_caret(
     time: Res<Time>,
     mut blink: ResMut<TextInputCaretBlink>,
     input_query: Query<(&TextInputField, &ComputedNode)>,
-    display_query: Query<(&TextLayoutInfo, &ChildOf), With<TextInputDisplay>>,
+    display_layout_query: Query<(&bevy::text::ComputedTextBlock, &ChildOf), With<TextInputDisplay>>,
     mut caret_query: Query<
         (&mut Node, &mut Visibility, &ChildOf, &mut BackgroundColor),
         With<TextInputCaret>,
@@ -195,11 +223,6 @@ fn sync_text_input_caret(
     blink.timer.tick(time.delta());
     if blink.timer.just_finished() {
         blink.visible = !blink.visible;
-    }
-
-    let mut display_layout_by_input = std::collections::HashMap::<Entity, &TextLayoutInfo>::new();
-    for (layout_info, child_of) in &display_query {
-        display_layout_by_input.insert(child_of.parent(), layout_info);
     }
 
     for (mut caret_node, mut caret_visibility, child_of, mut caret_color) in &mut caret_query {
@@ -222,18 +245,18 @@ fn sync_text_input_caret(
         let caret_height = (content_height * CARET_HEIGHT_FACTOR).max(CARET_MIN_HEIGHT_PX);
         let caret_top = text_origin_y + ((content_height - caret_height) * 0.5).max(0.0);
 
-        let caret_x = if let Some(layout) = display_layout_by_input.get(&input_entity) {
-            text_origin_x + caret_x_from_cursor(&field.text, field.cursor, layout)
-        } else {
-            text_origin_x
-        };
+        let text_layout = display_layout_query
+            .iter()
+            .find(|(_, layout_child_of)| layout_child_of.parent() == input_entity)
+            .map(|(layout, _)| layout);
+        let caret_x = text_origin_x + caret_x_from_cursor_exact(&field.text, field.cursor, text_layout);
 
         caret_node.left =
             Val::Px((caret_x - (CARET_WIDTH_PX * 0.5)).max(text_origin_x - CARET_SIDE_PADDING_PX));
         caret_node.top = Val::Px(caret_top);
         caret_node.width = Val::Px(CARET_WIDTH_PX);
         caret_node.height = Val::Px(caret_height);
-        caret_color.0 = Color::WHITE;
+        caret_color.0 = crate::ui::palette::TEXT_ON_DARK;
         *caret_visibility = Visibility::Visible;
     }
 }

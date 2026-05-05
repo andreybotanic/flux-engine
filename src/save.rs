@@ -44,12 +44,12 @@ pub struct SaveSessionState {
 }
 
 impl SaveSessionState {
-/// Runs `has_unsaved_changes` logic.
+    /// Runs `has_unsaved_changes` logic.
     pub fn has_unsaved_changes(&self, current_step: u64) -> bool {
         current_step > self.last_persisted_step
     }
 
-/// Runs `mark_persisted` logic.
+    /// Runs `mark_persisted` logic.
     pub fn mark_persisted(&mut self, step: u64, save_id: Option<String>) {
         self.last_persisted_step = step;
         self.current_save_id = save_id;
@@ -94,6 +94,7 @@ pub enum MainMenuDeferredAction {
 #[derive(Clone, Debug)]
 pub enum MainMenuConfirmState {
     OverwriteSave(String),
+    DeleteSave(String),
     UnsavedChanges(MainMenuDeferredAction),
 }
 

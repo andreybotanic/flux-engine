@@ -7,6 +7,7 @@
 ```text
 FluxEngine/
 |-- assets/                  # Графические и шейдерные ресурсы приложения.
+|   |-- fonts/               # UI-шрифты, загружаемые через AssetServer.
 |   |-- shaders/             # WGSL-шейдеры вычислений/рендера.
 |   `-- sprites/             # Спрайты UI и мира.
 |       |-- ui/              # Иконки инструментов и UI-элементы.
@@ -35,7 +36,9 @@ FluxEngine/
 ## Файлы
 
 - `AGENTS.md`: Правила работы агента в этом репозитории.
+- `assets/fonts/ui_main.ttf`: Основной UI-шрифт с поддержкой кириллицы для всех текстовых элементов интерфейса.
 - `assets/shaders/gas_solver.wgsl`: GPU-шейдер газового шага (WGSL), синхронизированный с CPU-эталоном.
+- `assets/sprites/ui/main_menu_background.png`: Отдельный fullscreen-фон главного меню.
 - `assets/sprites/ui/select_arrow.png`: UI-спрайт стрелки для выпадающих списков.
 - `assets/sprites/ui/silhouette_*.png`: UI-спрайты силуэтов предпросмотра.
 - `assets/sprites/ui/tool_*.png`: UI-спрайты иконок инструментов.
@@ -107,6 +110,7 @@ FluxEngine/
 - `src/ui/input_field_helpers_block.rs`: Парсинг и вспомогательная геометрия курсора текста.
 - `src/ui/input_field_systems_block.rs`: Системы focus/keyboard/render/caret для текстовых полей.
 - `src/ui/mod.rs`: UI-плагин и wiring общих UI-систем.
+- `src/ui/palette.rs`: Единая палитра цветов UI (панели, меню, текст, input/select, tooltip, HUD).
 - `src/ui/panels.rs`: Публичные типы panel-системы и композиция блоков панели.
 - `src/ui/panels_manager_block.rs`: Состояние и API PanelManager, hit-rect и управление панелями.
 - `src/ui/panels_runtime_block.rs`: Runtime-системы панели: layout, scroll, события заголовка.

@@ -21,7 +21,7 @@ fn spawn_main_menu_action_button(
             button.spawn((
                 Text::new(label.to_string()),
                 TextFont::from_font_size(15.0),
-                TextColor(Color::WHITE),
+                TextColor(crate::ui::palette::TEXT_ON_DARK),
                 TextLayout::new_with_justify(JustifyText::Center),
             ));
         })

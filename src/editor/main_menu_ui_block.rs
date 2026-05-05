@@ -2,7 +2,9 @@ fn refresh_main_menu_ui(
     mut commands: Commands,
     main_menu: Res<MainMenuState>,
     mut menu_ui: ResMut<MainMenuUiState>,
-    mut root_visibility: Single<&mut Visibility, With<MainMenuRoot>>,
+    mut root_visibility: Single<&mut Visibility, (With<MainMenuRoot>, Without<MainMenuBackdrop>)>,
+    mut root_background: Single<&mut BackgroundColor, With<MainMenuRoot>>,
+    mut backdrop_visibility: Single<&mut Visibility, (With<MainMenuBackdrop>, Without<MainMenuRoot>)>,
     mut text_set: ParamSet<(
         Single<&mut Text, With<MainMenuTitleText>>,
         Single<&mut Text, With<MainMenuStatusText>>,
@@ -16,6 +18,7 @@ fn refresh_main_menu_ui(
         Single<&mut Node, With<MainMenuSaveNameRow>>,
         Single<&mut Node, With<MainMenuSaveListRoot>>,
         Query<(&MainMenuActionButton, &mut Node), With<Button>>,
+        Single<&mut Node, (With<MainMenuBackdrop>, Without<MainMenuRoot>)>,
     )>,
     confirm_button_set: (
         Single<&Children, With<MainMenuConfirmPrimaryLabel>>,
@@ -30,11 +33,34 @@ fn refresh_main_menu_ui(
         Visibility::Hidden
     };
     if !main_menu.open {
+        let mut backdrop_node = node_set.p7();
+        backdrop_node.display = Display::None;
+        **backdrop_visibility = Visibility::Hidden;
         return;
     }
 
     let screen = menu_ui.screen;
     let mode = menu_ui.mode;
+    root_background.0 = if mode == MainMenuMode::Main {
+        crate::ui::palette::TRANSPARENT
+    } else {
+        MODAL_OVERLAY_BG
+    };
+    let show_main_backdrop = mode == MainMenuMode::Main;
+    {
+        let mut backdrop_node = node_set.p7();
+        backdrop_node.display = if show_main_backdrop {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+    **backdrop_visibility = if show_main_backdrop {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+
     {
         let mut title_text = text_set.p0();
         title_text.0 = match screen {
@@ -83,13 +109,17 @@ fn refresh_main_menu_ui(
                 _ => Display::None,
             },
             MainMenuScreen::Save => match action_button.0 {
-                MainMenuButtonAction::BackToRoot
-                | MainMenuButtonAction::CreateNewSave
-                | MainMenuButtonAction::SelectOverwrite(_) => Display::Flex,
+                MainMenuButtonAction::BackToRoot | MainMenuButtonAction::CreateNewSave => {
+                    Display::Flex
+                }
+                MainMenuButtonAction::SelectOverwrite(_) | MainMenuButtonAction::SelectDelete(_) => {
+                    Display::Flex
+                }
                 _ => Display::None,
             },
             MainMenuScreen::Load => match action_button.0 {
-                MainMenuButtonAction::BackToRoot | MainMenuButtonAction::SelectLoad(_) => {
+                MainMenuButtonAction::BackToRoot => Display::Flex,
+                MainMenuButtonAction::SelectLoad(_) | MainMenuButtonAction::SelectDelete(_) => {
                     Display::Flex
                 }
                 _ => Display::None,
@@ -140,7 +170,10 @@ fn refresh_main_menu_ui(
             Some(MainMenuConfirmState::OverwriteSave(_)) => {
                 primary_label = "Overwrite";
                 secondary_label = "Cancel";
-                show_cancel = false;
+            }
+            Some(MainMenuConfirmState::DeleteSave(_)) => {
+                primary_label = "Delete";
+                secondary_label = "Cancel";
             }
             None => {}
         }
@@ -184,12 +217,12 @@ fn refresh_main_menu_ui(
     }
     {
         let mut save_list_visibility = node_set.p5();
-        save_list_visibility.display =
-            if matches!(screen, MainMenuScreen::Save | MainMenuScreen::Load) {
-                Display::Flex
-            } else {
-                Display::None
-            };
+        save_list_visibility.display = if matches!(screen, MainMenuScreen::Save | MainMenuScreen::Load)
+        {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
 
     if !matches!(screen, MainMenuScreen::Save | MainMenuScreen::Load) {
@@ -218,13 +251,13 @@ fn refresh_main_menu_ui(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(Color::NONE),
+                    BackgroundColor(crate::ui::palette::TRANSPARENT),
                 ))
                 .with_children(|row| {
                     row.spawn((
                         Text::new("No saves found."),
                         TextFont::from_font_size(14.0),
-                        TextColor(Color::srgba(0.15, 0.16, 0.18, 1.0)),
+                        TextColor(crate::ui::palette::TEXT_MUTED),
                         TextLayout::new_with_justify(JustifyText::Center),
                     ));
                 })
@@ -234,44 +267,132 @@ fn refresh_main_menu_ui(
         }
 
         for descriptor in saves {
-            let action = match screen_for_buttons {
-                MainMenuScreen::Save => {
-                    MainMenuButtonAction::SelectOverwrite(descriptor.id.clone())
-                }
+            let created_text = format_save_datetime(descriptor.created_at_unix_ms);
+            let updated_text = format_save_datetime(descriptor.updated_at_unix_ms);
+            let primary_action = match screen_for_buttons {
+                MainMenuScreen::Save => MainMenuButtonAction::SelectOverwrite(descriptor.id.clone()),
                 MainMenuScreen::Load => MainMenuButtonAction::SelectLoad(descriptor.id.clone()),
                 _ => continue,
             };
+            let primary_label = match screen_for_buttons {
+                MainMenuScreen::Save => "Overwrite",
+                MainMenuScreen::Load => "Load",
+                _ => "",
+            };
+            let delete_action = MainMenuButtonAction::SelectDelete(descriptor.id.clone());
 
-            let label = format!(
-                "{}  |  id={}  |  updated={}",
-                descriptor.display_name, descriptor.id, descriptor.updated_at_unix_ms
-            );
-            let entity = parent
+            let card = parent
                 .spawn((
-                    Button,
                     Node {
                         width: Val::Px(730.0),
-                        height: Val::Px(34.0),
-                        justify_content: JustifyContent::Center,
+                        min_height: Val::Px(86.0),
+                        padding: UiRect::all(Val::Px(10.0)),
+                        justify_content: JustifyContent::SpaceBetween,
                         align_items: AlignItems::Center,
-                        padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
                         ..default()
                     },
-                    BackgroundColor(BUTTON_IDLE),
-                    MainMenuActionButton(action),
+                    BackgroundColor(PANEL_BG),
                 ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new(label),
-                        TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
-                        TextLayout::new_with_justify(JustifyText::Center),
-                    ));
+                .with_children(|row| {
+                    row.spawn((
+                        Node {
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Column,
+                            row_gap: Val::Px(4.0),
+                            ..default()
+                        },
+                    ))
+                    .with_children(|meta| {
+                        meta.spawn((
+                            Text::new(descriptor.display_name.clone()),
+                            TextFont::from_font_size(16.0),
+                            TextColor(crate::ui::palette::TEXT_PRIMARY),
+                        ));
+                        meta.spawn((
+                            Text::new(format!("Created: {created_text}")),
+                            TextFont::from_font_size(13.0),
+                            TextColor(crate::ui::palette::TEXT_MUTED),
+                        ));
+                        meta.spawn((
+                            Text::new(format!("Updated: {updated_text}")),
+                            TextFont::from_font_size(13.0),
+                            TextColor(crate::ui::palette::TEXT_MUTED),
+                        ));
+                    });
+                    row.spawn((
+                        Node {
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Column,
+                            row_gap: Val::Px(6.0),
+                            ..default()
+                        },
+                    ))
+                    .with_children(|actions| {
+                        actions
+                            .spawn((
+                                Button,
+                                Node {
+                                    width: Val::Px(120.0),
+                                    height: Val::Px(32.0),
+                                    justify_content: JustifyContent::Center,
+                                    align_items: AlignItems::Center,
+                                    ..default()
+                                },
+                                BackgroundColor(BUTTON_IDLE),
+                                MainMenuActionButton(primary_action),
+                            ))
+                            .with_children(|button| {
+                                button.spawn((
+                                    Text::new(primary_label),
+                                    TextFont::from_font_size(13.0),
+                                    TextColor(crate::ui::palette::TEXT_PRIMARY),
+                                ));
+                            });
+                        actions
+                            .spawn((
+                                Button,
+                                Node {
+                                    width: Val::Px(120.0),
+                                    height: Val::Px(32.0),
+                                    justify_content: JustifyContent::Center,
+                                    align_items: AlignItems::Center,
+                                    ..default()
+                                },
+                                BackgroundColor(MODAL_BUTTON_BG),
+                                MainMenuActionButton(delete_action),
+                            ))
+                            .with_children(|button| {
+                                button.spawn((
+                                    Text::new("Delete"),
+                                    TextFont::from_font_size(13.0),
+                                    TextColor(crate::ui::palette::TEXT_ON_DARK),
+                                ));
+                            });
+                    });
                 })
                 .id();
-            created.push(entity);
+            created.push(card);
         }
     });
     menu_ui.list_item_entities = created;
 }
 
+fn format_save_datetime(unix_ms: i64) -> String {
+    use time::{OffsetDateTime, UtcOffset};
+
+    let ns = (unix_ms as i128).saturating_mul(1_000_000);
+    let Ok(datetime_utc) = OffsetDateTime::from_unix_timestamp_nanos(ns) else {
+        return format!("unix_ms={unix_ms}");
+    };
+    let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
+    let local = datetime_utc.to_offset(offset);
+    let month: u8 = local.month().into();
+    format!(
+        "{:02}.{:02}.{:04} {:02}:{:02}",
+        local.day(),
+        month,
+        local.year(),
+        local.hour(),
+        local.minute()
+    )
+}

@@ -1,73 +1,87 @@
-fn cursor_index_from_click_x(
+fn cursor_index_from_click_position_exact(
     text: &str,
-    char_count: usize,
-    layout_info: &TextLayoutInfo,
     click_x: f32,
+    click_y: f32,
+    text_layout: Option<&bevy::text::ComputedTextBlock>,
 ) -> usize {
+    let Some(text_layout) = text_layout else {
+        return if click_x <= 0.0 { 0 } else { text.chars().count() };
+    };
+
+    let cursor = text_layout
+        .buffer()
+        .hit(click_x.max(0.0), click_y.max(0.0));
+    let Some(cursor) = cursor else {
+        return if click_x <= 0.0 { 0 } else { text.chars().count() };
+    };
+
+    char_index_at_byte(text, cursor.index)
+}
+
+fn caret_x_from_cursor_exact(
+    text: &str,
+    cursor_char_index: usize,
+    text_layout: Option<&bevy::text::ComputedTextBlock>,
+) -> f32 {
+    let Some(text_layout) = text_layout else {
+        return 0.0;
+    };
+
+    let target_byte = byte_index_at_char(text, cursor_char_index);
+    let mut fallback_line_width = 0.0f32;
+
+    for run in text_layout.buffer().layout_runs() {
+        fallback_line_width = fallback_line_width.max(run.line_w);
+
+        if run.glyphs.is_empty() {
+            if target_byte == 0 {
+                return 0.0;
+            }
+            if target_byte >= run.text.len() {
+                return run.line_w.max(0.0);
+            }
+            continue;
+        }
+
+        for glyph in run.glyphs.iter() {
+            let left = glyph.x.min(glyph.x + glyph.w);
+            let right = glyph.x.max(glyph.x + glyph.w);
+            if target_byte == glyph.start {
+                return left.max(0.0);
+            }
+            if target_byte == glyph.end {
+                return right.max(0.0);
+            }
+            if target_byte > glyph.start && target_byte < glyph.end {
+                let span = (glyph.end - glyph.start).max(1);
+                let local = target_byte - glyph.start;
+                let t = local as f32 / span as f32;
+                return (left + (right - left) * t).max(0.0);
+            }
+        }
+
+        if let Some(last_glyph) = run.glyphs.last() {
+            if target_byte >= last_glyph.end {
+                let last_right = last_glyph.x.max(last_glyph.x + last_glyph.w);
+                return run.line_w.max(last_right).max(0.0);
+            }
+        }
+    }
+
+    fallback_line_width.max(0.0)
+}
+
+fn char_index_at_byte(text: &str, byte_index: usize) -> usize {
     if text.is_empty() {
         return 0;
     }
 
-    let mut boundaries = collect_cursor_boundaries(text, layout_info);
-    if boundaries.is_empty() {
-        return ((click_x / layout_info.size.x.max(1.0)) * char_count as f32).round() as usize;
+    let clamped = byte_index.min(text.len());
+    let mut boundary = clamped;
+    while boundary > 0 && !text.is_char_boundary(boundary) {
+        boundary -= 1;
     }
-
-    boundaries.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-
-    let mut best = boundaries[0];
-    let mut best_dist = (click_x - best.0).abs();
-    for boundary in boundaries.into_iter().skip(1) {
-        let dist = (click_x - boundary.0).abs();
-        if dist < best_dist {
-            best = boundary;
-            best_dist = dist;
-        }
-    }
-
-    best.1.min(char_count)
-}
-
-fn caret_x_from_cursor(text: &str, cursor_char_index: usize, layout_info: &TextLayoutInfo) -> f32 {
-    if text.is_empty() {
-        return 0.0;
-    }
-
-    let cursor_byte_index = byte_index_at_char(text, cursor_char_index);
-
-    let mut glyphs = layout_info.glyphs.iter().collect::<Vec<_>>();
-    if glyphs.is_empty() {
-        return 0.0;
-    }
-
-    glyphs.sort_by(|a, b| a.byte_index.cmp(&b.byte_index));
-
-    if let Some(next_glyph) = glyphs.iter().find(|g| g.byte_index >= cursor_byte_index) {
-        return next_glyph.position.x - (next_glyph.size.x * 0.5);
-    }
-
-    let last = glyphs[glyphs.len() - 1];
-    last.position.x + (last.size.x * 0.5)
-}
-
-fn collect_cursor_boundaries(text: &str, layout_info: &TextLayoutInfo) -> Vec<(f32, usize)> {
-    let mut boundaries = Vec::new();
-    boundaries.push((0.0, 0));
-
-    let mut glyphs = layout_info.glyphs.iter().collect::<Vec<_>>();
-    glyphs.sort_by(|a, b| a.byte_index.cmp(&b.byte_index));
-
-    for glyph in glyphs {
-        let left = glyph.position.x - (glyph.size.x * 0.5);
-        let right = glyph.position.x + (glyph.size.x * 0.5);
-        let char_index = char_index_at_byte(text, glyph.byte_index);
-        let next_char_index = char_index_at_byte(text, glyph.byte_index + glyph.byte_length);
-
-        boundaries.push((left, char_index));
-        boundaries.push((right, next_char_index));
-    }
-
-    boundaries
+    text[..boundary].chars().count()
 }
 
 fn byte_index_at_char(text: &str, char_index: usize) -> usize {
@@ -84,9 +98,4 @@ fn byte_index_at_char(text: &str, char_index: usize) -> usize {
     }
 
     text.len()
-}
-
-fn char_index_at_byte(text: &str, byte_index: usize) -> usize {
-    let clamped = byte_index.min(text.len());
-    text[..clamped].chars().count()
 }

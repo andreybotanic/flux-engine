@@ -224,6 +224,28 @@ mod tests {
     }
 
     #[test]
+    fn delete_save_removes_slot_and_fails_for_missing_slot() {
+        let root = temp_saves_root("flux_save_delete_slot");
+        let registry = test_registry();
+        let world = WorldGrid::default();
+        let gas = GasField::from_registry(&registry);
+        let structures = GasStructureGrid::default();
+
+        let descriptor = create_save(&root, "to-delete", &world, &gas, &structures, &registry, 9)
+            .expect("save should be created");
+        assert!(root.join(&descriptor.id).exists());
+
+        delete_save(&root, &descriptor.id).expect("existing save should be deleted");
+        assert!(!root.join(&descriptor.id).exists());
+
+        let err =
+            delete_save(&root, &descriptor.id).expect_err("missing save should report error");
+        assert!(err.to_string().contains("does not exist"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn world_load_state_starts_unloaded() {
         assert!(!WorldLoadState::default().has_world);
     }

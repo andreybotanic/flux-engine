@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::ui::palette;
 use bevy::{
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
@@ -10,8 +11,8 @@ use bevy::{
 const PANEL_HEADER_HEIGHT: f32 = 34.0;
 const PANEL_CONTENT_PADDING_Y: f32 = 10.0;
 const PANEL_HEADER_BUTTON_SIZE: f32 = 24.0;
-const PANEL_HEADER_BUTTON_BG: Color = Color::srgba(0.70, 0.73, 0.77, 0.96);
-const PANEL_HEADER_TEXT: Color = Color::srgba(0.10, 0.10, 0.12, 1.0);
+const PANEL_HEADER_BUTTON_BG: Color = palette::PANEL_HEADER_BUTTON_BG;
+const PANEL_HEADER_TEXT: Color = palette::TEXT_PRIMARY;
 const SCROLLBAR_TRACK_WIDTH: f32 = 6.0;
 const SCROLLBAR_THUMB_MIN_HEIGHT: f32 = 18.0;
 
@@ -110,7 +111,7 @@ pub struct PanelOpenOrder {
 }
 
 impl PanelOpenOrder {
-/// Runs `allocate` logic.
+    /// Runs `allocate` logic.
     pub fn allocate(&mut self) -> u64 {
         self.next = self.next.saturating_add(1);
         self.next

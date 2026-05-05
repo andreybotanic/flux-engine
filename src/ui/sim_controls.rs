@@ -1,13 +1,15 @@
 use bevy::prelude::*;
 
+use crate::editor::MainMenuState;
 use crate::save::WorldLoadState;
 use crate::simulation::{SimulationControl, SimulationSpeed};
+use crate::ui::palette;
 
-const PANEL_BG: Color = Color::srgba(0.91, 0.92, 0.93, 0.96);
-const BUTTON_IDLE: Color = Color::srgba(0.78, 0.80, 0.83, 0.95);
-const BUTTON_ACTIVE: Color = Color::srgba(0.58, 0.68, 0.58, 0.96);
-const BUTTON_PAUSED: Color = Color::srgba(0.80, 0.46, 0.44, 0.96);
-const LABEL_COLOR: Color = Color::srgba(0.10, 0.10, 0.12, 1.0);
+const PANEL_BG: Color = palette::PANEL_BG;
+const BUTTON_IDLE: Color = palette::BUTTON_IDLE;
+const BUTTON_ACTIVE: Color = palette::BUTTON_ACTIVE;
+const BUTTON_PAUSED: Color = palette::BUTTON_PAUSED;
+const LABEL_COLOR: Color = palette::TEXT_PRIMARY;
 
 #[derive(Component, Clone, Copy)]
 pub(crate) enum SimControlAction {
@@ -140,7 +142,11 @@ pub(crate) fn handle_sim_control_keyboard(
     keys: Res<ButtonInput<KeyCode>>,
     mut control: ResMut<SimulationControl>,
     world_load_state: Res<WorldLoadState>,
+    main_menu: Option<Res<MainMenuState>>,
 ) {
+    if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
+        return;
+    }
     if keys.just_pressed(KeyCode::Space) {
         apply_pause_toggle(&mut control, &world_load_state);
     }
@@ -160,7 +166,11 @@ pub(crate) fn handle_sim_control_buttons(
     >,
     mut control: ResMut<SimulationControl>,
     world_load_state: Res<WorldLoadState>,
+    main_menu: Option<Res<MainMenuState>>,
 ) {
+    if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
+        return;
+    }
     for (interaction, action) in &mut interactions {
         if *interaction != Interaction::Pressed {
             continue;

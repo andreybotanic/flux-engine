@@ -16,6 +16,8 @@ fn handle_main_menu_actions(
     save_name_input: Single<&TextInputField, With<MainMenuSaveNameInputField>>,
     mut world_changed: EventWriter<WorldCellChanged>,
     mut exit_writer: EventWriter<AppExit>,
+    mut overlay_mode: ResMut<OverlayMode>,
+    mut camera_query: Single<(&mut Transform, &mut Projection), With<MainCamera>>,
 ) {
     if !main_menu.open {
         return;
@@ -53,7 +55,11 @@ fn handle_main_menu_actions(
                     &mut world_changed,
                 ) {
                     Ok(_) => {
-                        control.paused = true;
+                        apply_loaded_world_preset(
+                            &mut control,
+                            &mut overlay_mode,
+                            &mut camera_query,
+                        );
                         save_session.mark_persisted(step.0, None);
                         world_load_state.has_world = true;
                         menu_ui.mode = MainMenuMode::Hidden;
@@ -210,6 +216,9 @@ fn handle_main_menu_actions(
                     "This save slot will be fully overwritten. Continue?".to_string();
                 menu_ui.screen = MainMenuScreen::Confirm;
             }
+            MainMenuButtonAction::SelectDelete(save_id) => {
+                open_delete_confirmation(&mut menu_ui, save_id.clone());
+            }
             MainMenuButtonAction::SelectLoad(save_id) => {
                 match load_save(&saves_root_default(), save_id, &gas_registry) {
                     Ok(loaded) => {
@@ -222,7 +231,11 @@ fn handle_main_menu_actions(
                             &mut world_changed,
                         ) {
                             Ok(_) => {
-                                control.paused = true;
+                                apply_loaded_world_preset(
+                                    &mut control,
+                                    &mut overlay_mode,
+                                    &mut camera_query,
+                                );
                                 save_session.mark_persisted(step.0, Some(loaded.descriptor.id));
                                 world_load_state.has_world = true;
                                 menu_ui.mode = MainMenuMode::Hidden;
@@ -306,6 +319,22 @@ fn handle_main_menu_actions(
                             }
                         }
                     }
+                    Some(MainMenuConfirmState::DeleteSave(save_id)) => {
+                        match delete_save(&saves_root_default(), &save_id) {
+                            Ok(()) => {
+                                if save_session.current_save_id.as_deref() == Some(save_id.as_str()) {
+                                    save_session.current_save_id = None;
+                                }
+                                refresh_saves_cache(&mut menu_ui);
+                                menu_ui.status_text = "Save deleted.".to_string();
+                                menu_ui.screen = menu_ui.return_screen;
+                            }
+                            Err(err) => {
+                                menu_ui.status_text = format!("Delete failed: {}", err);
+                                menu_ui.screen = menu_ui.return_screen;
+                            }
+                        }
+                    }
                     Some(MainMenuConfirmState::UnsavedChanges(action)) => {
                         menu_ui.post_save_action = Some(action);
                         menu_ui.screen = MainMenuScreen::Save;
@@ -321,7 +350,8 @@ fn handle_main_menu_actions(
                 menu_ui.confirm_state = None;
                 menu_ui.confirm_text.clear();
                 match confirm {
-                    Some(MainMenuConfirmState::OverwriteSave(_)) => {
+                    Some(MainMenuConfirmState::OverwriteSave(_))
+                    | Some(MainMenuConfirmState::DeleteSave(_)) => {
                         menu_ui.screen = menu_ui.return_screen;
                     }
                     Some(MainMenuConfirmState::UnsavedChanges(action)) => match action {
@@ -410,3 +440,21 @@ fn emit_full_world_changed(world_changed: &mut EventWriter<WorldCellChanged>) {
     }
 }
 
+fn apply_loaded_world_preset(
+    control: &mut SimulationControl,
+    overlay_mode: &mut OverlayMode,
+    camera_query: &mut Single<(&mut Transform, &mut Projection), With<MainCamera>>,
+) {
+    control.paused = true;
+    control.speed = crate::simulation::SimulationSpeed::X1;
+    *overlay_mode = OverlayMode::Main;
+    let (transform, projection) = &mut **camera_query;
+    crate::input::camera::reset_camera_to_default(transform, projection);
+}
+
+fn open_delete_confirmation(menu_ui: &mut MainMenuUiState, save_id: String) {
+    menu_ui.return_screen = menu_ui.screen;
+    menu_ui.confirm_state = Some(MainMenuConfirmState::DeleteSave(save_id));
+    menu_ui.confirm_text = "This save slot will be deleted permanently. Continue?".to_string();
+    menu_ui.screen = MainMenuScreen::Confirm;
+}

@@ -17,11 +17,11 @@ use crate::{
         SimulationStep,
     },
     ui::panels::PanelManager,
+    world::gas_structures::{GasStructureCell, GasStructureGrid},
     world::grid::{
         cell_center, is_boundary, world_dimensions, world_to_cell, CellKind, CellMaterial,
         WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH,
     },
-    world::gas_structures::{GasStructureCell, GasStructureGrid},
     world::WorldCellChanged,
 };
 
@@ -34,6 +34,8 @@ const CURSOR_GRID_MAX_ALPHA: f32 = 0.24;
 const CURSOR_GRID_RADIUS_CELLS: i32 = 4;
 const CURSOR_GRID_FADE_RADIUS: f32 = 3.9;
 const BACKDROP_TILE_SIZE: f32 = 256.0;
+const OUTER_BORDER_LAYERS: u32 = 4;
+const WORLD_FADE_WIDTH_CELLS: f32 = 4.0;
 
 #[derive(Resource, Clone)]
 /// Stores `GasSimulationImages` state.
@@ -169,6 +171,15 @@ pub(crate) struct WallVisual {
     main_tint: Color,
     gas_tint: Color,
 }
+
+#[derive(Component)]
+pub(crate) struct OuterBorderVisual {
+    main_tint: Color,
+    gas_tint: Color,
+}
+
+#[derive(Component)]
+pub(crate) struct WorldFadeMaskLayer;
 
 #[derive(Resource, Clone)]
 pub(crate) struct WorldVisualAssets {

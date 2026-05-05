@@ -3,8 +3,8 @@ fn setup_editor_overlays(mut commands: Commands, asset_server: Res<AssetServer>)
     commands.spawn((
         Sprite {
             image: brick_silhouette,
-            custom_size: Some(Vec2::splat(CELL_SIZE - 1.0)),
-            color: Color::WHITE,
+            custom_size: Some(Vec2::splat(CELL_SIZE)),
+            color: crate::ui::palette::TEXT_ON_DARK,
             ..default()
         },
         Transform::from_xyz(0.0, 0.0, 1.8),
@@ -14,7 +14,7 @@ fn setup_editor_overlays(mut commands: Commands, asset_server: Res<AssetServer>)
 
     commands.spawn((
         Sprite::from_color(
-            Color::srgba(1.0, 0.24, 0.24, 0.28),
+            crate::ui::palette::DANGER_ACCENT,
             Vec2::splat(CELL_SIZE - 2.0),
         ),
         Transform::from_xyz(0.0, 0.0, 1.79),
@@ -37,7 +37,7 @@ fn setup_editor_overlays(mut commands: Commands, asset_server: Res<AssetServer>)
             parent.spawn((
                 Text::new("X"),
                 TextFont::from_font_size(24.0),
-                TextColor(Color::srgba(1.0, 0.25, 0.25, 0.95)),
+                TextColor(crate::ui::palette::DANGER_TEXT),
             ));
         });
 }

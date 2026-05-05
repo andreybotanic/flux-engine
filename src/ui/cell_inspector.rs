@@ -7,6 +7,7 @@ use crate::{
     render::OverlayMode,
     save::WorldLoadState,
     simulation::gas::GasField,
+    ui::palette,
     ui::panels::PanelManager,
     world::grid::{world_to_cell, WorldGrid},
 };
@@ -30,14 +31,14 @@ pub(crate) fn setup_cell_inspector(mut commands: Commands) {
                 padding: UiRect::all(Val::Px(7.0)),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.12, 0.14, 0.16, 0.90)),
+            BackgroundColor(palette::HUD_BG),
             CellInspectorPanel,
         ))
         .with_children(|parent| {
             parent.spawn((
                 Text::new("FluxEngine loading..."),
                 TextFont::from_font_size(13.0),
-                TextColor(Color::WHITE),
+                TextColor(palette::TEXT_ON_DARK),
                 CellInspectorText,
             ));
         });
@@ -122,15 +123,49 @@ pub(crate) fn update_cell_inspector(
     );
 
     if let Some(cursor_position) = window.cursor_position() {
-        let panel_offset = Vec2::new(12.0, 12.0);
         let panel_size = Vec2::new(310.0, 108.0);
-
-        let max_left = (window.width() - panel_size.x).max(0.0);
-        let max_top = (window.height() - panel_size.y).max(0.0);
-
-        node.left = Val::Px((cursor_position.x + panel_offset.x).clamp(0.0, max_left));
-        node.top = Val::Px((cursor_position.y + panel_offset.y).clamp(0.0, max_top));
+        let panel_position = compute_hud_position(
+            cursor_position,
+            panel_size,
+            Vec2::new(window.width(), window.height()),
+            Vec2::new(24.0, 18.0),
+        );
+        node.left = Val::Px(panel_position.x);
+        node.top = Val::Px(panel_position.y);
     }
 
     text.0 = message;
+}
+
+fn compute_hud_position(cursor: Vec2, panel_size: Vec2, viewport_size: Vec2, offset: Vec2) -> Vec2 {
+    let mut x = cursor.x + offset.x;
+    let mut y = cursor.y + offset.y;
+    if x + panel_size.x > viewport_size.x {
+        x = cursor.x - panel_size.x - offset.x;
+    }
+    if y + panel_size.y > viewport_size.y {
+        y = cursor.y - panel_size.y - offset.y;
+    }
+    Vec2::new(
+        x.clamp(0.0, (viewport_size.x - panel_size.x).max(0.0)),
+        y.clamp(0.0, (viewport_size.y - panel_size.y).max(0.0)),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_hud_position;
+    use bevy::prelude::*;
+
+    #[test]
+    fn hud_flips_to_left_and_up_near_screen_edge() {
+        let pos = compute_hud_position(
+            Vec2::new(1590.0, 890.0),
+            Vec2::new(310.0, 108.0),
+            Vec2::new(1600.0, 900.0),
+            Vec2::new(24.0, 18.0),
+        );
+        assert!(pos.x < 1590.0);
+        assert!(pos.y < 890.0);
+    }
 }

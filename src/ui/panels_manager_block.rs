@@ -254,11 +254,11 @@ impl PanelManager {
                     width: Val::Px(SCROLLBAR_TRACK_WIDTH),
                     display: Display::None,
                     ..default()
-                },
-                BackgroundColor(Color::srgba(0.86, 0.88, 0.90, 0.82)),
-                Visibility::Hidden,
-                PanelScrollbarTrack { panel_id },
-            ))
+                    },
+                    BackgroundColor(crate::ui::palette::PANEL_SCROLLBAR_TRACK_BG),
+                    Visibility::Hidden,
+                    PanelScrollbarTrack { panel_id },
+                ))
             .with_children(|track| {
                 track.spawn((
                     Node {
@@ -269,7 +269,7 @@ impl PanelManager {
                         height: Val::Px(SCROLLBAR_THUMB_MIN_HEIGHT),
                         ..default()
                     },
-                    BackgroundColor(Color::srgba(0.18, 0.19, 0.22, 0.28)),
+                    BackgroundColor(crate::ui::palette::PANEL_SCROLLBAR_THUMB_BG),
                     Visibility::Hidden,
                     PanelScrollbarThumb { panel_id },
                 ));

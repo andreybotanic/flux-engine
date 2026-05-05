@@ -4,11 +4,11 @@ use crate::{
     config::GasRegistry,
     debug::{DebugGasMetrics, DebugMode, DebugOverlaySettings},
     input::camera::MainCamera,
-    render::GasVisualSettings,
+    render::{GasVisualSettings, OverlayMode},
     save::{
-        create_save, list_saves, load_save, new_game_snapshot, overwrite_save, saves_root_default,
-        MainMenuConfirmState, MainMenuDeferredAction, MainMenuMode, MainMenuScreen,
-        MainMenuUiState, SaveSessionState, WorldLoadState,
+        create_save, delete_save, list_saves, load_save, new_game_snapshot, overwrite_save,
+        saves_root_default, MainMenuConfirmState, MainMenuDeferredAction, MainMenuMode,
+        MainMenuScreen, MainMenuUiState, SaveSessionState, WorldLoadState,
     },
     simulation::{
         gas::GasField, GasSimulationConfig, SimulationControl, SimulationPerfStats,
@@ -16,6 +16,7 @@ use crate::{
     },
     ui::{
         input_field::{TextInputDisplay, TextInputField, TextInputStyle},
+        palette,
         panels::{
             PanelControls, PanelCorner, PanelId, PanelManager, PanelOpenOrder, PanelScrollPolicy,
             PanelSpec,
@@ -32,18 +33,18 @@ use crate::{
     },
 };
 
-const PANEL_BG: Color = Color::srgba(0.91, 0.92, 0.93, 0.96);
-const BUTTON_IDLE: Color = Color::srgba(0.78, 0.80, 0.83, 0.95);
-const BUTTON_ACTIVE: Color = Color::srgba(0.58, 0.68, 0.58, 0.96);
-const INPUT_FOCUSED: Color = Color::srgba(0.66, 0.76, 0.86, 0.96);
-const DEBUG_PANEL_TEXT_COLOR: Color = Color::srgba(0.10, 0.10, 0.12, 1.0);
+const PANEL_BG: Color = palette::PANEL_BG;
+const BUTTON_IDLE: Color = palette::BUTTON_IDLE;
+const BUTTON_ACTIVE: Color = palette::BUTTON_ACTIVE;
+const INPUT_FOCUSED: Color = palette::INPUT_FOCUSED;
+const DEBUG_PANEL_TEXT_COLOR: Color = palette::TEXT_PRIMARY;
 const TOOL_BUTTON_SIZE: f32 = 40.0;
 const TOOL_ICON_SIZE: f32 = 20.0;
-const TOOLTIP_BG: Color = Color::srgba(0.12, 0.14, 0.16, 0.94);
-const MODAL_OVERLAY_BG: Color = Color::srgba(0.02, 0.02, 0.03, 0.60);
-const MODAL_BG: Color = Color::srgba(0.96, 0.96, 0.97, 0.98);
-const MODAL_BUTTON_BG: Color = Color::srgba(0.78, 0.34, 0.32, 0.95);
-const MODAL_BUTTON_HOVER: Color = Color::srgba(0.86, 0.42, 0.38, 0.98);
+const TOOLTIP_BG: Color = palette::TOOLTIP_BG;
+const MODAL_OVERLAY_BG: Color = palette::MODAL_OVERLAY_BG;
+const MODAL_BG: Color = palette::MODAL_BG;
+const MODAL_BUTTON_BG: Color = palette::MODAL_BUTTON_BG;
+const MODAL_BUTTON_HOVER: Color = palette::MODAL_BUTTON_HOVER;
 
 const TOP_LEFT_SIM_PANEL_WIDTH: f32 = 320.0;
 const TOP_LEFT_SIM_PANEL_HEIGHT: f32 = 112.0;
@@ -299,6 +300,9 @@ struct MainMenuSaveNameInputField;
 struct MainMenuSaveListRoot;
 
 #[derive(Component)]
+struct MainMenuBackdrop;
+
+#[derive(Component)]
 struct MainMenuConfirmPrimaryLabel;
 
 #[derive(Component)]
@@ -322,6 +326,7 @@ enum MainMenuButtonAction {
     CreateNewSave,
     SelectOverwrite(String),
     SelectLoad(String),
+    SelectDelete(String),
     ConfirmPrimary,
     ConfirmSecondary,
     ConfirmCancel,
@@ -406,7 +411,6 @@ impl Plugin for EditorPlugin {
     }
 }
 
-
 include!("ui_setup_block.rs");
 include!("overlay_setup_block.rs");
 include!("main_menu_block.rs");
@@ -433,8 +437,8 @@ impl UiRectPx {
 
 #[cfg(test)]
 mod tests {
-    use super::{escape_action, EscAction};
-    use crate::save::MainMenuMode;
+    use super::{escape_action, open_delete_confirmation, EscAction};
+    use crate::save::{MainMenuConfirmState, MainMenuMode, MainMenuScreen, MainMenuUiState};
 
     #[test]
     fn escape_closes_in_game_menu_when_open() {
@@ -488,5 +492,18 @@ mod tests {
             EscAction::CloseStructureEditor,
             "Esc must close structure editor first"
         );
+    }
+
+    #[test]
+    fn delete_action_opens_confirm_screen() {
+        let mut ui = MainMenuUiState::default();
+        ui.screen = MainMenuScreen::Load;
+        open_delete_confirmation(&mut ui, "slot-1".to_string());
+        assert_eq!(ui.screen, MainMenuScreen::Confirm);
+        assert_eq!(ui.return_screen, MainMenuScreen::Load);
+        assert!(matches!(
+            ui.confirm_state,
+            Some(MainMenuConfirmState::DeleteSave(ref id)) if id == "slot-1"
+        ));
     }
 }

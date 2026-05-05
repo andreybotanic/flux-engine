@@ -1,13 +1,14 @@
 use bevy::{prelude::*, window::PrimaryWindow};
 use std::collections::HashMap;
 
+use crate::ui::palette;
 use crate::ui::panels::PanelManager;
 
-const SELECT_BG: Color = Color::srgba(1.0, 1.0, 1.0, 1.0);
-const SELECT_BG_OPEN: Color = Color::srgba(0.94, 0.96, 1.0, 1.0);
-const SELECT_OPTION_HOVER: Color = Color::srgba(0.93, 0.94, 0.96, 1.0);
-const SELECT_OPTION_SELECTED: Color = Color::srgba(0.86, 0.90, 0.98, 1.0);
-const SELECT_BORDER: Color = Color::srgba(0.66, 0.68, 0.71, 1.0);
+const SELECT_BG: Color = palette::SELECT_BG;
+const SELECT_BG_OPEN: Color = palette::SELECT_BG_OPEN;
+const SELECT_OPTION_HOVER: Color = palette::SELECT_OPTION_HOVER;
+const SELECT_OPTION_SELECTED: Color = palette::SELECT_OPTION_SELECTED;
+const SELECT_BORDER: Color = palette::SELECT_BORDER;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 /// Stores `SelectFieldId` state.
@@ -41,7 +42,7 @@ pub struct SelectFieldState {
 }
 
 impl SelectFieldState {
-/// Runs `register_field` logic.
+    /// Runs `register_field` logic.
     pub fn register_field(&mut self, config: SelectFieldConfig) {
         let selected = if config.options.is_empty() {
             0
@@ -58,7 +59,7 @@ impl SelectFieldState {
         );
     }
 
-/// Runs `set_selected` logic.
+    /// Runs `set_selected` logic.
     pub fn set_selected(&mut self, id: SelectFieldId, index: usize) {
         let Some(entry) = self.entries.get_mut(&id) else {
             return;
@@ -70,23 +71,26 @@ impl SelectFieldState {
         }
     }
 
-/// Runs `selected_index` logic.
+    /// Runs `selected_index` logic.
     pub fn selected_index(&self, id: SelectFieldId) -> Option<usize> {
         self.entries.get(&id).map(|entry| entry.selected)
     }
 
-/// Runs `selected_label` logic.
+    /// Runs `selected_label` logic.
     pub fn selected_label(&self, id: SelectFieldId) -> Option<&str> {
         let entry = self.entries.get(&id)?;
         entry.options.get(entry.selected).map(|item| item.as_str())
     }
 
-/// Runs `is_open` logic.
+    /// Runs `is_open` logic.
     pub fn is_open(&self, id: SelectFieldId) -> bool {
-        self.entries.get(&id).map(|entry| entry.open).unwrap_or(false)
+        self.entries
+            .get(&id)
+            .map(|entry| entry.open)
+            .unwrap_or(false)
     }
 
-/// Runs `close_all` logic.
+    /// Runs `close_all` logic.
     pub fn close_all(&mut self) {
         for entry in self.entries.values_mut() {
             entry.open = false;
@@ -155,7 +159,7 @@ pub fn spawn_select_field(
             select.spawn((
                 Text::new(caption.to_string()),
                 TextFont::from_font_size(13.0),
-                TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                TextColor(palette::TEXT_PRIMARY),
             ));
 
             let initial_label = config
@@ -184,7 +188,7 @@ pub fn spawn_select_field(
                     button.spawn((
                         Text::new(initial_label),
                         TextFont::from_font_size(13.0),
-                        TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                        TextColor(palette::TEXT_PRIMARY),
                         SelectFieldLabel { id: config.id },
                     ));
                     button.spawn((
@@ -238,7 +242,7 @@ pub fn spawn_select_field(
                                 button.spawn((
                                     Text::new(option_label.clone()),
                                     TextFont::from_font_size(13.0),
-                                    TextColor(Color::srgba(0.10, 0.10, 0.12, 1.0)),
+                                    TextColor(palette::TEXT_PRIMARY),
                                 ));
                             });
                     }
@@ -251,15 +255,14 @@ pub struct SelectFieldPlugin;
 
 impl Plugin for SelectFieldPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<SelectFieldState>()
-            .add_systems(
-                Update,
-                (
-                    handle_select_field_interactions,
-                    collapse_open_selects_on_panel_click,
-                    sync_select_field_visuals,
-                ),
-            );
+        app.init_resource::<SelectFieldState>().add_systems(
+            Update,
+            (
+                handle_select_field_interactions,
+                collapse_open_selects_on_panel_click,
+                sync_select_field_visuals,
+            ),
+        );
     }
 }
 
@@ -320,12 +323,10 @@ fn sync_select_field_visuals(
     mut labels: Query<(&SelectFieldLabel, &mut Text)>,
     mut options_roots: Query<(&SelectFieldOptionsRoot, &mut Node)>,
     mut arrows: Query<(&SelectFieldArrow, &mut ImageNode)>,
-    mut button_sets: ParamSet<
-        (
-            Query<(&SelectFieldToggleButton, &Interaction, &mut BackgroundColor), With<Button>>,
-            Query<(&SelectFieldOptionButton, &Interaction, &mut BackgroundColor), With<Button>>,
-        ),
-    >,
+    mut button_sets: ParamSet<(
+        Query<(&SelectFieldToggleButton, &Interaction, &mut BackgroundColor), With<Button>>,
+        Query<(&SelectFieldOptionButton, &Interaction, &mut BackgroundColor), With<Button>>,
+    )>,
 ) {
     for (label, mut text) in &mut labels {
         text.0 = state.selected_label(label.id).unwrap_or("N/A").to_string();

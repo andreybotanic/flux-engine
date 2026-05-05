@@ -409,7 +409,7 @@ fn draw_selection_overlay(selection_drag: Res<SelectionDragState>, mut gizmos: G
     gizmos.rect_2d(
         Isometry2d::from_translation(center),
         size,
-        Color::srgba(0.97, 0.89, 0.20, 0.95),
+        crate::ui::palette::WARNING_ACCENT,
     );
 }
 

@@ -206,3 +206,28 @@ pub fn new_game_snapshot(gas_registry: &GasRegistry) -> RuntimeWorldState {
     }
 }
 
+/// Runs `delete_save` logic.
+pub fn delete_save(root: &Path, save_id: &str) -> Result<(), SaveError> {
+    let slot_dir = root.join(save_id);
+    if !slot_dir.exists() || !slot_dir.is_dir() {
+        return Err(SaveError::Validation(format!(
+            "Save slot '{}' does not exist",
+            save_id
+        )));
+    }
+    let meta_path = slot_dir.join(META_FILE);
+    if !meta_path.exists() {
+        return Err(SaveError::Validation(format!(
+            "Save slot '{}' has no meta file",
+            save_id
+        )));
+    }
+    fs::remove_dir_all(&slot_dir).map_err(|err| {
+        SaveError::Io(format!(
+            "Failed to delete save slot '{}': {}",
+            slot_dir.display(),
+            err
+        ))
+    })
+}
+

@@ -4,6 +4,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 
+use crate::editor::MainMenuState;
 use crate::ui::panels::PanelManager;
 use crate::world::grid::{world_dimensions, CAMERA_MARGIN};
 
@@ -24,7 +25,13 @@ pub fn camera_pan_zoom(
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&mut Projection, &mut Transform), With<MainCamera>>,
     panels: Option<Res<PanelManager>>,
+    main_menu: Option<Res<MainMenuState>>,
 ) {
+    if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
+        mouse_motion.clear();
+        mouse_wheel.clear();
+        return;
+    }
     let (mut projection, mut transform) = camera_query.into_inner();
     let cursor = window.cursor_position();
     let blocked_by_panel = cursor
@@ -76,6 +83,15 @@ pub fn camera_pan_zoom(
     clamp_camera_to_world(&mut transform, scale, window.resolution.size());
 }
 
+/// Runs `reset_camera_to_default` logic.
+pub fn reset_camera_to_default(transform: &mut Transform, projection: &mut Projection) {
+    if let Projection::Orthographic(orthographic) = projection {
+        orthographic.scale = 1.0;
+    }
+    transform.translation.x = 0.0;
+    transform.translation.y = 0.0;
+}
+
 fn anchor_zoom_to_cursor(
     translation: &mut Vec3,
     cursor: Vec2,
@@ -105,7 +121,7 @@ fn clamp_camera_to_world(transform: &mut Transform, scale: f32, window_size: Vec
 
 #[cfg(test)]
 mod tests {
-    use super::anchor_zoom_to_cursor;
+    use super::{anchor_zoom_to_cursor, reset_camera_to_default};
     use bevy::prelude::*;
 
     #[test]
@@ -126,5 +142,22 @@ mod tests {
             world_before.abs_diff_eq(world_after, 1e-4),
             "World point under cursor should stay fixed after zoom"
         );
+    }
+
+    #[test]
+    fn reset_camera_to_default_restores_center_and_zoom() {
+        let mut transform = Transform::from_xyz(120.0, -85.0, 999.0);
+        let mut projection = Projection::Orthographic(OrthographicProjection {
+            scale: 2.7,
+            ..OrthographicProjection::default_2d()
+        });
+        reset_camera_to_default(&mut transform, &mut projection);
+        let Projection::Orthographic(ortho) = projection else {
+            panic!("expected orthographic projection");
+        };
+        assert!((ortho.scale - 1.0).abs() < 1e-6);
+        assert!((transform.translation.x - 0.0).abs() < 1e-6);
+        assert!((transform.translation.y - 0.0).abs() < 1e-6);
+        assert!((transform.translation.z - 999.0).abs() < 1e-6);
     }
 }

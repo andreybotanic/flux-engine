@@ -4,7 +4,6 @@ use bevy::{
         ButtonState,
     },
     prelude::*,
-    text::TextLayoutInfo,
     ui::{ComputedNode, RelativeCursorPosition},
 };
 
@@ -69,7 +68,7 @@ pub struct TextInputField {
 }
 
 impl TextInputField {
-/// Runs `new_string` logic.
+    /// Runs `new_string` logic.
     pub fn new_string(
         initial: impl Into<String>,
         max_len: usize,
@@ -92,7 +91,7 @@ impl TextInputField {
         }
     }
 
-/// Runs `new_u32` logic.
+    /// Runs `new_u32` logic.
     pub fn new_u32(initial: u32, min: u32, max: u32, max_len: usize) -> Self {
         let value = initial.clamp(min, max);
         let text = value.to_string();
@@ -108,7 +107,7 @@ impl TextInputField {
         }
     }
 
-/// Runs `new_f32` logic.
+    /// Runs `new_f32` logic.
     pub fn new_f32(
         initial: f32,
         min: f32,
@@ -143,7 +142,7 @@ impl TextInputField {
         }
     }
 
-/// Runs `parsed_u32` logic.
+    /// Runs `parsed_u32` logic.
     pub fn parsed_u32(&self) -> Option<u32> {
         match self.value {
             ParsedInputValue::U32(v) => Some(v),
@@ -151,7 +150,7 @@ impl TextInputField {
         }
     }
 
-/// Runs `parsed_f32` logic.
+    /// Runs `parsed_f32` logic.
     pub fn parsed_f32(&self) -> Option<f32> {
         match self.value {
             ParsedInputValue::F32(v) => Some(v),
@@ -332,3 +331,47 @@ impl Default for TextInputCaretBlink {
 
 include!("input_field_systems_block.rs");
 include!("input_field_helpers_block.rs");
+
+#[cfg(test)]
+mod tests {
+    use super::{InputAllowedChars, TextInputField};
+    use bevy::text::cosmic_text::{Attrs, Buffer, FontSystem, Metrics, Shaping};
+
+    #[test]
+    fn any_input_allows_unicode_and_space() {
+        let mut field = TextInputField::new_string("A", 64, InputAllowedChars::Any);
+        field.cursor = field.text.chars().count();
+        field.insert_char(' ');
+        field.insert_char('Я');
+        field.insert_char('ß');
+        assert_eq!(field.text, "A Яß");
+    }
+
+    #[test]
+    fn any_input_blocks_control_chars() {
+        let mut field = TextInputField::new_string("", 64, InputAllowedChars::Any);
+        field.insert_char('\n');
+        field.insert_char('\t');
+        assert_eq!(field.text, "");
+    }
+
+    #[test]
+    fn trailing_space_changes_text_width() {
+        let mut font_system = FontSystem::new();
+        let mut buffer = Buffer::new(&mut font_system, Metrics::new(20.0, 24.0));
+        let attrs = Attrs::new();
+
+        buffer.set_text(&mut font_system, "SaveName", attrs, Shaping::Advanced);
+        buffer.shape_until_scroll(&mut font_system, false);
+        let without_space_width = buffer.layout_runs().next().map(|run| run.line_w).unwrap_or(0.0);
+
+        buffer.set_text(&mut font_system, "SaveName ", attrs, Shaping::Advanced);
+        buffer.shape_until_scroll(&mut font_system, false);
+        let with_space_width = buffer.layout_runs().next().map(|run| run.line_w).unwrap_or(0.0);
+
+        assert!(
+            with_space_width > without_space_width,
+            "expected trailing space to increase width: without={without_space_width}, with={with_space_width}"
+        );
+    }
+}
