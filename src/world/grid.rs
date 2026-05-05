@@ -19,6 +19,7 @@ pub enum CellMaterial {
 }
 
 #[derive(Resource, Clone)]
+/// Stores `WorldGrid` state.
 pub struct WorldGrid {
     cells: Vec<CellKind>,
 }
@@ -39,14 +40,17 @@ impl Default for WorldGrid {
 }
 
 impl WorldGrid {
+/// Runs `cell` logic.
     pub fn cell(&self, x: u32, y: u32) -> CellKind {
         self.cells[linear_index(x, y)]
     }
 
+/// Runs `is_solid` logic.
     pub fn is_solid(&self, x: u32, y: u32) -> bool {
         matches!(self.cell(x, y), CellKind::Solid(_))
     }
 
+/// Runs `solid_material` logic.
     pub fn solid_material(&self, x: u32, y: u32) -> Option<CellMaterial> {
         match self.cell(x, y) {
             CellKind::Solid(material) => Some(material),
@@ -54,6 +58,7 @@ impl WorldGrid {
         }
     }
 
+/// Runs `set_cell_kind` logic.
     pub fn set_cell_kind(&mut self, x: u32, y: u32, kind: CellKind) -> bool {
         if !is_editable_cell(x, y) {
             return false;
@@ -68,22 +73,27 @@ impl WorldGrid {
         true
     }
 
+/// Runs `set_solid` logic.
     pub fn set_solid(&mut self, x: u32, y: u32) -> bool {
         self.set_solid_with_material(x, y, CellMaterial::Brick)
     }
 
+/// Runs `set_solid_with_material` logic.
     pub fn set_solid_with_material(&mut self, x: u32, y: u32, material: CellMaterial) -> bool {
         self.set_cell_kind(x, y, CellKind::Solid(material))
     }
 
+/// Runs `set_empty` logic.
     pub fn set_empty(&mut self, x: u32, y: u32) -> bool {
         self.set_cell_kind(x, y, CellKind::Empty)
     }
 
+/// Runs `snapshot_cells` logic.
     pub fn snapshot_cells(&self) -> Vec<CellKind> {
         self.cells.clone()
     }
 
+/// Runs `restore_cells` logic.
     pub fn restore_cells(&mut self, cells: &[CellKind]) -> Result<(), String> {
         let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
         if cells.len() != expected {
@@ -99,6 +109,7 @@ impl WorldGrid {
         Ok(())
     }
 
+/// Runs `snapshot_cell_codes` logic.
     pub fn snapshot_cell_codes(&self) -> Vec<u8> {
         self.cells
             .iter()
@@ -106,6 +117,7 @@ impl WorldGrid {
             .collect()
     }
 
+/// Runs `restore_from_cell_codes` logic.
     pub fn restore_from_cell_codes(&mut self, codes: &[u8]) -> Result<(), String> {
         let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
         if codes.len() != expected {
@@ -167,18 +179,22 @@ fn validate_boundary_cells(cells: &[CellKind]) -> Result<(), String> {
     Ok(())
 }
 
+/// Runs `is_boundary` logic.
 pub fn is_boundary(x: u32, y: u32) -> bool {
     x == 0 || y == 0 || x == WORLD_WIDTH - 1 || y == WORLD_HEIGHT - 1
 }
 
+/// Runs `is_editable_cell` logic.
 pub fn is_editable_cell(x: u32, y: u32) -> bool {
     !is_boundary(x, y)
 }
 
+/// Runs `linear_index` logic.
 pub fn linear_index(x: u32, y: u32) -> usize {
     (y * WORLD_WIDTH + x) as usize
 }
 
+/// Runs `world_dimensions` logic.
 pub fn world_dimensions() -> Vec2 {
     Vec2::new(
         WORLD_WIDTH as f32 * CELL_SIZE,
@@ -186,14 +202,17 @@ pub fn world_dimensions() -> Vec2 {
     )
 }
 
+/// Runs `world_origin` logic.
 pub fn world_origin() -> Vec2 {
     -world_dimensions() * 0.5
 }
 
+/// Runs `cell_center` logic.
 pub fn cell_center(x: u32, y: u32) -> Vec2 {
     world_origin() + Vec2::new((x as f32 + 0.5) * CELL_SIZE, (y as f32 + 0.5) * CELL_SIZE)
 }
 
+/// Runs `world_to_cell` logic.
 pub fn world_to_cell(world_position: Vec2) -> Option<UVec2> {
     let local = world_position - world_origin();
     if local.x < 0.0 || local.y < 0.0 {

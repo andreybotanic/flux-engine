@@ -8,12 +8,15 @@ use crate::ui::panels::PanelManager;
 use crate::world::grid::{world_dimensions, CAMERA_MARGIN};
 
 #[derive(Component)]
+/// Stores `MainCamera` state.
 pub struct MainCamera;
 
+/// Runs `spawn_main_camera` logic.
 pub fn spawn_main_camera(mut commands: Commands) {
     commands.spawn((Camera2d, MainCamera));
 }
 
+/// Runs `camera_pan_zoom` logic.
 pub fn camera_pan_zoom(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut mouse_motion: EventReader<MouseMotion>,

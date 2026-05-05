@@ -29,7 +29,8 @@ fn apply_pause_toggle(control: &mut SimulationControl, world_load_state: &WorldL
     }
 }
 
-pub fn setup_sim_control_ui(mut commands: Commands) {
+/// Runs `setup_sim_control_ui` logic.
+pub(crate) fn setup_sim_control_ui(mut commands: Commands) {
     commands
         .spawn((
             Node {
@@ -134,7 +135,8 @@ pub fn setup_sim_control_ui(mut commands: Commands) {
         });
 }
 
-pub fn handle_sim_control_keyboard(
+/// Runs `handle_sim_control_keyboard` logic.
+pub(crate) fn handle_sim_control_keyboard(
     keys: Res<ButtonInput<KeyCode>>,
     mut control: ResMut<SimulationControl>,
     world_load_state: Res<WorldLoadState>,
@@ -150,7 +152,8 @@ pub fn handle_sim_control_keyboard(
     }
 }
 
-pub fn handle_sim_control_buttons(
+/// Runs `handle_sim_control_buttons` logic.
+pub(crate) fn handle_sim_control_buttons(
     mut interactions: Query<
         (&Interaction, &SimControlAction),
         (Changed<Interaction>, With<Button>),
@@ -170,7 +173,8 @@ pub fn handle_sim_control_buttons(
     }
 }
 
-pub fn refresh_sim_control_visibility(
+/// Runs `refresh_sim_control_visibility` logic.
+pub(crate) fn refresh_sim_control_visibility(
     world_load_state: Res<WorldLoadState>,
     mut root_visibility: Single<&mut Visibility, With<SimControlRoot>>,
 ) {
@@ -181,7 +185,8 @@ pub fn refresh_sim_control_visibility(
     };
 }
 
-pub fn refresh_sim_control_ui(
+/// Runs `refresh_sim_control_ui` logic.
+pub(crate) fn refresh_sim_control_ui(
     control: Res<SimulationControl>,
     mut button_query: Query<(&SimControlAction, &mut BackgroundColor), With<Button>>,
     mut pause_label: Single<&mut Text, With<SimPauseLabel>>,

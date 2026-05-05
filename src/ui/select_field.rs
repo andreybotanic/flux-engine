@@ -10,6 +10,7 @@ const SELECT_OPTION_SELECTED: Color = Color::srgba(0.86, 0.90, 0.98, 1.0);
 const SELECT_BORDER: Color = Color::srgba(0.66, 0.68, 0.71, 1.0);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// Stores `SelectFieldId` state.
 pub struct SelectFieldId(&'static str);
 
 impl SelectFieldId {
@@ -19,6 +20,7 @@ impl SelectFieldId {
 }
 
 #[derive(Clone, Debug)]
+/// Stores `SelectFieldConfig` state.
 pub struct SelectFieldConfig {
     pub id: SelectFieldId,
     pub options: Vec<String>,
@@ -33,11 +35,13 @@ struct SelectFieldEntry {
 }
 
 #[derive(Resource, Default)]
+/// Stores `SelectFieldState` state.
 pub struct SelectFieldState {
     entries: HashMap<SelectFieldId, SelectFieldEntry>,
 }
 
 impl SelectFieldState {
+/// Runs `register_field` logic.
     pub fn register_field(&mut self, config: SelectFieldConfig) {
         let selected = if config.options.is_empty() {
             0
@@ -54,6 +58,7 @@ impl SelectFieldState {
         );
     }
 
+/// Runs `set_selected` logic.
     pub fn set_selected(&mut self, id: SelectFieldId, index: usize) {
         let Some(entry) = self.entries.get_mut(&id) else {
             return;
@@ -65,19 +70,23 @@ impl SelectFieldState {
         }
     }
 
+/// Runs `selected_index` logic.
     pub fn selected_index(&self, id: SelectFieldId) -> Option<usize> {
         self.entries.get(&id).map(|entry| entry.selected)
     }
 
+/// Runs `selected_label` logic.
     pub fn selected_label(&self, id: SelectFieldId) -> Option<&str> {
         let entry = self.entries.get(&id)?;
         entry.options.get(entry.selected).map(|item| item.as_str())
     }
 
+/// Runs `is_open` logic.
     pub fn is_open(&self, id: SelectFieldId) -> bool {
         self.entries.get(&id).map(|entry| entry.open).unwrap_or(false)
     }
 
+/// Runs `close_all` logic.
     pub fn close_all(&mut self) {
         for entry in self.entries.values_mut() {
             entry.open = false;
@@ -98,16 +107,19 @@ impl SelectFieldState {
 }
 
 #[derive(Component, Clone, Copy)]
+/// Stores `SelectFieldLabel` state.
 pub struct SelectFieldLabel {
     pub id: SelectFieldId,
 }
 
 #[derive(Component, Clone, Copy)]
+/// Stores `SelectFieldArrow` state.
 pub struct SelectFieldArrow {
     pub id: SelectFieldId,
 }
 
 #[derive(Component, Clone, Copy)]
+/// Stores `SelectFieldOptionsRoot` state.
 pub struct SelectFieldOptionsRoot {
     pub id: SelectFieldId,
 }
@@ -123,6 +135,7 @@ struct SelectFieldOptionButton {
     option_index: usize,
 }
 
+/// Runs `spawn_select_field` logic.
 pub fn spawn_select_field(
     parent: &mut ChildSpawnerCommands,
     config: &SelectFieldConfig,
@@ -233,6 +246,7 @@ pub fn spawn_select_field(
         });
 }
 
+/// Stores `SelectFieldPlugin` state.
 pub struct SelectFieldPlugin;
 
 impl Plugin for SelectFieldPlugin {

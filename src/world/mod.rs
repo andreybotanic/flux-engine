@@ -7,10 +7,12 @@ use self::grid::WorldGrid;
 use self::gas_structures::GasStructureGrid;
 
 #[derive(Event, Clone, Copy, Debug)]
+/// Stores `WorldCellChanged` state.
 pub struct WorldCellChanged {
     pub cell: UVec2,
 }
 
+/// Stores `WorldPlugin` state.
 pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {

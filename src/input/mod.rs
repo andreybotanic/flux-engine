@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use self::camera::{camera_pan_zoom, spawn_main_camera};
 
+/// Stores `InputPlugin` state.
 pub struct InputPlugin;
 
 impl Plugin for InputPlugin {

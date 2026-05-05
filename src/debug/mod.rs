@@ -14,11 +14,13 @@ use crate::{
 };
 
 #[derive(Resource, Default)]
+/// Stores `DebugMode` state.
 pub struct DebugMode {
     pub active: bool,
 }
 
 #[derive(Resource, Clone, Copy)]
+/// Stores `DebugOverlaySettings` state.
 pub struct DebugOverlaySettings {
     pub show_momentum_vectors: bool,
 }
@@ -32,6 +34,7 @@ impl Default for DebugOverlaySettings {
 }
 
 #[derive(Resource, Default, Clone, Copy)]
+/// Stores `DebugGasMetrics` state.
 pub struct DebugGasMetrics {
     pub anisotropy_score: f32,
     pub radial_wave_score: f32,
@@ -47,6 +50,7 @@ struct DebugMassBaseline {
     last_step: u64,
 }
 
+/// Stores `DebugPlugin` state.
 pub struct DebugPlugin;
 
 #[derive(Default, Reflect, GizmoConfigGroup)]

@@ -17,7 +17,8 @@ pub(crate) struct CellInspectorText;
 #[derive(Component)]
 pub(crate) struct CellInspectorPanel;
 
-pub fn setup_cell_inspector(mut commands: Commands) {
+/// Runs `setup_cell_inspector` logic.
+pub(crate) fn setup_cell_inspector(mut commands: Commands) {
     commands
         .spawn((
             Node {
@@ -42,7 +43,8 @@ pub fn setup_cell_inspector(mut commands: Commands) {
         });
 }
 
-pub fn update_cell_inspector(
+/// Runs `update_cell_inspector` logic.
+pub(crate) fn update_cell_inspector(
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     active_tool: Res<ActiveEditorTool>,

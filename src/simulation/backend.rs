@@ -8,6 +8,7 @@ pub enum SimulationBackend {
 }
 
 #[derive(Resource, Clone, Copy, Debug)]
+/// Stores `SimulationBackendConfig` state.
 pub struct SimulationBackendConfig {
     pub backend: SimulationBackend,
 }
@@ -21,6 +22,7 @@ impl Default for SimulationBackendConfig {
 }
 
 #[derive(Resource, Clone, Copy, Debug)]
+/// Stores `WorldSizeConfig` state.
 pub struct WorldSizeConfig {
     pub width: u32,
     pub height: u32,

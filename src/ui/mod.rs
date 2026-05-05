@@ -15,6 +15,7 @@ use self::sim_controls::{
     refresh_sim_control_visibility, setup_sim_control_ui,
 };
 
+/// Stores `UiPlugin` state.
 pub struct UiPlugin;
 
 impl Plugin for UiPlugin {

@@ -1,0 +1,357 @@
+#[derive(Serialize, Deserialize)]
+struct SaveChunkMetaToml {
+    id: String,
+    file: String,
+    format: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SaveMetaToml {
+    schema_version: u32,
+    save_id: String,
+    display_name: String,
+    created_at_unix_ms: i64,
+    updated_at_unix_ms: i64,
+    world_width: u32,
+    world_height: u32,
+    chunks: Vec<SaveChunkMetaToml>,
+}
+
+struct SavedGasChunk {
+    width: u32,
+    height: u32,
+    simulation_step: u64,
+    gas_ids: Vec<String>,
+    species: Vec<u32>,
+    velocity: Vec<[f32; 2]>,
+    total_density: Vec<f32>,
+}
+
+fn validate_display_name(display_name: &str) -> Result<(), SaveError> {
+    let len = display_name.chars().count();
+    if len == 0 {
+        return Err(SaveError::Validation(
+            "Save display name must not be empty".to_string(),
+        ));
+    }
+    if len > 64 {
+        return Err(SaveError::Validation(format!(
+            "Save display name is too long: {} chars (max 64)",
+            len
+        )));
+    }
+    Ok(())
+}
+
+fn generate_save_id() -> String {
+    let seq = SAVE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    format!("save_{}_{}_{}", now, std::process::id(), seq)
+}
+
+fn now_unix_ms() -> Result<i64, SaveError> {
+    let ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| SaveError::Validation(format!("System clock error: {}", err)))?
+        .as_millis();
+    i64::try_from(ms).map_err(|_| SaveError::Validation("Unix ms timestamp overflow".to_string()))
+}
+
+fn read_meta(path: &Path) -> Result<SaveMetaToml, SaveError> {
+    let content = fs::read_to_string(path).map_err(|err| {
+        SaveError::Io(format!(
+            "Failed to read save meta '{}': {}",
+            path.display(),
+            err
+        ))
+    })?;
+    toml::from_str::<SaveMetaToml>(&content).map_err(|err| {
+        SaveError::Parse(format!(
+            "Failed to parse save meta '{}': {}",
+            path.display(),
+            err
+        ))
+    })
+}
+
+fn validate_meta_dimensions(meta: &SaveMetaToml) -> Result<(), SaveError> {
+    if meta.schema_version != SCHEMA_VERSION {
+        return Err(SaveError::Validation(format!(
+            "Unsupported save schema version {}",
+            meta.schema_version
+        )));
+    }
+    if meta.world_width != WORLD_WIDTH || meta.world_height != WORLD_HEIGHT {
+        return Err(SaveError::Validation(format!(
+            "Save world dimensions mismatch: got {}x{}, expected {}x{}",
+            meta.world_width, meta.world_height, WORLD_WIDTH, WORLD_HEIGHT
+        )));
+    }
+    Ok(())
+}
+
+fn write_slot(
+    root: &Path,
+    descriptor: &SaveDescriptor,
+    world: &WorldGrid,
+    gas: &GasField,
+    structures: &GasStructureGrid,
+    gas_registry: &GasRegistry,
+    simulation_step: u64,
+    allow_overwrite: bool,
+) -> Result<(), SaveError> {
+    let slot_dir = root.join(&descriptor.id);
+    if slot_dir.exists() && !allow_overwrite {
+        return Err(SaveError::Validation(format!(
+            "Save slot '{}' already exists",
+            descriptor.id
+        )));
+    }
+
+    let chunk_meta = vec![
+        SaveChunkMetaToml {
+            id: CHUNK_WORLD_CELLS_ID.to_string(),
+            file: WORLD_CELLS_FILE.to_string(),
+            format: "binary_v1".to_string(),
+        },
+        SaveChunkMetaToml {
+            id: CHUNK_GAS_STATE_ID.to_string(),
+            file: GAS_STATE_FILE.to_string(),
+            format: "binary_v2".to_string(),
+        },
+        SaveChunkMetaToml {
+            id: CHUNK_GAS_STRUCTURES_ID.to_string(),
+            file: GAS_STRUCTURES_FILE.to_string(),
+            format: "binary_v1".to_string(),
+        },
+    ];
+
+    let meta = SaveMetaToml {
+        schema_version: SCHEMA_VERSION,
+        save_id: descriptor.id.clone(),
+        display_name: descriptor.display_name.clone(),
+        created_at_unix_ms: descriptor.created_at_unix_ms,
+        updated_at_unix_ms: descriptor.updated_at_unix_ms,
+        world_width: WORLD_WIDTH,
+        world_height: WORLD_HEIGHT,
+        chunks: chunk_meta,
+    };
+
+    let world_codes = world.snapshot_cell_codes();
+    let gas_snapshot = gas.snapshot_state();
+    let structures_snapshot = structures.snapshot_state();
+    let gas_ids = gas_registry
+        .all()
+        .iter()
+        .map(|definition| definition.id.clone())
+        .collect::<Vec<_>>();
+    if gas_ids.len() != gas_snapshot.gas_count {
+        return Err(SaveError::Validation(format!(
+            "Gas registry count ({}) does not match gas snapshot count ({})",
+            gas_ids.len(),
+            gas_snapshot.gas_count
+        )));
+    }
+
+    let tmp_dir = root.join(format!(
+        ".tmp_{}_{}_{}",
+        descriptor.id,
+        std::process::id(),
+        SAVE_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    if tmp_dir.exists() {
+        fs::remove_dir_all(&tmp_dir).map_err(|err| {
+            SaveError::Io(format!(
+                "Failed to remove stale temp save directory '{}': {}",
+                tmp_dir.display(),
+                err
+            ))
+        })?;
+    }
+    fs::create_dir_all(&tmp_dir).map_err(|err| {
+        SaveError::Io(format!(
+            "Failed to create temp save directory '{}': {}",
+            tmp_dir.display(),
+            err
+        ))
+    })?;
+
+    let result = (|| -> Result<(), SaveError> {
+        write_meta(&tmp_dir.join(META_FILE), &meta)?;
+        write_world_cells_chunk(&tmp_dir.join(WORLD_CELLS_FILE), &world_codes)?;
+        write_gas_chunk(
+            &tmp_dir.join(GAS_STATE_FILE),
+            simulation_step,
+            &gas_ids,
+            &gas_snapshot,
+        )?;
+        write_gas_structures_chunk(&tmp_dir.join(GAS_STRUCTURES_FILE), &structures_snapshot)?;
+        Ok(())
+    })();
+
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&tmp_dir);
+        return result;
+    }
+
+    if !slot_dir.exists() {
+        fs::rename(&tmp_dir, &slot_dir).map_err(|err| {
+            SaveError::Io(format!(
+                "Failed to commit save '{}' from '{}' to '{}': {}",
+                descriptor.id,
+                tmp_dir.display(),
+                slot_dir.display(),
+                err
+            ))
+        })?;
+        return Ok(());
+    }
+
+    let backup_dir = root.join(format!(
+        ".bak_{}_{}_{}",
+        descriptor.id,
+        std::process::id(),
+        SAVE_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    if backup_dir.exists() {
+        fs::remove_dir_all(&backup_dir).map_err(|err| {
+            SaveError::Io(format!(
+                "Failed to remove stale backup save directory '{}': {}",
+                backup_dir.display(),
+                err
+            ))
+        })?;
+    }
+
+    fs::rename(&slot_dir, &backup_dir).map_err(|err| {
+        SaveError::Io(format!(
+            "Failed to move existing save '{}' to backup '{}' before overwrite: {}",
+            slot_dir.display(),
+            backup_dir.display(),
+            err
+        ))
+    })?;
+
+    match fs::rename(&tmp_dir, &slot_dir) {
+        Ok(_) => {
+            let _ = fs::remove_dir_all(&backup_dir);
+        }
+        Err(commit_err) => {
+            let restore_result = fs::rename(&backup_dir, &slot_dir);
+            let _ = fs::remove_dir_all(&tmp_dir);
+            return match restore_result {
+                Ok(_) => Err(SaveError::Io(format!(
+                    "Failed to commit overwrite for save '{}' from '{}' to '{}': {}",
+                    descriptor.id,
+                    tmp_dir.display(),
+                    slot_dir.display(),
+                    commit_err
+                ))),
+                Err(restore_err) => Err(SaveError::Io(format!(
+                    "Failed to commit overwrite for save '{}' ({}) and failed to restore backup '{}': {}",
+                    descriptor.id,
+                    commit_err,
+                    backup_dir.display(),
+                    restore_err
+                ))),
+            };
+        }
+    }
+
+    Ok(())
+}
+
+fn write_meta(path: &Path, meta: &SaveMetaToml) -> Result<(), SaveError> {
+    let text = toml::to_string_pretty(meta).map_err(|err| {
+        SaveError::Parse(format!(
+            "Failed to encode save meta for '{}': {}",
+            path.display(),
+            err
+        ))
+    })?;
+    fs::write(path, text).map_err(|err| {
+        SaveError::Io(format!(
+            "Failed to write save meta '{}': {}",
+            path.display(),
+            err
+        ))
+    })
+}
+
+fn write_world_cells_chunk(path: &Path, codes: &[u8]) -> Result<(), SaveError> {
+    let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+    if codes.len() != expected {
+        return Err(SaveError::Validation(format!(
+            "World cell code length mismatch while writing: got {}, expected {}",
+            codes.len(),
+            expected
+        )));
+    }
+
+    let mut bytes = Vec::with_capacity(4 + 2 + 4 + 4 + 4 + codes.len());
+    bytes.extend_from_slice(WORLD_CELLS_MAGIC);
+    bytes.extend_from_slice(&WORLD_CELLS_VERSION.to_le_bytes());
+    bytes.extend_from_slice(&WORLD_WIDTH.to_le_bytes());
+    bytes.extend_from_slice(&WORLD_HEIGHT.to_le_bytes());
+    bytes.extend_from_slice(&(codes.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(codes);
+
+    fs::write(path, bytes)
+        .map_err(|err| SaveError::Io(format!("Failed to write '{}': {}", path.display(), err)))
+}
+
+fn read_world_cells_chunk(path: &Path) -> Result<Vec<u8>, SaveError> {
+    let bytes = fs::read(path)
+        .map_err(|err| SaveError::Io(format!("Failed to read '{}': {}", path.display(), err)))?;
+    let mut cursor = Cursor::new(bytes.as_slice());
+    let magic = read_exact_array::<4>(&mut cursor)?;
+    if &magic != WORLD_CELLS_MAGIC {
+        return Err(SaveError::Validation(format!(
+            "Invalid world chunk magic in '{}'",
+            path.display()
+        )));
+    }
+    let version = read_u16(&mut cursor)?;
+    if version != WORLD_CELLS_VERSION {
+        return Err(SaveError::Validation(format!(
+            "Unsupported world chunk version {} in '{}'",
+            version,
+            path.display()
+        )));
+    }
+    let width = read_u32(&mut cursor)?;
+    let height = read_u32(&mut cursor)?;
+    let count = read_u32(&mut cursor)? as usize;
+    if width != WORLD_WIDTH || height != WORLD_HEIGHT {
+        return Err(SaveError::Validation(format!(
+            "World chunk dimensions mismatch in '{}': got {}x{}, expected {}x{}",
+            path.display(),
+            width,
+            height,
+            WORLD_WIDTH,
+            WORLD_HEIGHT
+        )));
+    }
+    let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+    if count != expected {
+        return Err(SaveError::Validation(format!(
+            "World chunk cell count mismatch in '{}': got {}, expected {}",
+            path.display(),
+            count,
+            expected
+        )));
+    }
+    let mut codes = vec![0u8; count];
+    cursor.read_exact(&mut codes).map_err(|err| {
+        SaveError::Parse(format!(
+            "Failed to read world chunk payload '{}': {}",
+            path.display(),
+            err
+        ))
+    })?;
+    Ok(codes)
+}
+

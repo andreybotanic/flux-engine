@@ -14,12 +14,14 @@ use crate::{
 };
 
 #[derive(Resource, Clone, Debug)]
+/// Stores `GasRegistry` state.
 pub struct GasRegistry {
     gases: Vec<GasDefinition>,
     by_id: HashMap<String, usize>,
 }
 
 impl GasRegistry {
+/// Runs `new` logic.
     pub fn new(mut gases: Vec<GasDefinition>) -> Result<Self, String> {
         if gases.is_empty() {
             return Err("Gas registry is empty. Add at least one gas config file.".to_string());
@@ -41,28 +43,34 @@ impl GasRegistry {
         Ok(Self { gases, by_id })
     }
 
+/// Runs `all` logic.
     pub fn all(&self) -> &[GasDefinition] {
         &self.gases
     }
 
+/// Runs `count` logic.
     pub fn count(&self) -> usize {
         self.gases.len()
     }
 
+/// Runs `get` logic.
     pub fn get(&self, index: usize) -> Option<&GasDefinition> {
         self.gases.get(index)
     }
 
+/// Runs `index_of` logic.
     pub fn index_of(&self, id: &str) -> Option<usize> {
         self.by_id.get(id).copied()
     }
 
+/// Runs `molecular_masses` logic.
     pub fn molecular_masses(&self) -> Vec<f32> {
         self.gases.iter().map(|gas| gas.molecular_mass).collect()
     }
 }
 
 #[derive(Clone, Debug)]
+/// Stores `GasDefinition` state.
 pub struct GasDefinition {
     pub id: String,
     pub label: String,
@@ -71,12 +79,14 @@ pub struct GasDefinition {
 }
 
 impl GasDefinition {
+/// Runs `color_as_bevy` logic.
     pub fn color_as_bevy(&self) -> Color {
         Color::srgb(self.color[0], self.color[1], self.color[2])
     }
 }
 
 #[derive(Resource, Clone, Copy, Debug)]
+/// Stores `GasMainViewVisualConfig` state.
 pub struct GasMainViewVisualConfig {
     pub min_particles: f32,
     pub max_particles_for_max_intensity: f32,
@@ -96,6 +106,7 @@ impl Default for GasMainViewVisualConfig {
 }
 
 #[derive(Resource, Clone, Copy, Debug)]
+/// Stores `CellTypeVisualConfig` state.
 pub struct CellTypeVisualConfig {
     pub boundary_main_tint: [f32; 3],
     pub boundary_gas_tint: [f32; 3],
@@ -119,6 +130,7 @@ impl Default for CellTypeVisualConfig {
 }
 
 impl CellTypeVisualConfig {
+/// Runs `main_tint` logic.
     pub fn main_tint(self, material: CellMaterial) -> Color {
         let rgb = match material {
             CellMaterial::Boundary => self.boundary_main_tint,
@@ -128,6 +140,7 @@ impl CellTypeVisualConfig {
         Color::srgb(rgb[0], rgb[1], rgb[2])
     }
 
+/// Runs `gas_tint` logic.
     pub fn gas_tint(self, material: CellMaterial) -> Color {
         let rgb = match material {
             CellMaterial::Boundary => self.boundary_gas_tint,
@@ -139,6 +152,7 @@ impl CellTypeVisualConfig {
 }
 
 #[derive(Clone)]
+/// Stores `GameConfig` state.
 pub struct GameConfig {
     pub gas_registry: GasRegistry,
     pub simulation_rate: SimulationRateConfig,
@@ -149,11 +163,13 @@ pub struct GameConfig {
 }
 
 impl GameConfig {
+/// Runs `load_from_default_location` logic.
     pub fn load_from_default_location() -> Result<Self, String> {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
         Self::load_from_root(&root)
     }
 
+/// Runs `load_from_root` logic.
     pub fn load_from_root(root: &Path) -> Result<Self, String> {
         let simulation = read_toml::<SimulationToml>(&root.join("simulation.toml"))?;
         let cell_types = read_toml::<CellTypesToml>(&root.join("cell_types.toml"))?;
@@ -221,302 +237,6 @@ impl GameConfig {
     }
 }
 
-#[derive(Deserialize)]
-struct SimulationToml {
-    rate: SimulationRateToml,
-    simulation: GasSimulationToml,
-    solver_tuning: SolverTuningToml,
-    visual: VisualToml,
-}
 
-#[derive(Deserialize)]
-struct SimulationRateToml {
-    target_hz: u32,
-}
-
-#[derive(Deserialize)]
-struct GasSimulationToml {
-    thermal_motion_scale: f32,
-}
-
-#[derive(Deserialize)]
-struct SolverTuningToml {
-    enable_buoyancy: bool,
-    buoyancy_strength: f32,
-    buoyancy_window_radius: u8,
-    buoyancy_window_sigma: f32,
-    buoyancy_gain: f32,
-    buoyancy_alpha: f32,
-    buoyancy_force_cap: f32,
-}
-
-#[derive(Deserialize)]
-struct VisualToml {
-    gamma: f32,
-    max_particles_for_max_color: u32,
-    f1_min_particles: f32,
-    f1_max_particles_for_max_intensity: f32,
-    f1_min_intensity: f32,
-    f1_alpha: f32,
-}
-
-#[derive(Deserialize)]
-struct CellTintToml {
-    main_tint: [f32; 3],
-    gas_tint: [f32; 3],
-}
-
-#[derive(Deserialize)]
-struct CellTypesToml {
-    boundary: CellTintToml,
-    brick: CellTintToml,
-    metal: CellTintToml,
-}
-
-#[derive(Deserialize)]
-struct GasToml {
-    id: String,
-    label: String,
-    molecular_mass: f32,
-    color: [f32; 3],
-}
-
-fn read_toml<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
-    let content = fs::read_to_string(path)
-        .map_err(|err| format!("Failed to read config '{}': {}", path.display(), err))?;
-    toml::from_str::<T>(&content)
-        .map_err(|err| format!("Failed to parse config '{}': {}", path.display(), err))
-}
-
-fn load_gas_files(gases_root: &Path) -> Result<Vec<GasDefinition>, String> {
-    let mut files: Vec<PathBuf> = fs::read_dir(gases_root)
-        .map_err(|err| {
-            format!(
-                "Failed to read gas config directory '{}': {}",
-                gases_root.display(),
-                err
-            )
-        })?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.extension()
-                .and_then(|ext| ext.to_str())
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("toml"))
-        })
-        .collect();
-
-    files.sort();
-
-    if files.is_empty() {
-        return Err(format!(
-            "Gas config directory '{}' contains no .toml files",
-            gases_root.display()
-        ));
-    }
-
-    let mut gases = Vec::with_capacity(files.len());
-    for path in files {
-        let file = read_toml::<GasToml>(&path)?;
-
-        if file.id.trim().is_empty() {
-            return Err(format!("Gas config '{}' has empty id", path.display()));
-        }
-        if file.label.trim().is_empty() {
-            return Err(format!("Gas config '{}' has empty label", path.display()));
-        }
-        if !file.molecular_mass.is_finite() || file.molecular_mass <= 0.0 {
-            return Err(format!(
-                "Gas config '{}' has invalid molecular_mass {}",
-                path.display(),
-                file.molecular_mass
-            ));
-        }
-        for component in file.color {
-            if !(0.0..=1.0).contains(&component) || !component.is_finite() {
-                return Err(format!(
-                    "Gas config '{}' has invalid color component {}",
-                    path.display(),
-                    component
-                ));
-            }
-        }
-
-        gases.push(GasDefinition {
-            id: file.id,
-            label: file.label,
-            molecular_mass: file.molecular_mass,
-            color: file.color,
-        });
-    }
-
-    Ok(gases)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn make_temp_root(prefix: &str) -> PathBuf {
-        let unique = format!(
-            "{}_{}_{}",
-            prefix,
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        );
-        let root = std::env::temp_dir().join(unique);
-        fs::create_dir_all(root.join("gases")).expect("create temp dirs");
-        root
-    }
-
-    fn write_minimal_configs(root: &Path) {
-        fs::write(
-            root.join("simulation.toml"),
-            r#"
-[rate]
-target_hz = 30
-
-[simulation]
-thermal_motion_scale = 0.08
-
-[solver_tuning]
-enable_buoyancy = true
-buoyancy_strength = 0.22
-buoyancy_window_radius = 2
-buoyancy_window_sigma = 1.2
-buoyancy_gain = 3.2
-buoyancy_alpha = 1.0
-buoyancy_force_cap = 0.30
-
-[visual]
-gamma = 1.0
-max_particles_for_max_color = 1000
-f1_min_particles = 1.0
-f1_max_particles_for_max_intensity = 1000.0
-f1_min_intensity = 0.05
-f1_alpha = 0.88
-"#,
-        )
-        .expect("write simulation");
-
-        fs::write(
-            root.join("cell_types.toml"),
-            r#"
-[boundary]
-main_tint = [0.90, 0.90, 0.91]
-gas_tint = [0.66, 0.66, 0.67]
-
-[brick]
-main_tint = [0.99, 0.99, 0.99]
-gas_tint = [0.72, 0.72, 0.74]
-
-[metal]
-main_tint = [0.99, 0.99, 0.99]
-gas_tint = [0.71, 0.71, 0.73]
-"#,
-        )
-        .expect("write cell types");
-    }
-
-    #[test]
-    fn config_loader_rejects_duplicate_gas_ids() {
-        let root = make_temp_root("flux_cfg_dup");
-        write_minimal_configs(&root);
-
-        fs::write(
-            root.join("gases").join("a.toml"),
-            r#"id = "same"
-label = "A"
-molecular_mass = 1.0
-color = [0.2, 0.2, 0.2]
-"#,
-        )
-        .expect("write gas a");
-        fs::write(
-            root.join("gases").join("b.toml"),
-            r#"id = "same"
-label = "B"
-molecular_mass = 2.0
-color = [0.3, 0.3, 0.3]
-"#,
-        )
-        .expect("write gas b");
-
-        let err = match GameConfig::load_from_root(&root) {
-            Ok(_) => panic!("must fail on duplicate ids"),
-            Err(err) => err,
-        };
-        assert!(err.contains("Duplicate gas id"));
-
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn config_loader_rejects_empty_gas_list() {
-        let root = make_temp_root("flux_cfg_empty");
-        write_minimal_configs(&root);
-        let err = match GameConfig::load_from_root(&root) {
-            Ok(_) => panic!("must fail on empty gases"),
-            Err(err) => err,
-        };
-        assert!(err.contains("contains no .toml files"));
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn config_loader_rejects_invalid_gas_values() {
-        let root = make_temp_root("flux_cfg_bad");
-        write_minimal_configs(&root);
-        fs::write(
-            root.join("gases").join("bad.toml"),
-            r#"id = "bad"
-label = "Bad"
-molecular_mass = -5.0
-color = [1.2, 0.0, 0.0]
-"#,
-        )
-        .expect("write bad gas");
-
-        let err = match GameConfig::load_from_root(&root) {
-            Ok(_) => panic!("must fail on invalid values"),
-            Err(err) => err,
-        };
-        assert!(err.contains("invalid molecular_mass") || err.contains("invalid color"));
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn gas_registry_orders_by_molecular_mass() {
-        let registry = GasRegistry::new(vec![
-            GasDefinition {
-                id: "co2".to_string(),
-                label: "CO2".to_string(),
-                molecular_mass: 44.009,
-                color: [0.5, 0.5, 0.5],
-            },
-            GasDefinition {
-                id: "h2".to_string(),
-                label: "H2".to_string(),
-                molecular_mass: 2.016,
-                color: [0.8, 0.2, 0.9],
-            },
-            GasDefinition {
-                id: "o2".to_string(),
-                label: "O2".to_string(),
-                molecular_mass: 31.998,
-                color: [0.0, 0.85, 0.85],
-            },
-        ])
-        .expect("valid registry");
-
-        let ids = registry
-            .all()
-            .iter()
-            .map(|g| g.id.as_str())
-            .collect::<Vec<_>>();
-        assert_eq!(ids, vec!["h2", "o2", "co2"]);
-    }
-}
+include!("config_loader_block.rs");
+include!("config_tests_block.rs");

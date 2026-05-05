@@ -9,6 +9,7 @@ use self::world_view::{
 };
 use crate::input::camera::spawn_main_camera;
 
+/// Stores `RenderPlugin` state.
 pub struct RenderPlugin;
 
 impl Plugin for RenderPlugin {

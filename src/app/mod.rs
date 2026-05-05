@@ -21,6 +21,7 @@ use crate::{
     world::WorldPlugin,
 };
 
+/// Runs `run` logic.
 pub fn run() {
     let game_config = GameConfig::load_from_default_location().unwrap_or_else(|err| {
         panic!("Failed to load game config files from ./config: {err}");

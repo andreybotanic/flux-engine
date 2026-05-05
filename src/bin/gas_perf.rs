@@ -222,6 +222,7 @@ fn ensure_required_sizes(world_sizes: &[(u32, u32)]) -> Result<(), String> {
     }
 }
 
+
 fn run_cpu(
     width: u32,
     height: u32,

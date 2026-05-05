@@ -20,6 +20,7 @@ use crate::{
 };
 
 #[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
+/// Stores `SimulationStep` state.
 pub struct SimulationStep(pub u64);
 
 #[derive(Resource, Clone, Copy, PartialEq, Eq, Default)]
@@ -31,6 +32,7 @@ pub enum SimulationSpeed {
 }
 
 impl SimulationSpeed {
+/// Runs `multiplier` logic.
     pub fn multiplier(self) -> u32 {
         match self {
             Self::X1 => 1,
@@ -39,6 +41,7 @@ impl SimulationSpeed {
         }
     }
 
+/// Runs `faster` logic.
     pub fn faster(self) -> Self {
         match self {
             Self::X1 => Self::X2,
@@ -47,6 +50,7 @@ impl SimulationSpeed {
         }
     }
 
+/// Runs `slower` logic.
     pub fn slower(self) -> Self {
         match self {
             Self::X1 => Self::X1,
@@ -57,12 +61,14 @@ impl SimulationSpeed {
 }
 
 #[derive(Resource, Clone, Copy)]
+/// Stores `SimulationControl` state.
 pub struct SimulationControl {
     pub paused: bool,
     pub speed: SimulationSpeed,
 }
 
 #[derive(Clone, Copy)]
+/// Stores `SolverTuning` state.
 pub struct SolverTuning {
     pub tau_even: f32,
     pub tau_odd: f32,
@@ -98,6 +104,7 @@ impl Default for SolverTuning {
 }
 
 #[derive(Resource, Clone, Copy)]
+/// Stores `GasSimulationConfig` state.
 pub struct GasSimulationConfig {
     pub enable_lbm_velocity: bool,
     pub enable_species_relaxation: bool,
@@ -125,6 +132,7 @@ impl Default for GasSimulationConfig {
 }
 
 #[derive(Resource, Clone, Copy)]
+/// Stores `SimulationRateConfig` state.
 pub struct SimulationRateConfig {
     pub target_hz: u32,
 }
@@ -136,6 +144,7 @@ impl Default for SimulationRateConfig {
 }
 
 #[derive(Resource)]
+/// Stores `SimulationPerfStats` state.
 pub struct SimulationPerfStats {
     pub last_step_ms: f32,
     pub avg_step_ms: f32,
@@ -167,6 +176,7 @@ impl Default for SimulationPerfStats {
 }
 
 #[derive(Resource)]
+/// Stores `BlockSyncState` state.
 pub struct BlockSyncState;
 
 impl Default for BlockSyncState {
@@ -176,6 +186,7 @@ impl Default for BlockSyncState {
 }
 
 #[derive(Resource, Default)]
+/// Stores `GpuRuntimeState` state.
 pub struct GpuRuntimeState {
     solver: Option<GpuGasSolver>,
     needs_full_upload: bool,
@@ -193,6 +204,7 @@ impl Default for SimulationControl {
     }
 }
 
+/// Stores `GasSimulationPlugin` state.
 pub struct GasSimulationPlugin;
 
 impl Plugin for GasSimulationPlugin {
@@ -214,321 +226,6 @@ impl Plugin for GasSimulationPlugin {
     }
 }
 
-fn effective_target_hz(base_hz: u32, speed: SimulationSpeed) -> f64 {
-    let base = base_hz.clamp(1, 1000) as f64;
-    base * speed.multiplier() as f64
-}
 
-fn initialize_gas_field_from_registry(mut commands: Commands, registry: Res<GasRegistry>) {
-    commands.insert_resource(GasField::from_registry(&registry));
-}
-
-fn apply_fixed_rate_config(
-    config: Res<SimulationRateConfig>,
-    control: Res<SimulationControl>,
-    mut fixed_time: ResMut<Time<Fixed>>,
-) {
-    if !config.is_changed() && !control.is_changed() {
-        return;
-    }
-    let hz = effective_target_hz(config.target_hz, control.speed);
-    fixed_time.set_timestep_hz(hz);
-}
-
-fn mark_gpu_state_dirty(
-    backend: Res<SimulationBackendConfig>,
-    world: Res<WorldGrid>,
-    mut gpu_state: ResMut<GpuRuntimeState>,
-) {
-    if backend.backend != SimulationBackend::Gpu {
-        return;
-    }
-    if world.is_changed() {
-        gpu_state.needs_full_upload = true;
-    }
-}
-
-fn mark_gpu_state_dirty_from_gas_edits(
-    backend: Res<SimulationBackendConfig>,
-    control: Res<SimulationControl>,
-    gas: Res<GasField>,
-    mut gpu_state: ResMut<GpuRuntimeState>,
-) {
-    if backend.backend != SimulationBackend::Gpu {
-        return;
-    }
-    if control.paused && gas.is_changed() {
-        gpu_state.needs_full_upload = true;
-    }
-}
-
-fn run_simulation_tick(
-    mut control: ResMut<SimulationControl>,
-    backend: Res<SimulationBackendConfig>,
-    world_load_state: Res<WorldLoadState>,
-    rate: Res<SimulationRateConfig>,
-    config: Res<GasSimulationConfig>,
-    mut block_state: ResMut<BlockSyncState>,
-    mut gas: ResMut<GasField>,
-    structures: Res<GasStructureGrid>,
-    world: Res<WorldGrid>,
-    mut step: ResMut<SimulationStep>,
-    mut perf: ResMut<SimulationPerfStats>,
-    mut gpu_state: ResMut<GpuRuntimeState>,
-) {
-    perf.target_hz_effective = effective_target_hz(rate.target_hz, control.speed) as f32;
-
-    if !world_load_state.has_world {
-        control.paused = true;
-        return;
-    }
-
-    if control.paused {
-        return;
-    }
-
-    let changed_by_structures = apply_gas_structures_pre_step(&structures, &mut gas, &world);
-    if changed_by_structures && backend.backend == SimulationBackend::Gpu {
-        gpu_state.needs_full_upload = true;
-    }
-
-    let started_at = Instant::now();
-    match backend.backend {
-        SimulationBackend::Cpu => {
-            do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);
-            perf.last_gpu_compute_ms = 0.0;
-            perf.last_upload_to_gpu_ms = 0.0;
-            perf.last_readback_from_gpu_ms = 0.0;
-            perf.last_step_total_ms = 0.0;
-        }
-        SimulationBackend::Gpu => {
-            let timings = do_one_substep_gpu(&mut gpu_state, &mut gas, &world, &config, &mut step);
-            match timings {
-                Ok(t) => {
-                    perf.last_gpu_compute_ms = t.compute_gpu_ms;
-                    perf.last_upload_to_gpu_ms = t.upload_to_gpu_ms;
-                    perf.last_readback_from_gpu_ms = t.readback_from_gpu_ms;
-                    perf.last_step_total_ms = t.step_total_ms;
-                }
-                Err(err) => {
-                    abort_on_gpu_runtime_error(&err);
-                }
-            }
-        }
-    }
-    let elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
-    perf.last_step_ms = elapsed_ms;
-    perf.avg_step_ms = if perf.avg_step_ms <= f32::EPSILON {
-        elapsed_ms
-    } else {
-        perf.avg_step_ms * 0.9 + elapsed_ms * 0.1
-    };
-    perf.window_steps = perf.window_steps.saturating_add(1);
-
-    let window_elapsed = perf.window_started_at.elapsed();
-    if window_elapsed >= Duration::from_millis(500) {
-        let seconds = window_elapsed.as_secs_f32().max(1e-6);
-        perf.actual_hz = perf.window_steps as f32 / seconds;
-        perf.window_steps = 0;
-        perf.window_started_at = Instant::now();
-    }
-}
-
-pub(crate) fn apply_gas_structures_pre_step(
-    structures: &GasStructureGrid,
-    gas: &mut GasField,
-    world: &WorldGrid,
-) -> bool {
-    let mut changed = false;
-    for (x, y, structure) in structures.iter_cells() {
-        match structure {
-            GasStructureCell::Source { gas_index, amount } => {
-                if gas.add_particles_no_impulse(x, y, gas_index, amount, world) > 0 {
-                    changed = true;
-                }
-            }
-            GasStructureCell::Sink { amount } => {
-                if gas.remove_particles_proportional(x, y, amount, world) > 0 {
-                    changed = true;
-                }
-            }
-        }
-    }
-
-    if changed {
-        gas.recompute_total_density_buffer(world);
-    }
-
-    changed
-}
-
-fn do_one_substep_gpu(
-    gpu_state: &mut GpuRuntimeState,
-    gas: &mut GasField,
-    world: &WorldGrid,
-    config: &GasSimulationConfig,
-    step: &mut SimulationStep,
-) -> Result<GpuStepTimings, String> {
-    let mut upload_ms = 0.0f32;
-    if gpu_state.solver.is_none() {
-        let (solver, first_upload_ms) = GpuGasSolver::from_cpu_state(world, gas)?;
-        upload_ms += first_upload_ms;
-        gpu_state.solver = Some(solver);
-        gpu_state.needs_full_upload = false;
-        gpu_state.steps_since_readback = 0;
-    }
-
-    let solver = gpu_state
-        .solver
-        .as_mut()
-        .ok_or_else(|| "GPU solver missing after initialization".to_string())?;
-    if gpu_state.needs_full_upload {
-        upload_ms += solver.upload_state(&gas.to_gpu_host_state(world))?;
-        gpu_state.needs_full_upload = false;
-        gpu_state.steps_since_readback = 0;
-    }
-
-    let (width, height) = solver.current_dimensions();
-    let params = GpuGasSolver::params_from_config(config, width, height, step.0, gas);
-    let mut timings = solver.step(params)?;
-    timings.upload_to_gpu_ms += upload_ms;
-
-    gpu_state.steps_since_readback = gpu_state.steps_since_readback.saturating_add(1);
-    if gpu_state.steps_since_readback >= GPU_RUNTIME_READBACK_INTERVAL {
-        let readback_started = Instant::now();
-        let host_state = solver.readback_state()?;
-        gas.apply_gpu_host_state(&host_state);
-        let readback_ms = readback_started.elapsed().as_secs_f32() * 1000.0;
-        timings.readback_from_gpu_ms += readback_ms;
-        gpu_state.steps_since_readback = 0;
-    }
-
-    step.0 = step.0.saturating_add(1);
-    timings.step_total_ms += timings.upload_to_gpu_ms + timings.readback_from_gpu_ms;
-    Ok(timings)
-}
-
-fn abort_on_gpu_runtime_error(err: &str) -> ! {
-    bevy::log::error!(
-        "GPU simulation backend failed during runtime. Backend is fixed after startup, aborting process. Details: {}",
-        err
-    );
-    panic!("GPU simulation backend failed: {err}");
-}
-
-pub fn do_one_substep(
-    _block_state: &mut BlockSyncState,
-    gas: &mut GasField,
-    world: &WorldGrid,
-    config: &GasSimulationConfig,
-    step: &mut SimulationStep,
-) {
-    gas.step_discrete(
-        world,
-        &config.solver_tuning,
-        config.thermal_motion_scale,
-        step.0,
-    );
-    step.0 += 1;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{effective_target_hz, SimulationRateConfig, SimulationSpeed};
-    use super::{abort_on_gpu_runtime_error, apply_gas_structures_pre_step};
-    use crate::config::{GasDefinition, GasRegistry};
-    use crate::simulation::gas::GasField;
-    use crate::simulation::backend::{SimulationBackend, SimulationBackendConfig};
-    use crate::world::{gas_structures::GasStructureGrid, grid::WorldGrid};
-
-    fn test_registry() -> GasRegistry {
-        GasRegistry::new(vec![
-            GasDefinition {
-                id: "h2".to_string(),
-                label: "Hydrogen".to_string(),
-                molecular_mass: 2.016,
-                color: [0.6, 0.8, 1.0],
-            },
-            GasDefinition {
-                id: "o2".to_string(),
-                label: "Oxygen".to_string(),
-                molecular_mass: 31.998,
-                color: [0.6, 0.8, 1.0],
-            },
-            GasDefinition {
-                id: "co2".to_string(),
-                label: "Carbon Dioxide".to_string(),
-                molecular_mass: 44.009,
-                color: [0.9, 0.6, 0.4],
-            },
-        ])
-        .expect("valid test registry")
-    }
-
-    #[test]
-    fn default_backend_is_gpu() {
-        assert_eq!(
-            SimulationBackendConfig::default().backend,
-            SimulationBackend::Gpu
-        );
-    }
-
-    #[test]
-    #[should_panic(expected = "GPU simulation backend failed")]
-    fn gpu_runtime_error_policy_panics_and_aborts() {
-        abort_on_gpu_runtime_error("synthetic failure");
-    }
-
-    #[test]
-    fn effective_target_hz_scales_with_speed() {
-        let base = 30;
-        assert!((effective_target_hz(base, SimulationSpeed::X1) - 30.0).abs() <= f64::EPSILON);
-        assert!((effective_target_hz(base, SimulationSpeed::X2) - 60.0).abs() <= f64::EPSILON);
-        assert!((effective_target_hz(base, SimulationSpeed::X5) - 150.0).abs() <= f64::EPSILON);
-    }
-
-    #[test]
-    fn effective_target_hz_clamps_base_rate_before_scaling() {
-        let zero_base = SimulationRateConfig { target_hz: 0 };
-        assert!((effective_target_hz(zero_base.target_hz, SimulationSpeed::X2) - 2.0).abs() <= f64::EPSILON);
-
-        let huge_base = SimulationRateConfig { target_hz: 9_999 };
-        assert!((effective_target_hz(huge_base.target_hz, SimulationSpeed::X5) - 5000.0).abs() <= f64::EPSILON);
-    }
-
-    #[test]
-    fn source_structure_adds_selected_gas_each_step() {
-        let world = WorldGrid::default();
-        let registry = test_registry();
-        let mut gas = GasField::from_registry(&registry);
-        let mut structures = GasStructureGrid::default();
-        assert!(structures.set_source(10, 10, 1, 25, &world));
-
-        let changed = apply_gas_structures_pre_step(&structures, &mut gas, &world);
-        assert!(changed);
-        assert_eq!(gas.amount_particles(10, 10, 0), 0);
-        assert_eq!(gas.amount_particles(10, 10, 1), 25);
-        assert_eq!(gas.total_amount_particles(10, 10), 25);
-    }
-
-    #[test]
-    fn sink_structure_removes_proportionally_and_is_deterministic() {
-        let world = WorldGrid::default();
-        let registry = test_registry();
-        let mut gas = GasField::from_registry(&registry);
-        let mut structures = GasStructureGrid::default();
-        assert!(structures.set_sink(12, 12, 10, &world));
-
-        gas.set_amount(12, 12, 0, 10.0);
-        gas.set_amount(12, 12, 1, 20.0);
-        gas.set_amount(12, 12, 2, 30.0);
-        gas.recompute_total_density_buffer(&world);
-
-        let changed = apply_gas_structures_pre_step(&structures, &mut gas, &world);
-        assert!(changed);
-        assert_eq!(gas.total_amount_particles(12, 12), 50);
-        assert_eq!(gas.amount_particles(12, 12, 0), 8);
-        assert_eq!(gas.amount_particles(12, 12, 1), 17);
-        assert_eq!(gas.amount_particles(12, 12, 2), 25);
-    }
-}
+include!("runtime_tick_block.rs");
+include!("simulation_tests_block.rs");
