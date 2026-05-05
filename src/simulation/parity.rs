@@ -519,77 +519,84 @@ mod tests {
         }
 
         let registry = super::test_registry_three_gases();
-        let mut world = WorldGrid::default();
-        for x in 20..=80 {
-            let _ = world.set_solid_with_material(x, 20, CellMaterial::Brick);
-            let _ = world.set_solid_with_material(x, 80, CellMaterial::Brick);
-        }
-        for y in 20..=80 {
-            let _ = world.set_solid_with_material(20, y, CellMaterial::Brick);
-            let _ = world.set_solid_with_material(80, y, CellMaterial::Brick);
-        }
-
-        let mut gpu_field = GasField::from_registry(&registry);
-        gpu_field.clear_rect(
-            UVec2::new(1, 1),
-            UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
-        );
-        for y in 1..WORLD_HEIGHT - 1 {
-            for x in 1..WORLD_WIDTH - 1 {
-                if world.is_solid(x, y) || is_boundary(x, y) {
-                    continue;
-                }
-                gpu_field.set_amount(x, y, 0, 200.0);
-            }
-        }
-        gpu_field.recompute_total_density_buffer(&world);
-
         let config = super::tuned_config();
-        let mut solver = GpuGasSolver::from_cpu_state(&world, &gpu_field)
-            .expect("create GPU solver from CPU state")
-            .0;
-        let mut step = crate::simulation::SimulationStep(0);
-        for _ in 0..400 {
-            let params =
-                GpuGasSolver::params_from_config(&config, WORLD_WIDTH, WORLD_HEIGHT, step.0, &gpu_field);
-            solver.step(params).expect("gpu step");
-            step.0 = step.0.saturating_add(1);
-        }
-        let host = solver.readback_state().expect("readback gpu state");
-        gpu_field.apply_gpu_host_state(&host);
 
-        let mut near_sum = 0.0f32;
-        let mut near_n = 0u32;
-        let mut far_sum = 0.0f32;
-        let mut far_n = 0u32;
+        let run_locked_room = |room_size: u32| {
+            let mut world = WorldGrid::default();
+            let left = 40;
+            let top = 40;
+            let right = left + room_size - 1;
+            let bottom = top + room_size - 1;
 
-        for y in 1..WORLD_HEIGHT - 1 {
-            for x in 1..WORLD_WIDTH - 1 {
-                if world.is_solid(x, y) || is_boundary(x, y) {
-                    continue;
-                }
-                let near_inner_wall =
-                    (x >= 21 && x <= 79 && (y == 21 || y == 79))
-                        || (y >= 21 && y <= 79 && (x == 21 || x == 79));
-                let far_from_inner_wall = x >= 30 && x <= 70 && y >= 30 && y <= 70;
-                if near_inner_wall {
-                    near_sum += gpu_field.amount(x, y, 0);
-                    near_n += 1;
-                } else if far_from_inner_wall {
-                    far_sum += gpu_field.amount(x, y, 0);
-                    far_n += 1;
+            for x in (left - 1)..=(right + 1) {
+                let _ = world.set_solid_with_material(x, top - 1, CellMaterial::Brick);
+                let _ = world.set_solid_with_material(x, bottom + 1, CellMaterial::Brick);
+            }
+            for y in (top - 1)..=(bottom + 1) {
+                let _ = world.set_solid_with_material(left - 1, y, CellMaterial::Brick);
+                let _ = world.set_solid_with_material(right + 1, y, CellMaterial::Brick);
+            }
+
+            let mut gpu_field = GasField::from_registry(&registry);
+            gpu_field.clear_rect(
+                UVec2::new(1, 1),
+                UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+            );
+            for y in top..=bottom {
+                for x in left..=right {
+                    debug_assert!(!world.is_solid(x, y) && !is_boundary(x, y));
+                    gpu_field.set_amount(x, y, 0, 100.0);
                 }
             }
-        }
+            gpu_field.recompute_total_density_buffer(&world);
 
-        let near_avg = near_sum / near_n as f32;
-        let far_avg = far_sum / far_n as f32;
-        assert!(
-            near_avg >= far_avg * 0.95,
-            "GPU wall-adjacent concentration is too low: near_avg={}, far_avg={}",
-            near_avg,
-            far_avg
-        );
+            let mut solver = GpuGasSolver::from_cpu_state(&world, &gpu_field)
+                .expect("create GPU solver from CPU state")
+                .0;
+            let mut step = crate::simulation::SimulationStep(0);
+            for _ in 0..100 {
+                let params = GpuGasSolver::params_from_config(
+                    &config,
+                    WORLD_WIDTH,
+                    WORLD_HEIGHT,
+                    step.0,
+                    &gpu_field,
+                );
+                solver.step(params).expect("gpu step");
+                step.0 = step.0.saturating_add(1);
+            }
+            let host = solver.readback_state().expect("readback gpu state");
+            gpu_field.apply_gpu_host_state(&host);
+
+            let mut room_sum = 0.0f32;
+            let mut room_n = 0u32;
+            for y in top..=bottom {
+                for x in left..=right {
+                    room_sum += gpu_field.amount(x, y, 0);
+                    room_n += 1;
+                }
+            }
+            let room_avg = room_sum / room_n as f32;
+
+            let corners = [(left, top), (right, top), (left, bottom), (right, bottom)];
+            for (cx, cy) in corners {
+                let corner_amount = gpu_field.amount(cx, cy, 0);
+                assert!(
+                    corner_amount >= room_avg * 0.95,
+                    "GPU corner concentration is too low in locked {}x{} room at ({}, {}): corner={}, room_avg={}",
+                    room_size,
+                    room_size,
+                    cx,
+                    cy,
+                    corner_amount,
+                    room_avg
+                );
+            }
+        };
+
+        for room_size in [3u32, 5u32, 9u32] {
+            run_locked_room(room_size);
+        }
     }
 
     #[test]

@@ -173,57 +173,73 @@ where
                 let half_mobility = mobility * 0.5;
 
                 // Direction up (0): blocked flow is redistributed along wall (left/right).
+                // If only one tangent side is open (corner-like case), keep half in place
+                // to avoid systematic corner drainage.
                 if neighbor_open[0] {
                     weights[0] += mobility;
                 } else if neighbor_open[2] && neighbor_open[3] {
                     weights[2] += half_mobility;
                     weights[3] += half_mobility;
                 } else if neighbor_open[2] {
-                    weights[2] += mobility;
+                    weights[2] += half_mobility;
+                    weights[4] += half_mobility;
                 } else if neighbor_open[3] {
-                    weights[3] += mobility;
+                    weights[3] += half_mobility;
+                    weights[4] += half_mobility;
                 } else {
                     weights[4] += mobility;
                 }
 
                 // Direction down (1): blocked flow is redistributed along wall (left/right).
+                // If only one tangent side is open (corner-like case), keep half in place
+                // to avoid systematic corner drainage.
                 if neighbor_open[1] {
                     weights[1] += mobility;
                 } else if neighbor_open[2] && neighbor_open[3] {
                     weights[2] += half_mobility;
                     weights[3] += half_mobility;
                 } else if neighbor_open[2] {
-                    weights[2] += mobility;
+                    weights[2] += half_mobility;
+                    weights[4] += half_mobility;
                 } else if neighbor_open[3] {
-                    weights[3] += mobility;
+                    weights[3] += half_mobility;
+                    weights[4] += half_mobility;
                 } else {
                     weights[4] += mobility;
                 }
 
                 // Direction left (2): blocked flow is redistributed along wall (up/down).
+                // If only one tangent side is open (corner-like case), keep half in place
+                // to avoid systematic corner drainage.
                 if neighbor_open[2] {
                     weights[2] += mobility;
                 } else if neighbor_open[0] && neighbor_open[1] {
                     weights[0] += half_mobility;
                     weights[1] += half_mobility;
                 } else if neighbor_open[0] {
-                    weights[0] += mobility;
+                    weights[0] += half_mobility;
+                    weights[4] += half_mobility;
                 } else if neighbor_open[1] {
-                    weights[1] += mobility;
+                    weights[1] += half_mobility;
+                    weights[4] += half_mobility;
                 } else {
                     weights[4] += mobility;
                 }
 
                 // Direction right (3): blocked flow is redistributed along wall (up/down).
+                // If only one tangent side is open (corner-like case), keep half in place
+                // to avoid systematic corner drainage.
                 if neighbor_open[3] {
                     weights[3] += mobility;
                 } else if neighbor_open[0] && neighbor_open[1] {
                     weights[0] += half_mobility;
                     weights[1] += half_mobility;
                 } else if neighbor_open[0] {
-                    weights[0] += mobility;
+                    weights[0] += half_mobility;
+                    weights[4] += half_mobility;
                 } else if neighbor_open[1] {
-                    weights[1] += mobility;
+                    weights[1] += half_mobility;
+                    weights[4] += half_mobility;
                 } else {
                     weights[4] += mobility;
                 }
