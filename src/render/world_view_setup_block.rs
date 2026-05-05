@@ -1,6 +1,7 @@
 /// Runs `setup_world_view` logic.
 pub fn setup_world_view(
     mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
     simulation_images: Res<GasSimulationImages>,
     world: Res<WorldGrid>,
     structures: Res<GasStructureGrid>,
@@ -21,6 +22,7 @@ pub fn setup_world_view(
 
     let world_size = world_dimensions();
     let fade_sprite_size = world_size + Vec2::splat(CELL_SIZE * WORLD_FADE_WIDTH_CELLS * 2.0);
+    let world_fade_mask = images.add(build_world_fade_mask_image(world_size));
 
     commands.spawn((
         Sprite {
@@ -66,7 +68,7 @@ pub fn setup_world_view(
 
     commands.spawn((
         Sprite {
-            image: asset_server.load("sprites/world/world_fade_mask.png"),
+            image: world_fade_mask,
             custom_size: Some(fade_sprite_size),
             color: Color::WHITE,
             ..default()

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use bevy::{
+    image::ImageSampler,
     prelude::*,
     render::render_asset::RenderAssetUsages,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
@@ -36,6 +37,7 @@ const CURSOR_GRID_FADE_RADIUS: f32 = 3.9;
 const BACKDROP_TILE_SIZE: f32 = 256.0;
 const OUTER_BORDER_LAYERS: u32 = 4;
 const WORLD_FADE_WIDTH_CELLS: f32 = 4.0;
+const WORLD_FADE_ALPHA_MAX: f32 = 1.0;
 
 #[derive(Resource, Clone)]
 /// Stores `GasSimulationImages` state.
@@ -145,6 +147,74 @@ fn build_seeded_image_f1() -> Image {
     image.texture_descriptor.usage =
         TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
     image
+}
+
+fn build_world_fade_mask_image(world_size: Vec2) -> Image {
+    let fade_width_world = (CELL_SIZE * WORLD_FADE_WIDTH_CELLS).max(1.0);
+    let total_width_world = (world_size.x.max(1.0) + fade_width_world * 2.0).max(2.0);
+    let total_height_world = (world_size.y.max(1.0) + fade_width_world * 2.0).max(2.0);
+    let width = total_width_world.ceil() as u32;
+    let height = total_height_world.ceil() as u32;
+    let mut data = vec![0_u8; (width as usize) * (height as usize) * 4];
+    let inner_min_x = fade_width_world;
+    let inner_max_x = inner_min_x + world_size.x.max(0.0);
+    let inner_min_y = fade_width_world;
+    let inner_max_y = inner_min_y + world_size.y.max(0.0);
+
+    for y in 0..height {
+        for x in 0..width {
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+            let dx = if px < inner_min_x {
+                inner_min_x - px
+            } else if px > inner_max_x {
+                px - inner_max_x
+            } else {
+                0.0
+            };
+            let dy = if py < inner_min_y {
+                inner_min_y - py
+            } else if py > inner_max_y {
+                py - inner_max_y
+            } else {
+                0.0
+            };
+            let outward_distance = dx.max(dy);
+            let alpha = world_fade_alpha(outward_distance, fade_width_world);
+            let pixel_index = ((y * width + x) as usize) * 4;
+            data[pixel_index] = 0;
+            data[pixel_index + 1] = 0;
+            data[pixel_index + 2] = 0;
+            data[pixel_index + 3] = (alpha * 255.0).round().clamp(0.0, 255.0) as u8;
+        }
+    }
+
+    let mut image = Image::new(
+        Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    );
+    image.sampler = ImageSampler::linear();
+    image
+}
+
+fn world_fade_alpha(distance_from_world: f32, fade_width_world: f32) -> f32 {
+    if distance_from_world <= 0.0 {
+        return 0.0;
+    }
+    if fade_width_world <= f32::EPSILON {
+        return WORLD_FADE_ALPHA_MAX;
+    }
+
+    let t = (distance_from_world / fade_width_world).clamp(0.0, 1.0);
+    let smoothstep = t * t * (3.0 - 2.0 * t);
+    smoothstep.clamp(0.0, WORLD_FADE_ALPHA_MAX)
 }
 
 #[derive(Resource, Clone, Copy, PartialEq, Eq, Default)]

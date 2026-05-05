@@ -44,6 +44,7 @@ FluxEngine/
 - `assets/sprites/ui/tool_*.png`: UI-спрайты иконок инструментов.
 - `assets/sprites/world/backdrop_*.png`: Фоновые текстуры мира.
 - `assets/sprites/world/tile_*.png`: Спрайты тайлов мира.
+- `assets/sprites/world/`: Не содержит статической fade-маски мира; затемняющая маска генерируется в runtime в `src/render/world_view.rs`.
 - `Cargo.lock`: Зафиксированные версии зависимостей Cargo.
 - `Cargo.toml`: Манифест Rust-проекта и зависимости.
 - `config/backups/simulation.toml.pre_tuning_20260503_174021.toml`: Резервная копия конфигурации симуляции для отката/сравнения.
@@ -107,7 +108,7 @@ FluxEngine/
 - `src/simulation/simulation_tests_block.rs`: Тесты конфигурации тика и структурных pre-step правил.
 - `src/ui/cell_inspector.rs`: Панель инспектора клетки под курсором.
 - `src/ui/input_field.rs`: Публичные типы text-input и точка сборки input-систем.
-- `src/ui/input_field_helpers_block.rs`: Парсинг и вспомогательная геометрия курсора текста.
+- `src/ui/input_field_helpers_block.rs`: Вспомогательная геометрия курсора текста и точный hit-test/каретка через `ComputedTextBlock`.
 - `src/ui/input_field_systems_block.rs`: Системы focus/keyboard/render/caret для текстовых полей.
 - `src/ui/mod.rs`: UI-плагин и wiring общих UI-систем.
 - `src/ui/palette.rs`: Единая палитра цветов UI (панели, меню, текст, input/select, tooltip, HUD).

@@ -1,5 +1,5 @@
 use bevy::{
-    input::mouse::{MouseMotion, MouseWheel},
+    input::mouse::MouseWheel,
     prelude::*,
     window::PrimaryWindow,
 };
@@ -20,16 +20,16 @@ pub fn spawn_main_camera(mut commands: Commands) {
 /// Runs `camera_pan_zoom` logic.
 pub fn camera_pan_zoom(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
-    mut mouse_motion: EventReader<MouseMotion>,
     mut mouse_wheel: EventReader<MouseWheel>,
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&mut Projection, &mut Transform), With<MainCamera>>,
     panels: Option<Res<PanelManager>>,
     main_menu: Option<Res<MainMenuState>>,
+    mut last_pan_cursor: Local<Option<Vec2>>,
 ) {
     if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
-        mouse_motion.clear();
         mouse_wheel.clear();
+        *last_pan_cursor = None;
         return;
     }
     let (mut projection, mut transform) = camera_query.into_inner();
@@ -68,19 +68,28 @@ pub fn camera_pan_zoom(
         scale = orthographic.scale;
     }
 
-    if mouse_buttons.pressed(MouseButton::Middle) && !blocked_by_panel {
-        let mut delta = Vec2::ZERO;
-        for event in mouse_motion.read() {
-            delta += event.delta;
+    let can_pan = mouse_buttons.pressed(MouseButton::Middle) && !blocked_by_panel;
+    if can_pan {
+        if let Some(cursor_now) = cursor {
+            if let Some(cursor_prev) = *last_pan_cursor {
+                let cursor_delta = cursor_now - cursor_prev;
+                let pan_delta = pan_translation_for_cursor_delta(cursor_delta, scale);
+                transform.translation.x += pan_delta.x;
+                transform.translation.y += pan_delta.y;
+            }
+            *last_pan_cursor = Some(cursor_now);
+        } else {
+            *last_pan_cursor = None;
         }
-
-        transform.translation.x -= delta.x * scale;
-        transform.translation.y += delta.y * scale;
     } else {
-        mouse_motion.clear();
+        *last_pan_cursor = None;
     }
 
     clamp_camera_to_world(&mut transform, scale, window.resolution.size());
+}
+
+fn pan_translation_for_cursor_delta(cursor_delta: Vec2, scale: f32) -> Vec2 {
+    Vec2::new(-cursor_delta.x * scale, cursor_delta.y * scale)
 }
 
 /// Runs `reset_camera_to_default` logic.
@@ -121,7 +130,7 @@ fn clamp_camera_to_world(transform: &mut Transform, scale: f32, window_size: Vec
 
 #[cfg(test)]
 mod tests {
-    use super::{anchor_zoom_to_cursor, reset_camera_to_default};
+    use super::{anchor_zoom_to_cursor, pan_translation_for_cursor_delta, reset_camera_to_default};
     use bevy::prelude::*;
 
     #[test]
@@ -159,5 +168,36 @@ mod tests {
         assert!((transform.translation.x - 0.0).abs() < 1e-6);
         assert!((transform.translation.y - 0.0).abs() < 1e-6);
         assert!((transform.translation.z - 999.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pan_translation_direction_matches_cursor_delta() {
+        let pan = pan_translation_for_cursor_delta(Vec2::new(20.0, -12.0), 1.0);
+        assert_eq!(pan, Vec2::new(-20.0, -12.0));
+    }
+
+    #[test]
+    fn panning_keeps_cursor_over_same_world_point_for_any_zoom() {
+        let window = Vec2::new(1600.0, 900.0);
+        let half = window * 0.5;
+        let cursor_prev = Vec2::new(700.0, 480.0);
+        let cursor_now = Vec2::new(830.0, 390.0);
+        let cursor_delta = cursor_now - cursor_prev;
+
+        for scale in [0.2_f32, 1.0, 2.7, 6.5] {
+            let translation_before = Vec2::new(210.0, -95.0);
+            let offset_prev = Vec2::new(cursor_prev.x - half.x, half.y - cursor_prev.y);
+            let offset_now = Vec2::new(cursor_now.x - half.x, half.y - cursor_now.y);
+            let world_before = translation_before + offset_prev * scale;
+
+            let pan = pan_translation_for_cursor_delta(cursor_delta, scale);
+            let translation_after = translation_before + pan;
+            let world_after = translation_after + offset_now * scale;
+
+            assert!(
+                world_before.abs_diff_eq(world_after, 1e-4),
+                "cursor anchor must stay on same world point for scale={scale}"
+            );
+        }
     }
 }
