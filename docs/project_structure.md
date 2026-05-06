@@ -111,7 +111,7 @@ FluxEngine/
 - `src/simulation/parity.rs`: Публичные parity API и сценарии сравнения CPU/GPU.
 - `src/simulation/parity_runtime_block.rs`: Runtime parity-метрики, прогоны сценариев и gate-оценка.
 - `src/simulation/parity_tests_block.rs`: Тесты parity-порогов, smoke и GPU-регрессий.
-- `src/simulation/pipes.rs`: PipeGasField, пошаговый pipe-flow solver с порогом активации вентиляций, pipe pre-step и тесты pipe-сети.
+- `src/simulation/pipes.rs`: PipeGasField, локальная синхронная клеточная pipe-симуляция (`world↔vent` + `pipe↔pipe`), pipe pre-step и тесты pipe-сети.
 - `src/simulation/runtime_tick_block.rs`: Runtime-шаги симуляции, GPU/CPU подшаги и perf-метрики.
 - `src/simulation/simulation_tests_block.rs`: Тесты конфигурации тика и структурных pre-step правил.
 - `src/ui/cell_inspector.rs`: Панель инспектора клетки под курсором, включая world-gas и pipe-gas блок для труб.

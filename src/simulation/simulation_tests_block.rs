@@ -1,11 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use super::{effective_target_hz, SimulationRateConfig, SimulationSpeed};
-    use super::{abort_on_gpu_runtime_error, apply_gas_structures_pre_step};
-    use crate::config::{GasDefinition, GasRegistry};
-    use crate::simulation::gas::GasField;
     use crate::simulation::backend::{SimulationBackend, SimulationBackendConfig};
+    use crate::simulation::gas::GasField;
     use crate::world::{gas_structures::GasStructureGrid, grid::WorldGrid};
+    use crate::config::{GasDefinition, GasRegistry};
+    use super::{
+        abort_on_gpu_runtime_error, apply_gas_structures_pre_step, effective_target_hz,
+        pipe_flow_reset_needed, SimulationRateConfig, SimulationSpeed,
+    };
 
     fn test_registry() -> GasRegistry {
         GasRegistry::new(vec![
@@ -60,6 +62,15 @@ mod tests {
 
         let huge_base = SimulationRateConfig { target_hz: 9_999 };
         assert!((effective_target_hz(huge_base.target_hz, SimulationSpeed::X5) - 5000.0).abs() <= f64::EPSILON);
+    }
+
+    #[test]
+    fn pause_transition_requires_pipe_flow_reset_but_same_state_does_not() {
+        assert!(!pipe_flow_reset_needed(None, true));
+        assert!(!pipe_flow_reset_needed(Some(true), true));
+        assert!(!pipe_flow_reset_needed(Some(false), false));
+        assert!(pipe_flow_reset_needed(Some(true), false));
+        assert!(pipe_flow_reset_needed(Some(false), true));
     }
 
     #[test]

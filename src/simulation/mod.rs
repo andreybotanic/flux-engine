@@ -229,6 +229,7 @@ impl Plugin for GasSimulationPlugin {
             .add_systems(Update, apply_fixed_rate_config)
             .add_systems(Update, mark_gpu_state_dirty)
             .add_systems(Update, mark_gpu_state_dirty_from_gas_edits)
+            .add_systems(Update, clear_stale_pipe_flow_on_pause_transition)
             .add_systems(FixedUpdate, run_simulation_tick);
     }
 }

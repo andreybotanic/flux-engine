@@ -85,7 +85,7 @@ pub(crate) fn update_cell_inspector(
     let (camera, camera_transform) = *camera_query;
     let text = &mut *text_query;
     let (node, visibility) = &mut *panel_query;
-    let (pipe_layout, pipe_gas, flow_state, control) = pipe_state;
+    let (pipe_layout, pipe_gas, flow_state, _control) = pipe_state;
 
     if !world_load_state.has_world {
         **visibility = Visibility::Hidden;
@@ -135,7 +135,7 @@ pub(crate) fn update_cell_inspector(
         &pipe_layout,
         &pipe_gas,
         &flow_state,
-        !control.paused,
+        false,
     );
     let panel_height = estimate_cell_inspector_height(&message);
     node.min_height = Val::Px(panel_height);

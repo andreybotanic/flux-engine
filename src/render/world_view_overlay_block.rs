@@ -478,7 +478,6 @@ pub(crate) fn sync_pipe_overlay_visuals(
     pipe_layout: Res<PipeGrid>,
     pipe_gas: Res<PipeGasField>,
     flow_state: Res<PipeFlowVisualState>,
-    control: Res<crate::simulation::SimulationControl>,
     gas_registry: Res<GasRegistry>,
     visual_settings: Res<GasVisualSettings>,
     main_view_settings: Res<GasMainViewVisualConfig>,
@@ -550,14 +549,14 @@ pub(crate) fn sync_pipe_overlay_visuals(
             &flow_state,
             *x,
             *y,
-            !control.paused,
+            false,
         );
         let total = pipe_cell_display_total_particles_with_transfers(
             &pipe_gas,
             &flow_state,
             *x,
             *y,
-            !control.paused,
+            false,
         );
         if total == 0 {
             if let Ok((_, mut visibility)) = visuals.p0().get_mut(*entity) {

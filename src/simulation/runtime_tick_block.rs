@@ -47,6 +47,23 @@ fn mark_gpu_state_dirty_from_gas_edits(
     }
 }
 
+fn pipe_flow_reset_needed(previous_paused: Option<bool>, current_paused: bool) -> bool {
+    previous_paused
+        .map(|previous| previous != current_paused)
+        .unwrap_or(false)
+}
+
+fn clear_stale_pipe_flow_on_pause_transition(
+    control: Res<SimulationControl>,
+    mut pipe_flow_visuals: ResMut<crate::simulation::pipes::PipeFlowVisualState>,
+    mut previous_paused: Local<Option<bool>>,
+) {
+    if pipe_flow_reset_needed(*previous_paused, control.paused) {
+        pipe_flow_visuals.transfers.clear();
+    }
+    *previous_paused = Some(control.paused);
+}
+
 fn run_simulation_tick(
     mut control: ResMut<SimulationControl>,
     backend: Res<SimulationBackendConfig>,
