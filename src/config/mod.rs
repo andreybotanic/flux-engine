@@ -10,7 +10,10 @@ use serde::Deserialize;
 use crate::{
     render::GasVisualSettings,
     simulation::{GasSimulationConfig, SimulationRateConfig, SolverTuning},
-    world::grid::CellMaterial,
+    world::{
+        grid::CellMaterial,
+        structures::StructureKind,
+    },
 };
 
 #[derive(Resource, Clone, Debug)]
@@ -151,6 +154,129 @@ impl CellTypeVisualConfig {
     }
 }
 
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
+/// Stores one appearance-layout config entry loaded from TOML.
+pub struct VisualPlacementConfig {
+    pub draw_priority: i32,
+    pub size_in_cells: UVec2,
+}
+
+#[derive(Resource, Clone, Debug)]
+/// Stores appearance-layout config for every built-in structure kind.
+pub struct StructureVisualConfigMap {
+    configs: HashMap<StructureKind, VisualPlacementConfig>,
+}
+
+impl Default for StructureVisualConfigMap {
+    fn default() -> Self {
+        let configs = HashMap::from([
+            (
+                StructureKind::Pipe,
+                VisualPlacementConfig {
+                    draw_priority: 100,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+            (
+                StructureKind::GasPipeBridge,
+                VisualPlacementConfig {
+                    draw_priority: 110,
+                    size_in_cells: UVec2::new(3, 1),
+                },
+            ),
+            (
+                StructureKind::Vent,
+                VisualPlacementConfig {
+                    draw_priority: 120,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+            (
+                StructureKind::GasSource,
+                VisualPlacementConfig {
+                    draw_priority: 130,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+            (
+                StructureKind::GasSink,
+                VisualPlacementConfig {
+                    draw_priority: 130,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+        ]);
+        Self { configs }
+    }
+}
+
+impl StructureVisualConfigMap {
+    /// Returns the appearance-layout config for the requested structure kind.
+    pub fn get(&self, kind: StructureKind) -> VisualPlacementConfig {
+        self.configs
+            .get(&kind)
+            .copied()
+            .unwrap_or_else(|| panic!("missing structure visual config for {:?}", kind))
+    }
+
+    fn from_entries(entries: Vec<(StructureKind, VisualPlacementConfig)>) -> Self {
+        Self {
+            configs: entries.into_iter().collect(),
+        }
+    }
+}
+
+#[derive(Resource, Clone, Debug)]
+/// Stores appearance-layout config for every built-in wall material.
+pub struct CellVisualPlacementConfigMap {
+    configs: HashMap<CellMaterial, VisualPlacementConfig>,
+}
+
+impl Default for CellVisualPlacementConfigMap {
+    fn default() -> Self {
+        let configs = HashMap::from([
+            (
+                CellMaterial::Boundary,
+                VisualPlacementConfig {
+                    draw_priority: 1000,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+            (
+                CellMaterial::Brick,
+                VisualPlacementConfig {
+                    draw_priority: 1000,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+            (
+                CellMaterial::Metal,
+                VisualPlacementConfig {
+                    draw_priority: 1000,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+        ]);
+        Self { configs }
+    }
+}
+
+impl CellVisualPlacementConfigMap {
+    /// Returns the appearance-layout config for the requested wall material.
+    pub fn get(&self, material: CellMaterial) -> VisualPlacementConfig {
+        self.configs
+            .get(&material)
+            .copied()
+            .unwrap_or_else(|| panic!("missing cell visual config for {:?}", material))
+    }
+
+    fn from_entries(entries: Vec<(CellMaterial, VisualPlacementConfig)>) -> Self {
+        Self {
+            configs: entries.into_iter().collect(),
+        }
+    }
+}
+
 #[derive(Clone)]
 /// Stores `GameConfig` state.
 pub struct GameConfig {
@@ -160,6 +286,8 @@ pub struct GameConfig {
     pub gas_visual: GasVisualSettings,
     pub gas_main_visual: GasMainViewVisualConfig,
     pub cell_visuals: CellTypeVisualConfig,
+    pub structure_visuals: StructureVisualConfigMap,
+    pub cell_visual_layouts: CellVisualPlacementConfigMap,
 }
 
 impl GameConfig {
@@ -174,6 +302,8 @@ impl GameConfig {
         let simulation = read_toml::<SimulationToml>(&root.join("simulation.toml"))?;
         let cell_types = read_toml::<CellTypesToml>(&root.join("cell_types.toml"))?;
         let gases = load_gas_files(&root.join("gases"))?;
+        let (structure_visuals, cell_visual_layouts) =
+            load_visual_placement_configs(&root.join("structures"))?;
 
         let gas_registry = GasRegistry::new(gases)?;
 
@@ -233,6 +363,8 @@ impl GameConfig {
             gas_visual,
             gas_main_visual,
             cell_visuals,
+            structure_visuals,
+            cell_visual_layouts,
         })
     }
 }

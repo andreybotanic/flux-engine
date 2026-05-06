@@ -4,16 +4,16 @@ mod tests {
         bridge_visual_size, bridge_visual_transform,
         build_pipe_mask_image, build_vent_overlay_image, build_world_fade_mask_image, grid_fade,
         pipe_flow_packet_visual, pipe_flow_square_size, pipe_gas_square_size,
-        pipe_highlight_visibility, pipe_world_z, vent_world_visibility, world_fade_alpha,
+        pipe_highlight_visibility, vent_world_visibility, world_fade_alpha,
         OverlayMode,
     };
+    use crate::config::{CellVisualPlacementConfigMap, GasDefinition, GasRegistry, StructureVisualConfigMap};
     use crate::simulation::pipes::{
         pipe_cell_display_total_particles_with_transfers, PipeFlowVisualState, PipeGasField,
         PipeTransferRecord,
     };
     use bevy::prelude::Visibility;
     use bevy::math::{UVec2, Vec2, Vec3};
-    use crate::config::{GasDefinition, GasRegistry};
     use crate::world::{
         grid::{WorldGrid, CELL_SIZE},
         structures::{PlacedStructureMap, StructureRotation},
@@ -152,10 +152,15 @@ mod tests {
     }
 
     #[test]
-    fn pipe_layer_is_below_walls_in_world_and_above_them_in_f3() {
-        assert!(pipe_world_z(OverlayMode::Main) < 0.5);
-        assert!(pipe_world_z(OverlayMode::Gas) < 0.5);
-        assert!(pipe_world_z(OverlayMode::Pipes) > 0.5);
+    fn default_visual_priorities_keep_pipe_below_bridge_and_walls() {
+        let structure_visuals = StructureVisualConfigMap::default();
+        let cell_visual_layouts = CellVisualPlacementConfigMap::default();
+        assert!(structure_visuals.get(crate::world::structures::StructureKind::Pipe).draw_priority
+            < structure_visuals
+                .get(crate::world::structures::StructureKind::GasPipeBridge)
+                .draw_priority);
+        assert!(structure_visuals.get(crate::world::structures::StructureKind::GasPipeBridge).draw_priority
+            < cell_visual_layouts.get(crate::world::grid::CellMaterial::Brick).draw_priority);
     }
 
     #[test]
@@ -295,20 +300,20 @@ mod tests {
 
     #[test]
     fn bridge_visual_keeps_base_horizontal_size_for_all_rotations() {
+        let structure_visuals = StructureVisualConfigMap::default();
         assert_eq!(
-            bridge_visual_size(StructureRotation::Deg0),
+            bridge_visual_size(StructureRotation::Deg0, &structure_visuals),
             Vec2::new(CELL_SIZE * 3.0, CELL_SIZE)
         );
         assert_eq!(
-            bridge_visual_size(StructureRotation::Deg90),
+            bridge_visual_size(StructureRotation::Deg90, &structure_visuals),
             Vec2::new(CELL_SIZE * 3.0, CELL_SIZE)
         );
     }
 
     #[test]
     fn bridge_vertical_variant_is_produced_by_rotation_not_resizing() {
-        let transform =
-            bridge_visual_transform(UVec2::new(10, 11), StructureRotation::Deg90, OverlayMode::Main);
+        let transform = bridge_visual_transform(UVec2::new(10, 11), StructureRotation::Deg90, 0.25);
         let rotated = transform.rotation * Vec3::X;
         assert!(rotated.y > 0.99);
     }

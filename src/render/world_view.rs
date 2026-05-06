@@ -22,7 +22,7 @@ use crate::{
     },
     ui::panels::PanelManager,
     world::grid::{
-        cell_center, is_boundary, world_dimensions, world_to_cell, CellKind, CellMaterial,
+        cell_center, is_boundary, linear_index, world_dimensions, world_to_cell, CellKind, CellMaterial,
         WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH,
     },
     world::WorldCellChanged,
@@ -290,6 +290,7 @@ pub(crate) struct GasStructureEntities {
 
 #[derive(Component)]
 pub(crate) struct PipeWorldVisual {
+    appearance_z: f32,
     main_tint: Color,
     gas_tint: Color,
     pipe_tint: Color,

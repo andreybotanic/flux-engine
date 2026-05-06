@@ -492,6 +492,8 @@ fn update_editor_cursor_overlays(
     cell_settings: Res<CellToolSettings>,
     pipe_settings: Res<PipeToolSettings>,
     bridge_state: Res<BridgePlacementState>,
+    structure_visuals: Res<crate::config::StructureVisualConfigMap>,
+    cell_visual_layouts: Res<crate::config::CellVisualPlacementConfigMap>,
     main_menu: Res<MainMenuState>,
     world_load_state: Res<WorldLoadState>,
     overlay_ui_state: (Res<EditorIconSet>, Res<DebugMode>, Res<PanelManager>),
@@ -563,28 +565,30 @@ fn update_editor_cursor_overlays(
             if let (Some(image), Some(cell)) = (ghost_image, world_cell) {
                 ghost_sprite.image = image;
                 let size_in_cells = match active_tool.selected {
-                    Some(EditorTool::BuildSolid) => crate::world::structures::cell_material_descriptor(
-                        cell_settings.material,
-                    )
-                    .size_in_cells(),
-                    Some(EditorTool::Gases) => crate::world::structures::structure_descriptor(
+                    Some(EditorTool::BuildSolid) => {
+                        crate::world::structures::cell_material_sprite_size_in_cells(
+                            cell_settings.material,
+                            &cell_visual_layouts,
+                        )
+                    }
+                    Some(EditorTool::Gases) => crate::world::structures::structure_footprint_size_in_cells(
                         selected_pipe_structure_kind(pipe_settings.selected),
                         bridge_state.rotation,
-                    )
-                    .size_in_cells(),
+                        &structure_visuals,
+                    ),
                     Some(EditorTool::CreateGasSource) => {
-                        crate::world::structures::structure_descriptor(
+                        crate::world::structures::structure_footprint_size_in_cells(
                             crate::world::structures::StructureKind::GasSource,
                             StructureRotation::Deg0,
+                            &structure_visuals,
                         )
-                        .size_in_cells()
                     }
                     Some(EditorTool::CreateGasSink) => {
-                        crate::world::structures::structure_descriptor(
+                        crate::world::structures::structure_footprint_size_in_cells(
                             crate::world::structures::StructureKind::GasSink,
                             StructureRotation::Deg0,
+                            &structure_visuals,
                         )
-                        .size_in_cells()
                     }
                     _ => UVec2::ONE,
                 };
@@ -592,22 +596,26 @@ fn update_editor_cursor_overlays(
                     Some(EditorTool::BuildSolid) => {
                         crate::world::structures::cell_material_sprite_size_in_cells(
                             cell_settings.material,
+                            &cell_visual_layouts,
                         )
                     }
                     Some(EditorTool::Gases) => crate::world::structures::structure_sprite_size_in_cells(
                         selected_pipe_structure_kind(pipe_settings.selected),
                         bridge_state.rotation,
+                        &structure_visuals,
                     ),
                     Some(EditorTool::CreateGasSource) => {
                         crate::world::structures::structure_sprite_size_in_cells(
                             crate::world::structures::StructureKind::GasSource,
                             StructureRotation::Deg0,
+                            &structure_visuals,
                         )
                     }
                     Some(EditorTool::CreateGasSink) => {
                         crate::world::structures::structure_sprite_size_in_cells(
                             crate::world::structures::StructureKind::GasSink,
                             StructureRotation::Deg0,
+                            &structure_visuals,
                         )
                     }
                     _ => UVec2::ONE,

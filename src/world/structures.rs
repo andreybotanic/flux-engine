@@ -2,8 +2,12 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use crate::world::grid::{
-    is_boundary, is_editable_cell, linear_index, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH,
+use crate::{
+    config::{CellVisualPlacementConfigMap, StructureVisualConfigMap},
+    world::grid::{
+        is_boundary, is_editable_cell, linear_index, CellMaterial, WorldGrid, WORLD_HEIGHT,
+        WORLD_WIDTH,
+    },
 };
 
 /// Identifies the visual/runtime layer used by a structure or world cell.
@@ -763,8 +767,11 @@ pub fn cell_material_descriptor(material: CellMaterial) -> StructureDescriptor {
 }
 
 /// Returns the base sprite size for a world material in world cells.
-pub fn cell_material_sprite_size_in_cells(_material: CellMaterial) -> UVec2 {
-    UVec2::ONE
+pub fn cell_material_sprite_size_in_cells(
+    material: CellMaterial,
+    cell_visual_layouts: &CellVisualPlacementConfigMap,
+) -> UVec2 {
+    cell_visual_layouts.get(material).size_in_cells
 }
 
 /// Builds a descriptor for one placeable structure kind/rotation pair.
@@ -857,13 +864,32 @@ pub fn structure_descriptor(kind: StructureKind, rotation: StructureRotation) ->
 pub fn structure_sprite_size_in_cells(
     kind: StructureKind,
     rotation: StructureRotation,
+    structure_visuals: &StructureVisualConfigMap,
 ) -> UVec2 {
     match kind {
         StructureKind::GasPipeBridge => {
             let _ = rotation;
-            UVec2::new(3, 1)
+            structure_visuals.get(kind).size_in_cells
         }
-        _ => structure_descriptor(kind, rotation).size_in_cells(),
+        _ => rotated_size_in_cells(structure_visuals.get(kind).size_in_cells, rotation),
+    }
+}
+
+/// Returns the rotated footprint size defined by the visual config of the structure.
+pub fn structure_footprint_size_in_cells(
+    kind: StructureKind,
+    rotation: StructureRotation,
+    structure_visuals: &StructureVisualConfigMap,
+) -> UVec2 {
+    rotated_size_in_cells(structure_visuals.get(kind).size_in_cells, rotation)
+}
+
+fn rotated_size_in_cells(size_in_cells: UVec2, rotation: StructureRotation) -> UVec2 {
+    match rotation {
+        StructureRotation::Deg0 | StructureRotation::Deg180 => size_in_cells,
+        StructureRotation::Deg90 | StructureRotation::Deg270 => {
+            UVec2::new(size_in_cells.y, size_in_cells.x)
+        }
     }
 }
 
@@ -1003,11 +1029,14 @@ fn params_sort_key(params: StructureParams) -> (u8, u32, u32) {
 mod tests {
     use super::{
         bridge_connection_local_cells, bridge_local_cells, cell_material_descriptor,
-        cell_material_sprite_size_in_cells, structure_descriptor, structure_sprite_size_in_cells,
-        LayerCollisionKind, LayerKind, LayerMarkerKind, PlacedStructureMap, StructureKind,
-        StructureRotation,
+        cell_material_sprite_size_in_cells, structure_descriptor, structure_footprint_size_in_cells,
+        structure_sprite_size_in_cells, LayerCollisionKind, LayerKind, LayerMarkerKind,
+        PlacedStructureMap, StructureKind, StructureRotation,
     };
-    use crate::world::grid::{CellMaterial, WorldGrid};
+    use crate::{
+        config::{CellVisualPlacementConfigMap, StructureVisualConfigMap},
+        world::grid::{CellMaterial, WorldGrid},
+    };
 
     #[test]
     fn bridge_descriptor_uses_expected_cells_for_both_orientations() {
@@ -1061,6 +1090,8 @@ mod tests {
 
     #[test]
     fn structure_descriptors_report_size_in_cells() {
+        let structure_visuals = StructureVisualConfigMap::default();
+        let cell_visual_layouts = CellVisualPlacementConfigMap::default();
         assert_eq!(
             structure_descriptor(StructureKind::Pipe, StructureRotation::Deg0).size_in_cells(),
             bevy::prelude::UVec2::ONE
@@ -1079,17 +1110,40 @@ mod tests {
                 .size_in_cells(),
             bevy::prelude::UVec2::new(1, 3)
         );
-        assert_eq!(cell_material_sprite_size_in_cells(CellMaterial::Brick), bevy::prelude::UVec2::ONE);
         assert_eq!(
-            structure_sprite_size_in_cells(StructureKind::Pipe, StructureRotation::Deg0),
+            cell_material_sprite_size_in_cells(CellMaterial::Brick, &cell_visual_layouts),
             bevy::prelude::UVec2::ONE
         );
         assert_eq!(
-            structure_sprite_size_in_cells(StructureKind::GasPipeBridge, StructureRotation::Deg0),
+            structure_footprint_size_in_cells(
+                StructureKind::Pipe,
+                StructureRotation::Deg0,
+                &structure_visuals
+            ),
+            bevy::prelude::UVec2::ONE
+        );
+        assert_eq!(
+            structure_footprint_size_in_cells(
+                StructureKind::GasPipeBridge,
+                StructureRotation::Deg0,
+                &structure_visuals
+            ),
             bevy::prelude::UVec2::new(3, 1)
         );
         assert_eq!(
-            structure_sprite_size_in_cells(StructureKind::GasPipeBridge, StructureRotation::Deg90),
+            structure_footprint_size_in_cells(
+                StructureKind::GasPipeBridge,
+                StructureRotation::Deg90,
+                &structure_visuals
+            ),
+            bevy::prelude::UVec2::new(1, 3)
+        );
+        assert_eq!(
+            structure_sprite_size_in_cells(
+                StructureKind::GasPipeBridge,
+                StructureRotation::Deg90,
+                &structure_visuals
+            ),
             bevy::prelude::UVec2::new(3, 1)
         );
     }

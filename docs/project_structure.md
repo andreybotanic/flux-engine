@@ -14,7 +14,8 @@ FluxEngine/
 |       `-- world/           # Тайлы мира и фоновые текстуры.
 |-- config/                  # Внешние TOML-конфиги игрового/симуляционного поведения.
 |   |-- backups/             # Резервные копии конфигов.
-|   `-- gases/               # Конфиги отдельных газов.
+|   |-- gases/               # Конфиги отдельных газов.
+|   `-- structures/          # Конфиги appearance-метаданных стен и структур.
 |-- docs/                    # Проектная документация.
 |-- src/                     # Исходный код Rust.
 |   |-- app/                 # Сборка и запуск Bevy-приложения.
@@ -58,6 +59,7 @@ FluxEngine/
 - `config/backups/simulation.toml.pre_tuning_20260503_174021.toml`: Резервная копия конфигурации симуляции для отката/сравнения.
 - `config/cell_types.toml`: Настройки визуала/параметров типов клеток.
 - `config/gases/*.toml`: Конфиги отдельных газов (физические и визуальные параметры).
+- `config/structures/*.toml`: Конфиги appearance-метаданных встроенных стен и структур (`draw_priority`, `size_in_cells`).
 - `config/simulation.toml`: Основные параметры симуляции и runtime-настройки.
 - `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
 - `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
@@ -65,9 +67,9 @@ FluxEngine/
 - `docs/technical_overview.md`: Техническая архитектура, подсистемы и инженерные ограничения.
 - `src/app/mod.rs`: Сборка Bevy-приложения, плагины, backend-инициализация и запуск.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
-- `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации TOML-конфигов.
+- `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации TOML-конфигов, включая `config/structures/*.toml`.
 - `src/config/config_tests_block.rs`: Тесты загрузки и валидации конфигов.
-- `src/config/mod.rs`: Публичные конфиг-типы и входная точка загрузки конфигов.
+- `src/config/mod.rs`: Публичные конфиг-типы, runtime-реестры visual/layout-метаданных и входная точка загрузки конфигов.
 - `src/debug/mod.rs`: Debug-режимы, оверлейные метрики и диагностические ресурсы.
 - `src/editor/editor_ui_block.rs`: Runtime-обработка editor UI: tooltip, state sync, панели.
 - `src/editor/input_block.rs`: Мышь/кисть/выделение и применение инструментов к миру, unified pipe/structure-сети и мосту.
@@ -88,9 +90,9 @@ FluxEngine/
 - `src/main.rs`: Точка входа бинаря; запускает приложение.
 - `src/render/mod.rs`: Плагин рендера и порядок render-систем, включая pipe visuals.
 - `src/render/pipe_highlight_material.rs`: Кастомный `Material2d` и helper-логика для shader-подсветки труб в `F3`.
-- `src/render/world_view.rs`: Публичные render-системы world view, layer-based pipe/bridge visuals и переключение overlay.
+- `src/render/world_view.rs`: Публичные render-системы world view, config-driven appearance z-order и layer-based pipe/bridge visuals.
 - `src/render/world_view_overlay_block.rs`: Логика overlay-режимов `F1/F2/F3`, курсорной сетки, multi-container pipe gas-square sizing и визуальных sync.
-- `src/render/world_view_setup_block.rs`: Построение сущностей мира/слоёв, загрузка pipe/vent/bridge world-спрайтов и спавн визуалов из `PlacedStructureMap`.
+- `src/render/world_view_setup_block.rs`: Построение сущностей мира/слоёв, config-driven z-order стен/структур и спавн визуалов из `PlacedStructureMap`.
 - `src/render/world_view_tests_block.rs`: Тесты вспомогательной математики рендера.
 - `src/save.rs`: Публичный save/load API и типы состояния меню/сессии.
 - `src/save_api_block.rs`: Операции верхнего уровня: list/create/overwrite/load snapshot.

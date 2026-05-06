@@ -18,6 +18,7 @@ mod tests {
     }
 
     fn write_minimal_configs(root: &Path) {
+        fs::create_dir_all(root.join("structures")).expect("create structures dir");
         fs::write(
             root.join("simulation.toml"),
             r#"
@@ -64,6 +65,32 @@ gas_tint = [0.71, 0.71, 0.73]
 "#,
         )
         .expect("write cell types");
+
+        for (file_name, content) in [
+            ("pipe.toml", "draw_priority = 100\nsize_in_cells = [1, 1]\n"),
+            ("vent.toml", "draw_priority = 120\nsize_in_cells = [1, 1]\n"),
+            (
+                "gas_source.toml",
+                "draw_priority = 130\nsize_in_cells = [1, 1]\n",
+            ),
+            (
+                "gas_sink.toml",
+                "draw_priority = 130\nsize_in_cells = [1, 1]\n",
+            ),
+            (
+                "gas_pipe_bridge.toml",
+                "draw_priority = 110\nsize_in_cells = [3, 1]\n",
+            ),
+            (
+                "boundary.toml",
+                "draw_priority = 1000\nsize_in_cells = [1, 1]\n",
+            ),
+            ("brick.toml", "draw_priority = 1000\nsize_in_cells = [1, 1]\n"),
+            ("metal.toml", "draw_priority = 1000\nsize_in_cells = [1, 1]\n"),
+        ] {
+            fs::write(root.join("structures").join(file_name), content)
+                .expect("write structure visual config");
+        }
     }
 
     #[test]
@@ -163,5 +190,55 @@ color = [1.2, 0.0, 0.0]
             .map(|g| g.id.as_str())
             .collect::<Vec<_>>();
         assert_eq!(ids, vec!["h2", "o2", "co2"]);
+    }
+
+    #[test]
+    fn config_loader_rejects_missing_structure_visual_file() {
+        let root = make_temp_root("flux_cfg_missing_structure");
+        write_minimal_configs(&root);
+        fs::remove_file(root.join("structures").join("pipe.toml")).expect("remove pipe config");
+        fs::write(
+            root.join("gases").join("h2.toml"),
+            r#"id = "h2"
+label = "H2"
+molecular_mass = 2.016
+color = [0.8, 0.8, 1.0]
+"#,
+        )
+        .expect("write gas");
+
+        let err = match GameConfig::load_from_root(&root) {
+            Ok(_) => panic!("missing structure config must fail"),
+            Err(err) => err,
+        };
+        assert!(err.contains("pipe.toml"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn config_loader_rejects_invalid_bridge_size() {
+        let root = make_temp_root("flux_cfg_bad_bridge_size");
+        write_minimal_configs(&root);
+        fs::write(
+            root.join("structures").join("gas_pipe_bridge.toml"),
+            "draw_priority = 110\nsize_in_cells = [2, 1]\n",
+        )
+        .expect("overwrite bridge config");
+        fs::write(
+            root.join("gases").join("h2.toml"),
+            r#"id = "h2"
+label = "H2"
+molecular_mass = 2.016
+color = [0.8, 0.8, 1.0]
+"#,
+        )
+        .expect("write gas");
+
+        let err = match GameConfig::load_from_root(&root) {
+            Ok(_) => panic!("invalid bridge size must fail"),
+            Err(err) => err,
+        };
+        assert!(err.contains("GasPipeBridge") || err.contains("gas_pipe_bridge"));
+        let _ = fs::remove_dir_all(root);
     }
 }

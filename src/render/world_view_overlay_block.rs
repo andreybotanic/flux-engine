@@ -176,7 +176,7 @@ pub(crate) fn apply_overlay_mode(
     }
     for (pipe_visual, mut sprite, mut visibility, mut transform) in &mut visuals.p4() {
         sprite.color = pipe_sprite_tint(*overlay_mode, pipe_visual);
-        transform.translation.z = pipe_world_z(*overlay_mode);
+        transform.translation.z = pipe_visual.appearance_z;
         *visibility = world_layer_visibility(show_world);
     }
     for (mut visibility, mut transform) in &mut visuals.p5() {

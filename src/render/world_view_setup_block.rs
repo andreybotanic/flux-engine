@@ -12,6 +12,8 @@ pub fn setup_world_view(
     mut pipe_highlight_materials:
         ResMut<Assets<crate::render::pipe_highlight_material::PipeHighlightMaterial>>,
     cell_visuals: Res<CellTypeVisualConfig>,
+    cell_visual_layouts: Res<crate::config::CellVisualPlacementConfigMap>,
+    structure_visuals: Res<crate::config::StructureVisualConfigMap>,
 ) {
     let show_world = world_load_state.has_world;
     let pipe_masks = (0u8..=0b1111)
@@ -145,6 +147,7 @@ pub fn setup_world_view(
                     &mut commands,
                     &visuals,
                     &cell_visuals,
+                    &cell_visual_layouts,
                     x,
                     y,
                     material,
@@ -162,13 +165,22 @@ pub fn setup_world_view(
         &visuals,
         boundary_main_tint,
         boundary_gas_tint,
+        &cell_visual_layouts,
         show_world,
     );
 
+    let structure_draw_ranks = build_structure_draw_ranks(&structures, &structure_visuals);
     let mut structure_entities = GasStructureEntities::default();
     for structure in structures.iter() {
         if let Some((cell, entity)) =
-            spawn_structure_sprite(&mut commands, &visuals, structure, show_world)
+            spawn_structure_sprite(
+                &mut commands,
+                &visuals,
+                &structure_visuals,
+                structure,
+                *structure_draw_ranks.get(&structure.id).unwrap_or(&0),
+                show_world,
+            )
         {
             structure_entities.by_cell.insert(cell, entity);
         }
@@ -180,9 +192,11 @@ pub fn setup_world_view(
         spawn_structure_pipe_visuals(
             &mut commands,
             &visuals,
+            &structure_visuals,
             &mut pipe_entities,
             &structures,
             structure,
+            *structure_draw_ranks.get(&structure.id).unwrap_or(&0),
             show_world,
             *overlay_mode,
         );
@@ -204,12 +218,15 @@ fn spawn_outer_border_layers(
     visuals: &WorldVisualAssets,
     boundary_main_tint: Color,
     boundary_gas_tint: Color,
+    cell_visual_layouts: &crate::config::CellVisualPlacementConfigMap,
     show_world: bool,
 ) {
     let min_x = 0_i32;
     let min_y = 0_i32;
     let max_x = WORLD_WIDTH as i32 - 1;
     let max_y = WORLD_HEIGHT as i32 - 1;
+    let boundary_priority = cell_visual_layouts.get(CellMaterial::Boundary).draw_priority;
+    let mut draw_rank = 0usize;
 
     for layer in 1..=OUTER_BORDER_LAYERS {
         let ring_min_x = min_x - layer as i32;
@@ -229,11 +246,16 @@ fn spawn_outer_border_layers(
                 commands.spawn((
                     Sprite {
                         image: visuals.boundary.clone(),
-                        custom_size: Some(Vec2::splat(CELL_SIZE)),
+                        custom_size: Some(size_in_world(
+                            cell_visual_layouts.get(CellMaterial::Boundary).size_in_cells,
+                        )),
                         color: boundary_main_tint,
                         ..default()
                     },
-                    Transform::from_translation(outer_cell_center(x, y).extend(0.2)),
+                    Transform::from_translation(
+                        outer_cell_center(x, y)
+                            .extend(appearance_z(boundary_priority, draw_rank)),
+                    ),
                     if show_world {
                         Visibility::Visible
                     } else {
@@ -244,6 +266,7 @@ fn spawn_outer_border_layers(
                         gas_tint: boundary_gas_tint,
                     },
                 ));
+                draw_rank += 1;
             }
         }
     }
@@ -253,6 +276,7 @@ fn spawn_wall_sprite(
     commands: &mut Commands,
     visuals: &WorldVisualAssets,
     cell_visuals: &CellTypeVisualConfig,
+    cell_visual_layouts: &crate::config::CellVisualPlacementConfigMap,
     x: u32,
     y: u32,
     material: CellMaterial,
@@ -265,16 +289,20 @@ fn spawn_wall_sprite(
     };
     let main_tint = cell_visuals.main_tint(material);
     let gas_tint = cell_visuals.gas_tint(material);
+    let visual_layout = cell_visual_layouts.get(material);
+    let draw_rank = linear_index(x, y);
 
     commands
         .spawn((
             Sprite {
                 image,
-                custom_size: Some(Vec2::splat(CELL_SIZE)),
+                custom_size: Some(size_in_world(visual_layout.size_in_cells)),
                 color: main_tint,
                 ..default()
             },
-            Transform::from_translation(cell_center(x, y).extend(0.5)),
+            Transform::from_translation(
+                cell_center(x, y).extend(appearance_z(visual_layout.draw_priority, draw_rank)),
+            ),
             if show_world {
                 Visibility::Visible
             } else {
@@ -291,7 +319,9 @@ fn spawn_wall_sprite(
 fn spawn_structure_sprite(
     commands: &mut Commands,
     visuals: &WorldVisualAssets,
+    structure_visuals: &crate::config::StructureVisualConfigMap,
     structure: &PlacedStructure,
+    draw_rank: usize,
     show_world: bool,
 ) -> Option<((u32, u32), Entity)> {
     let image = match structure.kind {
@@ -299,15 +329,25 @@ fn spawn_structure_sprite(
         StructureKind::GasSink => visuals.sink.clone(),
         _ => return None,
     };
+    let visual_layout = structure_visuals.get(structure.kind);
     let entity = commands
         .spawn((
             Sprite {
                 image,
-                custom_size: Some(Vec2::splat(CELL_SIZE)),
+                custom_size: Some(size_in_world(
+                    crate::world::structures::structure_sprite_size_in_cells(
+                        structure.kind,
+                        structure.rotation,
+                        structure_visuals,
+                    ),
+                )),
                 color: Color::WHITE,
                 ..default()
             },
-            Transform::from_translation(cell_center(structure.origin.x, structure.origin.y).extend(0.9)),
+            Transform::from_translation(
+                cell_center(structure.origin.x, structure.origin.y)
+                    .extend(appearance_z(visual_layout.draw_priority, draw_rank)),
+            ),
             if show_world {
                 Visibility::Visible
             } else {
@@ -322,13 +362,18 @@ fn spawn_structure_sprite(
 fn spawn_structure_pipe_visuals(
     commands: &mut Commands,
     visuals: &WorldVisualAssets,
+    structure_visuals: &crate::config::StructureVisualConfigMap,
     entities: &mut PipeEntities,
     structures: &PlacedStructureMap,
     structure: &PlacedStructure,
+    draw_rank: usize,
     show_world: bool,
     overlay_mode: OverlayMode,
 ) {
+    let visual_layout = structure_visuals.get(structure.kind);
+    let appearance_z = appearance_z(visual_layout.draw_priority, draw_rank);
     let pipe_visual = PipeWorldVisual {
+        appearance_z,
         main_tint: Color::srgba(0.42, 0.50, 0.56, 0.96),
         gas_tint: Color::srgba(0.74, 0.82, 0.88, 0.96),
         pipe_tint: Color::srgba(0.96, 0.985, 1.0, 1.0),
@@ -343,11 +388,17 @@ fn spawn_structure_pipe_visuals(
                 .spawn((
                     Sprite {
                         image: visuals.pipe_masks[mask].clone(),
-                        custom_size: Some(Vec2::splat(CELL_SIZE)),
+                        custom_size: Some(size_in_world(
+                            crate::world::structures::structure_sprite_size_in_cells(
+                                structure.kind,
+                                structure.rotation,
+                                structure_visuals,
+                            ),
+                        )),
                         color: pipe_sprite_tint(overlay_mode, &pipe_visual),
                         ..default()
                     },
-                    Transform::from_translation(center.extend(pipe_world_z(overlay_mode))),
+                    Transform::from_translation(center.extend(appearance_z)),
                     world_layer_visibility(show_world),
                     pipe_visual,
                 ))
@@ -376,11 +427,17 @@ fn spawn_structure_pipe_visuals(
                 .spawn((
                     Sprite {
                         image: visuals.vent_world.clone(),
-                        custom_size: Some(Vec2::splat(CELL_SIZE)),
+                        custom_size: Some(size_in_world(
+                            crate::world::structures::structure_sprite_size_in_cells(
+                                structure.kind,
+                                structure.rotation,
+                                structure_visuals,
+                            ),
+                        )),
                         color: Color::WHITE,
                         ..default()
                     },
-                    Transform::from_translation(center.extend(0.95)),
+                    Transform::from_translation(center.extend(appearance_z)),
                     vent_world_visibility(show_world, overlay_mode),
                     VentWorldVisual,
                 ))
@@ -411,11 +468,11 @@ fn spawn_structure_pipe_visuals(
                 .spawn((
                     Sprite {
                         image: visuals.bridge.clone(),
-                        custom_size: Some(bridge_visual_size(structure.rotation)),
+                        custom_size: Some(bridge_visual_size(structure.rotation, structure_visuals)),
                         color: pipe_sprite_tint(overlay_mode, &pipe_visual),
                         ..default()
                     },
-                    bridge_visual_transform(center_cell, structure.rotation, overlay_mode),
+                    bridge_visual_transform(center_cell, structure.rotation, appearance_z),
                     world_layer_visibility(show_world),
                     pipe_visual,
                 ))
@@ -569,10 +626,14 @@ fn bridge_connection_cells_for_render(origin: UVec2, rotation: StructureRotation
     }
 }
 
-fn bridge_visual_size(rotation: StructureRotation) -> Vec2 {
+fn bridge_visual_size(
+    rotation: StructureRotation,
+    structure_visuals: &crate::config::StructureVisualConfigMap,
+) -> Vec2 {
     let size = crate::world::structures::structure_sprite_size_in_cells(
         StructureKind::GasPipeBridge,
         rotation,
+        structure_visuals,
     );
     Vec2::new(size.x.max(1) as f32 * CELL_SIZE, size.y.max(1) as f32 * CELL_SIZE)
 }
@@ -580,11 +641,10 @@ fn bridge_visual_size(rotation: StructureRotation) -> Vec2 {
 fn bridge_visual_transform(
     center_cell: UVec2,
     rotation: StructureRotation,
-    overlay_mode: OverlayMode,
+    appearance_z: f32,
 ) -> Transform {
-    let mut transform = Transform::from_translation(
-        cell_center(center_cell.x, center_cell.y).extend(pipe_world_z(overlay_mode)),
-    );
+    let mut transform =
+        Transform::from_translation(cell_center(center_cell.x, center_cell.y).extend(appearance_z));
     transform.rotation = match rotation {
         StructureRotation::Deg0 => Quat::IDENTITY,
         StructureRotation::Deg90 => Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
@@ -641,11 +701,38 @@ fn pipe_highlight_z() -> f32 {
     0.97
 }
 
-fn pipe_world_z(overlay_mode: OverlayMode) -> f32 {
-    match overlay_mode {
-        OverlayMode::Pipes => 0.92,
-        OverlayMode::Main | OverlayMode::Gas => 0.45,
-    }
+fn appearance_z(draw_priority: i32, draw_rank: usize) -> f32 {
+    const APPEARANCE_BASE_Z: f32 = 0.20;
+    const APPEARANCE_PRIORITY_STEP: f32 = 0.0001;
+    const APPEARANCE_TIEBREAK_STEP: f32 = 0.0000001;
+    APPEARANCE_BASE_Z
+        + draw_priority as f32 * APPEARANCE_PRIORITY_STEP
+        + draw_rank as f32 * APPEARANCE_TIEBREAK_STEP
+}
+
+fn size_in_world(size_in_cells: UVec2) -> Vec2 {
+    Vec2::new(
+        size_in_cells.x.max(1) as f32 * CELL_SIZE,
+        size_in_cells.y.max(1) as f32 * CELL_SIZE,
+    )
+}
+
+fn build_structure_draw_ranks(
+    structures: &PlacedStructureMap,
+    structure_visuals: &crate::config::StructureVisualConfigMap,
+) -> std::collections::HashMap<PlacedStructureId, usize> {
+    let mut ordered = structures.iter().collect::<Vec<_>>();
+    ordered.sort_by_key(|structure| {
+        (
+            structure_visuals.get(structure.kind).draw_priority,
+            structure.id.0,
+        )
+    });
+    ordered
+        .into_iter()
+        .enumerate()
+        .map(|(rank, structure)| (structure.id, rank))
+        .collect()
 }
 
 fn pipe_overlay_vent_tint() -> Color {
@@ -667,6 +754,7 @@ pub(crate) fn sync_wall_visuals(
     world_load_state: Res<WorldLoadState>,
     visuals: Res<WorldVisualAssets>,
     cell_visuals: Res<CellTypeVisualConfig>,
+    cell_visual_layouts: Res<crate::config::CellVisualPlacementConfigMap>,
     mut wall_entities: ResMut<WallEntities>,
     mut changes: EventReader<WorldCellChanged>,
 ) {
@@ -682,6 +770,7 @@ pub(crate) fn sync_wall_visuals(
                     &mut commands,
                     &visuals,
                     &cell_visuals,
+                    &cell_visual_layouts,
                     x,
                     y,
                     material,
@@ -699,6 +788,7 @@ pub(crate) fn sync_wall_visuals(
                     &mut commands,
                     &visuals,
                     &cell_visuals,
+                    &cell_visual_layouts,
                     x,
                     y,
                     material,
@@ -716,6 +806,7 @@ pub(crate) fn sync_gas_structure_visuals(
     structures: Res<PlacedStructureMap>,
     world_load_state: Res<WorldLoadState>,
     visuals: Res<WorldVisualAssets>,
+    structure_visuals: Res<crate::config::StructureVisualConfigMap>,
     mut structure_entities: ResMut<GasStructureEntities>,
 ) {
     if !structures.is_changed() && !world_load_state.is_changed() {
@@ -731,9 +822,16 @@ pub(crate) fn sync_gas_structure_visuals(
         return;
     }
 
+    let structure_draw_ranks = build_structure_draw_ranks(&structures, &structure_visuals);
     for structure in structures.iter() {
-        if let Some((cell, entity)) =
-            spawn_structure_sprite(&mut commands, &visuals, structure, world_load_state.has_world)
+        if let Some((cell, entity)) = spawn_structure_sprite(
+            &mut commands,
+            &visuals,
+            &structure_visuals,
+            structure,
+            *structure_draw_ranks.get(&structure.id).unwrap_or(&0),
+            world_load_state.has_world,
+        )
         {
             structure_entities.by_cell.insert(cell, entity);
         }
@@ -746,6 +844,7 @@ pub(crate) fn sync_pipe_world_visuals(
     world_load_state: Res<WorldLoadState>,
     overlay_mode: Res<OverlayMode>,
     visuals: Res<WorldVisualAssets>,
+    structure_visuals: Res<crate::config::StructureVisualConfigMap>,
     mut pipe_entities: ResMut<PipeEntities>,
 ) {
     if !structures.is_changed() && !world_load_state.is_changed() && !overlay_mode.is_changed() {
@@ -785,13 +884,16 @@ pub(crate) fn sync_pipe_world_visuals(
         return;
     }
 
+    let structure_draw_ranks = build_structure_draw_ranks(&structures, &structure_visuals);
     for structure in structures.iter() {
         spawn_structure_pipe_visuals(
             &mut commands,
             &visuals,
+            &structure_visuals,
             &mut pipe_entities,
             &structures,
             structure,
+            *structure_draw_ranks.get(&structure.id).unwrap_or(&0),
             world_load_state.has_world,
             *overlay_mode,
         );

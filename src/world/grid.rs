@@ -11,7 +11,7 @@ pub enum CellKind {
     Empty,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CellMaterial {
     Boundary,
     Brick,
