@@ -5,8 +5,8 @@ use crate::{
         GasSimulationConfig, SimulationStep, SolverTuning,
     },
     world::{
-        gas_structures::GasStructureGrid,
         grid::{is_boundary, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
+        structures::PlacedStructureMap,
     },
 };
 use bevy::prelude::UVec2;
@@ -100,7 +100,7 @@ fn tuned_config() -> GasSimulationConfig {
 
 fn populate_scenario(
     world: &mut WorldGrid,
-    structures: &mut GasStructureGrid,
+    structures: &mut PlacedStructureMap,
     gas: &mut GasField,
     with_internal_walls: bool,
     with_structures: bool,
@@ -109,7 +109,7 @@ fn populate_scenario(
         UVec2::new(1, 1),
         UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
     );
-    *structures = GasStructureGrid::default();
+    *structures = PlacedStructureMap::default();
     if with_internal_walls {
         for x in 20..=80 {
             let _ = world.set_solid_with_material(x, 20, CellMaterial::Brick);
@@ -130,10 +130,10 @@ fn populate_scenario(
     }
 
     if with_structures {
-        let _ = structures.set_source(28, 28, 0, 8, world);
-        let _ = structures.set_source(74, 74, 2, 11, world);
-        let _ = structures.set_sink(28, 74, 7, world);
-        let _ = structures.set_sink(74, 28, 9, world);
+        let _ = structures.place_gas_source(28, 28, 0, 8, world);
+        let _ = structures.place_gas_source(74, 74, 2, 11, world);
+        let _ = structures.place_gas_sink(28, 74, 7, world);
+        let _ = structures.place_gas_sink(74, 28, 9, world);
     }
 
     for y in 1..WORLD_HEIGHT - 1 {

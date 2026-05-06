@@ -2,8 +2,8 @@
 mod tests {
     use crate::simulation::backend::{SimulationBackend, SimulationBackendConfig};
     use crate::simulation::gas::GasField;
-    use crate::world::{gas_structures::GasStructureGrid, grid::WorldGrid};
     use crate::config::{GasDefinition, GasRegistry};
+    use crate::world::{grid::WorldGrid, structures::PlacedStructureMap};
     use super::{
         abort_on_gpu_runtime_error, apply_gas_structures_pre_step, effective_target_hz,
         pipe_flow_reset_needed, SimulationRateConfig, SimulationSpeed,
@@ -78,8 +78,8 @@ mod tests {
         let world = WorldGrid::default();
         let registry = test_registry();
         let mut gas = GasField::from_registry(&registry);
-        let mut structures = GasStructureGrid::default();
-        assert!(structures.set_source(10, 10, 1, 25, &world));
+        let mut structures = PlacedStructureMap::default();
+        assert!(structures.place_gas_source(10, 10, 1, 25, &world).is_some());
 
         let changed = apply_gas_structures_pre_step(&structures, &mut gas, &world);
         assert!(changed);
@@ -93,8 +93,8 @@ mod tests {
         let world = WorldGrid::default();
         let registry = test_registry();
         let mut gas = GasField::from_registry(&registry);
-        let mut structures = GasStructureGrid::default();
-        assert!(structures.set_sink(12, 12, 10, &world));
+        let mut structures = PlacedStructureMap::default();
+        assert!(structures.place_gas_sink(12, 12, 10, &world).is_some());
 
         gas.set_amount(12, 12, 0, 10.0);
         gas.set_amount(12, 12, 1, 20.0);

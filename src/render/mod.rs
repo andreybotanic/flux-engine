@@ -44,9 +44,13 @@ impl Plugin for RenderPlugin {
                     sync_structure_edit_highlight,
                     sync_gas_display_texture,
                     sync_pipe_overlay_visuals,
-                ),
+                )
+                    .chain(),
             )
-            .add_systems(Update, (sync_pipe_flow_packets, draw_cursor_grid_overlay));
+            .add_systems(
+                Update,
+                (sync_pipe_flow_packets.after(sync_pipe_overlay_visuals), draw_cursor_grid_overlay),
+            );
     }
 }
 

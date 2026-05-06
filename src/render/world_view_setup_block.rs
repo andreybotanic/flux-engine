@@ -3,8 +3,7 @@ pub fn setup_world_view(
     mut commands: Commands,
     simulation_images: Res<GasSimulationImages>,
     world: Res<WorldGrid>,
-    structures: Res<GasStructureGrid>,
-    pipes: Res<PipeGrid>,
+    structures: Res<PlacedStructureMap>,
     world_load_state: Res<WorldLoadState>,
     overlay_mode: Res<OverlayMode>,
     asset_server: Res<AssetServer>,
@@ -39,6 +38,7 @@ pub fn setup_world_view(
         boundary: asset_server.load("sprites/world/tile_boundary.png"),
         source: asset_server.load("sprites/world/tile_gas_source.png"),
         sink: asset_server.load("sprites/world/tile_gas_sink.png"),
+        bridge: asset_server.load("sprites/world/bridge.png"),
         pipe_masks,
         vent_world,
         vent_overlay,
@@ -166,21 +166,23 @@ pub fn setup_world_view(
     );
 
     let mut structure_entities = GasStructureEntities::default();
-    for (x, y, structure) in structures.iter_cells() {
-        let entity = spawn_gas_structure_sprite(&mut commands, &visuals, x, y, structure, show_world);
-        structure_entities.by_cell.insert((x, y), entity);
+    for structure in structures.iter() {
+        if let Some((cell, entity)) =
+            spawn_structure_sprite(&mut commands, &visuals, structure, show_world)
+        {
+            structure_entities.by_cell.insert(cell, entity);
+        }
     }
     commands.insert_resource(structure_entities);
 
     let mut pipe_entities = PipeEntities::default();
-    for (x, y, pipe_cell) in pipes.iter_cells() {
-        spawn_pipe_visual_bundle(
+    for structure in structures.iter() {
+        spawn_structure_pipe_visuals(
             &mut commands,
             &visuals,
             &mut pipe_entities,
-            x,
-            y,
-            pipe_cell,
+            &structures,
+            structure,
             show_world,
             *overlay_mode,
         );
@@ -286,19 +288,18 @@ fn spawn_wall_sprite(
         .id()
 }
 
-fn spawn_gas_structure_sprite(
+fn spawn_structure_sprite(
     commands: &mut Commands,
     visuals: &WorldVisualAssets,
-    x: u32,
-    y: u32,
-    structure: GasStructureCell,
+    structure: &PlacedStructure,
     show_world: bool,
-) -> Entity {
-    let image = match structure {
-        GasStructureCell::Source { .. } => visuals.source.clone(),
-        GasStructureCell::Sink { .. } => visuals.sink.clone(),
+) -> Option<((u32, u32), Entity)> {
+    let image = match structure.kind {
+        StructureKind::GasSource => visuals.source.clone(),
+        StructureKind::GasSink => visuals.sink.clone(),
+        _ => return None,
     };
-    commands
+    let entity = commands
         .spawn((
             Sprite {
                 image,
@@ -306,7 +307,7 @@ fn spawn_gas_structure_sprite(
                 color: Color::WHITE,
                 ..default()
             },
-            Transform::from_translation(cell_center(x, y).extend(0.9)),
+            Transform::from_translation(cell_center(structure.origin.x, structure.origin.y).extend(0.9)),
             if show_world {
                 Visibility::Visible
             } else {
@@ -314,106 +315,301 @@ fn spawn_gas_structure_sprite(
             },
             GasStructureVisual,
         ))
-        .id()
+        .id();
+    Some(((structure.origin.x, structure.origin.y), entity))
 }
 
-fn spawn_pipe_visual_bundle(
+fn spawn_structure_pipe_visuals(
     commands: &mut Commands,
     visuals: &WorldVisualAssets,
     entities: &mut PipeEntities,
-    x: u32,
-    y: u32,
-    pipe_cell: PipeCell,
+    structures: &PlacedStructureMap,
+    structure: &PlacedStructure,
     show_world: bool,
     overlay_mode: OverlayMode,
 ) {
-    let center = cell_center(x, y);
     let pipe_visual = PipeWorldVisual {
         main_tint: Color::srgba(0.42, 0.50, 0.56, 0.96),
         gas_tint: Color::srgba(0.74, 0.82, 0.88, 0.96),
         pipe_tint: Color::srgba(0.96, 0.985, 1.0, 1.0),
     };
-    if pipe_cell.has_pipe {
-        let mask = (pipe_cell.connections & 0b1111) as usize;
-        let pipe_tint = pipe_sprite_tint(overlay_mode, &pipe_visual);
-        let entity = commands
-            .spawn((
-                Sprite {
-                    image: visuals.pipe_masks[mask].clone(),
-                    custom_size: Some(Vec2::splat(CELL_SIZE)),
-                    color: pipe_tint,
-                    ..default()
-                },
-                Transform::from_translation(center.extend(pipe_world_z(overlay_mode))),
-                world_layer_visibility(show_world),
-                pipe_visual,
-            ))
-            .id();
-        entities.pipes.insert((x, y), entity);
+    match structure.kind {
+        StructureKind::Pipe => {
+            let x = structure.origin.x;
+            let y = structure.origin.y;
+            let center = cell_center(x, y);
+            let mask = pipe_connection_mask(structures, UVec2::new(x, y)) as usize;
+            let entity = commands
+                .spawn((
+                    Sprite {
+                        image: visuals.pipe_masks[mask].clone(),
+                        custom_size: Some(Vec2::splat(CELL_SIZE)),
+                        color: pipe_sprite_tint(overlay_mode, &pipe_visual),
+                        ..default()
+                    },
+                    Transform::from_translation(center.extend(pipe_world_z(overlay_mode))),
+                    world_layer_visibility(show_world),
+                    pipe_visual,
+                ))
+                .id();
+            entities.pipes.insert((x, y), entity);
 
-        let highlight_entity = crate::render::pipe_highlight_material::spawn_pipe_highlight_entity(
-            commands,
-            &visuals.pipe_highlight,
-            mask,
-            Transform::from_translation(center.extend(pipe_highlight_z())),
-            pipe_highlight_visibility(show_world, overlay_mode),
-        );
-        commands.entity(highlight_entity).insert(PipeHighlightOverlayVisual);
-        entities.pipe_highlights.insert((x, y), highlight_entity);
+            let highlight_entity =
+                crate::render::pipe_highlight_material::spawn_pipe_highlight_entity(
+                    commands,
+                    &visuals.pipe_highlight,
+                    mask,
+                    Transform::from_translation(center.extend(pipe_highlight_z())),
+                    pipe_highlight_visibility(show_world, overlay_mode),
+                );
+            commands
+                .entity(highlight_entity)
+                .insert(PipeHighlightOverlayVisual);
+            entities.pipe_highlights.insert((x, y), highlight_entity);
+            spawn_pipe_gas_overlay_slots(commands, entities, x, y, center);
+        }
+        StructureKind::Vent => {
+            let x = structure.origin.x;
+            let y = structure.origin.y;
+            let center = cell_center(x, y);
+            let world_entity = commands
+                .spawn((
+                    Sprite {
+                        image: visuals.vent_world.clone(),
+                        custom_size: Some(Vec2::splat(CELL_SIZE)),
+                        color: Color::WHITE,
+                        ..default()
+                    },
+                    Transform::from_translation(center.extend(0.95)),
+                    vent_world_visibility(show_world, overlay_mode),
+                    VentWorldVisual,
+                ))
+                .id();
+            entities.vents.insert((x, y), world_entity);
 
-        let gas_overlay = commands
+            let overlay_entity = commands
+                .spawn((
+                    Sprite {
+                        image: visuals.vent_overlay.clone(),
+                        custom_size: Some(Vec2::splat(CELL_SIZE * 0.92)),
+                        color: pipe_overlay_vent_tint(),
+                        ..default()
+                    },
+                    Transform::from_translation(center.extend(1.15)),
+                    Visibility::Hidden,
+                    PipeVentOverlayVisual,
+                ))
+                .id();
+            entities.vent_overlays.insert((x, y), overlay_entity);
+        }
+        StructureKind::GasPipeBridge => {
+            let Some(center_cell) = bridge_center_cell_for_render(structure.origin, structure.rotation)
+            else {
+                return;
+            };
+            let entity = commands
+                .spawn((
+                    Sprite {
+                        image: visuals.bridge.clone(),
+                        custom_size: Some(bridge_visual_size(structure.rotation)),
+                        color: pipe_sprite_tint(overlay_mode, &pipe_visual),
+                        ..default()
+                    },
+                    bridge_visual_transform(center_cell, structure.rotation, overlay_mode),
+                    world_layer_visibility(show_world),
+                    pipe_visual,
+                ))
+                .id();
+            entities.bridges.insert(structure.id, entity);
+            spawn_pipe_gas_overlay_slots(
+                commands,
+                entities,
+                center_cell.x,
+                center_cell.y,
+                cell_center(center_cell.x, center_cell.y),
+            );
+            for connection_cell in bridge_connection_cells_for_render(structure.origin, structure.rotation) {
+                entities
+                    .vent_overlays
+                    .entry((connection_cell.x, connection_cell.y))
+                    .or_insert_with(|| {
+                        commands
+                            .spawn((
+                                Sprite {
+                                    image: visuals.vent_overlay.clone(),
+                                    custom_size: Some(Vec2::splat(CELL_SIZE * 0.92)),
+                                    color: pipe_overlay_vent_tint(),
+                                    ..default()
+                                },
+                                Transform::from_translation(
+                                    cell_center(connection_cell.x, connection_cell.y).extend(1.15),
+                                ),
+                                Visibility::Hidden,
+                                PipeVentOverlayVisual,
+                            ))
+                            .id()
+                    });
+            }
+        }
+        StructureKind::GasSource | StructureKind::GasSink => {}
+    }
+}
+
+fn spawn_pipe_gas_overlay_slots(
+    commands: &mut Commands,
+    entities: &mut PipeEntities,
+    x: u32,
+    y: u32,
+    center: Vec2,
+) {
+    if entities.gas_overlays.contains_key(&(x, y)) {
+        return;
+    }
+
+    let overlays = [
+        commands
             .spawn((
                 Sprite::from_color(Color::NONE, Vec2::splat(CELL_SIZE * 0.7)),
                 Transform::from_translation(center.extend(1.05)),
                 Visibility::Hidden,
                 PipeGasOverlayVisual,
             ))
-            .id();
-        entities.gas_overlays.insert((x, y), gas_overlay);
-
-        let gas_overlay_border = commands
+            .id(),
+        commands
+            .spawn((
+                Sprite::from_color(Color::NONE, Vec2::splat(CELL_SIZE * 0.7)),
+                Transform::from_translation(center.extend(1.05)),
+                Visibility::Hidden,
+                PipeGasOverlayVisual,
+            ))
+            .id(),
+    ];
+    let borders = [
+        commands
             .spawn((
                 Sprite::from_color(Color::WHITE, Vec2::splat(CELL_SIZE * 0.7)),
                 Transform::from_translation(center.extend(1.04)),
                 Visibility::Hidden,
                 PipeGasOverlayBorderVisual,
             ))
-            .id();
-        entities
-            .gas_overlay_borders
-            .insert((x, y), gas_overlay_border);
-    }
-
-    if pipe_cell.has_vent {
-        let world_entity = commands
+            .id(),
+        commands
             .spawn((
-                Sprite {
-                    image: visuals.vent_world.clone(),
-                    custom_size: Some(Vec2::splat(CELL_SIZE)),
-                    color: Color::WHITE,
-                    ..default()
-                },
-                Transform::from_translation(center.extend(0.95)),
-                vent_world_visibility(show_world, overlay_mode),
-                VentWorldVisual,
-            ))
-            .id();
-        entities.vents.insert((x, y), world_entity);
-
-        let overlay_entity = commands
-            .spawn((
-                Sprite {
-                    image: visuals.vent_overlay.clone(),
-                    custom_size: Some(Vec2::splat(CELL_SIZE * 0.92)),
-                    color: pipe_overlay_vent_tint(),
-                    ..default()
-                },
-                Transform::from_translation(center.extend(1.15)),
+                Sprite::from_color(Color::WHITE, Vec2::splat(CELL_SIZE * 0.7)),
+                Transform::from_translation(center.extend(1.04)),
                 Visibility::Hidden,
-                PipeVentOverlayVisual,
+                PipeGasOverlayBorderVisual,
             ))
-            .id();
-        entities.vent_overlays.insert((x, y), overlay_entity);
+            .id(),
+    ];
+    entities.gas_overlays.insert((x, y), overlays);
+    entities.gas_overlay_borders.insert((x, y), borders);
+}
+
+fn pipe_connection_mask(structures: &PlacedStructureMap, cell: UVec2) -> u8 {
+    let mut mask = 0u8;
+    // Match the legacy pipe-mask bit convention used by the sprite atlas:
+    // `0b0001` is the upper arm and `0b0100` is the lower arm.
+    if cell.y > 0 {
+        let neighbor = UVec2::new(cell.x, cell.y - 1);
+        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
+            mask |= 0b0001;
+        }
+    }
+    if cell.x + 1 < WORLD_WIDTH {
+        let neighbor = UVec2::new(cell.x + 1, cell.y);
+        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
+            mask |= 0b0010;
+        }
+    }
+    if cell.y + 1 < WORLD_HEIGHT {
+        let neighbor = UVec2::new(cell.x, cell.y + 1);
+        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
+            mask |= 0b0100;
+        }
+    }
+    if cell.x > 0 {
+        let neighbor = UVec2::new(cell.x - 1, cell.y);
+        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
+            mask |= 0b1000;
+        }
+    }
+    mask
+}
+
+fn bridge_center_cell_for_render(origin: UVec2, rotation: StructureRotation) -> Option<UVec2> {
+    match rotation {
+        StructureRotation::Deg0 | StructureRotation::Deg180 => {
+            if origin.x + 1 < WORLD_WIDTH {
+                Some(UVec2::new(origin.x + 1, origin.y))
+            } else {
+                None
+            }
+        }
+        StructureRotation::Deg90 | StructureRotation::Deg270 => {
+            if origin.y + 1 < WORLD_HEIGHT {
+                Some(UVec2::new(origin.x, origin.y + 1))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+fn bridge_connection_cells_for_render(origin: UVec2, rotation: StructureRotation) -> Vec<UVec2> {
+    match rotation {
+        StructureRotation::Deg0 | StructureRotation::Deg180 => vec![
+            UVec2::new(origin.x, origin.y),
+            UVec2::new(origin.x + 2, origin.y),
+        ],
+        StructureRotation::Deg90 | StructureRotation::Deg270 => vec![
+            UVec2::new(origin.x, origin.y),
+            UVec2::new(origin.x, origin.y + 2),
+        ],
+    }
+}
+
+fn bridge_visual_size(rotation: StructureRotation) -> Vec2 {
+    let size = crate::world::structures::structure_sprite_size_in_cells(
+        StructureKind::GasPipeBridge,
+        rotation,
+    );
+    Vec2::new(size.x.max(1) as f32 * CELL_SIZE, size.y.max(1) as f32 * CELL_SIZE)
+}
+
+fn bridge_visual_transform(
+    center_cell: UVec2,
+    rotation: StructureRotation,
+    overlay_mode: OverlayMode,
+) -> Transform {
+    let mut transform = Transform::from_translation(
+        cell_center(center_cell.x, center_cell.y).extend(pipe_world_z(overlay_mode)),
+    );
+    transform.rotation = match rotation {
+        StructureRotation::Deg0 => Quat::IDENTITY,
+        StructureRotation::Deg90 => Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+        StructureRotation::Deg180 => Quat::from_rotation_z(std::f32::consts::PI),
+        StructureRotation::Deg270 => Quat::from_rotation_z(std::f32::consts::PI * 1.5),
+    };
+    transform
+}
+
+fn pipe_overlay_slot_offset(slot: usize, total_slots: usize) -> Vec2 {
+    if total_slots <= 1 {
+        Vec2::ZERO
+    } else if slot == 0 {
+        Vec2::new(0.0, CELL_SIZE * 0.18)
+    } else {
+        Vec2::new(0.0, -CELL_SIZE * 0.18)
+    }
+}
+
+fn pipe_overlay_slot_size(total_particles: u32, total_slots: usize) -> f32 {
+    let base = pipe_gas_square_size(total_particles);
+    if total_slots <= 1 {
+        base
+    } else {
+        (base * 0.62).max(CELL_SIZE * 0.18)
     }
 }
 
@@ -517,7 +713,7 @@ pub(crate) fn sync_wall_visuals(
 
 pub(crate) fn sync_gas_structure_visuals(
     mut commands: Commands,
-    structures: Res<GasStructureGrid>,
+    structures: Res<PlacedStructureMap>,
     world_load_state: Res<WorldLoadState>,
     visuals: Res<WorldVisualAssets>,
     mut structure_entities: ResMut<GasStructureEntities>,
@@ -535,39 +731,50 @@ pub(crate) fn sync_gas_structure_visuals(
         return;
     }
 
-    for (x, y, structure) in structures.iter_cells() {
-        let entity =
-            spawn_gas_structure_sprite(&mut commands, &visuals, x, y, structure, world_load_state.has_world);
-        structure_entities.by_cell.insert((x, y), entity);
+    for structure in structures.iter() {
+        if let Some((cell, entity)) =
+            spawn_structure_sprite(&mut commands, &visuals, structure, world_load_state.has_world)
+        {
+            structure_entities.by_cell.insert(cell, entity);
+        }
     }
 }
 
 pub(crate) fn sync_pipe_world_visuals(
     mut commands: Commands,
-    pipes: Res<PipeGrid>,
+    structures: Res<PlacedStructureMap>,
     world_load_state: Res<WorldLoadState>,
     overlay_mode: Res<OverlayMode>,
     visuals: Res<WorldVisualAssets>,
     mut pipe_entities: ResMut<PipeEntities>,
 ) {
-    if !pipes.is_changed() && !world_load_state.is_changed() && !overlay_mode.is_changed() {
+    if !structures.is_changed() && !world_load_state.is_changed() && !overlay_mode.is_changed() {
         return;
     }
 
-    for entity in pipe_entities
-        .pipes
-        .values()
-        .chain(pipe_entities.pipe_highlights.values())
-        .chain(pipe_entities.vents.values())
-        .chain(pipe_entities.gas_overlays.values())
-        .chain(pipe_entities.gas_overlay_borders.values())
-        .chain(pipe_entities.vent_overlays.values())
-        .copied()
-        .collect::<Vec<_>>()
-    {
+    let mut entities_to_despawn = Vec::new();
+    entities_to_despawn.extend(pipe_entities.pipes.values().copied());
+    entities_to_despawn.extend(pipe_entities.bridges.values().copied());
+    entities_to_despawn.extend(pipe_entities.pipe_highlights.values().copied());
+    entities_to_despawn.extend(pipe_entities.vents.values().copied());
+    entities_to_despawn.extend(
+        pipe_entities
+            .gas_overlays
+            .values()
+            .flat_map(|pair| pair.iter().copied()),
+    );
+    entities_to_despawn.extend(
+        pipe_entities
+            .gas_overlay_borders
+            .values()
+            .flat_map(|pair| pair.iter().copied()),
+    );
+    entities_to_despawn.extend(pipe_entities.vent_overlays.values().copied());
+    for entity in entities_to_despawn {
         commands.entity(entity).despawn();
     }
     pipe_entities.pipes.clear();
+    pipe_entities.bridges.clear();
     pipe_entities.pipe_highlights.clear();
     pipe_entities.vents.clear();
     pipe_entities.gas_overlays.clear();
@@ -578,14 +785,13 @@ pub(crate) fn sync_pipe_world_visuals(
         return;
     }
 
-    for (x, y, pipe_cell) in pipes.iter_cells() {
-        spawn_pipe_visual_bundle(
+    for structure in structures.iter() {
+        spawn_structure_pipe_visuals(
             &mut commands,
             &visuals,
             &mut pipe_entities,
-            x,
-            y,
-            pipe_cell,
+            &structures,
+            structure,
             world_load_state.has_world,
             *overlay_mode,
         );
@@ -595,7 +801,7 @@ pub(crate) fn sync_pipe_world_visuals(
 pub(crate) fn sync_structure_edit_highlight(
     world_load_state: Res<WorldLoadState>,
     structure_edit: Res<StructureEditState>,
-    structures: Res<GasStructureGrid>,
+    structures: Res<PlacedStructureMap>,
     mut highlight: Single<(&mut Transform, &mut Visibility), With<GasStructureEditHighlight>>,
 ) {
     let (transform, visibility) = &mut *highlight;
@@ -607,7 +813,7 @@ pub(crate) fn sync_structure_edit_highlight(
         **visibility = Visibility::Hidden;
         return;
     };
-    if structures.cell(cell.x, cell.y).is_none() {
+    if structures.editable_structure_at(cell.x, cell.y).is_none() {
         **visibility = Visibility::Hidden;
         return;
     }
@@ -663,13 +869,7 @@ fn build_pipe_mask_image(mask: u8) -> Image {
         draw_circle(&mut data, half, half, hub_radius);
     } else {
         if (mask & 0b0001) != 0 {
-            draw_rect(
-                &mut data,
-                half - arm_half,
-                half,
-                half + arm_half,
-                size as i32,
-            );
+            draw_rect(&mut data, half - arm_half, 0, half + arm_half, half);
         }
         if (mask & 0b0010) != 0 {
             draw_rect(
@@ -681,7 +881,13 @@ fn build_pipe_mask_image(mask: u8) -> Image {
             );
         }
         if (mask & 0b0100) != 0 {
-            draw_rect(&mut data, half - arm_half, 0, half + arm_half, half);
+            draw_rect(
+                &mut data,
+                half - arm_half,
+                half,
+                half + arm_half,
+                size as i32,
+            );
         }
         if (mask & 0b1000) != 0 {
             draw_rect(&mut data, 0, half - arm_half, half, half + arm_half);

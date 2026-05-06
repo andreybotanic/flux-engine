@@ -9,6 +9,7 @@ fn handle_editor_mouse_input(
         ResMut<ActiveEditorTool>,
         Res<CellToolSettings>,
         Res<PipeToolSettings>,
+        ResMut<BridgePlacementState>,
         ResMut<SourceStructureToolSettings>,
         ResMut<SinkStructureToolSettings>,
         Res<MainMenuState>,
@@ -28,8 +29,7 @@ fn handle_editor_mouse_input(
     )>,
     data_state: (
         ResMut<WorldGrid>,
-        ResMut<GasStructureGrid>,
-        ResMut<crate::world::pipes::PipeGrid>,
+        ResMut<PlacedStructureMap>,
         ResMut<GasField>,
         ResMut<crate::simulation::pipes::PipeGasField>,
         ResMut<crate::simulation::pipes::PipeFlowVisualState>,
@@ -44,6 +44,7 @@ fn handle_editor_mouse_input(
         mut active_tool,
         cell_settings,
         pipe_settings,
+        mut bridge_state,
         mut source_settings,
         mut sink_settings,
         main_menu,
@@ -54,7 +55,6 @@ fn handle_editor_mouse_input(
     let (
         mut world,
         mut structures,
-        mut pipes,
         mut gas,
         mut pipe_gas,
         mut pipe_flow_visuals,
@@ -71,6 +71,14 @@ fn handle_editor_mouse_input(
             &mut active_tool,
             &mut structure_edit,
         );
+    }
+    if keyboard.just_pressed(KeyCode::KeyR)
+        && !main_menu.open
+        && world_load_state.has_world
+        && active_tool.selected == Some(EditorTool::Gases)
+        && pipe_settings.selected == PipeToolKind::Bridge
+    {
+        bridge_state.rotation = bridge_state.rotation.next_bridge_rotation();
     }
 
     if main_menu.open || !world_load_state.has_world {
@@ -105,9 +113,7 @@ fn handle_editor_mouse_input(
                 hovered_cell,
                 &mut brush_drag,
                 |cell| {
-                    if structures.blocks_solid_placement(cell.x, cell.y)
-                        || pipes.blocks_solid_placement(cell.x, cell.y)
-                    {
+                    if structures.blocks_solid_placement(cell.x, cell.y) {
                         return;
                     }
                     if world.set_solid_with_material(cell.x, cell.y, cell_settings.material) {
@@ -125,10 +131,11 @@ fn handle_editor_mouse_input(
                 hovered_cell,
                 &mut brush_drag,
                 |cell| {
-                    let _ = structures.clear(cell.x, cell.y);
-                    let pipe_cleared = pipes.clear_cell(cell.x, cell.y);
-                    if pipe_cleared {
-                        pipe_gas.clear_cell(cell.x, cell.y);
+                    let had_structures = !structures.structure_ids_at(cell.x, cell.y).is_empty();
+                    if had_structures {
+                        pipe_gas.sync_to_structures(&structures);
+                        pipe_gas.clear_cell(&structures, cell.x, cell.y);
+                        let _ = structures.clear_cell(cell.x, cell.y);
                         pipe_flow_visuals.transfers.clear();
                     }
                     if world.set_empty(cell.x, cell.y) {
@@ -147,21 +154,7 @@ fn handle_editor_mouse_input(
                     hovered_cell,
                     &mut brush_drag,
                     |path| {
-                        if let Some(&first) = path.first() {
-                            changed_pipe_layout |=
-                                pipes.set_pipe(first.x, first.y, &world, &structures);
-                        }
-                        for &cell in path.iter().skip(1) {
-                            changed_pipe_layout |=
-                                pipes.set_pipe(cell.x, cell.y, &world, &structures);
-                        }
-                        for pair in path.windows(2) {
-                            let a = pair[0];
-                            let b = pair[1];
-                            changed_pipe_layout |= pipes.set_pipe(a.x, a.y, &world, &structures);
-                            changed_pipe_layout |= pipes.set_pipe(b.x, b.y, &world, &structures);
-                            changed_pipe_layout |= pipes.add_connection(a, b);
-                        }
+                        changed_pipe_layout |= structures.apply_pipe_path(path, &world);
                     },
                 );
                 if changed_pipe_layout {
@@ -173,7 +166,21 @@ fn handle_editor_mouse_input(
                 structure_edit.selected_cell = None;
                 if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
                     if let Some(cell) = hovered_cell {
-                        if pipes.set_vent(cell.x, cell.y, &world, &structures) {
+                        if structures.place_vent(cell.x, cell.y, &world) {
+                            pipe_flow_visuals.transfers.clear();
+                        }
+                    }
+                }
+            }
+            PipeToolKind::Bridge => {
+                clear_active_tool_state(&mut selection_drag, &mut brush_drag);
+                structure_edit.selected_cell = None;
+                if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
+                    if let Some(cell) = hovered_cell {
+                        if structures
+                            .place_bridge(cell, bridge_state.rotation, &world)
+                            .is_some()
+                        {
                             pipe_flow_visuals.transfers.clear();
                         }
                     }
@@ -190,7 +197,7 @@ fn handle_editor_mouse_input(
                 &mut brush_drag,
                 |path| {
                     for pair in path.windows(2) {
-                        removed_connection |= pipes.remove_connection(pair[0], pair[1]);
+                        removed_connection |= structures.add_pipe_cut(pair[0], pair[1]);
                     }
                 },
             );
@@ -256,15 +263,15 @@ fn handle_editor_mouse_input(
             clear_active_tool_state(&mut selection_drag, &mut brush_drag);
             if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
                 if let Some(cell) = hovered_cell {
-                    if gas_registry.count() > 0 && !pipes.blocks_solid_placement(cell.x, cell.y) {
+                    if gas_registry.count() > 0 && !structures.blocks_solid_placement(cell.x, cell.y) {
                         let gas_index = source_settings.gas_index.min(gas_registry.count() - 1);
-                        if structures.set_source(
+                        if structures.place_gas_source(
                             cell.x,
                             cell.y,
                             gas_index,
                             source_settings.amount.max(1),
                             &world,
-                        ) {
+                        ).is_some() {
                             structure_edit.selected_cell = Some(cell);
                         }
                     }
@@ -275,8 +282,10 @@ fn handle_editor_mouse_input(
             clear_active_tool_state(&mut selection_drag, &mut brush_drag);
             if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
                 if let Some(cell) = hovered_cell {
-                    if !pipes.blocks_solid_placement(cell.x, cell.y)
-                        && structures.set_sink(cell.x, cell.y, sink_settings.amount.max(1), &world)
+                    if !structures.blocks_solid_placement(cell.x, cell.y)
+                        && structures
+                            .place_gas_sink(cell.x, cell.y, sink_settings.amount.max(1), &world)
+                            .is_some()
                     {
                         structure_edit.selected_cell = Some(cell);
                     }
@@ -289,11 +298,14 @@ fn handle_editor_mouse_input(
                 && mouse_buttons.just_pressed(MouseButton::Left)
                 && !blocked_by_ui
             {
-                structure_edit.selected_cell =
-                    hovered_cell.filter(|cell| structures.cell(cell.x, cell.y).is_some());
+                structure_edit.selected_cell = hovered_cell
+                    .filter(|cell| structures.editable_structure_at(cell.x, cell.y).is_some());
                 if let Some(cell) = structure_edit.selected_cell {
-                    match structures.cell(cell.x, cell.y) {
-                        Some(GasStructureCell::Source { gas_index, amount }) => {
+                    match structures
+                        .editable_structure_at(cell.x, cell.y)
+                        .map(|structure| structure.params)
+                    {
+                        Some(StructureParams::GasSource { gas_index, amount }) => {
                             source_settings.gas_index = gas_index;
                             select_fields.set_selected(GAS_SELECT_SOURCE_ID, gas_index);
                             source_settings.amount = amount.max(1);
@@ -306,7 +318,7 @@ fn handle_editor_mouse_input(
                                     );
                             }
                         }
-                        Some(GasStructureCell::Sink { amount }) => {
+                        Some(StructureParams::GasSink { amount }) => {
                             sink_settings.amount = amount.max(1);
                             if let Ok(mut sink_amount_input) = field_state.p2().single_mut() {
                                 sink_amount_input.text = sink_settings.amount.to_string();
@@ -315,7 +327,7 @@ fn handle_editor_mouse_input(
                                     crate::ui::input_field::ParsedInputValue::U32(sink_settings.amount);
                             }
                         }
-                        None => {}
+                        _ => {}
                     }
                 }
             }
@@ -479,6 +491,7 @@ fn update_editor_cursor_overlays(
     active_tool: Res<ActiveEditorTool>,
     cell_settings: Res<CellToolSettings>,
     pipe_settings: Res<PipeToolSettings>,
+    bridge_state: Res<BridgePlacementState>,
     main_menu: Res<MainMenuState>,
     world_load_state: Res<WorldLoadState>,
     overlay_ui_state: (Res<EditorIconSet>, Res<DebugMode>, Res<PanelManager>),
@@ -540,6 +553,7 @@ fn update_editor_cursor_overlays(
             Some(EditorTool::Gases) => Some(match pipe_settings.selected {
                 PipeToolKind::Pipe => icon_set.pipe_silhouette.clone(),
                 PipeToolKind::Vent => icon_set.vent_silhouette.clone(),
+                PipeToolKind::Bridge => icon_set.bridge_silhouette.clone(),
             }),
             Some(EditorTool::CreateGasSource) => Some(icon_set.source_silhouette.clone()),
             Some(EditorTool::CreateGasSink) => Some(icon_set.sink_silhouette.clone()),
@@ -548,8 +562,80 @@ fn update_editor_cursor_overlays(
         if !is_on_ui && !main_menu.open && !mouse_buttons.pressed(MouseButton::Left) {
             if let (Some(image), Some(cell)) = (ghost_image, world_cell) {
                 ghost_sprite.image = image;
-                **ghost_transform =
-                    Transform::from_translation(cell_center(cell.x, cell.y).extend(1.8));
+                let size_in_cells = match active_tool.selected {
+                    Some(EditorTool::BuildSolid) => crate::world::structures::cell_material_descriptor(
+                        cell_settings.material,
+                    )
+                    .size_in_cells(),
+                    Some(EditorTool::Gases) => crate::world::structures::structure_descriptor(
+                        selected_pipe_structure_kind(pipe_settings.selected),
+                        bridge_state.rotation,
+                    )
+                    .size_in_cells(),
+                    Some(EditorTool::CreateGasSource) => {
+                        crate::world::structures::structure_descriptor(
+                            crate::world::structures::StructureKind::GasSource,
+                            StructureRotation::Deg0,
+                        )
+                        .size_in_cells()
+                    }
+                    Some(EditorTool::CreateGasSink) => {
+                        crate::world::structures::structure_descriptor(
+                            crate::world::structures::StructureKind::GasSink,
+                            StructureRotation::Deg0,
+                        )
+                        .size_in_cells()
+                    }
+                    _ => UVec2::ONE,
+                };
+                let sprite_size_in_cells = match active_tool.selected {
+                    Some(EditorTool::BuildSolid) => {
+                        crate::world::structures::cell_material_sprite_size_in_cells(
+                            cell_settings.material,
+                        )
+                    }
+                    Some(EditorTool::Gases) => crate::world::structures::structure_sprite_size_in_cells(
+                        selected_pipe_structure_kind(pipe_settings.selected),
+                        bridge_state.rotation,
+                    ),
+                    Some(EditorTool::CreateGasSource) => {
+                        crate::world::structures::structure_sprite_size_in_cells(
+                            crate::world::structures::StructureKind::GasSource,
+                            StructureRotation::Deg0,
+                        )
+                    }
+                    Some(EditorTool::CreateGasSink) => {
+                        crate::world::structures::structure_sprite_size_in_cells(
+                            crate::world::structures::StructureKind::GasSink,
+                            StructureRotation::Deg0,
+                        )
+                    }
+                    _ => UVec2::ONE,
+                };
+                ghost_sprite.custom_size = Some(Vec2::new(
+                    sprite_size_in_cells.x.max(1) as f32 * CELL_SIZE,
+                    sprite_size_in_cells.y.max(1) as f32 * CELL_SIZE,
+                ));
+                let translation = cell_center(cell.x, cell.y)
+                    + Vec2::new(
+                        size_in_cells.x.saturating_sub(1) as f32 * CELL_SIZE * 0.5,
+                        size_in_cells.y.saturating_sub(1) as f32 * CELL_SIZE * 0.5,
+                    );
+                ghost_sprite.color = match pipe_settings.selected {
+                    PipeToolKind::Bridge => Color::srgba(1.0, 1.0, 1.0, 0.82),
+                    _ => Color::WHITE,
+                };
+                let mut transform = Transform::from_translation(translation.extend(1.8));
+                transform.rotation = match (active_tool.selected, pipe_settings.selected) {
+                    (Some(EditorTool::Gases), PipeToolKind::Bridge) => match bridge_state.rotation {
+                        StructureRotation::Deg0 => Quat::IDENTITY,
+                        StructureRotation::Deg90 => Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                        StructureRotation::Deg180 => Quat::from_rotation_z(std::f32::consts::PI),
+                        StructureRotation::Deg270 => Quat::from_rotation_z(std::f32::consts::PI * 1.5),
+                    },
+                    _ => Quat::IDENTITY,
+                };
+                **ghost_transform = transform;
                 **ghost_visibility = Visibility::Visible;
             } else {
                 **ghost_visibility = Visibility::Hidden;
@@ -706,6 +792,16 @@ pub(crate) fn is_cursor_over_ui(
         || panel_manager
             .map(|panels| panels.is_cursor_over_any_panel(cursor))
             .unwrap_or(false)
+}
+
+fn selected_pipe_structure_kind(
+    pipe_tool: PipeToolKind,
+) -> crate::world::structures::StructureKind {
+    match pipe_tool {
+        PipeToolKind::Pipe => crate::world::structures::StructureKind::Pipe,
+        PipeToolKind::Vent => crate::world::structures::StructureKind::Vent,
+        PipeToolKind::Bridge => crate::world::structures::StructureKind::GasPipeBridge,
+    }
 }
 
 #[derive(Clone, Copy)]

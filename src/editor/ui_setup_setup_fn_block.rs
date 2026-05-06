@@ -58,6 +58,7 @@ fn setup_editor_ui(
         erase: asset_server.load("sprites/ui/tool_erase.png"),
         pipe: asset_server.load("sprites/world/pipe_mask_10.png"),
         vent: asset_server.load("sprites/world/tile_vent.png"),
+        bridge: asset_server.load("sprites/ui/tool_bridge.png"),
         add_gas: asset_server.load("sprites/ui/tool_add_gas.png"),
         clear_gas: asset_server.load("sprites/ui/tool_clear_gas.png"),
         source: asset_server.load("sprites/world/tile_gas_source.png"),
@@ -68,6 +69,7 @@ fn setup_editor_ui(
         metal_silhouette: asset_server.load("sprites/world/silhouette_metal.png"),
         pipe_silhouette: asset_server.load("sprites/world/pipe_silhouette_mask_00.png"),
         vent_silhouette: asset_server.load("sprites/world/silhouette_vent.png"),
+        bridge_silhouette: asset_server.load("sprites/world/bridge_silhouette.png"),
         source_silhouette: asset_server.load("sprites/world/tile_gas_source.png"),
         sink_silhouette: asset_server.load("sprites/world/tile_gas_sink.png"),
         select_arrow: asset_server.load("sprites/ui/select_arrow.png"),
@@ -143,6 +145,7 @@ fn setup_editor_ui(
         .with_children(|parent| {
             spawn_pipe_tool_button(parent, "Pipe", PipeToolKind::Pipe, icon_set.pipe.clone());
             spawn_pipe_tool_button(parent, "Vent", PipeToolKind::Vent, icon_set.vent.clone());
+            spawn_pipe_tool_button(parent, "Bridge", PipeToolKind::Bridge, icon_set.bridge.clone());
         });
 
     commands

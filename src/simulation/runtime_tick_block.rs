@@ -72,8 +72,7 @@ fn run_simulation_tick(
     config: Res<GasSimulationConfig>,
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
-    structures: Res<GasStructureGrid>,
-    pipes: Res<PipeGrid>,
+    structures: Res<PlacedStructureMap>,
     mut pipe_gas: ResMut<crate::simulation::pipes::PipeGasField>,
     mut pipe_flow_visuals: ResMut<crate::simulation::pipes::PipeFlowVisualState>,
     world: Res<WorldGrid>,
@@ -93,7 +92,7 @@ fn run_simulation_tick(
     }
 
     let changed_by_pipes = crate::simulation::pipes::apply_pipe_network_step(
-        &pipes,
+        &structures,
         &mut pipe_gas,
         &mut gas,
         &world,
@@ -147,23 +146,39 @@ fn run_simulation_tick(
 }
 
 pub(crate) fn apply_gas_structures_pre_step(
-    structures: &GasStructureGrid,
+    structures: &PlacedStructureMap,
     gas: &mut GasField,
     world: &WorldGrid,
 ) -> bool {
     let mut changed = false;
-    for (x, y, structure) in structures.iter_cells() {
-        match structure {
-            GasStructureCell::Source { gas_index, amount } => {
-                if gas.add_particles_no_impulse(x, y, gas_index, amount, world) > 0 {
+    for structure in structures.iter() {
+        match structure.params {
+            StructureParams::GasSource { gas_index, amount }
+                if structure.kind == StructureKind::GasSource =>
+            {
+                if gas.add_particles_no_impulse(
+                    structure.origin.x,
+                    structure.origin.y,
+                    gas_index,
+                    amount,
+                    world,
+                ) > 0
+                {
                     changed = true;
                 }
             }
-            GasStructureCell::Sink { amount } => {
-                if gas.remove_particles_proportional(x, y, amount, world) > 0 {
+            StructureParams::GasSink { amount } if structure.kind == StructureKind::GasSink => {
+                if gas.remove_particles_proportional(
+                    structure.origin.x,
+                    structure.origin.y,
+                    amount,
+                    world,
+                ) > 0
+                {
                     changed = true;
                 }
             }
+            StructureParams::None | StructureParams::GasSource { .. } | StructureParams::GasSink { .. } => {}
         }
     }
 

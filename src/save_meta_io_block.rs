@@ -29,7 +29,7 @@ struct SavedGasChunk {
 
 struct SavedPipeGasChunk {
     gas_ids: Vec<String>,
-    species: Vec<u32>,
+    nodes: Vec<(PipeContainerKind, UVec2, Vec<u32>)>,
 }
 
 fn validate_display_name(display_name: &str) -> Result<(), SaveError> {
@@ -103,8 +103,7 @@ fn write_slot(
     descriptor: &SaveDescriptor,
     world: &WorldGrid,
     gas: &GasField,
-    structures: &GasStructureGrid,
-    pipe_layout: &crate::world::pipes::PipeGrid,
+    structures: &PlacedStructureMap,
     pipe_gas: &crate::simulation::pipes::PipeGasField,
     gas_registry: &GasRegistry,
     simulation_step: u64,
@@ -130,13 +129,8 @@ fn write_slot(
             format: "binary_v2".to_string(),
         },
         SaveChunkMetaToml {
-            id: CHUNK_GAS_STRUCTURES_ID.to_string(),
-            file: GAS_STRUCTURES_FILE.to_string(),
-            format: "binary_v1".to_string(),
-        },
-        SaveChunkMetaToml {
-            id: CHUNK_PIPE_LAYOUT_ID.to_string(),
-            file: PIPE_LAYOUT_FILE.to_string(),
+            id: CHUNK_PLACED_STRUCTURES_ID.to_string(),
+            file: PLACED_STRUCTURES_FILE.to_string(),
             format: "binary_v1".to_string(),
         },
         SaveChunkMetaToml {
@@ -160,7 +154,6 @@ fn write_slot(
     let world_codes = world.snapshot_cell_codes();
     let gas_snapshot = gas.snapshot_state();
     let structures_snapshot = structures.snapshot_state();
-    let pipe_layout_snapshot = pipe_layout.snapshot_state();
     let pipe_gas_snapshot = pipe_gas.snapshot_state();
     let gas_ids = gas_registry
         .all()
@@ -207,8 +200,10 @@ fn write_slot(
             &gas_ids,
             &gas_snapshot,
         )?;
-        write_gas_structures_chunk(&tmp_dir.join(GAS_STRUCTURES_FILE), &structures_snapshot)?;
-        write_pipe_layout_chunk(&tmp_dir.join(PIPE_LAYOUT_FILE), &pipe_layout_snapshot)?;
+        write_placed_structures_chunk(
+            &tmp_dir.join(PLACED_STRUCTURES_FILE),
+            &structures_snapshot,
+        )?;
         write_pipe_gas_chunk(
             &tmp_dir.join(PIPE_GAS_FILE),
             &gas_ids,

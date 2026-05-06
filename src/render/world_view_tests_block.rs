@@ -1,17 +1,23 @@
 #[cfg(test)]
 mod tests {
     use super::{
+        bridge_visual_size, bridge_visual_transform,
         build_pipe_mask_image, build_vent_overlay_image, build_world_fade_mask_image, grid_fade,
         pipe_flow_packet_visual, pipe_flow_square_size, pipe_gas_square_size,
         pipe_highlight_visibility, pipe_world_z, vent_world_visibility, world_fade_alpha,
         OverlayMode,
     };
     use crate::simulation::pipes::{
-        pipe_cell_display_total_particles, PipeFlowVisualState, PipeGasField, PipeTransferRecord,
+        pipe_cell_display_total_particles_with_transfers, PipeFlowVisualState, PipeGasField,
+        PipeTransferRecord,
     };
     use bevy::prelude::Visibility;
-    use bevy::math::{UVec2, Vec2};
+    use bevy::math::{UVec2, Vec2, Vec3};
     use crate::config::{GasDefinition, GasRegistry};
+    use crate::world::{
+        grid::{WorldGrid, CELL_SIZE},
+        structures::{PlacedStructureMap, StructureRotation},
+    };
 
     fn registry() -> GasRegistry {
         GasRegistry::new(vec![
@@ -76,31 +82,31 @@ mod tests {
 
     #[test]
     fn pipe_mask_vertical_connections_match_world_orientation() {
-        let down_visual = build_pipe_mask_image(0b0001);
-        let up_visual = build_pipe_mask_image(0b0100);
-        let down_data = down_visual
-            .data
-            .as_ref()
-            .expect("pipe mask image has pixel data");
+        let up_visual = build_pipe_mask_image(0b0001);
+        let down_visual = build_pipe_mask_image(0b0100);
         let up_data = up_visual
             .data
             .as_ref()
             .expect("pipe mask image has pixel data");
-        let width = down_visual.texture_descriptor.size.width as usize;
+        let down_data = down_visual
+            .data
+            .as_ref()
+            .expect("pipe mask image has pixel data");
+        let width = up_visual.texture_descriptor.size.width as usize;
         let sample_alpha = |data: &[u8], x: usize, y: usize| data[((y * width + x) * 4) + 3];
 
-        assert_eq!(sample_alpha(down_data, width / 2, 8), 0);
-        assert!(sample_alpha(down_data, width / 2, width - 8) > 0);
         assert!(sample_alpha(up_data, width / 2, 8) > 0);
         assert_eq!(sample_alpha(up_data, width / 2, width - 8), 0);
+        assert_eq!(sample_alpha(down_data, width / 2, 8), 0);
+        assert!(sample_alpha(down_data, width / 2, width - 8) > 0);
     }
 
     #[test]
     fn pipe_mask_connections_reach_cell_edges() {
         let right_visual = build_pipe_mask_image(0b0010);
         let left_visual = build_pipe_mask_image(0b1000);
-        let down_visual = build_pipe_mask_image(0b0001);
-        let up_visual = build_pipe_mask_image(0b0100);
+        let up_visual = build_pipe_mask_image(0b0001);
+        let down_visual = build_pipe_mask_image(0b0100);
         let right_data = right_visual
             .data
             .as_ref()
@@ -248,7 +254,12 @@ mod tests {
     #[test]
     fn pipe_display_total_uses_flow_packets_when_storage_is_empty() {
         let registry = registry();
-        let pipe_gas = PipeGasField::from_registry(&registry);
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        assert!(structures.place_pipe(3, 4, &world));
+        assert!(structures.place_pipe(4, 4, &world));
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        pipe_gas.sync_to_structures(&structures);
         let flow_state = PipeFlowVisualState {
             transfers: vec![PipeTransferRecord {
                 from: UVec2::new(3, 4),
@@ -259,12 +270,46 @@ mod tests {
         };
 
         assert_eq!(
-            pipe_cell_display_total_particles(&pipe_gas, &flow_state, 3, 4),
+            pipe_cell_display_total_particles_with_transfers(
+                &structures,
+                &pipe_gas,
+                &flow_state,
+                3,
+                4,
+                true,
+            ),
             8
         );
         assert_eq!(
-            pipe_cell_display_total_particles(&pipe_gas, &flow_state, 4, 4),
+            pipe_cell_display_total_particles_with_transfers(
+                &structures,
+                &pipe_gas,
+                &flow_state,
+                4,
+                4,
+                true,
+            ),
             8
         );
+    }
+
+    #[test]
+    fn bridge_visual_keeps_base_horizontal_size_for_all_rotations() {
+        assert_eq!(
+            bridge_visual_size(StructureRotation::Deg0),
+            Vec2::new(CELL_SIZE * 3.0, CELL_SIZE)
+        );
+        assert_eq!(
+            bridge_visual_size(StructureRotation::Deg90),
+            Vec2::new(CELL_SIZE * 3.0, CELL_SIZE)
+        );
+    }
+
+    #[test]
+    fn bridge_vertical_variant_is_produced_by_rotation_not_resizing() {
+        let transform =
+            bridge_visual_transform(UVec2::new(10, 11), StructureRotation::Deg90, OverlayMode::Main);
+        let rotated = transform.rotation * Vec3::X;
+        assert!(rotated.y > 0.99);
     }
 }

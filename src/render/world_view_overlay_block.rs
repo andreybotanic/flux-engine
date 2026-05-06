@@ -475,7 +475,7 @@ fn grid_fade(distance_cells: f32, fade_radius_cells: f32) -> f32 {
 pub(crate) fn sync_pipe_overlay_visuals(
     overlay_mode: Res<OverlayMode>,
     world_load_state: Res<WorldLoadState>,
-    pipe_layout: Res<PipeGrid>,
+    structures: Res<PlacedStructureMap>,
     pipe_gas: Res<PipeGasField>,
     flow_state: Res<PipeFlowVisualState>,
     gas_registry: Res<GasRegistry>,
@@ -486,7 +486,7 @@ pub(crate) fn sync_pipe_overlay_visuals(
         Query<
             '_,
             '_,
-            (&mut Sprite, &mut Visibility),
+            (&mut Sprite, &mut Transform, &mut Visibility),
             (
                 With<PipeGasOverlayVisual>,
                 Without<PipeGasOverlayBorderVisual>,
@@ -496,7 +496,7 @@ pub(crate) fn sync_pipe_overlay_visuals(
         Query<
             '_,
             '_,
-            (&mut Sprite, &mut Visibility),
+            (&mut Sprite, &mut Transform, &mut Visibility),
             (
                 With<PipeGasOverlayBorderVisual>,
                 Without<PipeGasOverlayVisual>,
@@ -517,101 +517,95 @@ pub(crate) fn sync_pipe_overlay_visuals(
 ) {
     let show_pipe_overlay = world_load_state.has_world && *overlay_mode == OverlayMode::Pipes;
 
-    for ((x, y), entity) in &pipe_entities.gas_overlays {
-        let Some(border_entity) = pipe_entities.gas_overlay_borders.get(&(*x, *y)).copied() else {
-            if let Ok((_, mut visibility)) = visuals.p0().get_mut(*entity) {
-                *visibility = Visibility::Hidden;
-            }
+    for ((x, y), overlay_entities) in &pipe_entities.gas_overlays {
+        let Some(border_entities) = pipe_entities.gas_overlay_borders.get(&(*x, *y)) else {
             continue;
         };
-        let has_border = {
-            let border_query = visuals.p1();
-            border_query.contains(border_entity)
-        };
-        if !has_border {
-            if let Ok((_, mut visibility)) = visuals.p0().get_mut(*entity) {
-                *visibility = Visibility::Hidden;
-            }
-            continue;
-        }
-
-        if !show_pipe_overlay {
-            if let Ok((_, mut visibility)) = visuals.p0().get_mut(*entity) {
-                *visibility = Visibility::Hidden;
-            }
-            if let Ok((_, mut border_visibility)) = visuals.p1().get_mut(border_entity) {
-                *border_visibility = Visibility::Hidden;
-            }
-            continue;
-        }
-        let display_counts = pipe_cell_display_species_counts_with_transfers(
-            &pipe_gas,
-            &flow_state,
-            *x,
-            *y,
-            false,
-        );
-        let total = pipe_cell_display_total_particles_with_transfers(
-            &pipe_gas,
-            &flow_state,
-            *x,
-            *y,
-            false,
-        );
-        if total == 0 {
-            if let Ok((_, mut visibility)) = visuals.p0().get_mut(*entity) {
-                *visibility = Visibility::Hidden;
-            }
-            if let Ok((_, mut border_visibility)) = visuals.p1().get_mut(border_entity) {
-                *border_visibility = Visibility::Hidden;
-            }
-            continue;
-        }
-        let total_f = total as f32;
-        let mut weighted_rgb = Vec3::ZERO;
-        for gas_index in 0..display_counts.len() {
-            let amount = display_counts[gas_index] as f32;
-            if amount <= 0.0 {
-                continue;
-            }
-            if let Some(gas_def) = gas_registry.get(gas_index) {
-                weighted_rgb += Vec3::from_array(gas_def.color) * amount;
-            }
-        }
-        let mix_rgb = if weighted_rgb.length_squared() <= f32::EPSILON {
-            Vec3::ZERO
+        let display_blocks = if show_pipe_overlay {
+            pipe_cell_display_blocks_with_transfers(
+                &structures,
+                &pipe_gas,
+                &flow_state,
+                *x,
+                *y,
+                false,
+            )
         } else {
-            weighted_rgb / total_f.max(1.0)
+            Vec::new()
         };
-        let visual = gas_visual_intensity(
-            total_f,
-            visual_settings.gamma,
-            main_view_settings.max_particles_for_max_intensity,
-            1.0,
-            0.12,
-        );
-        let rgb = (mix_rgb * visual).clamp(Vec3::ZERO, Vec3::ONE);
-        let outer_size = pipe_gas_square_size(total);
-        let inner_size = pipe_square_inner_size(outer_size);
-        {
-            let mut gas_query = visuals.p0();
-            let Ok((mut sprite, mut visibility)) = gas_query.get_mut(*entity) else {
-                continue;
-            };
-            sprite.custom_size = Some(Vec2::splat(inner_size));
-            sprite.color =
-                Color::linear_rgba(rgb.x, rgb.y, rgb.z, (0.42 + visual * 0.5).clamp(0.0, 1.0));
-            *visibility = Visibility::Visible;
-        }
-        {
-            let mut border_query = visuals.p1();
-            let Ok((mut border_sprite, mut border_visibility)) = border_query.get_mut(border_entity)
-            else {
-                continue;
-            };
-            border_sprite.custom_size = Some(Vec2::splat(outer_size));
-            border_sprite.color = Color::srgba(1.0, 1.0, 1.0, 0.96);
-            *border_visibility = Visibility::Visible;
+
+        for slot in 0..overlay_entities.len() {
+            let overlay_entity = overlay_entities[slot];
+            let border_entity = border_entities[slot];
+            let block = display_blocks.get(slot);
+            let total_slots = display_blocks.len().min(overlay_entities.len());
+            let cell_center = crate::world::grid::cell_center(*x, *y);
+
+            if let Some(block) = block {
+                let total_f = block.total_particles as f32;
+                let mut weighted_rgb = Vec3::ZERO;
+                for gas_index in 0..block.species_counts.len() {
+                    let amount = block.species_counts[gas_index] as f32;
+                    if amount <= 0.0 {
+                        continue;
+                    }
+                    if let Some(gas_def) = gas_registry.get(gas_index) {
+                        weighted_rgb += Vec3::from_array(gas_def.color) * amount;
+                    }
+                }
+                let mix_rgb = if weighted_rgb.length_squared() <= f32::EPSILON {
+                    Vec3::ZERO
+                } else {
+                    weighted_rgb / total_f.max(1.0)
+                };
+                let visual = gas_visual_intensity(
+                    total_f,
+                    visual_settings.gamma,
+                    main_view_settings.max_particles_for_max_intensity,
+                    1.0,
+                    0.12,
+                );
+                let rgb = (mix_rgb * visual).clamp(Vec3::ZERO, Vec3::ONE);
+                let outer_size = pipe_overlay_slot_size(block.total_particles, total_slots);
+                let inner_size = pipe_square_inner_size(outer_size);
+                let offset = pipe_overlay_slot_offset(slot, total_slots);
+                {
+                    let mut gas_query = visuals.p0();
+                    let Ok((mut sprite, mut transform, mut visibility)) =
+                        gas_query.get_mut(overlay_entity)
+                    else {
+                        continue;
+                    };
+                    sprite.custom_size = Some(Vec2::splat(inner_size));
+                    sprite.color = Color::linear_rgba(
+                        rgb.x,
+                        rgb.y,
+                        rgb.z,
+                        (0.42 + visual * 0.5).clamp(0.0, 1.0),
+                    );
+                    transform.translation = (cell_center + offset).extend(1.05);
+                    *visibility = Visibility::Visible;
+                }
+                {
+                    let mut border_query = visuals.p1();
+                    let Ok((mut border_sprite, mut transform, mut border_visibility)) =
+                        border_query.get_mut(border_entity)
+                    else {
+                        continue;
+                    };
+                    border_sprite.custom_size = Some(Vec2::splat(outer_size));
+                    border_sprite.color = Color::srgba(1.0, 1.0, 1.0, 0.96);
+                    transform.translation = (cell_center + offset).extend(1.04);
+                    *border_visibility = Visibility::Visible;
+                }
+            } else {
+                if let Ok((_, _, mut visibility)) = visuals.p0().get_mut(overlay_entity) {
+                    *visibility = Visibility::Hidden;
+                }
+                if let Ok((_, _, mut border_visibility)) = visuals.p1().get_mut(border_entity) {
+                    *border_visibility = Visibility::Hidden;
+                }
+            }
         }
     }
 
@@ -620,8 +614,8 @@ pub(crate) fn sync_pipe_overlay_visuals(
         let Ok(mut visibility) = vent_query.get_mut(*entity) else {
             continue;
         };
-        let cell = pipe_layout.cell(*x, *y);
-        *visibility = if show_pipe_overlay && cell.has_vent {
+        let _ = (x, y);
+        *visibility = if show_pipe_overlay {
             Visibility::Visible
         } else {
             Visibility::Hidden

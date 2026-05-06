@@ -11,9 +11,8 @@ mod tests {
     };
     use crate::simulation::gpu_solver::GpuGasSolver;
     use crate::world::{
-        gas_structures::GasStructureGrid,
         grid::{is_boundary, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
-        pipes::PipeGrid,
+        structures::PlacedStructureMap,
     };
     use bevy::prelude::UVec2;
 
@@ -70,22 +69,18 @@ mod tests {
         let registry = super::test_registry_three_gases();
         let config = super::tuned_config();
         let world = WorldGrid::default();
-        let structures = GasStructureGrid::default();
-        let mut layout = PipeGrid::default();
+        let mut structures = PlacedStructureMap::default();
         for cell in [
             UVec2::new(30, 30),
             UVec2::new(31, 30),
             UVec2::new(32, 30),
             UVec2::new(31, 29),
         ] {
-            assert!(layout.set_pipe(cell.x, cell.y, &world, &structures));
+            assert!(structures.place_pipe(cell.x, cell.y, &world));
         }
-        assert!(layout.add_connection(UVec2::new(30, 30), UVec2::new(31, 30)));
-        assert!(layout.add_connection(UVec2::new(31, 30), UVec2::new(32, 30)));
-        assert!(layout.add_connection(UVec2::new(31, 30), UVec2::new(31, 29)));
-        assert!(layout.set_vent(30, 30, &world, &structures));
-        assert!(layout.set_vent(32, 30, &world, &structures));
-        assert!(layout.set_vent(31, 29, &world, &structures));
+        assert!(structures.place_vent(30, 30, &world));
+        assert!(structures.place_vent(32, 30, &world));
+        assert!(structures.place_vent(31, 29, &world));
 
         let mut cpu_field = GasField::from_registry(&registry);
         cpu_field.set_amount(30, 30, 0, 180.0);
@@ -94,6 +89,8 @@ mod tests {
         let mut gpu_field = cpu_field.clone();
         let mut cpu_pipe = PipeGasField::from_registry(&registry);
         let mut gpu_pipe = PipeGasField::from_registry(&registry);
+        cpu_pipe.sync_to_structures(&structures);
+        gpu_pipe.sync_to_structures(&structures);
         let mut cpu_visuals = PipeFlowVisualState::default();
         let mut gpu_visuals = PipeFlowVisualState::default();
         let mut cpu_step = crate::simulation::SimulationStep(0);
@@ -105,7 +102,7 @@ mod tests {
 
         for _ in 0..8 {
             let _ = apply_pipe_network_step(
-                &layout,
+                &structures,
                 &mut cpu_pipe,
                 &mut cpu_field,
                 &world,
@@ -120,7 +117,7 @@ mod tests {
             );
 
             let changed = apply_pipe_network_step(
-                &layout,
+                &structures,
                 &mut gpu_pipe,
                 &mut gpu_field,
                 &world,

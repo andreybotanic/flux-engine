@@ -56,7 +56,7 @@ pub fn run_cpu_gpu_parity_scenario(
     radius: u32,
 ) -> Result<ParityMetrics, String> {
     let mut world = WorldGrid::default();
-    let mut structures = GasStructureGrid::default();
+    let mut structures = PlacedStructureMap::default();
     let registry = test_registry_three_gases();
     let config = tuned_config();
 
@@ -118,7 +118,7 @@ pub fn run_cpu_cpu_parity_scenario(
     step_offset_b: u64,
 ) -> Result<ParityMetrics, String> {
     let mut world = WorldGrid::default();
-    let mut structures = GasStructureGrid::default();
+    let mut structures = PlacedStructureMap::default();
     let registry = test_registry_three_gases();
     let config = tuned_config();
 
@@ -207,7 +207,7 @@ pub fn run_cpu_only_calibration(
         return Err("Calibration requires at least two CPU runs".to_string());
     }
     let mut world = WorldGrid::default();
-    let mut structures = GasStructureGrid::default();
+    let mut structures = PlacedStructureMap::default();
     let registry = test_registry_three_gases();
     let config = tuned_config();
 

@@ -9,9 +9,8 @@ use crate::{
     simulation::{
         gas::GasField,
         pipes::{
-            pipe_cell_display_species_counts_with_transfers,
-            pipe_cell_display_total_particles_with_transfers, PipeFlowVisualState, PipeGasField,
-            PIPE_CELL_CAPACITY,
+            pipe_cell_display_blocks_with_transfers, PipeContainerKind, PipeFlowVisualState,
+            PipeGasField, PIPE_CELL_CAPACITY,
         },
         SimulationControl,
     },
@@ -19,7 +18,7 @@ use crate::{
     ui::panels::PanelManager,
     world::{
         grid::{world_to_cell, WorldGrid},
-        pipes::PipeGrid,
+        structures::PlacedStructureMap,
     },
 };
 
@@ -73,7 +72,7 @@ pub(crate) fn update_cell_inspector(
     gas_registry: Res<GasRegistry>,
     world: Res<WorldGrid>,
     pipe_state: (
-        Res<PipeGrid>,
+        Res<PlacedStructureMap>,
         Res<PipeGasField>,
         Res<PipeFlowVisualState>,
         Res<SimulationControl>,
@@ -161,7 +160,7 @@ fn build_cell_inspector_message(
     world: &WorldGrid,
     gas: &GasField,
     gas_registry: &GasRegistry,
-    pipe_layout: &PipeGrid,
+    structures: &PlacedStructureMap,
     pipe_gas: &PipeGasField,
     flow_state: &PipeFlowVisualState,
     include_transfers: bool,
@@ -180,35 +179,40 @@ fn build_cell_inspector_message(
         gas.total_amount_rounded(cell.x, cell.y)
     ));
 
-    let pipe_cell = pipe_layout.cell(cell.x, cell.y);
-    if pipe_cell.has_pipe {
+    let display_blocks = pipe_cell_display_blocks_with_transfers(
+        structures,
+        pipe_gas,
+        flow_state,
+        cell.x,
+        cell.y,
+        include_transfers,
+    );
+    if !display_blocks.is_empty() {
         message.push_str("\n\n");
-        message.push_str(if pipe_cell.has_vent {
-            "Pipe + Vent\n"
-        } else {
-            "Pipe\n"
-        });
-        let display_counts = pipe_cell_display_species_counts_with_transfers(
-            pipe_gas,
-            flow_state,
-            cell.x,
-            cell.y,
-            include_transfers,
-        );
-        append_gas_lines(&mut message, gas_registry, |gas_index| {
-            display_counts.get(gas_index).copied().unwrap_or(0)
-        });
-        message.push_str(&format!(
-            "Pipe total: {} / {}",
-            pipe_cell_display_total_particles_with_transfers(
-                pipe_gas,
-                flow_state,
-                cell.x,
-                cell.y,
-                include_transfers,
-            ),
-            PIPE_CELL_CAPACITY
-        ));
+        for (index, block) in display_blocks.iter().enumerate() {
+            if index > 0 {
+                message.push('\n');
+            }
+            let label = match block.kind {
+                PipeContainerKind::Pipe if structures.has_vent_at(cell.x, cell.y) => "Pipe + Vent",
+                PipeContainerKind::Pipe => "Pipe",
+                PipeContainerKind::BridgePipe => "Bridge Pipe",
+            };
+            message.push_str(label);
+            message.push('\n');
+            append_gas_lines(&mut message, gas_registry, |gas_index| {
+                block.species_counts.get(gas_index).copied().unwrap_or(0)
+            });
+            message.push_str(&format!(
+                "{} total: {} / {}",
+                label,
+                block.total_particles,
+                PIPE_CELL_CAPACITY
+            ));
+            if index + 1 < display_blocks.len() {
+                message.push_str("\n\n");
+            }
+        }
     }
 
     message
@@ -259,7 +263,7 @@ mod tests {
             gas::GasField,
             pipes::{PipeFlowVisualState, PipeGasField, PipeTransferRecord},
         },
-        world::{gas_structures::GasStructureGrid, grid::WorldGrid, pipes::PipeGrid},
+        world::{grid::WorldGrid, structures::PlacedStructureMap},
     };
     use bevy::prelude::*;
 
@@ -297,15 +301,15 @@ mod tests {
     fn pipe_block_is_added_when_hovered_cell_contains_pipe() {
         let registry = registry();
         let world = WorldGrid::default();
-        let structures = GasStructureGrid::default();
-        let mut pipe_layout = PipeGrid::default();
+        let mut structures = PlacedStructureMap::default();
         let mut pipe_gas = PipeGasField::from_registry(&registry);
         let flow_state = PipeFlowVisualState::default();
         let mut gas = GasField::from_registry(&registry);
-        assert!(pipe_layout.set_pipe(12, 14, &world, &structures));
-        assert!(pipe_layout.set_vent(12, 14, &world, &structures));
+        assert!(structures.place_pipe(12, 14, &world));
+        assert!(structures.place_vent(12, 14, &world));
         gas.set_amount(12, 14, 0, 5.0);
-        pipe_gas.add_species_counts_limited(12, 14, &[7, 2]);
+        pipe_gas.sync_to_structures(&structures);
+        pipe_gas.add_species_counts_limited(0, &[7, 2]);
 
         let message = build_cell_inspector_message(
             "F3 Pipes",
@@ -313,14 +317,14 @@ mod tests {
             &world,
             &gas,
             &registry,
-            &pipe_layout,
+            &structures,
             &pipe_gas,
             &flow_state,
             true,
         );
 
         assert!(message.contains("Pipe + Vent"));
-        assert!(message.contains("Pipe total: 9 / 1000"));
+        assert!(message.contains("Pipe + Vent total: 9 / 1000"));
         assert!(message.contains("H2: 7 particles"));
         assert!(message.contains("O2: 2 particles"));
     }
@@ -336,8 +340,7 @@ mod tests {
     fn pipe_block_uses_transient_flow_when_storage_is_empty() {
         let registry = registry();
         let world = WorldGrid::default();
-        let structures = GasStructureGrid::default();
-        let mut pipe_layout = PipeGrid::default();
+        let mut structures = PlacedStructureMap::default();
         let pipe_gas = PipeGasField::from_registry(&registry);
         let gas = GasField::from_registry(&registry);
         let flow_state = PipeFlowVisualState {
@@ -348,7 +351,9 @@ mod tests {
                 total_amount: 5,
             }],
         };
-        assert!(pipe_layout.set_pipe(8, 9, &world, &structures));
+        assert!(structures.place_pipe(8, 9, &world));
+        let mut pipe_gas = pipe_gas;
+        pipe_gas.sync_to_structures(&structures);
 
         let message = build_cell_inspector_message(
             "F3 Pipes",
@@ -356,7 +361,7 @@ mod tests {
             &world,
             &gas,
             &registry,
-            &pipe_layout,
+            &structures,
             &pipe_gas,
             &flow_state,
             true,
@@ -371,8 +376,7 @@ mod tests {
     fn pipe_block_ignores_transient_flow_when_requested() {
         let registry = registry();
         let world = WorldGrid::default();
-        let structures = GasStructureGrid::default();
-        let mut pipe_layout = PipeGrid::default();
+        let mut structures = PlacedStructureMap::default();
         let pipe_gas = PipeGasField::from_registry(&registry);
         let gas = GasField::from_registry(&registry);
         let flow_state = PipeFlowVisualState {
@@ -383,7 +387,9 @@ mod tests {
                 total_amount: 5,
             }],
         };
-        assert!(pipe_layout.set_pipe(8, 9, &world, &structures));
+        assert!(structures.place_pipe(8, 9, &world));
+        let mut pipe_gas = pipe_gas;
+        pipe_gas.sync_to_structures(&structures);
 
         let message = build_cell_inspector_message(
             "F3 Pipes",
@@ -391,7 +397,7 @@ mod tests {
             &world,
             &gas,
             &registry,
-            &pipe_layout,
+            &structures,
             &pipe_gas,
             &flow_state,
             false,

@@ -10,9 +10,8 @@ use crate::{
         BlockSyncState, GasSimulationConfig, SimulationControl, SimulationStep,
     },
     world::{
-        gas_structures::GasStructureGrid,
         grid::{cell_center, is_boundary, WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH},
-        pipes::PipeGrid,
+        structures::PlacedStructureMap,
     },
 };
 
@@ -98,8 +97,7 @@ fn handle_debug_keys(
     config: Res<GasSimulationConfig>,
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
-    structures: Res<GasStructureGrid>,
-    pipes: Res<PipeGrid>,
+    structures: Res<PlacedStructureMap>,
     mut pipe_gas: ResMut<PipeGasField>,
     mut pipe_flow_visuals: ResMut<PipeFlowVisualState>,
     world: Res<WorldGrid>,
@@ -118,7 +116,7 @@ fn handle_debug_keys(
 
     if debug_mode.active && keys.just_pressed(KeyCode::Enter) {
         let _ = apply_pipe_network_step(
-            &pipes,
+            &structures,
             &mut pipe_gas,
             &mut gas,
             &world,

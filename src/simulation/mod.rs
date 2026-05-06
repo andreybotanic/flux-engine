@@ -19,9 +19,8 @@ use crate::{
     config::GasRegistry,
     save::WorldLoadState,
     world::{
-        gas_structures::{GasStructureCell, GasStructureGrid},
         grid::WorldGrid,
-        pipes::PipeGrid,
+        structures::{PlacedStructureMap, StructureKind, StructureParams},
     },
 };
 

@@ -179,7 +179,7 @@ fn refresh_editor_ui(
     mut source_settings: ResMut<SourceStructureToolSettings>,
     mut sink_settings: ResMut<SinkStructureToolSettings>,
     mut structure_edit: ResMut<StructureEditState>,
-    mut structures: ResMut<GasStructureGrid>,
+    mut structures: ResMut<PlacedStructureMap>,
     select_fields: Res<SelectFieldState>,
     world: Res<WorldGrid>,
     gas_registry: Res<GasRegistry>,
@@ -247,25 +247,29 @@ fn refresh_editor_ui(
     }
 
     if let Some(cell) = structure_edit.selected_cell {
-        match structures.cell(cell.x, cell.y) {
-            Some(GasStructureCell::Source { .. }) => {
-                let gas_index = if gas_registry.count() == 0 {
+        let selected = structures
+            .editable_structure_at(cell.x, cell.y)
+            .map(|structure| (structure.id, structure.params));
+        match selected {
+            Some((id, StructureParams::GasSource { gas_index, amount })) => {
+                let desired_gas_index = if gas_registry.count() == 0 {
                     0
                 } else {
                     source_settings.gas_index.min(gas_registry.count() - 1)
                 };
-                let _ = structures.update_source(
-                    cell.x,
-                    cell.y,
-                    gas_index,
-                    source_settings.amount.max(1),
-                    &world,
-                );
+                let desired_amount = source_settings.amount.max(1);
+                let _ = world;
+                if desired_gas_index != gas_index || desired_amount != amount {
+                    let _ = structures.update_gas_source(id, desired_gas_index, desired_amount);
+                }
             }
-            Some(GasStructureCell::Sink { .. }) => {
-                let _ = structures.update_sink(cell.x, cell.y, sink_settings.amount.max(1), &world);
+            Some((id, StructureParams::GasSink { amount })) => {
+                let desired_amount = sink_settings.amount.max(1);
+                if desired_amount != amount {
+                    let _ = structures.update_gas_sink(id, desired_amount);
+                }
             }
-            None => {
+            _ => {
                 structure_edit.selected_cell = None;
             }
         }
@@ -350,7 +354,7 @@ fn refresh_editor_ui(
     );
     let editing_structure = structure_edit
         .selected_cell
-        .and_then(|cell| structures.cell(cell.x, cell.y).map(|s| (cell, s)));
+        .and_then(|cell| structures.editable_structure_at(cell.x, cell.y).map(|s| (cell, s.params)));
     let structure_panel_visible =
         world_load_state.has_world && debug_mode.active && editing_structure.is_some();
     ui.panel_manager.set_visible(
@@ -424,14 +428,14 @@ fn refresh_editor_ui(
     }
 
     let structure_mode = match (selected_tool, editing_structure) {
-        (_, Some((cell, GasStructureCell::Source { .. }))) => {
+        (_, Some((cell, StructureParams::GasSource { .. }))) => {
             let mut src = ui.node_set.p0();
             src.display = Display::Flex;
             let mut sink = ui.node_set.p1();
             sink.display = Display::None;
             format!("Editing Source at ({}, {})", cell.x, cell.y)
         }
-        (_, Some((cell, GasStructureCell::Sink { .. }))) => {
+        (_, Some((cell, StructureParams::GasSink { .. }))) => {
             let mut src = ui.node_set.p0();
             src.display = Display::None;
             let mut sink = ui.node_set.p1();

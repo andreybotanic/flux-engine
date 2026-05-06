@@ -11,9 +11,8 @@ fn handle_main_menu_actions(
     ),
     world_state: (
         ResMut<WorldGrid>,
-        ResMut<GasStructureGrid>,
+        ResMut<PlacedStructureMap>,
         ResMut<GasField>,
-        ResMut<crate::world::pipes::PipeGrid>,
         ResMut<crate::simulation::pipes::PipeGasField>,
         ResMut<SimulationStep>,
         ResMut<SaveSessionState>,
@@ -30,7 +29,6 @@ fn handle_main_menu_actions(
         mut world,
         mut structures,
         mut gas,
-        mut pipe_layout,
         mut pipe_gas,
         mut step,
         mut save_session,
@@ -68,7 +66,6 @@ fn handle_main_menu_actions(
                     &mut world,
                     &mut structures,
                     &mut gas,
-                    &mut pipe_layout,
                     &mut pipe_gas,
                     &mut step,
                     &mut world_changed,
@@ -124,7 +121,6 @@ fn handle_main_menu_actions(
                         &mut world,
                         &mut structures,
                         &mut gas,
-                        &mut pipe_layout,
                         &mut pipe_gas,
                         &mut step,
                         &mut world_changed,
@@ -178,7 +174,6 @@ fn handle_main_menu_actions(
                     &world,
                     &gas,
                     &structures,
-                    &pipe_layout,
                     &pipe_gas,
                     &gas_registry,
                     step.0,
@@ -195,7 +190,6 @@ fn handle_main_menu_actions(
                                         &mut world,
                                         &mut structures,
                                         &mut gas,
-                                        &mut pipe_layout,
                                         &mut pipe_gas,
                                         &mut step,
                                         &mut world_changed,
@@ -252,7 +246,6 @@ fn handle_main_menu_actions(
                             &mut world,
                             &mut structures,
                             &mut gas,
-                            &mut pipe_layout,
                             &mut pipe_gas,
                             &mut step,
                             &mut world_changed,
@@ -296,7 +289,6 @@ fn handle_main_menu_actions(
                             &world,
                             &gas,
                             &structures,
-                            &pipe_layout,
                             &pipe_gas,
                             &gas_registry,
                             step.0,
@@ -313,7 +305,6 @@ fn handle_main_menu_actions(
                                                 &mut world,
                                                 &mut structures,
                                                 &mut gas,
-                                                &mut pipe_layout,
                                                 &mut pipe_gas,
                                                 &mut step,
                                                 &mut world_changed,
@@ -393,7 +384,6 @@ fn handle_main_menu_actions(
                             &mut world,
                             &mut structures,
                             &mut gas,
-                            &mut pipe_layout,
                             &mut pipe_gas,
                             &mut step,
                             &mut world_changed,
@@ -450,18 +440,16 @@ fn refresh_saves_cache(menu_ui: &mut MainMenuUiState) {
 fn apply_runtime_world_state(
     state: crate::save::RuntimeWorldState,
     world: &mut WorldGrid,
-    structures: &mut GasStructureGrid,
+    structures: &mut PlacedStructureMap,
     gas: &mut GasField,
-    pipe_layout: &mut crate::world::pipes::PipeGrid,
     pipe_gas: &mut crate::simulation::pipes::PipeGasField,
     step: &mut SimulationStep,
     world_changed: &mut EventWriter<WorldCellChanged>,
 ) -> Result<(), String> {
     world.restore_from_cell_codes(&state.world_cell_codes)?;
-    structures.restore_state(&state.gas_structures_snapshot, world)?;
+    structures.restore_state(&state.placed_structures_snapshot, world)?;
     gas.restore_state(&state.gas_snapshot)?;
-    pipe_layout.restore_state(&state.pipe_layout_snapshot, world, structures)?;
-    pipe_gas.restore_state(&state.pipe_gas_snapshot)?;
+    pipe_gas.restore_state(&state.pipe_gas_snapshot, structures)?;
     step.0 = state.simulation_step;
     emit_full_world_changed(world_changed);
     Ok(())

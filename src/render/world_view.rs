@@ -17,10 +17,7 @@ use crate::{
     save::WorldLoadState,
     simulation::{
         gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
-        pipes::{
-            pipe_cell_display_species_counts_with_transfers,
-            pipe_cell_display_total_particles_with_transfers, PipeFlowVisualState, PipeGasField,
-        },
+        pipes::{pipe_cell_display_blocks_with_transfers, PipeFlowVisualState, PipeGasField},
         SimulationStep,
     },
     ui::panels::PanelManager,
@@ -29,10 +26,7 @@ use crate::{
         WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH,
     },
     world::WorldCellChanged,
-    world::{
-        gas_structures::{GasStructureCell, GasStructureGrid},
-        pipes::{PipeCell, PipeGrid},
-    },
+    world::structures::{PlacedStructure, PlacedStructureId, PlacedStructureMap, StructureKind, StructureRotation},
 };
 
 const BOARD_MAIN_COLOR: Color = Color::srgba(0.96, 0.96, 0.96, 0.88);
@@ -271,6 +265,7 @@ pub(crate) struct WorldVisualAssets {
     boundary: Handle<Image>,
     source: Handle<Image>,
     sink: Handle<Image>,
+    bridge: Handle<Image>,
     pipe_masks: Vec<Handle<Image>>,
     vent_world: Handle<Image>,
     vent_overlay: Handle<Image>,
@@ -321,10 +316,11 @@ pub(crate) struct PipeFlowPacketVisual;
 #[derive(Resource, Default)]
 pub(crate) struct PipeEntities {
     pipes: HashMap<(u32, u32), Entity>,
+    bridges: HashMap<PlacedStructureId, Entity>,
     pipe_highlights: HashMap<(u32, u32), Entity>,
     vents: HashMap<(u32, u32), Entity>,
-    gas_overlays: HashMap<(u32, u32), Entity>,
-    gas_overlay_borders: HashMap<(u32, u32), Entity>,
+    gas_overlays: HashMap<(u32, u32), [Entity; 2]>,
+    gas_overlay_borders: HashMap<(u32, u32), [Entity; 2]>,
     vent_overlays: HashMap<(u32, u32), Entity>,
     flow_packets: Vec<Entity>,
 }

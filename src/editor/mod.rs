@@ -24,11 +24,11 @@ use crate::{
         select_field::{spawn_select_field, SelectFieldConfig, SelectFieldId, SelectFieldState},
     },
     world::{
-        gas_structures::{GasStructureCell, GasStructureGrid},
         grid::{
             cell_center, world_to_cell, CellMaterial, WorldGrid, CELL_SIZE, WORLD_HEIGHT,
             WORLD_WIDTH,
         },
+        structures::{PlacedStructureMap, StructureParams, StructureRotation},
         WorldCellChanged,
     },
 };
@@ -55,7 +55,7 @@ const MAIN_TOOLBAR_WIDTH: f32 = 176.0;
 const MAIN_TOOLBAR_HEIGHT: f32 = 56.0;
 const CELL_TYPE_PANEL_HEIGHT: f32 = 56.0;
 const CELL_TYPE_PANEL_BOTTOM: f32 = MAIN_TOOLBAR_BOTTOM + MAIN_TOOLBAR_HEIGHT + 10.0;
-const CELL_TYPE_PANEL_WIDTH: f32 = 120.0;
+const CELL_TYPE_PANEL_WIDTH: f32 = 176.0;
 
 const DEBUG_TOOLBAR_LEFT: f32 = 306.0;
 const DEBUG_TOOLBAR_TOP: f32 = 12.0;
@@ -93,6 +93,7 @@ pub enum EditorTool {
 enum PipeToolKind {
     Pipe,
     Vent,
+    Bridge,
 }
 
 #[derive(Resource, Default)]
@@ -125,6 +126,20 @@ impl Default for PipeToolSettings {
     fn default() -> Self {
         Self {
             selected: PipeToolKind::Pipe,
+        }
+    }
+}
+
+#[derive(Resource)]
+/// Stores `BridgePlacementState` state.
+pub struct BridgePlacementState {
+    pub rotation: StructureRotation,
+}
+
+impl Default for BridgePlacementState {
+    fn default() -> Self {
+        Self {
+            rotation: StructureRotation::Deg0,
         }
     }
 }
@@ -385,6 +400,7 @@ struct EditorIconSet {
     erase: Handle<Image>,
     pipe: Handle<Image>,
     vent: Handle<Image>,
+    bridge: Handle<Image>,
     add_gas: Handle<Image>,
     clear_gas: Handle<Image>,
     source: Handle<Image>,
@@ -395,6 +411,7 @@ struct EditorIconSet {
     metal_silhouette: Handle<Image>,
     pipe_silhouette: Handle<Image>,
     vent_silhouette: Handle<Image>,
+    bridge_silhouette: Handle<Image>,
     source_silhouette: Handle<Image>,
     sink_silhouette: Handle<Image>,
     select_arrow: Handle<Image>,
@@ -417,6 +434,7 @@ impl Plugin for EditorPlugin {
         app.init_resource::<ActiveEditorTool>()
             .init_resource::<CellToolSettings>()
             .init_resource::<PipeToolSettings>()
+            .init_resource::<BridgePlacementState>()
             .init_resource::<MainMenuState>()
             .init_resource::<MainMenuUiState>()
             .init_resource::<SaveSessionState>()
