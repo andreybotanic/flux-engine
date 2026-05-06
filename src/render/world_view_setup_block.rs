@@ -19,7 +19,7 @@ pub fn setup_world_view(
         .map(|mask| asset_server.load(format!("sprites/world/pipe_mask_{mask:02}.png")))
         .collect::<Vec<_>>();
     let vent_world = asset_server.load("sprites/world/tile_vent.png");
-    let vent_overlay = images.add(build_vent_overlay_image());
+    let vent_overlay = asset_server.load("sprites/world/gas_in_out.png");
     let pipe_highlight = crate::render::pipe_highlight_material::PipeHighlightRenderAssets {
         quad: meshes.add(bevy::math::primitives::Rectangle::new(CELL_SIZE, CELL_SIZE)),
         materials: pipe_masks
@@ -370,6 +370,18 @@ fn spawn_pipe_visual_bundle(
             ))
             .id();
         entities.gas_overlays.insert((x, y), gas_overlay);
+
+        let gas_overlay_border = commands
+            .spawn((
+                Sprite::from_color(Color::WHITE, Vec2::splat(CELL_SIZE * 0.7)),
+                Transform::from_translation(center.extend(1.04)),
+                Visibility::Hidden,
+                PipeGasOverlayBorderVisual,
+            ))
+            .id();
+        entities
+            .gas_overlay_borders
+            .insert((x, y), gas_overlay_border);
     }
 
     if pipe_cell.has_vent {
@@ -548,6 +560,7 @@ pub(crate) fn sync_pipe_world_visuals(
         .chain(pipe_entities.pipe_highlights.values())
         .chain(pipe_entities.vents.values())
         .chain(pipe_entities.gas_overlays.values())
+        .chain(pipe_entities.gas_overlay_borders.values())
         .chain(pipe_entities.vent_overlays.values())
         .copied()
         .collect::<Vec<_>>()
@@ -558,6 +571,7 @@ pub(crate) fn sync_pipe_world_visuals(
     pipe_entities.pipe_highlights.clear();
     pipe_entities.vents.clear();
     pipe_entities.gas_overlays.clear();
+    pipe_entities.gas_overlay_borders.clear();
     pipe_entities.vent_overlays.clear();
 
     if !world_load_state.has_world {
@@ -689,10 +703,12 @@ fn build_pipe_mask_image(mask: u8) -> Image {
     )
 }
 
+#[cfg(test)]
 fn build_vent_overlay_image() -> Image {
     build_vent_image(true)
 }
 
+#[cfg(test)]
 fn build_vent_image(with_arrows: bool) -> Image {
     let size = 64u32;
     let mut data = vec![0u8; (size * size * 4) as usize];

@@ -477,32 +477,101 @@ pub(crate) fn sync_pipe_overlay_visuals(
     world_load_state: Res<WorldLoadState>,
     pipe_layout: Res<PipeGrid>,
     pipe_gas: Res<PipeGasField>,
+    flow_state: Res<PipeFlowVisualState>,
+    control: Res<crate::simulation::SimulationControl>,
     gas_registry: Res<GasRegistry>,
     visual_settings: Res<GasVisualSettings>,
     main_view_settings: Res<GasMainViewVisualConfig>,
     pipe_entities: Res<PipeEntities>,
-    mut gas_query: Query<(&mut Sprite, &mut Visibility), With<PipeGasOverlayVisual>>,
-    mut vent_query: Query<&mut Visibility, (With<PipeVentOverlayVisual>, Without<PipeGasOverlayVisual>)>,
+    mut visuals: ParamSet<(
+        Query<
+            '_,
+            '_,
+            (&mut Sprite, &mut Visibility),
+            (
+                With<PipeGasOverlayVisual>,
+                Without<PipeGasOverlayBorderVisual>,
+                Without<PipeVentOverlayVisual>,
+            ),
+        >,
+        Query<
+            '_,
+            '_,
+            (&mut Sprite, &mut Visibility),
+            (
+                With<PipeGasOverlayBorderVisual>,
+                Without<PipeGasOverlayVisual>,
+                Without<PipeVentOverlayVisual>,
+            ),
+        >,
+        Query<
+            '_,
+            '_,
+            &mut Visibility,
+            (
+                With<PipeVentOverlayVisual>,
+                Without<PipeGasOverlayVisual>,
+                Without<PipeGasOverlayBorderVisual>,
+            ),
+        >,
+    )>,
 ) {
     let show_pipe_overlay = world_load_state.has_world && *overlay_mode == OverlayMode::Pipes;
 
     for ((x, y), entity) in &pipe_entities.gas_overlays {
-        let Ok((mut sprite, mut visibility)) = gas_query.get_mut(*entity) else {
+        let Some(border_entity) = pipe_entities.gas_overlay_borders.get(&(*x, *y)).copied() else {
+            if let Ok((_, mut visibility)) = visuals.p0().get_mut(*entity) {
+                *visibility = Visibility::Hidden;
+            }
             continue;
         };
-        if !show_pipe_overlay {
-            *visibility = Visibility::Hidden;
+        let has_border = {
+            let border_query = visuals.p1();
+            border_query.contains(border_entity)
+        };
+        if !has_border {
+            if let Ok((_, mut visibility)) = visuals.p0().get_mut(*entity) {
+                *visibility = Visibility::Hidden;
+            }
             continue;
         }
-        let total = pipe_gas.total_amount_particles(*x, *y);
+
+        if !show_pipe_overlay {
+            if let Ok((_, mut visibility)) = visuals.p0().get_mut(*entity) {
+                *visibility = Visibility::Hidden;
+            }
+            if let Ok((_, mut border_visibility)) = visuals.p1().get_mut(border_entity) {
+                *border_visibility = Visibility::Hidden;
+            }
+            continue;
+        }
+        let display_counts = pipe_cell_display_species_counts_with_transfers(
+            &pipe_gas,
+            &flow_state,
+            *x,
+            *y,
+            !control.paused,
+        );
+        let total = pipe_cell_display_total_particles_with_transfers(
+            &pipe_gas,
+            &flow_state,
+            *x,
+            *y,
+            !control.paused,
+        );
         if total == 0 {
-            *visibility = Visibility::Hidden;
+            if let Ok((_, mut visibility)) = visuals.p0().get_mut(*entity) {
+                *visibility = Visibility::Hidden;
+            }
+            if let Ok((_, mut border_visibility)) = visuals.p1().get_mut(border_entity) {
+                *border_visibility = Visibility::Hidden;
+            }
             continue;
         }
         let total_f = total as f32;
         let mut weighted_rgb = Vec3::ZERO;
-        for gas_index in 0..pipe_gas.gas_count() {
-            let amount = pipe_gas.amount_particles(*x, *y, gas_index) as f32;
+        for gas_index in 0..display_counts.len() {
+            let amount = display_counts[gas_index] as f32;
             if amount <= 0.0 {
                 continue;
             }
@@ -523,11 +592,32 @@ pub(crate) fn sync_pipe_overlay_visuals(
             0.12,
         );
         let rgb = (mix_rgb * visual).clamp(Vec3::ZERO, Vec3::ONE);
-        sprite.color = Color::linear_rgba(rgb.x, rgb.y, rgb.z, (0.42 + visual * 0.5).clamp(0.0, 1.0));
-        *visibility = Visibility::Visible;
+        let outer_size = pipe_gas_square_size(total);
+        let inner_size = pipe_square_inner_size(outer_size);
+        {
+            let mut gas_query = visuals.p0();
+            let Ok((mut sprite, mut visibility)) = gas_query.get_mut(*entity) else {
+                continue;
+            };
+            sprite.custom_size = Some(Vec2::splat(inner_size));
+            sprite.color =
+                Color::linear_rgba(rgb.x, rgb.y, rgb.z, (0.42 + visual * 0.5).clamp(0.0, 1.0));
+            *visibility = Visibility::Visible;
+        }
+        {
+            let mut border_query = visuals.p1();
+            let Ok((mut border_sprite, mut border_visibility)) = border_query.get_mut(border_entity)
+            else {
+                continue;
+            };
+            border_sprite.custom_size = Some(Vec2::splat(outer_size));
+            border_sprite.color = Color::srgba(1.0, 1.0, 1.0, 0.96);
+            *border_visibility = Visibility::Visible;
+        }
     }
 
     for ((x, y), entity) in &pipe_entities.vent_overlays {
+        let mut vent_query = visuals.p2();
         let Ok(mut visibility) = vent_query.get_mut(*entity) else {
             continue;
         };
@@ -581,19 +671,67 @@ pub(crate) fn sync_pipe_flow_packets(
         } else {
             weighted_rgb / total.max(1.0)
         };
-        let size = (CELL_SIZE * 0.12 + (transfer.total_amount.min(1000) as f32 / 1000.0) * CELL_SIZE * 0.38)
-            .clamp(CELL_SIZE * 0.12, CELL_SIZE * 0.5);
-        let entity = commands
+        let packet_visual = pipe_flow_packet_visual(transfer.total_amount);
+        let rgb = (mix_rgb * packet_visual.intensity).clamp(Vec3::ZERO, Vec3::ONE);
+        let outer_size = pipe_flow_square_size(transfer.total_amount);
+        let inner_size = pipe_square_inner_size(outer_size);
+        let border_entity = commands
             .spawn((
                 Sprite::from_color(
-                    Color::linear_rgba(mix_rgb.x, mix_rgb.y, mix_rgb.z, 0.92),
-                    Vec2::splat(size),
+                    Color::srgba(1.0, 1.0, 1.0, 1.0),
+                    Vec2::splat(outer_size),
                 ),
                 Transform::from_translation(position.extend(1.22)),
                 PipeFlowPacketVisual,
             ))
             .id();
+        let entity = commands
+            .spawn((
+                Sprite::from_color(
+                    Color::linear_rgba(rgb.x, rgb.y, rgb.z, packet_visual.fill_alpha),
+                    Vec2::splat(inner_size),
+                ),
+                Transform::from_translation(position.extend(1.23)),
+                PipeFlowPacketVisual,
+            ))
+            .id();
+        pipe_entities.flow_packets.push(border_entity);
         pipe_entities.flow_packets.push(entity);
     }
+}
+
+fn pipe_gas_square_size(total_particles: u32) -> f32 {
+    scaled_pipe_square_size(total_particles, 0.22, 0.70)
+}
+
+fn pipe_flow_square_size(moved_particles: u32) -> f32 {
+    scaled_pipe_square_size(moved_particles, 0.14, 0.42)
+}
+
+struct PipeFlowPacketVisualParams {
+    intensity: f32,
+    fill_alpha: f32,
+}
+
+fn pipe_flow_packet_visual(moved_particles: u32) -> PipeFlowPacketVisualParams {
+    let ratio = (moved_particles.min(1_000) as f32 / 1_000.0).clamp(0.0, 1.0);
+    let eased = ratio.sqrt();
+    PipeFlowPacketVisualParams {
+        intensity: (0.08 + eased * 0.92).clamp(0.0, 1.0),
+        fill_alpha: (0.12 + eased * 0.80).clamp(0.0, 0.92),
+    }
+}
+
+fn scaled_pipe_square_size(particles: u32, min_fraction: f32, max_fraction: f32) -> f32 {
+    if particles == 0 {
+        return 0.0;
+    }
+    let fill_ratio = (particles.min(1_000) as f32 / 1_000.0).clamp(0.0, 1.0);
+    CELL_SIZE * (min_fraction + (max_fraction - min_fraction) * fill_ratio)
+}
+
+fn pipe_square_inner_size(outer_size: f32) -> f32 {
+    const PIPE_SQUARE_BORDER_THICKNESS: f32 = CELL_SIZE / 64.0;
+    (outer_size - PIPE_SQUARE_BORDER_THICKNESS * 2.0).max(0.0)
 }
 

@@ -17,7 +17,10 @@ use crate::{
     save::WorldLoadState,
     simulation::{
         gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
-        pipes::{PipeFlowVisualState, PipeGasField},
+        pipes::{
+            pipe_cell_display_species_counts_with_transfers,
+            pipe_cell_display_total_particles_with_transfers, PipeFlowVisualState, PipeGasField,
+        },
         SimulationStep,
     },
     ui::panels::PanelManager,
@@ -304,6 +307,9 @@ pub(crate) struct VentWorldVisual;
 pub(crate) struct PipeGasOverlayVisual;
 
 #[derive(Component)]
+pub(crate) struct PipeGasOverlayBorderVisual;
+
+#[derive(Component)]
 pub(crate) struct PipeVentOverlayVisual;
 
 #[derive(Component)]
@@ -318,6 +324,7 @@ pub(crate) struct PipeEntities {
     pipe_highlights: HashMap<(u32, u32), Entity>,
     vents: HashMap<(u32, u32), Entity>,
     gas_overlays: HashMap<(u32, u32), Entity>,
+    gas_overlay_borders: HashMap<(u32, u32), Entity>,
     vent_overlays: HashMap<(u32, u32), Entity>,
     flow_packets: Vec<Entity>,
 }

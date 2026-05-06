@@ -32,6 +32,7 @@ fn handle_editor_mouse_input(
         ResMut<crate::world::pipes::PipeGrid>,
         ResMut<GasField>,
         ResMut<crate::simulation::pipes::PipeGasField>,
+        ResMut<crate::simulation::pipes::PipeFlowVisualState>,
         ResMut<StructureEditState>,
         ResMut<SelectionDragState>,
         ResMut<BrushDragState>,
@@ -56,6 +57,7 @@ fn handle_editor_mouse_input(
         mut pipes,
         mut gas,
         mut pipe_gas,
+        mut pipe_flow_visuals,
         mut structure_edit,
         mut selection_drag,
         mut brush_drag,
@@ -127,6 +129,7 @@ fn handle_editor_mouse_input(
                     let pipe_cleared = pipes.clear_cell(cell.x, cell.y);
                     if pipe_cleared {
                         pipe_gas.clear_cell(cell.x, cell.y);
+                        pipe_flow_visuals.transfers.clear();
                     }
                     if world.set_empty(cell.x, cell.y) {
                         world_changed.write(WorldCellChanged { cell });
@@ -137,6 +140,7 @@ fn handle_editor_mouse_input(
         Some(EditorTool::Gases) => match pipe_settings.selected {
             PipeToolKind::Pipe => {
                 structure_edit.selected_cell = None;
+                let mut changed_pipe_layout = false;
                 apply_path_tool(
                     &mouse_buttons,
                     blocked_by_ui,
@@ -144,33 +148,41 @@ fn handle_editor_mouse_input(
                     &mut brush_drag,
                     |path| {
                         if let Some(&first) = path.first() {
-                            let _ = pipes.set_pipe(first.x, first.y, &world, &structures);
+                            changed_pipe_layout |=
+                                pipes.set_pipe(first.x, first.y, &world, &structures);
                         }
                         for &cell in path.iter().skip(1) {
-                            let _ = pipes.set_pipe(cell.x, cell.y, &world, &structures);
+                            changed_pipe_layout |=
+                                pipes.set_pipe(cell.x, cell.y, &world, &structures);
                         }
                         for pair in path.windows(2) {
                             let a = pair[0];
                             let b = pair[1];
-                            let _ = pipes.set_pipe(a.x, a.y, &world, &structures);
-                            let _ = pipes.set_pipe(b.x, b.y, &world, &structures);
-                            let _ = pipes.add_connection(a, b);
+                            changed_pipe_layout |= pipes.set_pipe(a.x, a.y, &world, &structures);
+                            changed_pipe_layout |= pipes.set_pipe(b.x, b.y, &world, &structures);
+                            changed_pipe_layout |= pipes.add_connection(a, b);
                         }
                     },
                 );
+                if changed_pipe_layout {
+                    pipe_flow_visuals.transfers.clear();
+                }
             }
             PipeToolKind::Vent => {
                 clear_active_tool_state(&mut selection_drag, &mut brush_drag);
                 structure_edit.selected_cell = None;
                 if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
                     if let Some(cell) = hovered_cell {
-                        let _ = pipes.set_vent(cell.x, cell.y, &world, &structures);
+                        if pipes.set_vent(cell.x, cell.y, &world, &structures) {
+                            pipe_flow_visuals.transfers.clear();
+                        }
                     }
                 }
             }
         },
         Some(EditorTool::Scissors) => {
             structure_edit.selected_cell = None;
+            let mut removed_connection = false;
             apply_path_tool(
                 &mouse_buttons,
                 blocked_by_ui,
@@ -178,10 +190,13 @@ fn handle_editor_mouse_input(
                 &mut brush_drag,
                 |path| {
                     for pair in path.windows(2) {
-                        let _ = pipes.remove_connection(pair[0], pair[1]);
+                        removed_connection |= pipes.remove_connection(pair[0], pair[1]);
                     }
                 },
             );
+            if removed_connection {
+                pipe_flow_visuals.transfers.clear();
+            }
         }
         Some(EditorTool::AddGas) | Some(EditorTool::ClearGas) => {
             structure_edit.selected_cell = None;

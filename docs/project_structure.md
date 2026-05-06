@@ -46,6 +46,9 @@ FluxEngine/
 - `assets/sprites/world/pipe_mask_*.png`: Файловые спрайты труб для всех connection-mask вариантов.
 - `assets/sprites/world/pipe_silhouette_mask_*.png`: Файловые silhouette-спрайты труб для всех connection-mask вариантов.
 - `assets/sprites/world/silhouette_*.png`: World-силуэты предпросмотра под курсором.
+- `assets/sprites/world/gas_in_out.png`: Базовый жёлтый overlay-спрайт вентиляции для pipe-view `F3`.
+- `assets/sprites/world/gas_in.png`: Зелёный вариант overlay-спрайта вентиляции со стрелкой только внутрь.
+- `assets/sprites/world/gas_out.png`: Белый вариант overlay-спрайта вентиляции со стрелкой только наружу.
 - `assets/sprites/world/tile_*.png`: Спрайты тайлов мира.
 - `assets/sprites/world/`: Не содержит статической fade-маски мира; затемняющая маска генерируется в runtime в `src/render/world_view.rs`.
 - `Cargo.lock`: Зафиксированные версии зависимостей Cargo.
@@ -84,7 +87,7 @@ FluxEngine/
 - `src/render/mod.rs`: Плагин рендера и порядок render-систем, включая pipe visuals.
 - `src/render/pipe_highlight_material.rs`: Кастомный `Material2d` и helper-логика для shader-подсветки труб в `F3`.
 - `src/render/world_view.rs`: Публичные render-системы world view, pipe visuals и переключение overlay.
-- `src/render/world_view_overlay_block.rs`: Логика overlay-режимов `F1/F2/F3`, курсорной сетки и визуальных sync.
+- `src/render/world_view_overlay_block.rs`: Логика overlay-режимов `F1/F2/F3`, курсорной сетки, pipe gas-square sizing и визуальных sync.
 - `src/render/world_view_setup_block.rs`: Построение сущностей мира/слоёв, загрузка pipe/vent world-спрайтов и спавн визуалов.
 - `src/render/world_view_tests_block.rs`: Тесты вспомогательной математики рендера.
 - `src/save.rs`: Публичный save/load API и типы состояния меню/сессии.
@@ -108,10 +111,10 @@ FluxEngine/
 - `src/simulation/parity.rs`: Публичные parity API и сценарии сравнения CPU/GPU.
 - `src/simulation/parity_runtime_block.rs`: Runtime parity-метрики, прогоны сценариев и gate-оценка.
 - `src/simulation/parity_tests_block.rs`: Тесты parity-порогов, smoke и GPU-регрессий.
-- `src/simulation/pipes.rs`: PipeGasField, pipe-flow solver, pipe pre-step и тесты pipe-сети.
+- `src/simulation/pipes.rs`: PipeGasField, пошаговый pipe-flow solver с порогом активации вентиляций, pipe pre-step и тесты pipe-сети.
 - `src/simulation/runtime_tick_block.rs`: Runtime-шаги симуляции, GPU/CPU подшаги и perf-метрики.
 - `src/simulation/simulation_tests_block.rs`: Тесты конфигурации тика и структурных pre-step правил.
-- `src/ui/cell_inspector.rs`: Панель инспектора клетки под курсором.
+- `src/ui/cell_inspector.rs`: Панель инспектора клетки под курсором, включая world-gas и pipe-gas блок для труб.
 - `src/ui/input_field.rs`: Публичные типы text-input и точка сборки input-систем.
 - `src/ui/input_field_helpers_block.rs`: Вспомогательная геометрия курсора текста и точный hit-test/каретка через `ComputedTextBlock`.
 - `src/ui/input_field_systems_block.rs`: Системы focus/keyboard/render/caret для текстовых полей.

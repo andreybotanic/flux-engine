@@ -2,11 +2,34 @@
 mod tests {
     use super::{
         build_pipe_mask_image, build_vent_overlay_image, build_world_fade_mask_image, grid_fade,
+        pipe_flow_packet_visual, pipe_flow_square_size, pipe_gas_square_size,
         pipe_highlight_visibility, pipe_world_z, vent_world_visibility, world_fade_alpha,
         OverlayMode,
     };
+    use crate::simulation::pipes::{
+        pipe_cell_display_total_particles, PipeFlowVisualState, PipeGasField, PipeTransferRecord,
+    };
     use bevy::prelude::Visibility;
-    use bevy::math::Vec2;
+    use bevy::math::{UVec2, Vec2};
+    use crate::config::{GasDefinition, GasRegistry};
+
+    fn registry() -> GasRegistry {
+        GasRegistry::new(vec![
+            GasDefinition {
+                id: "h2".to_string(),
+                label: "Hydrogen".to_string(),
+                color: [0.7, 0.8, 1.0],
+                molecular_mass: 2.016,
+            },
+            GasDefinition {
+                id: "o2".to_string(),
+                label: "Oxygen".to_string(),
+                color: [0.5, 0.8, 1.0],
+                molecular_mass: 31.998,
+            },
+        ])
+        .expect("test registry")
+    }
 
     #[test]
     fn grid_fade_is_full_at_center_and_zero_beyond_radius() {
@@ -183,6 +206,65 @@ mod tests {
         assert_eq!(
             vent_world_visibility(false, OverlayMode::Pipes),
             Visibility::Hidden
+        );
+    }
+
+    #[test]
+    fn pipe_gas_square_size_scales_with_amount_and_hits_expected_max() {
+        let low = pipe_gas_square_size(1);
+        let mid = pipe_gas_square_size(500);
+        let full = pipe_gas_square_size(1_000);
+
+        assert!(low > 0.0);
+        assert!(mid > low);
+        assert!(full > mid);
+        assert!((full - super::CELL_SIZE * 0.70).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pipe_flow_square_size_stays_smaller_than_static_square() {
+        let static_half = pipe_gas_square_size(500);
+        let flow_half = pipe_flow_square_size(500);
+        let flow_full = pipe_flow_square_size(1_000);
+
+        assert!(flow_half > 0.0);
+        assert!(flow_full > flow_half);
+        assert!(flow_half < static_half);
+        assert!((flow_full - super::CELL_SIZE * 0.42).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pipe_flow_packet_visual_gets_brighter_and_less_transparent_with_more_gas() {
+        let low = pipe_flow_packet_visual(1);
+        let mid = pipe_flow_packet_visual(500);
+        let full = pipe_flow_packet_visual(1_000);
+
+        assert!(low.intensity < mid.intensity && mid.intensity < full.intensity);
+        assert!(low.fill_alpha < mid.fill_alpha && mid.fill_alpha < full.fill_alpha);
+        assert!(low.fill_alpha < 0.2);
+        assert!((full.fill_alpha - 0.92).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pipe_display_total_uses_flow_packets_when_storage_is_empty() {
+        let registry = registry();
+        let pipe_gas = PipeGasField::from_registry(&registry);
+        let flow_state = PipeFlowVisualState {
+            transfers: vec![PipeTransferRecord {
+                from: UVec2::new(3, 4),
+                to: UVec2::new(4, 4),
+                gas_counts: vec![6, 2],
+                total_amount: 8,
+            }],
+        };
+
+        assert_eq!(
+            pipe_cell_display_total_particles(&pipe_gas, &flow_state, 3, 4),
+            8
+        );
+        assert_eq!(
+            pipe_cell_display_total_particles(&pipe_gas, &flow_state, 4, 4),
+            8
         );
     }
 }
