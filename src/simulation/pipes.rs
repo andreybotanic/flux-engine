@@ -332,12 +332,23 @@ impl PipeGasField {
 }
 
 #[derive(Clone, Debug)]
+/// Describes how one pipe transfer should be drawn in `F3`.
+pub enum PipeTransferVisualPath {
+    Straight,
+    BridgeArc {
+        bridge_origin: UVec2,
+        bridge_rotation: StructureRotation,
+    },
+}
+
+#[derive(Clone, Debug)]
 /// Stores `PipeTransferRecord` state.
 pub struct PipeTransferRecord {
     pub from: UVec2,
     pub to: UVec2,
     pub gas_counts: Vec<u32>,
     pub total_amount: u32,
+    pub visual_path: PipeTransferVisualPath,
 }
 
 #[derive(Resource, Default, Clone)]
@@ -647,6 +658,11 @@ pub fn apply_pipe_network_step(
                     to: runtime.nodes[target_node_id].visual_cell,
                     total_amount: moved.iter().copied().sum(),
                     gas_counts: moved,
+                    visual_path: transfer_visual_path(
+                        pipe_gas.keys[source_node_id],
+                        pipe_gas.keys[target_node_id],
+                        structures,
+                    ),
                 });
             }
         }
@@ -923,6 +939,32 @@ fn bridge_port_cells(origin: UVec2, rotation: StructureRotation) -> Vec<UVec2> {
     }
 }
 
+fn transfer_visual_path(
+    source_key: PipeNodeKey,
+    target_key: PipeNodeKey,
+    structures: &PlacedStructureMap,
+) -> PipeTransferVisualPath {
+    let bridge_origin = match (source_key.kind, target_key.kind) {
+        (PipeContainerKind::BridgePipe, _) => Some(source_key.anchor),
+        (_, PipeContainerKind::BridgePipe) => Some(target_key.anchor),
+        _ => None,
+    };
+    let Some(bridge_origin) = bridge_origin else {
+        return PipeTransferVisualPath::Straight;
+    };
+    let bridge_rotation = structures
+        .iter()
+        .find(|structure| {
+            structure.kind == StructureKind::GasPipeBridge && structure.origin == bridge_origin
+        })
+        .map(|structure| structure.rotation)
+        .unwrap_or(StructureRotation::Deg0);
+    PipeTransferVisualPath::BridgeArc {
+        bridge_origin,
+        bridge_rotation,
+    }
+}
+
 fn orthogonal_neighbors(cell: UVec2) -> Vec<UVec2> {
     let mut neighbors = Vec::new();
     if cell.y > 0 {
@@ -1125,6 +1167,7 @@ mod tests {
     use super::{
         apply_pipe_network_step, bridge_port_cells, pipe_cell_display_blocks_with_transfers,
         PipeCellDisplayBlock, PipeContainerKind, PipeFlowVisualState, PipeGasField,
+        PipeTransferVisualPath,
         PIPE_CELL_CAPACITY,
     };
     use crate::{
@@ -1313,5 +1356,53 @@ mod tests {
         }
         let after = total_world_and_pipe_particles(&gas, &pipe_gas, &world);
         assert_eq!(before, after);
+    }
+
+    #[test]
+    fn transfer_visual_path_marks_only_bridge_node_transfers_as_arcs() {
+        let registry = registry();
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        assert!(structures.place_pipe(40, 40, &world));
+        assert!(structures.place_pipe(41, 40, &world));
+        assert!(structures.place_pipe(42, 40, &world));
+        assert!(structures
+            .place_bridge(UVec2::new(40, 40), StructureRotation::Deg0, &world)
+            .is_some());
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        pipe_gas.sync_to_structures(&structures);
+
+        let snapshot = pipe_gas.snapshot_state();
+        let center_pipe_node = snapshot
+            .nodes
+            .iter()
+            .position(|node| {
+                node.key.kind == PipeContainerKind::Pipe && node.key.anchor == UVec2::new(41, 40)
+            })
+            .expect("center pipe node");
+        let bridge_node = snapshot
+            .nodes
+            .iter()
+            .position(|node| node.key.kind == PipeContainerKind::BridgePipe)
+            .expect("bridge node");
+
+        let _ = pipe_gas.add_species_counts_limited(center_pipe_node, &[80, 0, 0]);
+        let _ = pipe_gas.add_species_counts_limited(bridge_node, &[80, 0, 0]);
+
+        let mut gas = GasField::from_registry(&registry);
+        let mut visuals = PipeFlowVisualState::default();
+        let changed =
+            apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+        assert!(changed);
+        assert!(visuals.transfers.iter().any(|transfer| {
+            matches!(transfer.visual_path, PipeTransferVisualPath::BridgeArc { .. })
+        }));
+        assert!(visuals.transfers.iter().any(|transfer| {
+            matches!(transfer.visual_path, PipeTransferVisualPath::Straight)
+                && ((transfer.from == UVec2::new(41, 40) && transfer.to == UVec2::new(40, 40))
+                    || (transfer.from == UVec2::new(41, 40) && transfer.to == UVec2::new(42, 40))
+                    || (transfer.to == UVec2::new(41, 40) && transfer.from == UVec2::new(40, 40))
+                    || (transfer.to == UVec2::new(41, 40) && transfer.from == UVec2::new(42, 40)))
+        }));
     }
 }

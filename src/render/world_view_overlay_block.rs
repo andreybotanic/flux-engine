@@ -537,7 +537,9 @@ pub(crate) fn sync_pipe_overlay_visuals(
         for slot in 0..overlay_entities.len() {
             let overlay_entity = overlay_entities[slot];
             let border_entity = border_entities[slot];
-            let block = display_blocks.get(slot);
+            let block = display_blocks
+                .get(slot)
+                .filter(|block| pipe_overlay_block_visible(block.total_particles));
             let total_slots = display_blocks.len().min(overlay_entities.len());
             let cell_center = crate::world::grid::cell_center(*x, *y);
 
@@ -568,7 +570,13 @@ pub(crate) fn sync_pipe_overlay_visuals(
                 let rgb = (mix_rgb * visual).clamp(Vec3::ZERO, Vec3::ONE);
                 let outer_size = pipe_overlay_slot_size(block.total_particles, total_slots);
                 let inner_size = pipe_square_inner_size(outer_size);
-                let offset = pipe_overlay_slot_offset(slot, total_slots);
+                let offset = pipe_overlay_block_offset(
+                    slot,
+                    total_slots,
+                    block.kind,
+                    &structures,
+                    UVec2::new(*x, *y),
+                );
                 {
                     let mut gas_query = visuals.p0();
                     let Ok((mut sprite, mut transform, mut visibility)) =
@@ -623,10 +631,45 @@ pub(crate) fn sync_pipe_overlay_visuals(
     }
 }
 
+fn pipe_overlay_block_visible(total_particles: u32) -> bool {
+    total_particles > 0
+}
+
+fn pipe_overlay_block_offset(
+    slot: usize,
+    total_slots: usize,
+    kind: crate::simulation::pipes::PipeContainerKind,
+    structures: &PlacedStructureMap,
+    cell: UVec2,
+) -> Vec2 {
+    let Some(rotation) = bridge_rotation_for_center_cell(structures, cell) else {
+        return pipe_overlay_slot_offset(slot, total_slots);
+    };
+    let bridge_offset = bridge_bend_direction(rotation) * (CELL_SIZE * 0.18);
+    match kind {
+        crate::simulation::pipes::PipeContainerKind::BridgePipe => bridge_offset,
+        crate::simulation::pipes::PipeContainerKind::Pipe if total_slots > 1 => -bridge_offset,
+        crate::simulation::pipes::PipeContainerKind::Pipe => Vec2::ZERO,
+    }
+}
+
+fn bridge_rotation_for_center_cell(
+    structures: &PlacedStructureMap,
+    cell: UVec2,
+) -> Option<StructureRotation> {
+    structures.iter().find_map(|structure| {
+        (structure.kind == StructureKind::GasPipeBridge
+            && crate::world::structures::bridge_center_cell(structure.origin, structure.rotation)
+                == Some(cell))
+            .then_some(structure.rotation)
+    })
+}
+
 pub(crate) fn sync_pipe_flow_packets(
     mut commands: Commands,
     overlay_mode: Res<OverlayMode>,
     world_load_state: Res<WorldLoadState>,
+    structures: Res<PlacedStructureMap>,
     flow_state: Res<PipeFlowVisualState>,
     control: Res<crate::simulation::SimulationControl>,
     gas_registry: Res<GasRegistry>,
@@ -637,7 +680,12 @@ pub(crate) fn sync_pipe_flow_packets(
         commands.entity(entity).despawn();
     }
 
-    if !world_load_state.has_world || *overlay_mode != OverlayMode::Pipes || control.paused {
+    if !pipe_flow_packets_enabled(
+        world_load_state.has_world,
+        *overlay_mode,
+        control.paused,
+        structures.is_changed(),
+    ) {
         return;
     }
 
@@ -646,9 +694,7 @@ pub(crate) fn sync_pipe_flow_packets(
         if transfer.total_amount == 0 {
             continue;
         }
-        let from = cell_center(transfer.from.x, transfer.from.y);
-        let to = cell_center(transfer.to.x, transfer.to.y);
-        let position = from.lerp(to, progress);
+        let position = flow_packet_position(transfer, progress);
         let total = transfer.total_amount as f32;
         let mut weighted_rgb = Vec3::ZERO;
         for (gas_index, amount) in transfer.gas_counts.iter().copied().enumerate() {
@@ -693,12 +739,122 @@ pub(crate) fn sync_pipe_flow_packets(
     }
 }
 
+fn pipe_flow_packets_enabled(
+    has_world: bool,
+    overlay_mode: OverlayMode,
+    paused: bool,
+    structures_changed: bool,
+) -> bool {
+    has_world
+        && overlay_mode == OverlayMode::Pipes
+        && !paused
+        && !structures_changed
+}
+
+const BRIDGE_PACKET_ARC_OFFSET_CELLS: f32 = 0.45;
+
+fn flow_packet_position(
+    transfer: &crate::simulation::pipes::PipeTransferRecord,
+    t: f32,
+) -> Vec2 {
+    bridge_packet_position(transfer, t).unwrap_or_else(|| {
+        straight_packet_position(
+            cell_center(transfer.from.x, transfer.from.y),
+            cell_center(transfer.to.x, transfer.to.y),
+            t,
+        )
+    })
+}
+
+fn straight_packet_position(from: Vec2, to: Vec2, t: f32) -> Vec2 {
+    from.lerp(to, t)
+}
+
+fn bridge_packet_position(
+    transfer: &crate::simulation::pipes::PipeTransferRecord,
+    t: f32,
+) -> Option<Vec2> {
+    let crate::simulation::pipes::PipeTransferVisualPath::BridgeArc {
+        bridge_origin,
+        bridge_rotation,
+    } = transfer.visual_path
+    else {
+        return None;
+    };
+    let Some(center_cell) =
+        crate::world::structures::bridge_center_cell(bridge_origin, bridge_rotation)
+    else {
+        return None;
+    };
+    let [first_port, second_port] = bridge_port_world_cells(bridge_origin, bridge_rotation);
+    let curve_t =
+        bridge_curve_progress_for_transfer(transfer, center_cell, first_port, second_port, t)?;
+    Some(quadratic_bezier_point(
+        cell_center(first_port.x, first_port.y),
+        bridge_arc_control_point(center_cell, bridge_rotation),
+        cell_center(second_port.x, second_port.y),
+        curve_t,
+    ))
+}
+
+fn bridge_curve_progress_for_transfer(
+    transfer: &crate::simulation::pipes::PipeTransferRecord,
+    center_cell: UVec2,
+    first_port: UVec2,
+    second_port: UVec2,
+    t: f32,
+) -> Option<f32> {
+    if transfer.from == first_port && transfer.to == center_cell {
+        return Some(t * 0.5);
+    }
+    if transfer.from == center_cell && transfer.to == first_port {
+        return Some((1.0 - t) * 0.5);
+    }
+    if transfer.from == center_cell && transfer.to == second_port {
+        return Some(0.5 + t * 0.5);
+    }
+    if transfer.from == second_port && transfer.to == center_cell {
+        return Some(1.0 - t * 0.5);
+    }
+    None
+}
+
+fn quadratic_bezier_point(p0: Vec2, p1: Vec2, p2: Vec2, t: f32) -> Vec2 {
+    let one_minus_t = 1.0 - t;
+    p0 * (one_minus_t * one_minus_t) + p1 * (2.0 * one_minus_t * t) + p2 * (t * t)
+}
+
+fn bridge_arc_control_point(center_cell: UVec2, rotation: StructureRotation) -> Vec2 {
+    let bend_offset = BRIDGE_PACKET_ARC_OFFSET_CELLS * CELL_SIZE;
+    cell_center(center_cell.x, center_cell.y) + bridge_bend_direction(rotation) * bend_offset
+}
+
+fn bridge_bend_direction(rotation: StructureRotation) -> Vec2 {
+    match rotation {
+        StructureRotation::Deg0 => Vec2::Y,
+        StructureRotation::Deg90 => Vec2::NEG_X,
+        StructureRotation::Deg180 => Vec2::NEG_Y,
+        StructureRotation::Deg270 => Vec2::X,
+    }
+}
+
+fn bridge_port_world_cells(origin: UVec2, rotation: StructureRotation) -> [UVec2; 2] {
+    match rotation {
+        StructureRotation::Deg0 | StructureRotation::Deg180 => {
+            [origin, UVec2::new(origin.x + 2, origin.y)]
+        }
+        StructureRotation::Deg90 | StructureRotation::Deg270 => {
+            [origin, UVec2::new(origin.x, origin.y + 2)]
+        }
+    }
+}
+
 fn pipe_gas_square_size(total_particles: u32) -> f32 {
-    scaled_pipe_square_size(total_particles, 0.22, 0.70)
+    scaled_pipe_square_size(total_particles, 0.22, 0.63)
 }
 
 fn pipe_flow_square_size(moved_particles: u32) -> f32 {
-    scaled_pipe_square_size(moved_particles, 0.14, 0.42)
+    scaled_pipe_square_size(moved_particles, 0.21, 0.63)
 }
 
 struct PipeFlowPacketVisualParams {

@@ -1,16 +1,21 @@
 #[cfg(test)]
 mod tests {
     use super::{
+        bridge_arc_control_point, bridge_bend_direction, bridge_packet_position,
         bridge_visual_size, bridge_visual_transform,
         build_pipe_mask_image, build_vent_overlay_image, build_world_fade_mask_image, grid_fade,
-        pipe_flow_packet_visual, pipe_flow_square_size, pipe_gas_square_size,
+        bridge_curve_progress_for_transfer,
+        flow_packet_position, pipe_flow_packet_visual, pipe_flow_square_size, pipe_gas_square_size,
+        pipe_overlay_block_offset, pipe_overlay_block_visible,
+        quadratic_bezier_point, straight_packet_position,
         pipe_highlight_visibility, vent_world_visibility, world_fade_alpha,
         OverlayMode,
     };
     use crate::config::{CellVisualPlacementConfigMap, GasDefinition, GasRegistry, StructureVisualConfigMap};
     use crate::simulation::pipes::{
-        pipe_cell_display_total_particles_with_transfers, PipeFlowVisualState, PipeGasField,
-        PipeTransferRecord,
+        pipe_cell_display_total_particles_with_transfers, PipeContainerKind, PipeFlowVisualState,
+        PipeGasField,
+        PipeTransferRecord, PipeTransferVisualPath,
     };
     use bevy::prelude::Visibility;
     use bevy::math::{UVec2, Vec2, Vec3};
@@ -229,7 +234,7 @@ mod tests {
         assert!(low > 0.0);
         assert!(mid > low);
         assert!(full > mid);
-        assert!((full - super::CELL_SIZE * 0.70).abs() < 1e-6);
+        assert!((full - super::CELL_SIZE * 0.63).abs() < 1e-6);
     }
 
     #[test]
@@ -241,7 +246,13 @@ mod tests {
         assert!(flow_half > 0.0);
         assert!(flow_full > flow_half);
         assert!(flow_half < static_half);
-        assert!((flow_full - super::CELL_SIZE * 0.42).abs() < 1e-6);
+        assert!((flow_full - super::CELL_SIZE * 0.63).abs() < 1e-6);
+    }
+
+    #[test]
+    fn empty_pipe_overlay_blocks_are_hidden() {
+        assert!(!pipe_overlay_block_visible(0));
+        assert!(pipe_overlay_block_visible(1));
     }
 
     #[test]
@@ -271,6 +282,7 @@ mod tests {
                 to: UVec2::new(4, 4),
                 gas_counts: vec![6, 2],
                 total_amount: 8,
+                visual_path: PipeTransferVisualPath::Straight,
             }],
         };
 
@@ -316,5 +328,223 @@ mod tests {
         let transform = bridge_visual_transform(UVec2::new(10, 11), StructureRotation::Deg90, 0.25);
         let rotated = transform.rotation * Vec3::X;
         assert!(rotated.y > 0.99);
+    }
+
+    #[test]
+    fn quadratic_bezier_preserves_start_and_end_points() {
+        let start = Vec2::new(10.0, 12.0);
+        let control = Vec2::new(18.0, 24.0);
+        let end = Vec2::new(40.0, 8.0);
+
+        assert_eq!(quadratic_bezier_point(start, control, end, 0.0), start);
+        assert_eq!(quadratic_bezier_point(start, control, end, 1.0), end);
+    }
+
+    #[test]
+    fn horizontal_bridge_packet_arc_bends_upward() {
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        assert!(structures
+            .place_bridge(UVec2::new(10, 10), StructureRotation::Deg0, &world)
+            .is_some());
+        let transfer = PipeTransferRecord {
+            from: UVec2::new(11, 10),
+            to: UVec2::new(10, 10),
+            gas_counts: vec![5, 0],
+            total_amount: 5,
+            visual_path: PipeTransferVisualPath::BridgeArc {
+                bridge_origin: UVec2::new(10, 10),
+                bridge_rotation: StructureRotation::Deg0,
+            },
+        };
+        let midpoint = bridge_packet_position(&transfer, 0.5)
+            .expect("bridge transfer should use arc");
+        let straight_midpoint = straight_packet_position(
+            crate::world::grid::cell_center(11, 10),
+            crate::world::grid::cell_center(10, 10),
+            0.5,
+        );
+
+        assert!(midpoint.y > straight_midpoint.y);
+    }
+
+    #[test]
+    fn bridge_arc_control_point_uses_stronger_offset() {
+        let center = UVec2::new(10, 10);
+        let center_world = crate::world::grid::cell_center(center.x, center.y);
+        let control = bridge_arc_control_point(center, StructureRotation::Deg0);
+
+        assert!((control.y - center_world.y - CELL_SIZE * 0.45).abs() < 1e-4);
+    }
+
+    #[test]
+    fn vertical_bridge_packet_arc_bends_left() {
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        assert!(structures
+            .place_bridge(UVec2::new(10, 10), StructureRotation::Deg90, &world)
+            .is_some());
+        let transfer = PipeTransferRecord {
+            from: UVec2::new(10, 11),
+            to: UVec2::new(10, 10),
+            gas_counts: vec![5, 0],
+            total_amount: 5,
+            visual_path: PipeTransferVisualPath::BridgeArc {
+                bridge_origin: UVec2::new(10, 10),
+                bridge_rotation: StructureRotation::Deg90,
+            },
+        };
+        let midpoint = bridge_packet_position(&transfer, 0.5)
+            .expect("bridge transfer should use arc");
+        let straight_midpoint = straight_packet_position(
+            crate::world::grid::cell_center(10, 11),
+            crate::world::grid::cell_center(10, 10),
+            0.5,
+        );
+
+        assert!(midpoint.x < straight_midpoint.x);
+    }
+
+    #[test]
+    fn bridge_overlay_offset_follows_bridge_bend_direction() {
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        assert!(structures
+            .place_bridge(UVec2::new(10, 10), StructureRotation::Deg90, &world)
+            .is_some());
+
+        let bridge_offset = pipe_overlay_block_offset(
+            0,
+            2,
+            PipeContainerKind::BridgePipe,
+            &structures,
+            UVec2::new(10, 11),
+        );
+        let plain_offset = pipe_overlay_block_offset(
+            1,
+            2,
+            PipeContainerKind::Pipe,
+            &structures,
+            UVec2::new(10, 11),
+        );
+
+        assert!(bridge_offset.x < 0.0);
+        assert!((plain_offset + bridge_offset).length_squared() < 1e-6);
+    }
+
+    #[test]
+    fn bridge_packet_halves_share_one_common_apex() {
+        let center = UVec2::new(11, 10);
+        let first_port = UVec2::new(10, 10);
+        let second_port = UVec2::new(12, 10);
+
+        let left_to_center = PipeTransferRecord {
+            from: first_port,
+            to: center,
+            gas_counts: vec![5, 0],
+            total_amount: 5,
+            visual_path: PipeTransferVisualPath::BridgeArc {
+                bridge_origin: UVec2::new(10, 10),
+                bridge_rotation: StructureRotation::Deg0,
+            },
+        };
+        let center_to_right = PipeTransferRecord {
+            from: center,
+            to: second_port,
+            gas_counts: vec![5, 0],
+            total_amount: 5,
+            visual_path: PipeTransferVisualPath::BridgeArc {
+                bridge_origin: UVec2::new(10, 10),
+                bridge_rotation: StructureRotation::Deg0,
+            },
+        };
+
+        let left_end = bridge_curve_progress_for_transfer(
+            &left_to_center,
+            center,
+            first_port,
+            second_port,
+            1.0,
+        )
+        .expect("left half");
+        let right_start = bridge_curve_progress_for_transfer(
+            &center_to_right,
+            center,
+            first_port,
+            second_port,
+            0.0,
+        )
+        .expect("right half");
+
+        assert!((left_end - 0.5).abs() < 1e-6);
+        assert!((right_start - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn future_bridge_rotations_have_expected_arc_directions() {
+        let center = UVec2::new(20, 21);
+        let origin = crate::world::grid::cell_center(center.x, center.y);
+
+        assert_eq!(bridge_bend_direction(StructureRotation::Deg0), Vec2::Y);
+        assert_eq!(bridge_bend_direction(StructureRotation::Deg90), Vec2::NEG_X);
+        assert!(bridge_arc_control_point(center, StructureRotation::Deg180).y < origin.y);
+        assert!(bridge_arc_control_point(center, StructureRotation::Deg270).x > origin.x);
+    }
+
+    #[test]
+    fn non_bridge_transfers_keep_straight_packet_motion() {
+        let transfer = PipeTransferRecord {
+            from: UVec2::new(3, 4),
+            to: UVec2::new(4, 4),
+            gas_counts: vec![6, 2],
+            total_amount: 8,
+            visual_path: PipeTransferVisualPath::Straight,
+        };
+        let position = flow_packet_position(&transfer, 0.5);
+        let expected = straight_packet_position(
+            crate::world::grid::cell_center(3, 4),
+            crate::world::grid::cell_center(4, 4),
+            0.5,
+        );
+
+        assert_eq!(position, expected);
+    }
+
+    #[test]
+    fn bridge_arc_detection_matches_only_center_to_port_pairs() {
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        assert!(structures
+            .place_bridge(UVec2::new(10, 10), StructureRotation::Deg0, &world)
+            .is_some());
+        let non_bridge_transfer = PipeTransferRecord {
+            from: UVec2::new(11, 10),
+            to: UVec2::new(11, 11),
+            gas_counts: vec![3, 0],
+            total_amount: 3,
+            visual_path: PipeTransferVisualPath::Straight,
+        };
+
+        assert!(bridge_packet_position(&non_bridge_transfer, 0.5).is_none());
+    }
+
+    #[test]
+    fn plain_pipe_under_bridge_keeps_straight_packet_motion() {
+        let transfer = PipeTransferRecord {
+            from: UVec2::new(11, 10),
+            to: UVec2::new(10, 10),
+            gas_counts: vec![5, 0],
+            total_amount: 5,
+            visual_path: PipeTransferVisualPath::Straight,
+        };
+
+        let position = flow_packet_position(&transfer, 0.5);
+        let expected = straight_packet_position(
+            crate::world::grid::cell_center(11, 10),
+            crate::world::grid::cell_center(10, 10),
+            0.5,
+        );
+
+        assert_eq!(position, expected);
     }
 }

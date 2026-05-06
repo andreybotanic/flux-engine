@@ -261,7 +261,7 @@ mod tests {
         config::{GasDefinition, GasRegistry},
         simulation::{
             gas::GasField,
-            pipes::{PipeFlowVisualState, PipeGasField, PipeTransferRecord},
+            pipes::{PipeFlowVisualState, PipeGasField, PipeTransferRecord, PipeTransferVisualPath},
         },
         world::{grid::WorldGrid, structures::PlacedStructureMap},
     };
@@ -349,6 +349,7 @@ mod tests {
                 to: UVec2::new(9, 9),
                 gas_counts: vec![4, 1],
                 total_amount: 5,
+                visual_path: PipeTransferVisualPath::Straight,
             }],
         };
         assert!(structures.place_pipe(8, 9, &world));
@@ -385,6 +386,7 @@ mod tests {
                 to: UVec2::new(9, 9),
                 gas_counts: vec![4, 1],
                 total_amount: 5,
+                visual_path: PipeTransferVisualPath::Straight,
             }],
         };
         assert!(structures.place_pipe(8, 9, &world));
