@@ -121,6 +121,7 @@ fn handle_debug_keys(
             &mut gas,
             &world,
             &mut pipe_flow_visuals,
+            &config.pipe,
         );
         let _ = apply_gas_structures_pre_step(&structures, &mut gas, &world);
         do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);

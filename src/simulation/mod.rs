@@ -108,6 +108,28 @@ impl Default for SolverTuning {
     }
 }
 
+#[derive(Clone, Copy)]
+/// Stores configuration for the pressure-driven pipe simulation.
+pub struct PipeSimulationConfig {
+    pub cell_volume_ratio: f32,
+    pub segment_capacity_particles: u32,
+    pub edge_transfer_per_tick: u32,
+    pub vent_transfer_per_tick: u32,
+    pub pressure_epsilon: f32,
+}
+
+impl Default for PipeSimulationConfig {
+    fn default() -> Self {
+        Self {
+            cell_volume_ratio: 25.0,
+            segment_capacity_particles: 1_000,
+            edge_transfer_per_tick: 200,
+            vent_transfer_per_tick: 200,
+            pressure_epsilon: 0.01,
+        }
+    }
+}
+
 #[derive(Resource, Clone, Copy)]
 /// Stores `GasSimulationConfig` state.
 pub struct GasSimulationConfig {
@@ -119,6 +141,7 @@ pub struct GasSimulationConfig {
     pub mass_fix_min_residual: f32,
     pub thermal_motion_scale: f32,
     pub solver_tuning: SolverTuning,
+    pub pipe: PipeSimulationConfig,
 }
 
 impl Default for GasSimulationConfig {
@@ -132,6 +155,7 @@ impl Default for GasSimulationConfig {
             mass_fix_min_residual: 1e-5,
             thermal_motion_scale: 0.08,
             solver_tuning: SolverTuning::default(),
+            pipe: PipeSimulationConfig::default(),
         }
     }
 }

@@ -21,6 +21,7 @@ use crate::{
             PanelControls, PanelCorner, PanelId, PanelManager, PanelOpenOrder, PanelScrollPolicy,
             PanelSpec,
         },
+        scroll_area::{spawn_scroll_area_scrollbar, ScrollAreaViewport, UiScrollBlockState},
         select_field::{spawn_select_field, SelectFieldConfig, SelectFieldId, SelectFieldState},
     },
     world::{
@@ -342,6 +343,12 @@ struct MainMenuSaveNameInputField;
 
 #[derive(Component)]
 struct MainMenuSaveListRoot;
+
+#[derive(Component)]
+struct MainMenuSaveListViewport;
+
+#[derive(Component)]
+struct MainMenuSaveListContent;
 
 #[derive(Component)]
 struct MainMenuBackdrop;

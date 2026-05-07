@@ -7,15 +7,15 @@ use crate::{
     simulation::gas::GasField,
     world::{
         grid::{WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
-        structures::{
-            bridge_center_cell, PlacedStructureMap, StructureKind, StructureRotation,
-        },
+        structures::{bridge_center_cell, PlacedStructureMap, StructureKind, StructureRotation},
     },
 };
 
-pub(crate) const PIPE_CELL_CAPACITY: u32 = 1_000;
-/// Minimum rounded pressure delta between vents required to activate pipe flow.
-pub(crate) const MIN_VENT_PRESSURE_DELTA_PARTICLES: u32 = 5;
+mod solver;
+
+pub(crate) const DEFAULT_PIPE_CELL_CAPACITY: u32 = 1_000;
+/// Nominal full-segment amount used by UI/tests and as the default config value.
+pub const PIPE_CELL_CAPACITY: u32 = DEFAULT_PIPE_CELL_CAPACITY;
 const PIPE_LOCAL_TRANSFER_NUMERATOR: u32 = 1;
 const PIPE_LOCAL_TRANSFER_DENOMINATOR: u32 = 2;
 
@@ -51,6 +51,7 @@ pub struct PipeGasSnapshot {
 /// Stores `PipeGasField` state.
 pub struct PipeGasField {
     gas_count: usize,
+    capacity_particles: u32,
     keys: Vec<PipeNodeKey>,
     cells: Vec<Vec<u32>>,
 }
@@ -59,6 +60,7 @@ impl Default for PipeGasField {
     fn default() -> Self {
         Self {
             gas_count: 0,
+            capacity_particles: DEFAULT_PIPE_CELL_CAPACITY,
             keys: Vec::new(),
             cells: Vec::new(),
         }
@@ -68,8 +70,14 @@ impl Default for PipeGasField {
 impl PipeGasField {
     /// Builds an empty field sized for the current gas registry.
     pub fn from_registry(registry: &GasRegistry) -> Self {
+        Self::from_registry_with_capacity(registry, DEFAULT_PIPE_CELL_CAPACITY)
+    }
+
+    /// Builds an empty field sized for the current gas registry with a custom segment capacity.
+    pub fn from_registry_with_capacity(registry: &GasRegistry, capacity_particles: u32) -> Self {
         Self {
             gas_count: registry.count(),
+            capacity_particles: capacity_particles.max(1),
             keys: Vec::new(),
             cells: Vec::new(),
         }
@@ -78,6 +86,11 @@ impl PipeGasField {
     /// Returns the number of registered gases.
     pub fn gas_count(&self) -> usize {
         self.gas_count
+    }
+
+    /// Returns the configured capacity of one pipe segment.
+    pub fn capacity_particles(&self) -> u32 {
+        self.capacity_particles
     }
 
     /// Rebuilds the node layout from placed structures while preserving gas by node key.
@@ -125,7 +138,8 @@ impl PipeGasField {
 
     /// Returns the free capacity of one node.
     pub fn free_capacity(&self, node_id: usize) -> u32 {
-        PIPE_CELL_CAPACITY.saturating_sub(self.total_amount_particles(node_id))
+        self.capacity_particles
+            .saturating_sub(self.total_amount_particles(node_id))
     }
 
     /// Clears all nodes that visually belong to the world cell.
@@ -162,7 +176,11 @@ impl PipeGasField {
     }
 
     /// Removes gas proportionally from one node and returns the removed species counts.
-    pub fn remove_particles_proportional_counts(&mut self, node_id: usize, amount: u32) -> Vec<u32> {
+    pub fn remove_particles_proportional_counts(
+        &mut self,
+        node_id: usize,
+        amount: u32,
+    ) -> Vec<u32> {
         if amount == 0 || self.gas_count == 0 {
             return vec![0; self.gas_count];
         }
@@ -230,7 +248,8 @@ impl PipeGasField {
         };
         let current_total: u32 = cell.iter().copied().sum();
         let total_offered: u32 = offered.iter().take(self.gas_count).copied().sum();
-        let accept_total = PIPE_CELL_CAPACITY
+        let accept_total = self
+            .capacity_particles
             .saturating_sub(current_total)
             .min(total_offered);
         if accept_total == 0 {
@@ -319,10 +338,10 @@ impl PipeGasField {
                 .cloned()
                 .unwrap_or_else(|| vec![0; self.gas_count]);
             let total: u32 = counts.iter().copied().sum();
-            if total > PIPE_CELL_CAPACITY {
+            if total > self.capacity_particles {
                 return Err(format!(
                     "Pipe gas snapshot exceeds capacity for node {:?}: {} > {}",
-                    key, total, PIPE_CELL_CAPACITY
+                    key, total, self.capacity_particles
                 ));
             }
             self.set_species_counts_exact(node_id, &counts);
@@ -451,212 +470,9 @@ pub fn apply_pipe_network_step(
     gas: &mut GasField,
     world: &WorldGrid,
     visual_state: &mut PipeFlowVisualState,
+    config: &crate::simulation::PipeSimulationConfig,
 ) -> bool {
-    visual_state.transfers.clear();
-    if pipe_gas.gas_count() == 0 {
-        return false;
-    }
-
-    pipe_gas.sync_to_structures(structures);
-    let runtime = PipeRuntime::from_structures(structures, pipe_gas);
-    if runtime.nodes.is_empty() {
-        return false;
-    }
-
-    let components = collect_pipe_components(&runtime);
-    let mut world_changed = false;
-    let mut pipe_changed = false;
-
-    for component in components {
-        if component.is_empty() {
-            continue;
-        }
-
-        let starting_pipe_totals = component
-            .iter()
-            .map(|node_id| pipe_gas.total_amount_particles(*node_id))
-            .collect::<Vec<_>>();
-        let starting_pipe_species = component
-            .iter()
-            .map(|node_id| pipe_gas.node_species_counts(*node_id))
-            .collect::<Vec<_>>();
-        let vent_cells = component
-            .iter()
-            .map(|node_id| runtime.nodes[*node_id].vent_cell)
-            .collect::<Vec<_>>();
-        let starting_world_totals = vent_cells
-            .iter()
-            .map(|vent_cell| vent_cell.map(|cell| gas.total_amount_rounded(cell.x, cell.y)))
-            .collect::<Vec<_>>();
-        let vent_profile =
-            build_component_vent_profile(&starting_pipe_totals, &starting_world_totals);
-        let (initial_world_to_pipe_requests, pipe_to_world_requests) =
-            build_world_exchange_requests(
-                &starting_pipe_totals,
-                &starting_world_totals,
-                vent_profile.as_ref(),
-            );
-        let neighbor_requests = build_pipe_transfer_plan(
-            &runtime,
-            &component,
-            &starting_pipe_totals,
-            &starting_world_totals,
-            &initial_world_to_pipe_requests,
-            &pipe_to_world_requests,
-            vent_profile.as_ref(),
-        );
-        let world_to_pipe_requests = finalize_world_to_pipe_requests(
-            &starting_pipe_totals,
-            &starting_world_totals,
-            &pipe_to_world_requests,
-            &neighbor_requests,
-            vent_profile.as_ref(),
-        );
-
-        let mut next_pipe_species = starting_pipe_species.clone();
-        let mut incoming_pipe_species = vec![vec![0u32; pipe_gas.gas_count()]; component.len()];
-        let mut edge_transfers = Vec::<(PipeEdgePlan, Vec<u32>)>::new();
-
-        for request in &neighbor_requests {
-            if request.amount == 0 {
-                continue;
-            }
-            let moved = remove_species_proportional_counts(
-                &mut next_pipe_species[request.source_index],
-                request.amount,
-            );
-            if moved.iter().any(|count| *count > 0) {
-                edge_transfers.push((request.clone(), moved));
-            }
-        }
-
-        for target_index in 0..component.len() {
-            let incoming_edge_indices = edge_transfers
-                .iter()
-                .enumerate()
-                .filter_map(|(edge_index, (request, species))| {
-                    (request.target_index == target_index
-                        && species.iter().any(|count| *count > 0))
-                    .then_some(edge_index)
-                })
-                .collect::<Vec<_>>();
-            if incoming_edge_indices.is_empty() {
-                continue;
-            }
-
-            let target_total_after_outgoing: u32 =
-                next_pipe_species[target_index].iter().copied().sum();
-            let target_capacity = PIPE_CELL_CAPACITY.saturating_add(pipe_to_world_requests[target_index]);
-            let free_for_incoming = target_capacity.saturating_sub(target_total_after_outgoing);
-            let offered_totals = incoming_edge_indices
-                .iter()
-                .map(|edge_index| {
-                    edge_transfers[*edge_index]
-                        .1
-                        .iter()
-                        .copied()
-                        .sum::<u32>()
-                })
-                .collect::<Vec<_>>();
-            let accepted_totals = split_bounded_integer_requests(
-                free_for_incoming.min(offered_totals.iter().copied().sum()),
-                &offered_totals,
-            );
-            for (edge_index, accepted_total) in incoming_edge_indices
-                .into_iter()
-                .zip(accepted_totals.into_iter())
-            {
-                let (request, moved_species) = &edge_transfers[edge_index];
-                let mut rejected_species = moved_species.clone();
-                let accepted_species =
-                    remove_species_proportional_counts(&mut rejected_species, accepted_total);
-                for (gas_index, amount) in accepted_species.iter().copied().enumerate() {
-                    incoming_pipe_species[target_index][gas_index] =
-                        incoming_pipe_species[target_index][gas_index]
-                            .saturating_add(amount);
-                }
-                if rejected_species.iter().any(|count| *count > 0) {
-                    let _ = add_species_counts_limited(
-                        &mut next_pipe_species[request.source_index],
-                        &rejected_species,
-                        PIPE_CELL_CAPACITY,
-                    );
-                }
-
-                let source_node_id = component[request.source_index];
-                let target_node_id = component[request.target_index];
-                if accepted_species.iter().any(|count| *count > 0) {
-                    visual_state.transfers.push(PipeTransferRecord {
-                        from: runtime.nodes[source_node_id].visual_cell,
-                        to: runtime.nodes[target_node_id].visual_cell,
-                        total_amount: accepted_species.iter().copied().sum(),
-                        gas_counts: accepted_species,
-                        visual_path: transfer_visual_path(
-                            pipe_gas.keys[source_node_id],
-                            pipe_gas.keys[target_node_id],
-                            structures,
-                        ),
-                    });
-                }
-            }
-        }
-
-        for target_index in 0..component.len() {
-            if incoming_pipe_species[target_index].iter().all(|count| *count == 0) {
-                continue;
-            }
-            let _ = add_species_counts_limited(
-                &mut next_pipe_species[target_index],
-                &incoming_pipe_species[target_index],
-                PIPE_CELL_CAPACITY.saturating_add(pipe_to_world_requests[target_index]),
-            );
-        }
-
-        for (component_index, node_id) in component.iter().copied().enumerate() {
-            let pipe_out = pipe_to_world_requests[component_index];
-            if pipe_out > 0 {
-                let Some(cell) = vent_cells[component_index] else {
-                    continue;
-                };
-                let moved =
-                    remove_species_proportional_counts(&mut next_pipe_species[component_index], pipe_out);
-                if moved.iter().any(|count| *count > 0) {
-                    for (gas_index, amount) in moved.iter().copied().enumerate() {
-                        if amount > 0 {
-                            let _ = gas.add_particles_no_impulse(cell.x, cell.y, gas_index, amount, world);
-                        }
-                    }
-                    world_changed = true;
-                }
-            }
-
-            let world_in = world_to_pipe_requests[component_index];
-            if world_in > 0 {
-                let Some(cell) = vent_cells[component_index] else {
-                    continue;
-                };
-                let removed_counts =
-                    gas.remove_particles_proportional_counts(cell.x, cell.y, world_in, world);
-                if removed_counts.iter().any(|count| *count > 0) {
-                    add_species_counts_limited(
-                        &mut next_pipe_species[component_index],
-                        &removed_counts,
-                        PIPE_CELL_CAPACITY,
-                    );
-                    world_changed = true;
-                }
-            }
-
-            pipe_gas.set_species_counts_exact(node_id, &next_pipe_species[component_index]);
-            pipe_changed |= next_pipe_species[component_index] != starting_pipe_species[component_index];
-        }
-    }
-
-    if world_changed {
-        gas.recompute_total_density_buffer(world);
-    }
-
-    pipe_changed || world_changed
+    solver::apply_pipe_network_step(structures, pipe_gas, gas, world, visual_state, config)
 }
 
 #[derive(Clone, Debug)]
@@ -683,7 +499,8 @@ impl PipeRuntime {
                         let rotation = structures
                             .iter()
                             .find(|structure| {
-                                structure.kind == StructureKind::GasPipeBridge && structure.origin == key.anchor
+                                structure.kind == StructureKind::GasPipeBridge
+                                    && structure.origin == key.anchor
                             })
                             .map(|structure| structure.rotation)
                             .unwrap_or(StructureRotation::Deg0);
@@ -699,7 +516,9 @@ impl PipeRuntime {
             .keys
             .iter()
             .enumerate()
-            .filter_map(|(node_id, key)| (key.kind == PipeContainerKind::Pipe).then_some((key.anchor, node_id)))
+            .filter_map(|(node_id, key)| {
+                (key.kind == PipeContainerKind::Pipe).then_some((key.anchor, node_id))
+            })
             .collect::<HashMap<_, _>>();
         let bridge_by_origin = pipe_gas
             .keys
@@ -730,7 +549,8 @@ impl PipeRuntime {
                     }
                 }
                 StructureKind::GasPipeBridge => {
-                    let Some(bridge_node_id) = bridge_by_origin.get(&structure.origin).copied() else {
+                    let Some(bridge_node_id) = bridge_by_origin.get(&structure.origin).copied()
+                    else {
                         continue;
                     };
                     for port_cell in bridge_port_cells(structure.origin, structure.rotation) {
@@ -762,9 +582,7 @@ struct PipeComponentTransferPlan {
 
 #[derive(Clone, Debug, Default)]
 struct PipeNodeDemand {
-    terminal_demand: u32,
     distance_to_sink: Option<u32>,
-    upstream_request: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -772,7 +590,6 @@ struct PipeComponentVentProfile {
     inlet_indices: Vec<usize>,
     outlet_indices: Vec<usize>,
     target_fill: u32,
-    throughput_budget: u32,
 }
 
 fn collect_pipe_node_keys(structures: &PlacedStructureMap) -> Vec<PipeNodeKey> {
@@ -820,7 +637,8 @@ fn node_ids_for_cell(
                 let bridge = structures.iter().find(|structure| {
                     structure.kind == StructureKind::GasPipeBridge && structure.origin == key.anchor
                 })?;
-                (bridge_center_cell(bridge.origin, bridge.rotation) == Some(cell)).then_some(node_id)
+                (bridge_center_cell(bridge.origin, bridge.rotation) == Some(cell))
+                    .then_some(node_id)
             }
             _ => None,
         })
@@ -845,7 +663,9 @@ fn pipe_node_display_species_counts(
         PipeContainerKind::Pipe => key.anchor,
         PipeContainerKind::BridgePipe => structures
             .iter()
-            .find(|structure| structure.kind == StructureKind::GasPipeBridge && structure.origin == key.anchor)
+            .find(|structure| {
+                structure.kind == StructureKind::GasPipeBridge && structure.origin == key.anchor
+            })
             .and_then(|bridge| bridge_center_cell(bridge.origin, bridge.rotation))
             .unwrap_or(key.anchor),
     };
@@ -969,239 +789,6 @@ fn combined_outgoing_delta(deltas: &[u32]) -> u32 {
     deltas.iter().copied().max().unwrap_or(0)
 }
 
-fn build_component_vent_profile(
-    starting_pipe_totals: &[u32],
-    starting_world_totals: &[Option<u32>],
-) -> Option<PipeComponentVentProfile> {
-    let vent_totals = starting_world_totals
-        .iter()
-        .enumerate()
-        .filter_map(|(index, total)| total.map(|amount| (index, amount)))
-        .collect::<Vec<_>>();
-    if vent_totals.is_empty() {
-        return None;
-    }
-
-    if vent_totals.len() >= 2 {
-        let max_world = vent_totals.iter().map(|(_, total)| *total).max().unwrap_or(0);
-        let min_world = vent_totals.iter().map(|(_, total)| *total).min().unwrap_or(0);
-        let head = max_world.saturating_sub(min_world);
-        if head >= MIN_VENT_PRESSURE_DELTA_PARTICLES {
-            return Some(PipeComponentVentProfile {
-                inlet_indices: vent_totals
-                    .iter()
-                    .filter_map(|(index, total)| (*total == max_world).then_some(*index))
-                    .collect(),
-                outlet_indices: vent_totals
-                    .iter()
-                    .filter_map(|(index, total)| (*total == min_world).then_some(*index))
-                    .collect(),
-                target_fill: head.min(PIPE_CELL_CAPACITY),
-                throughput_budget: desired_local_transfer_amount(head).min(PIPE_CELL_CAPACITY),
-            });
-        }
-    }
-
-    let inlet_candidates = vent_totals
-        .iter()
-        .filter_map(|(index, world_total)| {
-            let pipe_total = starting_pipe_totals.get(*index).copied().unwrap_or(0);
-            let delta = world_total.saturating_sub(pipe_total);
-            (delta >= MIN_VENT_PRESSURE_DELTA_PARTICLES).then_some((*index, delta))
-        })
-        .collect::<Vec<_>>();
-    if inlet_candidates.is_empty() {
-        let outlet_candidates = vent_totals
-            .iter()
-            .filter_map(|(index, world_total)| {
-                let pipe_total = starting_pipe_totals.get(*index).copied().unwrap_or(0);
-                let delta = pipe_total.saturating_sub(*world_total);
-                (delta >= MIN_VENT_PRESSURE_DELTA_PARTICLES).then_some((*index, delta))
-            })
-            .collect::<Vec<_>>();
-        if outlet_candidates.is_empty() {
-            return None;
-        }
-        let throughput_budget = outlet_candidates
-            .iter()
-            .map(|(_, delta)| desired_local_transfer_amount(*delta))
-            .max()
-            .unwrap_or(0)
-            .min(PIPE_CELL_CAPACITY);
-        if throughput_budget == 0 {
-            return None;
-        }
-        return Some(PipeComponentVentProfile {
-            inlet_indices: Vec::new(),
-            outlet_indices: outlet_candidates.into_iter().map(|(index, _)| index).collect(),
-            target_fill: PIPE_CELL_CAPACITY,
-            throughput_budget,
-        });
-    }
-
-    let throughput_budget = inlet_candidates
-        .iter()
-        .map(|(_, delta)| desired_local_transfer_amount(*delta))
-        .max()
-        .unwrap_or(0)
-        .min(PIPE_CELL_CAPACITY);
-    if throughput_budget == 0 {
-        return None;
-    }
-
-    Some(PipeComponentVentProfile {
-        inlet_indices: inlet_candidates.into_iter().map(|(index, _)| index).collect(),
-        outlet_indices: Vec::new(),
-        target_fill: PIPE_CELL_CAPACITY,
-        throughput_budget,
-    })
-}
-
-fn finalize_world_to_pipe_requests(
-    starting_pipe_totals: &[u32],
-    starting_world_totals: &[Option<u32>],
-    pipe_to_world_requests: &[u32],
-    neighbor_requests: &[PipeEdgePlan],
-    vent_profile: Option<&PipeComponentVentProfile>,
-) -> Vec<u32> {
-    let mut world_to_pipe = vec![0u32; starting_pipe_totals.len()];
-    let Some(profile) = vent_profile else {
-        return world_to_pipe;
-    };
-    let sustained_multi_vent_flow =
-        !profile.inlet_indices.is_empty() && !profile.outlet_indices.is_empty();
-
-    let mut outgoing_by_node = vec![0u32; starting_pipe_totals.len()];
-    for request in neighbor_requests {
-        outgoing_by_node[request.source_index] =
-            outgoing_by_node[request.source_index].saturating_add(request.amount);
-    }
-    for (index, amount) in pipe_to_world_requests.iter().copied().enumerate() {
-        outgoing_by_node[index] = outgoing_by_node[index].saturating_add(amount);
-    }
-
-    for &index in &profile.inlet_indices {
-        let Some(world_total) = starting_world_totals[index] else {
-            continue;
-        };
-        let projected_total = starting_pipe_totals[index].saturating_sub(outgoing_by_node[index]);
-        if !sustained_multi_vent_flow && world_total <= projected_total {
-            continue;
-        }
-        let delta = world_total.saturating_sub(projected_total);
-        if !sustained_multi_vent_flow && delta < MIN_VENT_PRESSURE_DELTA_PARTICLES {
-            continue;
-        }
-        let room_to_target = profile.target_fill.saturating_sub(projected_total);
-        world_to_pipe[index] = profile
-            .throughput_budget
-            .min(room_to_target)
-            .min(world_total);
-    }
-
-    world_to_pipe
-}
-
-fn build_world_exchange_requests(
-    starting_pipe_totals: &[u32],
-    starting_world_totals: &[Option<u32>],
-    vent_profile: Option<&PipeComponentVentProfile>,
-) -> (Vec<u32>, Vec<u32>) {
-    let mut world_to_pipe = vec![0u32; starting_pipe_totals.len()];
-    let mut pipe_to_world = vec![0u32; starting_pipe_totals.len()];
-    if let Some(profile) = vent_profile {
-        let sustained_multi_vent_flow =
-            !profile.inlet_indices.is_empty() && !profile.outlet_indices.is_empty();
-        for &index in &profile.inlet_indices {
-            let Some(world_total) = starting_world_totals[index] else {
-                continue;
-            };
-            let source_total = starting_pipe_totals[index];
-            if !sustained_multi_vent_flow && world_total <= source_total {
-                continue;
-            }
-            let delta = world_total.saturating_sub(source_total);
-            if !sustained_multi_vent_flow && delta < MIN_VENT_PRESSURE_DELTA_PARTICLES {
-                continue;
-            }
-            let room_to_target = profile.target_fill.saturating_sub(source_total);
-            world_to_pipe[index] = profile
-                .throughput_budget
-                .min(room_to_target)
-                .min(world_total);
-        }
-
-        for &index in &profile.outlet_indices {
-            let source_total = starting_pipe_totals[index];
-            if sustained_multi_vent_flow {
-                pipe_to_world[index] = profile.throughput_budget.min(source_total);
-                continue;
-            }
-            let Some(world_total) = starting_world_totals[index] else {
-                continue;
-            };
-            if source_total <= world_total {
-                continue;
-            }
-            let delta = source_total - world_total;
-            if delta < MIN_VENT_PRESSURE_DELTA_PARTICLES {
-                continue;
-            }
-            pipe_to_world[index] = profile.throughput_budget.min(source_total);
-        }
-        return (world_to_pipe, pipe_to_world);
-    }
-
-    for (index, source_total) in starting_pipe_totals.iter().copied().enumerate() {
-        let Some(world_total) = starting_world_totals[index] else {
-            continue;
-        };
-        if source_total > world_total {
-            let delta = source_total - world_total;
-            if delta >= MIN_VENT_PRESSURE_DELTA_PARTICLES {
-                pipe_to_world[index] = desired_local_transfer_amount(delta).min(source_total);
-            }
-        } else if world_total > source_total {
-            let delta = world_total - source_total;
-            if delta >= MIN_VENT_PRESSURE_DELTA_PARTICLES {
-                world_to_pipe[index] = desired_local_transfer_amount(delta).min(world_total);
-            }
-        }
-    }
-    (world_to_pipe, pipe_to_world)
-}
-
-fn build_pipe_transfer_plan(
-    runtime: &PipeRuntime,
-    component: &[usize],
-    starting_pipe_totals: &[u32],
-    starting_world_totals: &[Option<u32>],
-    world_to_pipe_requests: &[u32],
-    pipe_to_world_requests: &[u32],
-    vent_profile: Option<&PipeComponentVentProfile>,
-) -> Vec<PipeEdgePlan> {
-    if let Some(profile) = vent_profile {
-        if profile.inlet_indices.is_empty() && !profile.outlet_indices.is_empty() {
-            return build_sink_oriented_pipe_transfer_plan(
-                runtime,
-                component,
-                starting_pipe_totals,
-                pipe_to_world_requests,
-            );
-        }
-    }
-    build_demand_driven_pipe_transfer_plan(
-        runtime,
-        component,
-        starting_pipe_totals,
-        starting_world_totals,
-        world_to_pipe_requests,
-        pipe_to_world_requests,
-        vent_profile,
-    )
-    .unwrap_or_else(|| build_local_pipe_transfer_plan(runtime, component, starting_pipe_totals))
-}
-
 fn build_sink_oriented_pipe_transfer_plan(
     runtime: &PipeRuntime,
     component: &[usize],
@@ -1228,7 +815,11 @@ fn build_sink_oriented_pipe_transfer_plan(
         }
     }
 
-    let max_distance = distances.iter().filter_map(|distance| *distance).max().unwrap_or(0);
+    let max_distance = distances
+        .iter()
+        .filter_map(|distance| *distance)
+        .max()
+        .unwrap_or(0);
     let mut requested_edges = Vec::<PipeEdgePlan>::new();
     let mut closer_requested = vec![0u32; component.len()];
     for distance in 0..=max_distance {
@@ -1256,7 +847,11 @@ fn build_sink_oriented_pipe_transfer_plan(
                     .iter()
                     .map(|parent| {
                         let total = starting_pipe_totals[*parent];
-                        if total == 0 { 1.0 } else { total as f32 }
+                        if total == 0 {
+                            1.0
+                        } else {
+                            total as f32
+                        }
                     })
                     .collect::<Vec<_>>(),
             );
@@ -1364,17 +959,15 @@ fn build_demand_driven_pipe_transfer_plan(
                 continue;
             }
             let source_total = starting_pipe_totals[node_index];
-            let reserved_world_in =
-                world_to_pipe_requests[node_index].min(profile.target_fill.saturating_sub(source_total));
+            let reserved_world_in = world_to_pipe_requests[node_index]
+                .min(profile.target_fill.saturating_sub(source_total));
             let local_free_capacity = profile
                 .target_fill
                 .saturating_sub(source_total)
                 .saturating_sub(reserved_world_in);
-            let terminal_demand = local_free_capacity
-                .saturating_add(pipe_to_world_requests[node_index]);
+            let terminal_demand =
+                local_free_capacity.saturating_add(pipe_to_world_requests[node_index]);
             let total_need = terminal_demand.saturating_add(upstream_requests[node_index]);
-            demands[node_index].terminal_demand = terminal_demand;
-            demands[node_index].upstream_request = total_need;
             if total_need == 0 || distance == 0 {
                 continue;
             }
@@ -1393,7 +986,11 @@ fn build_demand_driven_pipe_transfer_plan(
                 .iter()
                 .map(|parent| {
                     let total = starting_pipe_totals[*parent];
-                    if total == 0 { 1.0 } else { total as f32 }
+                    if total == 0 {
+                        1.0
+                    } else {
+                        total as f32
+                    }
                 })
                 .collect::<Vec<_>>();
             let split = split_integer_by_weights(total_need, &weights);
@@ -1453,6 +1050,7 @@ fn build_local_pipe_transfer_plan(
     runtime: &PipeRuntime,
     component: &[usize],
     starting_pipe_totals: &[u32],
+    capacity_particles: u32,
 ) -> Vec<PipeEdgePlan> {
     let mut requested_edges = Vec::<PipeEdgePlan>::new();
     let mut accepted_outgoing = vec![0u32; component.len()];
@@ -1516,7 +1114,7 @@ fn build_local_pipe_transfer_plan(
 
     let mut accepted_edges = vec![0u32; requested_edges.len()];
     for target_index in 0..component.len() {
-        let room = PIPE_CELL_CAPACITY
+        let room = capacity_particles
             .saturating_sub(starting_pipe_totals[target_index])
             .saturating_add(accepted_outgoing[target_index]);
         let incoming = requested_edges
@@ -1530,7 +1128,13 @@ fn build_local_pipe_transfer_plan(
         if total_requested == 0 {
             continue;
         }
-        let accepted = split_bounded_integer_requests(room.min(total_requested), &incoming.iter().map(|(_, amount)| *amount).collect::<Vec<_>>());
+        let accepted = split_bounded_integer_requests(
+            room.min(total_requested),
+            &incoming
+                .iter()
+                .map(|(_, amount)| *amount)
+                .collect::<Vec<_>>(),
+        );
         for ((edge_index, _), accepted_amount) in incoming.into_iter().zip(accepted.into_iter()) {
             accepted_edges[edge_index] = accepted_amount;
         }
@@ -1557,7 +1161,11 @@ fn component_neighbor_indices(
     runtime.nodes[component[node_index]]
         .neighbors
         .iter()
-        .filter_map(|neighbor| component.iter().position(|candidate| *candidate == *neighbor))
+        .filter_map(|neighbor| {
+            component
+                .iter()
+                .position(|candidate| *candidate == *neighbor)
+        })
         .collect()
 }
 
@@ -1607,7 +1215,10 @@ fn split_bounded_integer_requests(total: u32, requests: &[u32]) -> Vec<u32> {
     }
     let mut accepted = split_integer_by_weights(
         total,
-        &requests.iter().map(|request| *request as f32).collect::<Vec<_>>(),
+        &requests
+            .iter()
+            .map(|request| *request as f32)
+            .collect::<Vec<_>>(),
     );
     for (index, request) in requests.iter().copied().enumerate() {
         accepted[index] = accepted[index].min(request);
@@ -1741,8 +1352,7 @@ mod tests {
     use super::{
         apply_pipe_network_step, bridge_port_cells, pipe_cell_display_blocks_with_transfers,
         PipeCellDisplayBlock, PipeContainerKind, PipeFlowVisualState, PipeGasField,
-        PipeTransferVisualPath,
-        PIPE_CELL_CAPACITY,
+        PipeTransferVisualPath, PIPE_CELL_CAPACITY,
     };
     use crate::{
         config::{GasDefinition, GasRegistry},
@@ -1776,6 +1386,31 @@ mod tests {
             },
         ])
         .expect("test registry")
+    }
+
+    fn pipe_config() -> crate::simulation::PipeSimulationConfig {
+        crate::simulation::PipeSimulationConfig::default()
+    }
+
+    fn pipe_pressure_for(total: u32) -> f32 {
+        super::solver::pipe_pressure(&pipe_config(), total)
+    }
+
+    fn world_pressure_for(total: u32) -> f32 {
+        super::solver::world_pressure(&pipe_config(), total)
+    }
+
+    fn pressures_match_within(a: f32, b: f32, relative_tolerance: f32) -> bool {
+        let denom = a.abs().max(b.abs()).max(1.0);
+        ((a - b).abs() / denom) <= relative_tolerance
+    }
+
+    fn has_transfer_between(visuals: &PipeFlowVisualState, a: UVec2, b: UVec2) -> bool {
+        visuals.transfers.iter().any(|transfer| {
+            transfer.total_amount > 0
+                && ((transfer.from == a && transfer.to == b)
+                    || (transfer.from == b && transfer.to == a))
+        })
     }
 
     fn total_world_and_pipe_particles(
@@ -1858,16 +1493,17 @@ mod tests {
         let mut gas = GasField::from_registry(&registry);
         let mut visuals = PipeFlowVisualState::default();
 
-        let changed = apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
-        assert!(changed);
-        let edge_blocks = pipe_cell_display_blocks_with_transfers(
+        let changed = apply_pipe_network_step(
             &structures,
-            &pipe_gas,
-            &visuals,
-            20,
-            20,
-            true,
+            &mut pipe_gas,
+            &mut gas,
+            &world,
+            &mut visuals,
+            &pipe_config(),
         );
+        assert!(changed);
+        let edge_blocks =
+            pipe_cell_display_blocks_with_transfers(&structures, &pipe_gas, &visuals, 20, 20, true);
         assert!(!edge_blocks.is_empty());
     }
 
@@ -1947,7 +1583,14 @@ mod tests {
         let before = total_world_and_pipe_particles(&gas, &pipe_gas, &world);
         let mut visuals = PipeFlowVisualState::default();
         for _ in 0..5 {
-            let _ = apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+            let _ = apply_pipe_network_step(
+                &structures,
+                &mut pipe_gas,
+                &mut gas,
+                &world,
+                &mut visuals,
+                &pipe_config(),
+            );
         }
         let after = total_world_and_pipe_particles(&gas, &pipe_gas, &world);
         assert_eq!(before, after);
@@ -1986,11 +1629,20 @@ mod tests {
 
         let mut gas = GasField::from_registry(&registry);
         let mut visuals = PipeFlowVisualState::default();
-        let changed =
-            apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+        let changed = apply_pipe_network_step(
+            &structures,
+            &mut pipe_gas,
+            &mut gas,
+            &world,
+            &mut visuals,
+            &pipe_config(),
+        );
         assert!(changed);
         assert!(visuals.transfers.iter().any(|transfer| {
-            matches!(transfer.visual_path, PipeTransferVisualPath::BridgeArc { .. })
+            matches!(
+                transfer.visual_path,
+                PipeTransferVisualPath::BridgeArc { .. }
+            )
         }));
         assert!(visuals.transfers.iter().any(|transfer| {
             matches!(transfer.visual_path, PipeTransferVisualPath::Straight)
@@ -2015,8 +1667,14 @@ mod tests {
         gas.set_amount(10, 10, 0, 1_000.0);
         let mut visuals = PipeFlowVisualState::default();
 
-        let changed =
-            apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+        let changed = apply_pipe_network_step(
+            &structures,
+            &mut pipe_gas,
+            &mut gas,
+            &world,
+            &mut visuals,
+            &pipe_config(),
+        );
         assert!(changed);
         assert!(pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(10, 10)) > 0);
         assert_eq!(
@@ -2030,7 +1688,7 @@ mod tests {
     }
 
     #[test]
-    fn inlet_request_refills_chain_synchronously_in_one_tick() {
+    fn source_refill_keeps_upstream_full_while_front_advances_one_edge_per_tick() {
         let registry = registry();
         let world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
@@ -2044,7 +1702,9 @@ mod tests {
             let node_id = snapshot
                 .nodes
                 .iter()
-                .position(|node| node.key.kind == PipeContainerKind::Pipe && node.key.anchor == cell)
+                .position(|node| {
+                    node.key.kind == PipeContainerKind::Pipe && node.key.anchor == cell
+                })
                 .expect("pipe node");
             let _ = pipe_gas.add_species_counts_limited(node_id, &[PIPE_CELL_CAPACITY, 0, 0]);
         }
@@ -2052,8 +1712,14 @@ mod tests {
         let mut gas = GasField::from_registry(&registry);
         gas.set_amount(14, 14, 0, 100_000.0);
         let mut visuals = PipeFlowVisualState::default();
-        let changed =
-            apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+        let changed = apply_pipe_network_step(
+            &structures,
+            &mut pipe_gas,
+            &mut gas,
+            &world,
+            &mut visuals,
+            &pipe_config(),
+        );
         assert!(changed);
         assert_eq!(
             pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(14, 14)),
@@ -2065,7 +1731,7 @@ mod tests {
         );
         assert_eq!(
             pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(16, 14)),
-            PIPE_CELL_CAPACITY
+            200
         );
     }
 
@@ -2093,8 +1759,14 @@ mod tests {
 
         let mut gas = GasField::from_registry(&registry);
         let mut visuals = PipeFlowVisualState::default();
-        let changed =
-            apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+        let changed = apply_pipe_network_step(
+            &structures,
+            &mut pipe_gas,
+            &mut gas,
+            &world,
+            &mut visuals,
+            &pipe_config(),
+        );
         assert!(changed);
         assert!(
             pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(20, 20))
@@ -2135,8 +1807,14 @@ mod tests {
         let mut gas = GasField::from_registry(&registry);
         let mut visuals = PipeFlowVisualState::default();
         for _ in 0..4 {
-            let _ =
-                apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+            let _ = apply_pipe_network_step(
+                &structures,
+                &mut pipe_gas,
+                &mut gas,
+                &world,
+                &mut visuals,
+                &pipe_config(),
+            );
         }
 
         assert_eq!(
@@ -2175,14 +1853,23 @@ mod tests {
             let node_id = snapshot
                 .nodes
                 .iter()
-                .position(|node| node.key.kind == PipeContainerKind::Pipe && node.key.anchor == cell)
+                .position(|node| {
+                    node.key.kind == PipeContainerKind::Pipe && node.key.anchor == cell
+                })
                 .expect("pipe node");
             let _ = pipe_gas.add_species_counts_limited(node_id, &[amount, 0, 0]);
         }
 
         let mut gas = GasField::from_registry(&registry);
         let mut visuals = PipeFlowVisualState::default();
-        let _ = apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+        let _ = apply_pipe_network_step(
+            &structures,
+            &mut pipe_gas,
+            &mut gas,
+            &world,
+            &mut visuals,
+            &pipe_config(),
+        );
 
         let center_to_right = visuals
             .transfers
@@ -2204,15 +1891,11 @@ mod tests {
     }
 
     #[test]
-    fn equal_parallel_routes_split_sink_pull_evenly() {
+    fn equal_parallel_routes_share_sink_pull_with_edge_limited_front() {
         let registry = registry();
         let world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
-        for cell in [
-            UVec2::new(52, 49),
-            UVec2::new(52, 50),
-            UVec2::new(52, 51),
-        ] {
+        for cell in [UVec2::new(52, 49), UVec2::new(52, 50), UVec2::new(52, 51)] {
             assert!(structures.place_pipe(cell.x, cell.y, &world));
         }
         assert!(structures.place_vent(52, 50, &world));
@@ -2224,31 +1907,40 @@ mod tests {
             let node_id = snapshot
                 .nodes
                 .iter()
-                .position(|node| node.key.kind == PipeContainerKind::Pipe && node.key.anchor == cell)
+                .position(|node| {
+                    node.key.kind == PipeContainerKind::Pipe && node.key.anchor == cell
+                })
                 .expect("parallel node");
             let _ = pipe_gas.add_species_counts_limited(node_id, &[PIPE_CELL_CAPACITY, 0, 0]);
         }
 
         let mut gas = GasField::from_registry(&registry);
         let mut visuals = PipeFlowVisualState::default();
-        let _ = apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+        let _ = apply_pipe_network_step(
+            &structures,
+            &mut pipe_gas,
+            &mut gas,
+            &world,
+            &mut visuals,
+            &pipe_config(),
+        );
 
         assert_eq!(
             pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(52, 49)),
-            PIPE_CELL_CAPACITY / 2
+            PIPE_CELL_CAPACITY - 200
         );
         assert_eq!(
             pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(52, 51)),
-            PIPE_CELL_CAPACITY / 2
+            PIPE_CELL_CAPACITY - 200
         );
         assert_eq!(
             pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(52, 50)),
-            PIPE_CELL_CAPACITY
+            400
         );
     }
 
     #[test]
-    fn fifty_cell_pipe_keeps_far_end_within_eighty_percent_after_one_hundred_ticks() {
+    fn long_pipe_high_pressure_to_vacuum_fills_with_dense_front() {
         let registry = registry();
         let world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
@@ -2259,20 +1951,62 @@ mod tests {
         let mut pipe_gas = PipeGasField::from_registry(&registry);
         pipe_gas.sync_to_structures(&structures);
         let mut gas = GasField::from_registry(&registry);
-        gas.set_amount(54, 60, 0, 0.0);
         let mut visuals = PipeFlowVisualState::default();
+        let mut first_reach_tick = vec![None; 50];
 
-        for _ in 0..100 {
+        for tick in 0..520u32 {
             gas.set_amount(5, 60, 0, 100_000.0);
-            let _ =
-                apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+            gas.set_amount(54, 60, 0, 0.0);
+            let _ = apply_pipe_network_step(
+                &structures,
+                &mut pipe_gas,
+                &mut gas,
+                &world,
+                &mut visuals,
+                &pipe_config(),
+            );
+            for offset in 0..50u32 {
+                let total = pipe_node_total_at(
+                    &pipe_gas,
+                    PipeContainerKind::Pipe,
+                    UVec2::new(5 + offset, 60),
+                );
+                if total >= 900 && first_reach_tick[offset as usize].is_none() {
+                    first_reach_tick[offset as usize] = Some(tick);
+                }
+            }
         }
 
-        let first_total = pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(5, 60));
-        let last_total = pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(54, 60));
+        let totals = (5..=54)
+            .map(|x| pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(x, 60)))
+            .collect::<Vec<_>>();
         assert!(
-            u64::from(last_total) * 10 >= u64::from(first_total) * 8,
-            "expected far end to keep at least 80% of start: first={first_total}, last={last_total}"
+            totals[..49].iter().all(|total| *total >= 990),
+            "expected every internal segment to stay at or above nominal full, got {totals:?}"
+        );
+        assert!(
+            totals[49] >= 200,
+            "expected outlet vent segment to stay pressurized while exchanging with vacuum, got {totals:?}"
+        );
+        for window in totals[..49].windows(2) {
+            assert!(
+                window[0].abs_diff(window[1]) <= 10,
+                "neighbor gradient is too steep: {totals:?}"
+            );
+        }
+        let reach_ticks = first_reach_tick[..49]
+            .iter()
+            .copied()
+            .collect::<Option<Vec<_>>>()
+            .expect("every internal cell should see the dense front");
+        let average_ticks_per_cell = reach_ticks[..49]
+            .windows(2)
+            .map(|pair| pair[1].saturating_sub(pair[0]) as f32)
+            .sum::<f32>()
+            / ((49usize.saturating_sub(1)) as f32).max(1.0);
+        assert!(
+            average_ticks_per_cell <= 10.0,
+            "expected dense front to move no slower than 10 ticks/cell, got {average_ticks_per_cell}"
         );
     }
 
@@ -2303,7 +2037,14 @@ mod tests {
         gas.set_amount(10, 70, 0, 1_200.0);
         gas.set_amount(15, 70, 0, 900.0);
         let mut visuals = PipeFlowVisualState::default();
-        let _ = apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
+        let _ = apply_pipe_network_step(
+            &structures,
+            &mut pipe_gas,
+            &mut gas,
+            &world,
+            &mut visuals,
+            &pipe_config(),
+        );
 
         let totals = (10..=15)
             .map(|x| pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(x, 70)))
@@ -2315,13 +2056,261 @@ mod tests {
     }
 
     #[test]
-    fn filled_pipe_with_positive_head_keeps_transferring_every_tick() {
+    fn two_single_cell_rooms_connected_by_one_pipe_equalize_pressure() {
         let registry = registry();
         let world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
-        place_horizontal_pipe_line(&mut structures, &world, UVec2::new(30, 74), 6);
+        place_horizontal_pipe_line(&mut structures, &world, UVec2::new(30, 74), 8);
         assert!(structures.place_vent(30, 74, &world));
-        assert!(structures.place_vent(35, 74, &world));
+        assert!(structures.place_vent(37, 74, &world));
+
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        pipe_gas.sync_to_structures(&structures);
+        let mut gas = GasField::from_registry(&registry);
+        gas.set_amount(30, 74, 0, 20_000.0);
+        gas.set_amount(37, 74, 0, 10_000.0);
+        let mut visuals = PipeFlowVisualState::default();
+
+        for _ in 0..10_000 {
+            let _ = apply_pipe_network_step(
+                &structures,
+                &mut pipe_gas,
+                &mut gas,
+                &world,
+                &mut visuals,
+                &pipe_config(),
+            );
+        }
+
+        let left_pressure = world_pressure_for(gas.total_amount_rounded(30, 74));
+        let right_pressure = world_pressure_for(gas.total_amount_rounded(37, 74));
+        assert!(
+            pressures_match_within(left_pressure, right_pressure, 0.03),
+            "room pressures did not converge closely enough: left={left_pressure}, right={right_pressure}"
+        );
+        for x in 30..=37 {
+            let pipe_total =
+                pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(x, 74));
+            let pipe_pressure = pipe_pressure_for(pipe_total);
+            assert!(
+                pressures_match_within(pipe_pressure, left_pressure, 0.20),
+                "pipe segment at x={x} did not match room pressure: pipe_pressure={pipe_pressure}, room_pressure={left_pressure}"
+            );
+        }
+    }
+
+    #[test]
+    fn parallel_p_branch_inside_one_network_equalizes_pressure_and_uses_both_routes() {
+        let registry = registry();
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        place_horizontal_pipe_line(&mut structures, &world, UVec2::new(10, 40), 13);
+        for cell in [
+            UVec2::new(14, 39),
+            UVec2::new(14, 38),
+            UVec2::new(15, 38),
+            UVec2::new(16, 38),
+            UVec2::new(17, 38),
+            UVec2::new(18, 38),
+            UVec2::new(18, 39),
+        ] {
+            assert!(structures.place_pipe(cell.x, cell.y, &world));
+        }
+        assert!(structures.place_vent(10, 40, &world));
+        assert!(structures.place_vent(22, 40, &world));
+
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        pipe_gas.sync_to_structures(&structures);
+        let mut gas = GasField::from_registry(&registry);
+        gas.set_amount(10, 40, 0, 20_000.0);
+        gas.set_amount(22, 40, 0, 5_000.0);
+        let mut visuals = PipeFlowVisualState::default();
+        let mut direct_route_seen = false;
+        let mut branch_route_seen = false;
+
+        for _ in 0..20_000 {
+            let _ = apply_pipe_network_step(
+                &structures,
+                &mut pipe_gas,
+                &mut gas,
+                &world,
+                &mut visuals,
+                &pipe_config(),
+            );
+            direct_route_seen |=
+                has_transfer_between(&visuals, UVec2::new(15, 40), UVec2::new(16, 40));
+            branch_route_seen |=
+                has_transfer_between(&visuals, UVec2::new(15, 38), UVec2::new(16, 38));
+        }
+
+        assert!(
+            direct_route_seen,
+            "expected flow through the direct mainline segment"
+        );
+        assert!(
+            branch_route_seen,
+            "expected flow through the P-shaped branch segment"
+        );
+        let left_pressure = world_pressure_for(gas.total_amount_rounded(10, 40));
+        let right_pressure = world_pressure_for(gas.total_amount_rounded(22, 40));
+        assert!(
+            pressures_match_within(left_pressure, right_pressure, 0.03),
+            "room pressures did not converge: left={left_pressure}, right={right_pressure}"
+        );
+    }
+
+    #[test]
+    fn single_high_pressure_vent_fills_dead_end_pipe() {
+        let registry = registry();
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        place_horizontal_pipe_line(&mut structures, &world, UVec2::new(10, 50), 20);
+        assert!(structures.place_vent(10, 50, &world));
+
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        pipe_gas.sync_to_structures(&structures);
+        let mut gas = GasField::from_registry(&registry);
+        let mut visuals = PipeFlowVisualState::default();
+
+        for _ in 0..100 {
+            gas.set_amount(10, 50, 0, 100_000.0);
+            let _ = apply_pipe_network_step(
+                &structures,
+                &mut pipe_gas,
+                &mut gas,
+                &world,
+                &mut visuals,
+                &pipe_config(),
+            );
+        }
+
+        let totals = (10..30)
+            .map(|x| pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(x, 50)))
+            .collect::<Vec<_>>();
+        assert!(
+            totals.iter().all(|total| *total >= 990),
+            "expected dead-end pipe to become fully saturated, got {totals:?}"
+        );
+    }
+
+    #[test]
+    fn three_room_star_network_equalizes_pressure() {
+        let registry = registry();
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        for cell in [
+            UVec2::new(60, 56),
+            UVec2::new(60, 57),
+            UVec2::new(60, 58),
+            UVec2::new(60, 59),
+            UVec2::new(60, 60),
+            UVec2::new(59, 60),
+            UVec2::new(58, 60),
+            UVec2::new(57, 60),
+            UVec2::new(56, 60),
+            UVec2::new(61, 60),
+            UVec2::new(62, 60),
+            UVec2::new(63, 60),
+            UVec2::new(64, 60),
+        ] {
+            assert!(structures.place_pipe(cell.x, cell.y, &world));
+        }
+        assert!(structures.place_vent(60, 56, &world));
+        assert!(structures.place_vent(56, 60, &world));
+        assert!(structures.place_vent(64, 60, &world));
+
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        pipe_gas.sync_to_structures(&structures);
+        let mut gas = GasField::from_registry(&registry);
+        gas.set_amount(56, 60, 0, 10_000.0);
+        gas.set_amount(64, 60, 0, 50_000.0);
+        let mut visuals = PipeFlowVisualState::default();
+
+        for _ in 0..10_000 {
+            let _ = apply_pipe_network_step(
+                &structures,
+                &mut pipe_gas,
+                &mut gas,
+                &world,
+                &mut visuals,
+                &pipe_config(),
+            );
+        }
+
+        let target_pressure = world_pressure_for(gas.total_amount_rounded(60, 56));
+        for cell in [UVec2::new(60, 56), UVec2::new(56, 60), UVec2::new(64, 60)] {
+            let room_pressure = world_pressure_for(gas.total_amount_rounded(cell.x, cell.y));
+            assert!(
+                pressures_match_within(room_pressure, target_pressure, 0.03),
+                "room pressure mismatch at {cell:?}: {room_pressure} vs {target_pressure}"
+            );
+        }
+        let center_pressure = pipe_pressure_for(pipe_node_total_at(
+            &pipe_gas,
+            PipeContainerKind::Pipe,
+            UVec2::new(60, 60),
+        ));
+        assert!(
+            pressures_match_within(center_pressure, target_pressure, 0.06),
+            "star center pressure mismatch: {center_pressure} vs {target_pressure}"
+        );
+    }
+
+    #[test]
+    fn pipe_drains_after_source_pressure_drop() {
+        let registry = registry();
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        place_horizontal_pipe_line(&mut structures, &world, UVec2::new(20, 66), 12);
+        assert!(structures.place_vent(20, 66, &world));
+        assert!(structures.place_vent(31, 66, &world));
+
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        pipe_gas.sync_to_structures(&structures);
+        let mut gas = GasField::from_registry(&registry);
+        let mut visuals = PipeFlowVisualState::default();
+
+        for _ in 0..70 {
+            gas.set_amount(20, 66, 0, 100_000.0);
+            gas.set_amount(31, 66, 0, 0.0);
+            let _ = apply_pipe_network_step(
+                &structures,
+                &mut pipe_gas,
+                &mut gas,
+                &world,
+                &mut visuals,
+                &pipe_config(),
+            );
+        }
+        for _ in 0..220 {
+            gas.set_amount(20, 66, 0, 0.0);
+            gas.set_amount(31, 66, 0, 0.0);
+            let _ = apply_pipe_network_step(
+                &structures,
+                &mut pipe_gas,
+                &mut gas,
+                &world,
+                &mut visuals,
+                &pipe_config(),
+            );
+        }
+
+        let totals = (20..32)
+            .map(|x| pipe_node_total_at(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(x, 66)))
+            .collect::<Vec<_>>();
+        assert!(
+            totals.iter().all(|total| *total <= 50),
+            "expected the line to drain after the source pressure drop, got {totals:?}"
+        );
+    }
+
+    #[test]
+    fn whole_component_reacts_beyond_the_first_segment_to_a_single_vacuum_vent() {
+        let registry = registry();
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        place_horizontal_pipe_line(&mut structures, &world, UVec2::new(30, 78), 6);
+        assert!(structures.place_vent(35, 78, &world));
 
         let mut pipe_gas = PipeGasField::from_registry(&registry);
         pipe_gas.sync_to_structures(&structures);
@@ -2331,36 +2320,31 @@ mod tests {
                 .nodes
                 .iter()
                 .position(|node| {
-                    node.key.kind == PipeContainerKind::Pipe && node.key.anchor == UVec2::new(x, 74)
+                    node.key.kind == PipeContainerKind::Pipe && node.key.anchor == UVec2::new(x, 78)
                 })
                 .expect("pipe node");
             let _ = pipe_gas.add_species_counts_limited(node_id, &[PIPE_CELL_CAPACITY, 0, 0]);
         }
 
         let mut gas = GasField::from_registry(&registry);
-        gas.set_amount(30, 74, 0, 1_500.0);
-        gas.set_amount(35, 74, 0, 500.0);
         let mut visuals = PipeFlowVisualState::default();
+        let _ = apply_pipe_network_step(
+            &structures,
+            &mut pipe_gas,
+            &mut gas,
+            &world,
+            &mut visuals,
+            &pipe_config(),
+        );
 
-        for tick in 0..10 {
-            gas.set_amount(30, 74, 0, 1_500.0);
-            gas.set_amount(35, 74, 0, 500.0);
-            let _ =
-                apply_pipe_network_step(&structures, &mut pipe_gas, &mut gas, &world, &mut visuals);
-            let middle_edge_transfer = visuals.transfers.iter().any(|transfer| {
-                transfer.total_amount > 0
-                    && transfer.from == UVec2::new(32, 74)
-                    && transfer.to == UVec2::new(33, 74)
-            });
-            assert!(
-                middle_edge_transfer,
-                "expected middle edge to carry gas on tick {tick}, transfers={:?}",
-                visuals
-                    .transfers
-                    .iter()
-                    .map(|transfer| (transfer.from, transfer.to, transfer.total_amount))
-                    .collect::<Vec<_>>()
-            );
-        }
+        assert!(
+            has_transfer_between(&visuals, UVec2::new(32, 78), UVec2::new(33, 78)),
+            "expected the sink demand to propagate past the first segment: {:?}",
+            visuals
+                .transfers
+                .iter()
+                .map(|transfer| (transfer.from, transfer.to, transfer.total_amount))
+                .collect::<Vec<_>>()
+        );
     }
 }

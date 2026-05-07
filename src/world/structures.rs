@@ -444,7 +444,11 @@ impl PlacedStructureMap {
         if amount == 0 {
             return false;
         }
-        let Some(structure) = self.structures.iter_mut().find(|structure| structure.id == id) else {
+        let Some(structure) = self
+            .structures
+            .iter_mut()
+            .find(|structure| structure.id == id)
+        else {
             return false;
         };
         if structure.kind != StructureKind::GasSource {
@@ -463,7 +467,11 @@ impl PlacedStructureMap {
         if amount == 0 {
             return false;
         }
-        let Some(structure) = self.structures.iter_mut().find(|structure| structure.id == id) else {
+        let Some(structure) = self
+            .structures
+            .iter_mut()
+            .find(|structure| structure.id == id)
+        else {
             return false;
         };
         if structure.kind != StructureKind::GasSink {
@@ -479,7 +487,11 @@ impl PlacedStructureMap {
 
     /// Removes one structure by id.
     pub fn remove_structure(&mut self, id: PlacedStructureId) -> bool {
-        let Some(index) = self.structures.iter().position(|structure| structure.id == id) else {
+        let Some(index) = self
+            .structures
+            .iter()
+            .position(|structure| structure.id == id)
+        else {
             return false;
         };
         let removed = self.structures.remove(index);
@@ -564,13 +576,19 @@ impl PlacedStructureMap {
     ) -> Result<(), String> {
         let mut next = Self::default();
         for entry in &snapshot.entries {
-            next.place_structure(entry.kind, entry.origin, entry.rotation, entry.params, world)
-                .ok_or_else(|| {
-                    format!(
-                        "PlacedStructure snapshot contains invalid entry {:?} at ({}, {})",
-                        entry.kind, entry.origin.x, entry.origin.y
-                    )
-                })?;
+            next.place_structure(
+                entry.kind,
+                entry.origin,
+                entry.rotation,
+                entry.params,
+                world,
+            )
+            .ok_or_else(|| {
+                format!(
+                    "PlacedStructure snapshot contains invalid entry {:?} at ({}, {})",
+                    entry.kind, entry.origin.x, entry.origin.y
+                )
+            })?;
         }
         for [a, b] in &snapshot.pipe_cuts {
             if !next.add_pipe_cut(*a, *b) {
@@ -590,8 +608,10 @@ impl PlacedStructureMap {
             .into_iter()
             .filter(|structure| match structure.kind {
                 StructureKind::Pipe => structure.origin == UVec2::new(x, y),
-                StructureKind::GasPipeBridge => bridge_center_cell(structure.origin, structure.rotation)
-                    == Some(UVec2::new(x, y)),
+                StructureKind::GasPipeBridge => {
+                    bridge_center_cell(structure.origin, structure.rotation)
+                        == Some(UVec2::new(x, y))
+                }
                 _ => false,
             })
             .collect()
@@ -677,7 +697,12 @@ impl PlacedStructureMap {
                 if self
                     .structures_at(origin.x, origin.y)
                     .into_iter()
-                    .any(|structure| matches!(structure.kind, StructureKind::GasSource | StructureKind::GasSink))
+                    .any(|structure| {
+                        matches!(
+                            structure.kind,
+                            StructureKind::GasSource | StructureKind::GasSink
+                        )
+                    })
                 {
                     return false;
                 }
@@ -689,12 +714,18 @@ impl PlacedStructureMap {
                 {
                     return false;
                 }
-                if self.structures_at(origin.x, origin.y).into_iter().any(|structure| {
-                    matches!(
-                        structure.kind,
-                        StructureKind::GasSource | StructureKind::GasSink | StructureKind::GasPipeBridge
-                    )
-                }) {
+                if self
+                    .structures_at(origin.x, origin.y)
+                    .into_iter()
+                    .any(|structure| {
+                        matches!(
+                            structure.kind,
+                            StructureKind::GasSource
+                                | StructureKind::GasSink
+                                | StructureKind::GasPipeBridge
+                        )
+                    })
+                {
                     return false;
                 }
             }
@@ -775,7 +806,10 @@ pub fn cell_material_sprite_size_in_cells(
 }
 
 /// Builds a descriptor for one placeable structure kind/rotation pair.
-pub fn structure_descriptor(kind: StructureKind, rotation: StructureRotation) -> StructureDescriptor {
+pub fn structure_descriptor(
+    kind: StructureKind,
+    rotation: StructureRotation,
+) -> StructureDescriptor {
     match kind {
         StructureKind::Pipe => StructureDescriptor {
             layers: vec![StructureLayer {
@@ -896,8 +930,12 @@ fn rotated_size_in_cells(size_in_cells: UVec2, rotation: StructureRotation) -> U
 /// Returns the bridge center cell for the given origin/rotation.
 pub fn bridge_center_cell(origin: UVec2, rotation: StructureRotation) -> Option<UVec2> {
     match rotation {
-        StructureRotation::Deg0 | StructureRotation::Deg180 => offset_world_cell(origin, IVec2::new(1, 0)),
-        StructureRotation::Deg90 | StructureRotation::Deg270 => offset_world_cell(origin, IVec2::new(0, 1)),
+        StructureRotation::Deg0 | StructureRotation::Deg180 => {
+            offset_world_cell(origin, IVec2::new(1, 0))
+        }
+        StructureRotation::Deg90 | StructureRotation::Deg270 => {
+            offset_world_cell(origin, IVec2::new(0, 1))
+        }
     }
 }
 
@@ -934,7 +972,8 @@ fn layer_collision_blocked(
 ) -> bool {
     if layer_kind == LayerKind::Appearance && world.is_solid(cell.x, cell.y) {
         let world_descriptor = cell_material_descriptor(
-            world.solid_material(cell.x, cell.y)
+            world
+                .solid_material(cell.x, cell.y)
                 .expect("solid cell has material"),
         );
         if world_descriptor.layers.iter().any(|layer| {
@@ -1029,9 +1068,9 @@ fn params_sort_key(params: StructureParams) -> (u8, u32, u32) {
 mod tests {
     use super::{
         bridge_connection_local_cells, bridge_local_cells, cell_material_descriptor,
-        cell_material_sprite_size_in_cells, structure_descriptor, structure_footprint_size_in_cells,
-        structure_sprite_size_in_cells, LayerCollisionKind, LayerKind, LayerMarkerKind,
-        PlacedStructureMap, StructureKind, StructureRotation,
+        cell_material_sprite_size_in_cells, structure_descriptor,
+        structure_footprint_size_in_cells, structure_sprite_size_in_cells, LayerCollisionKind,
+        LayerKind, LayerMarkerKind, PlacedStructureMap, StructureKind, StructureRotation,
     };
     use crate::{
         config::{CellVisualPlacementConfigMap, StructureVisualConfigMap},
@@ -1058,17 +1097,24 @@ mod tests {
         );
         assert_eq!(
             bridge_connection_local_cells(StructureRotation::Deg0),
-            vec![bevy::prelude::IVec2::new(0, 0), bevy::prelude::IVec2::new(2, 0)]
+            vec![
+                bevy::prelude::IVec2::new(0, 0),
+                bevy::prelude::IVec2::new(2, 0)
+            ]
         );
         assert_eq!(
             bridge_connection_local_cells(StructureRotation::Deg90),
-            vec![bevy::prelude::IVec2::new(0, 0), bevy::prelude::IVec2::new(0, 2)]
+            vec![
+                bevy::prelude::IVec2::new(0, 0),
+                bevy::prelude::IVec2::new(0, 2)
+            ]
         );
     }
 
     #[test]
     fn gas_pipe_connection_markers_exist_only_on_bridge_edges() {
-        let descriptor = structure_descriptor(StructureKind::GasPipeBridge, StructureRotation::Deg0);
+        let descriptor =
+            structure_descriptor(StructureKind::GasPipeBridge, StructureRotation::Deg0);
         let connection_layer = descriptor
             .layers
             .iter()
@@ -1154,7 +1200,10 @@ mod tests {
         assert_eq!(descriptor.layers.len(), 1);
         assert_eq!(descriptor.layers[0].kind, LayerKind::Appearance);
         assert_eq!(descriptor.layers[0].cells.len(), 1);
-        assert_eq!(descriptor.layers[0].cells[0].collision, LayerCollisionKind::Special);
+        assert_eq!(
+            descriptor.layers[0].cells[0].collision,
+            LayerCollisionKind::Special
+        );
     }
 
     #[test]
@@ -1162,11 +1211,13 @@ mod tests {
         let mut world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
         assert!(world.set_solid_with_material(20, 20, CellMaterial::Brick));
-        assert!(structures.place_bridge(
-            bevy::prelude::UVec2::new(19, 20),
-            StructureRotation::Deg0,
-            &world
-        ).is_some());
+        assert!(structures
+            .place_bridge(
+                bevy::prelude::UVec2::new(19, 20),
+                StructureRotation::Deg0,
+                &world
+            )
+            .is_some());
         assert!(!structures.place_vent(19, 20, &world));
     }
 
@@ -1175,7 +1226,11 @@ mod tests {
         let world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
         let bridge = structures
-            .place_bridge(bevy::prelude::UVec2::new(40, 40), StructureRotation::Deg0, &world)
+            .place_bridge(
+                bevy::prelude::UVec2::new(40, 40),
+                StructureRotation::Deg0,
+                &world,
+            )
             .expect("bridge placement");
         assert_eq!(structures.clear_cell(41, 40), vec![bridge]);
         assert!(structures.structures_at(40, 40).is_empty());

@@ -3,9 +3,16 @@ fn effective_target_hz(base_hz: u32, speed: SimulationSpeed) -> f64 {
     base * speed.multiplier() as f64
 }
 
-fn initialize_gas_state_from_registry(mut commands: Commands, registry: Res<GasRegistry>) {
+fn initialize_gas_state_from_registry(
+    mut commands: Commands,
+    registry: Res<GasRegistry>,
+    config: Res<GasSimulationConfig>,
+) {
     commands.insert_resource(GasField::from_registry(&registry));
-    commands.insert_resource(crate::simulation::pipes::PipeGasField::from_registry(&registry));
+    commands.insert_resource(crate::simulation::pipes::PipeGasField::from_registry_with_capacity(
+        &registry,
+        config.pipe.segment_capacity_particles,
+    ));
 }
 
 fn apply_fixed_rate_config(
@@ -97,6 +104,7 @@ fn run_simulation_tick(
         &mut gas,
         &world,
         &mut pipe_flow_visuals,
+        &config.pipe,
     );
     let changed_by_structures = apply_gas_structures_pre_step(&structures, &mut gas, &world);
     if (changed_by_pipes || changed_by_structures) && backend.backend == SimulationBackend::Gpu {

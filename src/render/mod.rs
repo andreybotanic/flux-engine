@@ -49,7 +49,10 @@ impl Plugin for RenderPlugin {
             )
             .add_systems(
                 Update,
-                (sync_pipe_flow_packets.after(sync_pipe_overlay_visuals), draw_cursor_grid_overlay),
+                (
+                    sync_pipe_flow_packets.after(sync_pipe_overlay_visuals),
+                    draw_cursor_grid_overlay,
+                ),
             );
     }
 }

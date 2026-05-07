@@ -25,7 +25,10 @@ fn refresh_main_menu_ui(
         Single<&Children, With<MainMenuConfirmSecondaryLabel>>,
         Single<&Children, With<MainMenuConfirmCancelLabel>>,
     ),
-    save_list_root: Single<Entity, With<MainMenuSaveListRoot>>,
+    mut save_list_entities: (
+        Single<Entity, With<MainMenuSaveListContent>>,
+        Single<&mut bevy::ui::ScrollPosition, With<MainMenuSaveListViewport>>,
+    ),
 ) {
     **root_visibility = if main_menu.open {
         Visibility::Visible
@@ -33,6 +36,18 @@ fn refresh_main_menu_ui(
         Visibility::Hidden
     };
     if !main_menu.open {
+        let mut root_actions = node_set.p0();
+        root_actions.display = Display::None;
+        let mut save_actions = node_set.p1();
+        save_actions.display = Display::None;
+        let mut load_actions = node_set.p2();
+        load_actions.display = Display::None;
+        let mut confirm_actions = node_set.p3();
+        confirm_actions.display = Display::None;
+        let mut save_name_row = node_set.p4();
+        save_name_row.display = Display::None;
+        let mut save_list = node_set.p5();
+        save_list.display = Display::None;
         let mut backdrop_node = node_set.p7();
         backdrop_node.display = Display::None;
         **backdrop_visibility = Visibility::Hidden;
@@ -236,11 +251,12 @@ fn refresh_main_menu_ui(
     for entity in menu_ui.list_item_entities.drain(..) {
         commands.entity(entity).despawn();
     }
+    save_list_entities.1.offset_y = 0.0;
 
     let saves = menu_ui.saves.clone();
     let mut created = Vec::new();
     let screen_for_buttons = screen;
-    commands.entity(*save_list_root).with_children(|parent| {
+    commands.entity(*save_list_entities.0).with_children(|parent| {
         if saves.is_empty() {
             let row = parent
                 .spawn((

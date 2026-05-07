@@ -3,6 +3,7 @@ struct SimulationToml {
     rate: SimulationRateToml,
     simulation: GasSimulationToml,
     solver_tuning: SolverTuningToml,
+    pipe: PipeToml,
     visual: VisualToml,
 }
 
@@ -25,6 +26,15 @@ struct SolverTuningToml {
     buoyancy_gain: f32,
     buoyancy_alpha: f32,
     buoyancy_force_cap: f32,
+}
+
+#[derive(Deserialize)]
+struct PipeToml {
+    cell_volume_ratio: f32,
+    segment_capacity_particles: u32,
+    edge_transfer_per_tick: u32,
+    vent_transfer_per_tick: u32,
+    pressure_epsilon: f32,
 }
 
 #[derive(Deserialize)]

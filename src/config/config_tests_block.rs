@@ -37,6 +37,13 @@ buoyancy_gain = 3.2
 buoyancy_alpha = 1.0
 buoyancy_force_cap = 0.30
 
+[pipe]
+cell_volume_ratio = 25.0
+segment_capacity_particles = 1000
+edge_transfer_per_tick = 200
+vent_transfer_per_tick = 200
+pressure_epsilon = 0.01
+
 [visual]
 gamma = 1.0
 max_particles_for_max_color = 1000

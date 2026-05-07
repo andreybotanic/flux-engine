@@ -22,11 +22,13 @@ use crate::{
     },
     ui::panels::PanelManager,
     world::grid::{
-        cell_center, is_boundary, linear_index, world_dimensions, world_to_cell, CellKind, CellMaterial,
-        WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH,
+        cell_center, is_boundary, linear_index, world_dimensions, world_to_cell, CellKind,
+        CellMaterial, WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH,
+    },
+    world::structures::{
+        PlacedStructure, PlacedStructureId, PlacedStructureMap, StructureKind, StructureRotation,
     },
     world::WorldCellChanged,
-    world::structures::{PlacedStructure, PlacedStructureId, PlacedStructureMap, StructureKind, StructureRotation},
 };
 
 const BOARD_MAIN_COLOR: Color = Color::srgba(0.96, 0.96, 0.96, 0.88);

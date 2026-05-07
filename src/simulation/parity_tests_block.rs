@@ -107,6 +107,7 @@ mod tests {
                 &mut cpu_field,
                 &world,
                 &mut cpu_visuals,
+                &config.pipe,
             );
             crate::simulation::do_one_substep(
                 &mut block_sync,
@@ -122,6 +123,7 @@ mod tests {
                 &mut gpu_field,
                 &world,
                 &mut gpu_visuals,
+                &config.pipe,
             );
             if changed {
                 let _ = solver

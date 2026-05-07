@@ -26,6 +26,7 @@ FluxEngine/
 |   |-- input/               # Обработка пользовательского ввода.
 |   |-- render/              # Визуализация мира, pipe-layer и overlay-режимов.
 |   |-- simulation/          # CPU/GPU симуляция газа, pipe pre-step и parity-инфраструктура.
+|   |   `-- pipes/           # Внутренние модули pressure-driven pipe solver-а.
 |   |-- ui/                  # Общие UI-компоненты и панели.
 |   `-- world/               # Клеточный мир, unified structures и legacy-модули миграции.
 |-- AGENTS.md                # Правила работы агента.
@@ -60,12 +61,13 @@ FluxEngine/
 - `config/cell_types.toml`: Настройки визуала/параметров типов клеток.
 - `config/gases/*.toml`: Конфиги отдельных газов (физические и визуальные параметры).
 - `config/structures/*.toml`: Конфиги appearance-метаданных встроенных стен и структур (`draw_priority`, `size_in_cells`).
-- `config/simulation.toml`: Основные параметры симуляции и runtime-настройки.
+- `config/simulation.toml`: Основные параметры симуляции и runtime-настройки, включая секцию `[pipe]` для pressure-driven труб.
 - `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
 - `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
 - `docs/project_structure.md`: Карта структуры проекта: дерево папок + зоны ответственности файлов.
 - `docs/technical_overview.md`: Техническая архитектура, подсистемы и инженерные ограничения.
 - `src/app/mod.rs`: Сборка Bevy-приложения, плагины, backend-инициализация и запуск.
+- `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
 - `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации TOML-конфигов, включая `config/structures/*.toml`.
 - `src/config/config_tests_block.rs`: Тесты загрузки и валидации конфигов.
@@ -115,7 +117,8 @@ FluxEngine/
 - `src/simulation/parity.rs`: Публичные parity API и сценарии сравнения CPU/GPU.
 - `src/simulation/parity_runtime_block.rs`: Runtime parity-метрики, прогоны сценариев и gate-оценка.
 - `src/simulation/parity_tests_block.rs`: Тесты parity-порогов, smoke и GPU-регрессий.
-- `src/simulation/pipes.rs`: Node-based `PipeGasField`, локальная pipe-симуляция (`world↔vent`, `pipe↔pipe`, `BridgePipe`) и тесты pipe-сети.
+- `src/simulation/pipes.rs`: Node-based `PipeGasField`, публичный фасад pipe runtime/visual API и тесты pipe-сети.
+- `src/simulation/pipes/solver.rs`: Внутренний pressure-driven solver pipe-сети: пересчёт давления, world↔vent budgets, component planner и применение pipe pre-step.
 - `src/simulation/runtime_tick_block.rs`: Runtime-шаги симуляции, GPU/CPU подшаги и perf-метрики.
 - `src/simulation/simulation_tests_block.rs`: Тесты конфигурации тика и структурных pre-step правил.
 - `src/ui/cell_inspector.rs`: Панель инспектора клетки под курсором, включая world-gas и список pipe-контейнеров для труб/моста.
@@ -128,6 +131,7 @@ FluxEngine/
 - `src/ui/panels_manager_block.rs`: Состояние и API PanelManager, hit-rect и управление панелями.
 - `src/ui/panels_runtime_block.rs`: Runtime-системы панели: layout, scroll, события заголовка.
 - `src/ui/panels_tests_block.rs`: Тесты layout/scroll/stack-поведения панелей.
+- `src/ui/scroll_area.rs`: Переиспользуемый wheel-scroll/scrollbar механизм для обычных UI-контейнеров вне panel-системы; сейчас используется в save/load списке главного меню.
 - `src/ui/select_field.rs`: Dropdown/select-компонент для UI-панелей и его тесты.
 - `src/ui/sim_controls.rs`: UI-контролы симуляции (pause/speed/hotkeys).
 - `src/world/gas_structures.rs`: Legacy Source/Sink grid и snapshot schema `2/3`, сохранённый для backward-compatible загрузки и старых unit-тестов.

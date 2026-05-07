@@ -238,8 +238,12 @@ fn apply_panel_scrolling(
     mut mouse_wheel: EventReader<MouseWheel>,
     windows: Query<&Window, With<PrimaryWindow>>,
     panels: Res<PanelManager>,
+    scroll_block: Res<crate::ui::scroll_area::UiScrollBlockState>,
     mut viewport_nodes: Query<(&PanelContentViewport, &ComputedNode, &mut ScrollPosition)>,
 ) {
+    if scroll_block.block_panel_scrolling {
+        return;
+    }
     let Ok(window) = windows.single() else {
         return;
     };

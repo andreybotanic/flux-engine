@@ -636,16 +636,48 @@ fn setup_editor_ui(
                     panel.spawn((
                         Node {
                             display: Display::None,
+                            position_type: PositionType::Relative,
                             flex_direction: FlexDirection::Column,
                             width: Val::Percent(100.0),
-                            align_items: AlignItems::Center,
-                            row_gap: Val::Px(6.0),
                             height: Val::Px(350.0),
-                            overflow: Overflow::clip_y(),
                             ..default()
                         },
                         MainMenuSaveListRoot,
-                    ));
+                    ))
+                    .with_children(|list_root| {
+                        let viewport = list_root
+                            .spawn((
+                                Node {
+                                    width: Val::Percent(100.0),
+                                    height: Val::Percent(100.0),
+                                    display: Display::Flex,
+                                    flex_direction: FlexDirection::Column,
+                                    align_items: AlignItems::Center,
+                                    padding: UiRect::right(Val::Px(10.0)),
+                                    overflow: Overflow::scroll_y(),
+                                    ..default()
+                                },
+                                bevy::ui::ScrollPosition::default(),
+                                bevy::ui::RelativeCursorPosition::default(),
+                                ScrollAreaViewport,
+                                MainMenuSaveListViewport,
+                            ))
+                            .with_children(|viewport| {
+                                viewport.spawn((
+                                    Node {
+                                        width: Val::Percent(100.0),
+                                        display: Display::Flex,
+                                        flex_direction: FlexDirection::Column,
+                                        align_items: AlignItems::Center,
+                                        row_gap: Val::Px(6.0),
+                                        ..default()
+                                    },
+                                    MainMenuSaveListContent,
+                                ));
+                            })
+                            .id();
+                        spawn_scroll_area_scrollbar(list_root, viewport);
+                    });
                 });
         });
 

@@ -164,6 +164,7 @@ fn refresh_editor_ui(
         Res<MainMenuState>,
         Res<DebugMode>,
         Res<WorldLoadState>,
+        ResMut<UiScrollBlockState>,
     ),
     sim_metrics: (
         Res<DebugGasMetrics>,
@@ -185,10 +186,18 @@ fn refresh_editor_ui(
     gas_registry: Res<GasRegistry>,
     mut ui: RefreshEditorUiSystemParams,
 ) {
-    let (active_tool, cell_settings, pipe_settings, main_menu, debug_mode, world_load_state) =
-        ui_state;
+    let (
+        active_tool,
+        cell_settings,
+        pipe_settings,
+        main_menu,
+        debug_mode,
+        world_load_state,
+        mut ui_scroll_block,
+    ) = ui_state;
     let (debug_metrics, sim_control, sim_perf) = sim_metrics;
     let selected_tool = active_tool.selected;
+    ui_scroll_block.block_panel_scrolling = main_menu.open;
 
     if let Some(selected) = select_fields.selected_index(GAS_SELECT_ADD_ID) {
         gas_settings.gas_index = selected;

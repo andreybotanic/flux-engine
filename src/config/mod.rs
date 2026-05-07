@@ -9,11 +9,8 @@ use serde::Deserialize;
 
 use crate::{
     render::GasVisualSettings,
-    simulation::{GasSimulationConfig, SimulationRateConfig, SolverTuning},
-    world::{
-        grid::CellMaterial,
-        structures::StructureKind,
-    },
+    simulation::{GasSimulationConfig, PipeSimulationConfig, SimulationRateConfig, SolverTuning},
+    world::{grid::CellMaterial, structures::StructureKind},
 };
 
 #[derive(Resource, Clone, Debug)]
@@ -332,6 +329,13 @@ impl GameConfig {
                 buoyancy_gain: simulation.solver_tuning.buoyancy_gain,
                 buoyancy_alpha: simulation.solver_tuning.buoyancy_alpha,
                 buoyancy_force_cap: simulation.solver_tuning.buoyancy_force_cap,
+            },
+            pipe: PipeSimulationConfig {
+                cell_volume_ratio: simulation.pipe.cell_volume_ratio,
+                segment_capacity_particles: simulation.pipe.segment_capacity_particles,
+                edge_transfer_per_tick: simulation.pipe.edge_transfer_per_tick,
+                vent_transfer_per_tick: simulation.pipe.vent_transfer_per_tick,
+                pressure_epsilon: simulation.pipe.pressure_epsilon,
             },
         };
 

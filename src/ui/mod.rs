@@ -2,6 +2,7 @@ pub mod cell_inspector;
 pub mod input_field;
 pub mod palette;
 pub mod panels;
+pub mod scroll_area;
 pub mod select_field;
 pub mod sim_controls;
 
@@ -10,6 +11,7 @@ use bevy::prelude::*;
 use self::cell_inspector::{setup_cell_inspector, update_cell_inspector};
 use self::input_field::TextInputPlugin;
 use self::panels::PanelPlugin;
+use self::scroll_area::ScrollAreaPlugin;
 use self::select_field::SelectFieldPlugin;
 use self::sim_controls::{
     handle_sim_control_buttons, handle_sim_control_keyboard, refresh_sim_control_ui,
@@ -53,28 +55,33 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((TextInputPlugin, PanelPlugin, SelectFieldPlugin))
-            .add_systems(
-                Startup,
-                (setup_ui_font, setup_cell_inspector, setup_sim_control_ui),
+        app.add_plugins((
+            TextInputPlugin,
+            PanelPlugin,
+            ScrollAreaPlugin,
+            SelectFieldPlugin,
+        ))
+        .add_systems(
+            Startup,
+            (setup_ui_font, setup_cell_inspector, setup_sim_control_ui),
+        )
+        .add_systems(
+            Update,
+            (apply_ui_font_to_existing_text, apply_ui_font_to_added_text),
+        )
+        .add_systems(
+            Update,
+            (
+                handle_sim_control_keyboard,
+                handle_sim_control_buttons,
+                refresh_sim_control_visibility,
+                refresh_sim_control_ui,
             )
-            .add_systems(
-                Update,
-                (apply_ui_font_to_existing_text, apply_ui_font_to_added_text),
-            )
-            .add_systems(
-                Update,
-                (
-                    handle_sim_control_keyboard,
-                    handle_sim_control_buttons,
-                    refresh_sim_control_visibility,
-                    refresh_sim_control_ui,
-                )
-                    .chain(),
-            )
-            .add_systems(
-                PostUpdate,
-                update_cell_inspector.after(TransformSystem::TransformPropagate),
-            );
+                .chain(),
+        )
+        .add_systems(
+            PostUpdate,
+            update_cell_inspector.after(TransformSystem::TransformPropagate),
+        );
     }
 }

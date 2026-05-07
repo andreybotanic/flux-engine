@@ -10,7 +10,7 @@ use crate::{
         gas::GasField,
         pipes::{
             pipe_cell_display_blocks_with_transfers, PipeContainerKind, PipeFlowVisualState,
-            PipeGasField, PIPE_CELL_CAPACITY,
+            PipeGasField,
         },
         SimulationControl,
     },
@@ -207,7 +207,7 @@ fn build_cell_inspector_message(
                 "{} total: {} / {}",
                 label,
                 block.total_particles,
-                PIPE_CELL_CAPACITY
+                pipe_gas.capacity_particles()
             ));
             if index + 1 < display_blocks.len() {
                 message.push_str("\n\n");
@@ -261,7 +261,9 @@ mod tests {
         config::{GasDefinition, GasRegistry},
         simulation::{
             gas::GasField,
-            pipes::{PipeFlowVisualState, PipeGasField, PipeTransferRecord, PipeTransferVisualPath},
+            pipes::{
+                PipeFlowVisualState, PipeGasField, PipeTransferRecord, PipeTransferVisualPath,
+            },
         },
         world::{grid::WorldGrid, structures::PlacedStructureMap},
     };
