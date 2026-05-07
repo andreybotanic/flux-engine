@@ -163,3 +163,7 @@
 - Исправлено ложное отображение пустого pipe-slot в центральной клетке моста: пустой контейнер больше не оставляет статичную точку в `F3`.
 - Усилен изгиб дуги пакетов внутри мостов и синхронизировано смещение статичного bridge-квадрата газа с тем же направлением изгиба.
 - Увеличен размер движущихся pipe-пакетов в `F3` и немного уменьшен максимальный размер статичной метки газа в трубе.
+- Pipe runtime: replaced pure local pipe equalization with a demand-driven relay planner for vent-pulled components, while keeping a stable local fallback for isolated pipes. Long source/sink pipe runs now preserve pressure much better over distance, and same-tick pipe transfers are applied synchronously without dropping rejected mass.
+- Pipe runtime: component relay is now normalized by the actual pressure head between vents, so low head no longer keeps the whole pipe artificially saturated while long high-head runs still carry pressure across distance.
+- Pipe runtime: synchronized inlet relay now propagates free-space requests backward through already filled pipe segments, so a filled chain can shift forward in one tick and the inlet vent can refill the first segment immediately after it frees capacity.
+- Pipe runtime/render: multi-vent components now keep sustained flow from component-level head instead of stalling on local vent-cell equalization, and moving pipe packets were reduced by 20% relative to the previous maximum size.

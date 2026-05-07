@@ -854,7 +854,7 @@ fn pipe_gas_square_size(total_particles: u32) -> f32 {
 }
 
 fn pipe_flow_square_size(moved_particles: u32) -> f32 {
-    scaled_pipe_square_size(moved_particles, 0.21, 0.63)
+    scaled_pipe_square_size(moved_particles, 0.21, 0.504)
 }
 
 struct PipeFlowPacketVisualParams {

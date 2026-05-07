@@ -246,7 +246,7 @@ mod tests {
         assert!(flow_half > 0.0);
         assert!(flow_full > flow_half);
         assert!(flow_half < static_half);
-        assert!((flow_full - super::CELL_SIZE * 0.63).abs() < 1e-6);
+        assert!((flow_full - super::CELL_SIZE * 0.504).abs() < 1e-6);
     }
 
     #[test]
