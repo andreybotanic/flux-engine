@@ -5,7 +5,8 @@ mod tests {
         bridge_visual_size, bridge_visual_transform,
         build_pipe_mask_image, build_vent_overlay_image, build_world_fade_mask_image, grid_fade,
         bridge_curve_progress_for_transfer,
-        flow_packet_position, pipe_flow_packet_visual, pipe_flow_square_size, pipe_gas_square_size,
+        flow_packet_position, pipe_flow_packet_visual, pipe_flow_packet_visible,
+        pipe_flow_square_size, pipe_gas_square_size,
         pipe_overlay_block_offset, pipe_overlay_block_visible,
         quadratic_bezier_point, straight_packet_position,
         pipe_highlight_visibility, vent_world_visibility, world_fade_alpha,
@@ -280,6 +281,14 @@ mod tests {
         assert!(denser.intensity > full.intensity);
         assert!(denser.fill_alpha > full.fill_alpha);
         assert!(denser.fill_alpha < 0.92);
+    }
+
+    #[test]
+    fn tiny_pipe_flow_packets_are_hidden_as_noise() {
+        assert!(!pipe_flow_packet_visible(0));
+        assert!(!pipe_flow_packet_visible(4));
+        assert!(pipe_flow_packet_visible(5));
+        assert!(pipe_flow_packet_visible(12));
     }
 
     #[test]

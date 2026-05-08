@@ -694,7 +694,7 @@ pub(crate) fn sync_pipe_flow_packets(
 
     let progress = (time.elapsed_secs() * 2.0).fract();
     for transfer in &flow_state.transfers {
-        if transfer.total_amount == 0 {
+        if !pipe_flow_packet_visible(transfer.total_amount) {
             continue;
         }
         let position = flow_packet_position(transfer, progress);
@@ -877,6 +877,10 @@ fn pipe_flow_packet_visual(
         intensity: (0.08 + eased * 0.92).clamp(0.0, 1.0),
         fill_alpha: (0.12 + eased * 0.80).clamp(0.0, 0.92),
     }
+}
+
+fn pipe_flow_packet_visible(moved_particles: u32) -> bool {
+    moved_particles >= 5
 }
 
 fn scaled_pipe_square_size(

@@ -54,11 +54,7 @@ fn scenario_one_long_pipe_to_vacuum(
     config: &PipeSimulationConfig,
     gas_index: usize,
 ) -> PipeScenarioSlot {
-    let mut slot = blank_slot(
-        registry,
-        config,
-        "Pipe Scenario 1 - 100k Source to Vacuum",
-    );
+    let mut slot = blank_slot(registry, config, "Pipe Scenario 1 - 100k Source to Vacuum");
     build_room(&mut slot.world, 6, 43, 24, 59);
     build_room(&mut slot.world, 78, 43, 96, 59);
     place_horizontal_pipe(&mut slot.structures, &slot.world, 23, 79, 51);
@@ -80,11 +76,7 @@ fn scenario_two_two_rooms_single_path(
     config: &PipeSimulationConfig,
     gas_index: usize,
 ) -> PipeScenarioSlot {
-    let mut slot = blank_slot(
-        registry,
-        config,
-        "Pipe Scenario 2 - Two Rooms Single Pipe",
-    );
+    let mut slot = blank_slot(registry, config, "Pipe Scenario 2 - Two Rooms Single Pipe");
     build_room(&mut slot.world, 6, 43, 24, 59);
     build_room(&mut slot.world, 78, 43, 96, 59);
     place_horizontal_pipe(&mut slot.structures, &slot.world, 23, 79, 51);
@@ -125,11 +117,7 @@ fn scenario_four_dead_end_fill(
     config: &PipeSimulationConfig,
     gas_index: usize,
 ) -> PipeScenarioSlot {
-    let mut slot = blank_slot(
-        registry,
-        config,
-        "Pipe Scenario 4 - Dead-End High Pressure",
-    );
+    let mut slot = blank_slot(registry, config, "Pipe Scenario 4 - Dead-End High Pressure");
     build_room(&mut slot.world, 10, 43, 28, 59);
     place_horizontal_pipe(&mut slot.structures, &slot.world, 27, 85, 51);
     ensure_vent(&mut slot.structures, &slot.world, 27, 51);

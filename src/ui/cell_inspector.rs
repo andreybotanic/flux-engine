@@ -9,9 +9,9 @@ use crate::{
     simulation::{
         gas::GasField,
         pipes::{
+            pipe_cell_display_blocks_with_transfers,
             pressure::{format_pressure_pa, pipe_pressure_pa, world_pressure_pa},
-            pipe_cell_display_blocks_with_transfers, PipeContainerKind, PipeFlowVisualState,
-            PipeGasField,
+            PipeContainerKind, PipeFlowVisualState, PipeGasField,
         },
         GasSimulationConfig, SimulationControl,
     },
@@ -216,8 +216,7 @@ fn build_cell_inspector_message(
             });
             message.push_str(&format!(
                 "{} total: {} particles",
-                label,
-                block.total_particles
+                label, block.total_particles
             ));
             message.push_str(&format!(
                 "\n{} pressure: {}",

@@ -18,7 +18,8 @@ fn main() -> Result<(), String> {
         }
     }
 
-    let scenarios = build_reference_pipe_scenarios(&config.gas_registry, &config.gas_simulation.pipe)?;
+    let scenarios =
+        build_reference_pipe_scenarios(&config.gas_registry, &config.gas_simulation.pipe)?;
     for scenario in scenarios {
         let descriptor = create_save(
             &saves_root,

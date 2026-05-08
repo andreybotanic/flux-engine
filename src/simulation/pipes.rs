@@ -217,8 +217,8 @@ impl PipeGasField {
             return;
         };
         for gas_index in 0..self.gas_count {
-            cell[gas_index] = cell[gas_index]
-                .saturating_add(offered.get(gas_index).copied().unwrap_or(0));
+            cell[gas_index] =
+                cell[gas_index].saturating_add(offered.get(gas_index).copied().unwrap_or(0));
         }
     }
 
@@ -375,11 +375,7 @@ impl PipeFluxField {
 
     fn signed_flux(&self, source: PipeNodeKey, target: PipeNodeKey) -> f32 {
         let key = PipeEdgeKey::new(source, target);
-        self.flux_by_edge
-            .get(&key)
-            .copied()
-            .unwrap_or(0.0)
-            * key.sign_for(source, target)
+        self.flux_by_edge.get(&key).copied().unwrap_or(0.0) * key.sign_for(source, target)
     }
 
     fn set_signed_flux(&mut self, source: PipeNodeKey, target: PipeNodeKey, flux: f32) {

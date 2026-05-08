@@ -76,12 +76,24 @@ pub(super) fn apply_pipe_network_step(
         build_pipe_edge_requests(&runtime, pipe_gas, pipe_flux, &starting_pipe_totals, config);
     let accepted_pipe_requests =
         scale_pipe_requests_by_available_mass(&starting_pipe_totals, &mut pipe_requests);
-    let outbound_pipe_totals =
-        project_pipe_totals_after_outgoing(starting_pipe_totals.len(), &starting_pipe_totals, &accepted_pipe_requests);
-    let after_pipe_totals =
-        project_pipe_totals_after_requests(starting_pipe_totals.len(), &starting_pipe_totals, &accepted_pipe_requests);
-    let mut vent_requests =
-        build_vent_requests(&runtime, &outbound_pipe_totals, &after_pipe_totals, gas, world, config);
+    let outbound_pipe_totals = project_pipe_totals_after_outgoing(
+        starting_pipe_totals.len(),
+        &starting_pipe_totals,
+        &accepted_pipe_requests,
+    );
+    let after_pipe_totals = project_pipe_totals_after_requests(
+        starting_pipe_totals.len(),
+        &starting_pipe_totals,
+        &accepted_pipe_requests,
+    );
+    let mut vent_requests = build_vent_requests(
+        &runtime,
+        &outbound_pipe_totals,
+        &after_pipe_totals,
+        gas,
+        world,
+        config,
+    );
     scale_vent_requests_by_available_mass(&outbound_pipe_totals, &mut vent_requests);
 
     let mut next_pipe_species = starting_pipe_species.clone();
@@ -138,11 +150,16 @@ pub(super) fn apply_pipe_network_step(
                 if moved.iter().all(|count| *count == 0) {
                     continue;
                 }
-                world_changed |= add_particles_to_world_cells(gas, &request.world_cells, &moved, world);
+                world_changed |=
+                    add_particles_to_world_cells(gas, &request.world_cells, &moved, world);
             }
             VentRequestDirection::WorldToPipe => {
-                let removed =
-                    remove_particles_from_world_cells(gas, &request.world_cells, request.requested_amount, world);
+                let removed = remove_particles_from_world_cells(
+                    gas,
+                    &request.world_cells,
+                    request.requested_amount,
+                    world,
+                );
                 if removed.iter().all(|count| *count == 0) {
                     continue;
                 }
@@ -214,7 +231,8 @@ fn build_pipe_edge_requests(
             .map(|node_index| starting_pipe_totals[*node_index] as f32)
             .collect::<Vec<_>>();
         let adjacency = build_component_adjacency(component_nodes.len(), &component_edges);
-        let solved = solve_component_particles(&starting_component, &component_edges, &adjacency, config);
+        let solved =
+            solve_component_particles(&starting_component, &component_edges, &adjacency, config);
         let mut planned_fluxes = component_edges
             .iter()
             .copied()
@@ -228,10 +246,10 @@ fn build_pipe_edge_requests(
                 );
                 ((previous_flux + config.pipe_flux_gain * drive)
                     * config.pipe_flux_damping.clamp(0.0, 1.0))
-                    .clamp(
-                        -config.max_pipe_flux_particles_per_tick.max(0.0),
-                        config.max_pipe_flux_particles_per_tick.max(0.0),
-                    )
+                .clamp(
+                    -config.max_pipe_flux_particles_per_tick.max(0.0),
+                    config.max_pipe_flux_particles_per_tick.max(0.0),
+                )
             })
             .collect::<Vec<_>>();
         smooth_component_fluxes(&component_edges, &mut planned_fluxes);
@@ -496,8 +514,13 @@ fn build_vent_requests(
         let (world_pressure, _) = sampled_world_reservoir(gas, config, &world_cells);
         let inbound_pipe_pressure = pipe_pressure_pa(config, after_pipe_totals[node_index]);
         if world_pressure - inbound_pipe_pressure > config.pressure_epsilon_pa.max(0.0) {
-            let amount = vent_requested_amount(config, world_pressure, inbound_pipe_pressure)
-                .min(pipe_equalization_gap_particles(config, after_pipe_totals[node_index], world_pressure));
+            let amount = vent_requested_amount(config, world_pressure, inbound_pipe_pressure).min(
+                pipe_equalization_gap_particles(
+                    config,
+                    after_pipe_totals[node_index],
+                    world_pressure,
+                ),
+            );
             if amount > 0 {
                 requests.push(VentRequest {
                     node_index,
@@ -511,8 +534,13 @@ fn build_vent_requests(
 
         let outbound_pipe_pressure = pipe_pressure_pa(config, outbound_pipe_totals[node_index]);
         if outbound_pipe_pressure - world_pressure > config.pressure_epsilon_pa.max(0.0) {
-            let amount = vent_requested_amount(config, outbound_pipe_pressure, world_pressure)
-                .min(pipe_pressure_excess_particles(config, outbound_pipe_totals[node_index], world_pressure));
+            let amount = vent_requested_amount(config, outbound_pipe_pressure, world_pressure).min(
+                pipe_pressure_excess_particles(
+                    config,
+                    outbound_pipe_totals[node_index],
+                    world_pressure,
+                ),
+            );
             if amount > 0 {
                 requests.push(VentRequest {
                     node_index,
@@ -545,7 +573,8 @@ fn scale_pipe_requests_by_available_mass(
             continue;
         }
 
-        let accepted_total = starting_pipe_totals[node_index].min(request_amounts.iter().copied().sum());
+        let accepted_total =
+            starting_pipe_totals[node_index].min(request_amounts.iter().copied().sum());
         let accepted_split = split_bounded_integer_requests(accepted_total, &request_amounts);
         for ((_is_pipe, index), accepted_amount) in request_kinds.into_iter().zip(accepted_split) {
             let request = pipe_requests[index];
@@ -712,7 +741,10 @@ fn sampled_world_reservoir(
     } else {
         total_particles / world_cells.len() as u32
     };
-    (world_pressure_pa(config, average_particles), total_particles)
+    (
+        world_pressure_pa(config, average_particles),
+        total_particles,
+    )
 }
 
 fn remove_particles_from_world_cells(

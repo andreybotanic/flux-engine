@@ -26,7 +26,7 @@ FluxEngine/
 |   |-- input/               # Обработка пользовательского ввода.
 |   |-- render/              # Визуализация мира, pipe-layer и overlay-режимов.
 |   |-- simulation/          # CPU/GPU симуляция газа, pipe pre-step и parity-инфраструктура.
-|   |   `-- pipes/           # Внутренние модули pressure-driven pipe solver-а.
+|   |   `-- pipes/           # Внутренние модули pressure/fixtures/solver/test-инфраструктуры труб.
 |   |-- ui/                  # Общие UI-компоненты и панели.
 |   `-- world/               # Клеточный мир, unified structures и legacy-модули миграции.
 |-- AGENTS.md                # Правила работы агента.
@@ -93,7 +93,7 @@ FluxEngine/
 - `src/render/mod.rs`: Плагин рендера и порядок render-систем, включая pipe visuals.
 - `src/render/pipe_highlight_material.rs`: Кастомный `Material2d` и helper-логика для shader-подсветки труб в `F3`.
 - `src/render/world_view.rs`: Публичные render-системы world view, config-driven appearance z-order и layer-based pipe/bridge visuals.
-- `src/render/world_view_overlay_block.rs`: Логика overlay-режимов `F1/F2/F3`, курсорной сетки, multi-container pipe gas-square sizing и визуальных sync.
+- `src/render/world_view_overlay_block.rs`: Логика overlay-режимов `F1/F2/F3`, курсорной сетки, multi-container pipe gas-square sizing, flow-packet анимации и фильтрации визуального шума для пакетов `< 5` частиц.
 - `src/render/world_view_setup_block.rs`: Построение сущностей мира/слоёв, config-driven z-order стен/структур и спавн визуалов из `PlacedStructureMap`.
 - `src/render/world_view_tests_block.rs`: Тесты вспомогательной математики рендера.
 - `src/save.rs`: Публичный save/load API и типы состояния меню/сессии.
@@ -113,15 +113,18 @@ FluxEngine/
 - `src/simulation/gpu_solver_helpers_block.rs`: Вспомогательные функции буферов, bind-групп и dispatch.
 - `src/simulation/gpu_solver_impl_core_block.rs`: Core-инициализация/загрузка состояния GPU solver.
 - `src/simulation/gpu_solver_impl_exec_block.rs`: Исполнение шага GPU, readback и генерация параметров.
-- `src/simulation/mod.rs`: Плагин симуляции, ресурсы состояния и orchestration тика, включая pipe pre-step.
+- `src/simulation/mod.rs`: Плагин симуляции, ресурсы состояния и orchestration тика, включая pipe pre-step и perf-метрики для отдельного времени расчёта труб.
 - `src/simulation/parity.rs`: Публичные parity API и сценарии сравнения CPU/GPU.
 - `src/simulation/parity_runtime_block.rs`: Runtime parity-метрики, прогоны сценариев и gate-оценка.
 - `src/simulation/parity_tests_block.rs`: Тесты parity-порогов, smoke и GPU-регрессий.
-- `src/simulation/pipes.rs`: Node-based `PipeGasField`, публичный фасад pipe runtime/visual API и тесты pipe-сети.
-- `src/simulation/pipes/solver.rs`: Внутренний pressure-driven solver pipe-сети: пересчёт давления, world↔vent budgets, component planner и применение pipe pre-step.
-- `src/simulation/runtime_tick_block.rs`: Runtime-шаги симуляции, GPU/CPU подшаги и perf-метрики.
+- `src/simulation/pipes.rs`: Node-based `PipeGasField`, runtime-only `PipeFluxField`, публичный фасад pipe runtime/visual API и wiring тестов pipe-сети.
+- `src/simulation/pipes/pressure.rs`: Helper-ы перевода `particles -> pressure` и форматирования давления для HUD/pipe-рендера.
+- `src/simulation/pipes/scenarios.rs`: Общий builder пяти канонических pipe-сценариев для save-утилиты и acceptance-тестов.
+- `src/simulation/pipes/solver.rs`: Внутренний semi-implicit pressure+flux solver pipe-сети: component solve, world↔vent budgets, mass-bounded transfers и запись `PipeFlowVisualState`.
+- `src/simulation/pipes/tests.rs`: Acceptance/regression тесты новой pipe-модели, включая быстрые `_smoke` проверки для самых долгих сценариев и полные канонические scenario 1..5.
+- `src/simulation/runtime_tick_block.rs`: Runtime-шаги симуляции, GPU/CPU подшаги и perf-метрики, включая отдельный замер времени pipe pre-step.
 - `src/simulation/simulation_tests_block.rs`: Тесты конфигурации тика и структурных pre-step правил.
-- `src/ui/cell_inspector.rs`: Панель инспектора клетки под курсором, включая world-gas и список pipe-контейнеров для труб/моста.
+- `src/ui/cell_inspector.rs`: Панель инспектора клетки под курсором, включая world-gas, pressure HUD и список pipe-контейнеров для труб/моста.
 - `src/ui/input_field.rs`: Публичные типы text-input и точка сборки input-систем.
 - `src/ui/input_field_helpers_block.rs`: Вспомогательная геометрия курсора текста и точный hit-test/каретка через `ComputedTextBlock`.
 - `src/ui/input_field_systems_block.rs`: Системы focus/keyboard/render/caret для текстовых полей.

@@ -1,5 +1,14 @@
 ﻿# Changelog
 
+## 2026-05-08
+- Pipe runtime окончательно переведён на pressure+flux модель без pipe-capacity: `PipeGasField` хранит только частицы по stable node keys, а remembered edge-flow вынесен в runtime-only `PipeFluxField`.
+- `PipeSimulationConfig` очищен от legacy-параметров вместимости/локального transfer-limit и теперь задаёт pressure-конверсию, pipe flux, vent throughput и численную устойчивость новой модели.
+- Внутренний solver труб переписан на semi-implicit component solve с log pressure ratio, remembered edge flux и same-tick правилом `pipe hop first, vent refill after`, чтобы длинные магистрали, dead-end и ветвления работали одной и той же физикой.
+- Общие builders pipe-сценариев вынесены в `src/simulation/pipes/scenarios.rs`, а acceptance/regression тесты новой модели собраны в `src/simulation/pipes/tests.rs`.
+- Для самых долгих pipe-сценариев добавлены быстрые `_smoke` версии с коротким tick-budget и ослабленными ожиданиями, чтобы сначала гонять минутный sanity-check, а уже потом полные acceptance-тесты.
+- HUD и `F3` переведены на pressure-first отображение: инспектор клетки показывает частицы и давление для world/pipe, а flow-пакеты меньше `5` частиц больше не рисуются как визуальный шум.
+- В debug-панель добавлено отдельное время расчёта труб (`Pipe ms: last/avg`) поверх общих perf-метрик simulation step.
+
 ## 2026-05-07
 - Pipe runtime перепроектирован на pressure-driven solver: `world↔vent` теперь считает давление как `particles / volume`, а объём pipe-сегмента по умолчанию в `25` раз меньше объёма world-клетки.
 - В `config/simulation.toml` добавлена секция `[pipe]` с параметрами pipe-сети (`cell_volume_ratio`, `segment_capacity_particles`, `edge_transfer_per_tick`, `vent_transfer_per_tick`, `pressure_epsilon`).

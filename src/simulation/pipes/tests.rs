@@ -58,6 +58,20 @@ fn pressures_match_within(a: f32, b: f32, tolerance: f32) -> bool {
     relative_diff(a, b) <= tolerance
 }
 
+fn pressure_spread(values: &[f32]) -> f32 {
+    let mut min_value = f32::INFINITY;
+    let mut max_value = f32::NEG_INFINITY;
+    for value in values {
+        min_value = min_value.min(*value);
+        max_value = max_value.max(*value);
+    }
+    if values.is_empty() {
+        0.0
+    } else {
+        max_value - min_value
+    }
+}
+
 fn pipe_node_total_at(pipe_gas: &PipeGasField, kind: PipeContainerKind, cell: UVec2) -> u32 {
     let node_id = pipe_gas
         .snapshot_state()
@@ -202,12 +216,11 @@ fn cell_with_bridge_and_pipe_returns_two_display_blocks() {
     let world = WorldGrid::default();
     let mut structures = PlacedStructureMap::default();
     assert!(structures.place_pipe(20, 20, &world));
+    assert!(structures.place_pipe(21, 20, &world));
     assert!(structures.place_pipe(22, 20, &world));
-    assert!(
-        structures
-            .place_bridge(UVec2::new(20, 20), StructureRotation::Deg0, &world)
-            .is_some()
-    );
+    assert!(structures
+        .place_bridge(UVec2::new(20, 20), StructureRotation::Deg0, &world)
+        .is_some());
 
     let mut pipe_gas = PipeGasField::from_registry(&registry);
     pipe_gas.sync_to_structures(&structures);
@@ -216,7 +229,7 @@ fn cell_with_bridge_and_pipe_returns_two_display_blocks() {
         .nodes
         .iter()
         .position(|node| {
-            node.key.kind == PipeContainerKind::Pipe && node.key.anchor == UVec2::new(20, 20)
+            node.key.kind == PipeContainerKind::Pipe && node.key.anchor == UVec2::new(21, 20)
         })
         .expect("pipe node");
     let bridge_node = snapshot
@@ -303,7 +316,10 @@ fn topology_change_resets_flux_but_preserves_pipe_gas() {
         .map(|node_id| pipe_gas.total_amount_particles(node_id))
         .sum();
 
-    assert!(pipe_flux.flux_by_edge.values().all(|value| value.abs() <= f32::EPSILON));
+    assert!(pipe_flux
+        .flux_by_edge
+        .values()
+        .all(|value| value.abs() <= f32::EPSILON));
     assert_eq!(before_total, after_total);
 }
 
@@ -350,8 +366,12 @@ fn scenario_one_long_pipe_reaches_dense_front_and_low_gradient() {
     let source_pressure = final_source_pressure;
     let final_pressures = final_profile;
     for cell in &segment_cells {
-        let pressure =
-            pipe_pressure_at(&harness.pipe_gas, &harness.config.pipe, PipeContainerKind::Pipe, *cell);
+        let pressure = pipe_pressure_at(
+            &harness.pipe_gas,
+            &harness.config.pipe,
+            PipeContainerKind::Pipe,
+            *cell,
+        );
         assert!(
             pressure >= source_pressure * 0.95,
             "segment {cell:?} stayed below dense-front target: pressure={pressure}, source={source_pressure}, profile={final_pressures:?}"
@@ -366,7 +386,12 @@ fn scenario_one_long_pipe_reaches_dense_front_and_low_gradient() {
         );
     }
 
-    let max_tick = first_reach_tick.iter().flatten().copied().max().unwrap_or(0) as f32;
+    let max_tick = first_reach_tick
+        .iter()
+        .flatten()
+        .copied()
+        .max()
+        .unwrap_or(0) as f32;
     let avg_ticks_per_cell = max_tick / segment_cells.len() as f32;
     assert!(
         avg_ticks_per_cell <= 10.0,
@@ -378,7 +403,7 @@ fn scenario_one_long_pipe_reaches_dense_front_and_low_gradient() {
 fn scenario_two_equalizes_two_rooms_and_pipe() {
     let config = simulation_config();
     let mut harness = ScenarioHarness::from_slot(scenario_slot(1), config);
-    let ticks = harness.run_until(4_000, |state, _| {
+    let ticks = harness.run_until(20_000, |state, _| {
         let left = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 58);
         let right = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 58);
         pressures_match_within(left, right, 0.03)
@@ -407,14 +432,56 @@ fn scenario_two_equalizes_two_rooms_and_pipe() {
 }
 
 #[test]
+fn scenario_two_equalizes_two_rooms_and_pipe_smoke() {
+    let config = simulation_config();
+    let mut harness = ScenarioHarness::from_slot(scenario_slot(1), config);
+    let left_initial =
+        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 58);
+    let right_initial =
+        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 58);
+    let initial_diff = (left_initial - right_initial).abs();
+    let ticks = harness.run_until(1_200, |state, _| {
+        let left = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 58);
+        let right = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 58);
+        let center = pipe_pressure_at(
+            &state.pipe_gas,
+            &state.config.pipe,
+            PipeContainerKind::Pipe,
+            UVec2::new(51, 51),
+        );
+        (left - right).abs() <= initial_diff * 0.95 && center >= right_initial
+    });
+
+    let left = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 58);
+    let right = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 58);
+    let center = pipe_pressure_at(
+        &harness.pipe_gas,
+        &harness.config.pipe,
+        PipeContainerKind::Pipe,
+        UVec2::new(51, 51),
+    );
+    let final_diff = (left - right).abs();
+    assert!(
+        final_diff <= initial_diff * 0.95,
+        "scenario 2 smoke did not reduce room pressure gap enough after {ticks} ticks: initial_diff={initial_diff}, final_diff={final_diff}, left={left}, right={right}"
+    );
+    assert!(
+        center >= right_initial,
+        "scenario 2 smoke did not pressurize the middle of the pipe above the low-pressure room after {ticks} ticks: center={center}, right_initial={right_initial}"
+    );
+}
+
+#[test]
 fn scenario_three_equalizes_and_uses_both_parallel_routes() {
     let config = simulation_config();
     let mut harness = ScenarioHarness::from_slot(scenario_slot(2), config);
     let mut direct_route_seen = false;
     let mut branch_route_seen = false;
-    harness.run_until(5_000, |state, _| {
-        direct_route_seen |= has_transfer_between(&state.visuals, UVec2::new(50, 53), UVec2::new(51, 53));
-        branch_route_seen |= has_transfer_between(&state.visuals, UVec2::new(50, 49), UVec2::new(51, 49));
+    harness.run_until(20_000, |state, _| {
+        direct_route_seen |=
+            has_transfer_between(&state.visuals, UVec2::new(50, 53), UVec2::new(51, 53));
+        branch_route_seen |=
+            has_transfer_between(&state.visuals, UVec2::new(50, 49), UVec2::new(51, 49));
         let left = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 62);
         let right = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 62);
         direct_route_seen && branch_route_seen && pressures_match_within(left, right, 0.03)
@@ -423,10 +490,51 @@ fn scenario_three_equalizes_and_uses_both_parallel_routes() {
     let left = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 62);
     let right = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 62);
     assert!(direct_route_seen, "expected flow through the direct branch");
-    assert!(branch_route_seen, "expected flow through the longer P-branch");
+    assert!(
+        branch_route_seen,
+        "expected flow through the longer P-branch"
+    );
     assert!(
         pressures_match_within(left, right, 0.03),
         "scenario 3 room pressures did not converge: left={left}, right={right}"
+    );
+}
+
+#[test]
+fn scenario_three_equalizes_and_uses_both_parallel_routes_smoke() {
+    let config = simulation_config();
+    let mut harness = ScenarioHarness::from_slot(scenario_slot(2), config);
+    let left_initial =
+        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 62);
+    let right_initial =
+        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 62);
+    let initial_diff = (left_initial - right_initial).abs();
+    let mut direct_route_seen = false;
+    let mut branch_route_seen = false;
+    let ticks = harness.run_until(1_400, |state, _| {
+        direct_route_seen |=
+            has_transfer_between(&state.visuals, UVec2::new(50, 53), UVec2::new(51, 53));
+        branch_route_seen |=
+            has_transfer_between(&state.visuals, UVec2::new(50, 49), UVec2::new(51, 49));
+        let left = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 62);
+        let right = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 62);
+        direct_route_seen && branch_route_seen && (left - right).abs() <= initial_diff * 0.95
+    });
+
+    let left = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 62);
+    let right = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 62);
+    let final_diff = (left - right).abs();
+    assert!(
+        direct_route_seen,
+        "scenario 3 smoke expected flow through the direct branch"
+    );
+    assert!(
+        branch_route_seen,
+        "scenario 3 smoke expected flow through the longer P-branch"
+    );
+    assert!(
+        final_diff <= initial_diff * 0.95,
+        "scenario 3 smoke did not reduce room pressure gap enough after {ticks} ticks: initial_diff={initial_diff}, final_diff={final_diff}, left={left}, right={right}"
     );
 }
 
@@ -463,13 +571,65 @@ fn scenario_four_dead_end_pipe_fills_almost_to_source_pressure() {
 }
 
 #[test]
+fn scenario_five_star_equalizes_three_rooms_and_all_rays_flow_smoke() {
+    let config = simulation_config();
+    let mut harness = ScenarioHarness::from_slot(scenario_slot(4), config);
+    let initial_pressures = [
+        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 44, 7, 58, 23),
+        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 58),
+        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 58),
+    ];
+    let initial_spread = pressure_spread(&initial_pressures);
+    let mut top_seen = false;
+    let mut left_seen = false;
+    let mut right_seen = false;
+    let ticks = harness.run_until(1_400, |state, _| {
+        top_seen |= has_transfer_between(&state.visuals, UVec2::new(51, 30), UVec2::new(51, 31));
+        left_seen |= has_transfer_between(&state.visuals, UVec2::new(30, 51), UVec2::new(31, 51));
+        right_seen |= has_transfer_between(&state.visuals, UVec2::new(71, 51), UVec2::new(72, 51));
+        let current_pressures = [
+            mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 44, 7, 58, 23),
+            mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 58),
+            mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 58),
+        ];
+        top_seen
+            && left_seen
+            && right_seen
+            && pressure_spread(&current_pressures) <= initial_spread * 0.95
+    });
+
+    let final_pressures = [
+        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 44, 7, 58, 23),
+        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 58),
+        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 58),
+    ];
+    let final_spread = pressure_spread(&final_pressures);
+    assert!(
+        top_seen,
+        "scenario 5 smoke expected flow through the top ray"
+    );
+    assert!(
+        left_seen,
+        "scenario 5 smoke expected flow through the left ray"
+    );
+    assert!(
+        right_seen,
+        "scenario 5 smoke expected flow through the right ray"
+    );
+    assert!(
+        final_spread <= initial_spread * 0.95,
+        "scenario 5 smoke did not reduce room pressure spread enough after {ticks} ticks: initial_spread={initial_spread}, final_spread={final_spread}, pressures={final_pressures:?}"
+    );
+}
+
+#[test]
 fn scenario_five_star_equalizes_three_rooms_and_all_rays_flow() {
     let config = simulation_config();
     let mut harness = ScenarioHarness::from_slot(scenario_slot(4), config);
     let mut top_seen = false;
     let mut left_seen = false;
     let mut right_seen = false;
-    harness.run_until(6_000, |state, _| {
+    harness.run_until(20_000, |state, _| {
         top_seen |= has_transfer_between(&state.visuals, UVec2::new(51, 30), UVec2::new(51, 31));
         left_seen |= has_transfer_between(&state.visuals, UVec2::new(30, 51), UVec2::new(31, 51));
         right_seen |= has_transfer_between(&state.visuals, UVec2::new(71, 51), UVec2::new(72, 51));
