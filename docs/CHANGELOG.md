@@ -1,6 +1,12 @@
 ﻿# Changelog
 
 ## 2026-05-08
+- Save/load меню переработано под preview-карточки: слот теперь загружается или перезаписывается кликом по всей карточке, справа показывается `160x160` preview мира, а `Delete` остаётся отдельной кнопкой внутри карточки.
+- Схема сохранений повышена до `5`: в `meta.toml` добавлен chunk `preview_png`, `SaveDescriptor` теперь умеет возвращать optional `preview_path`, а preview PNG записывается отдельным post-save этапом после коммита data-slot.
+- В render-подсистему добавлен offscreen preview pipeline (`src/render/save_preview.rs`): отдельная `RenderTarget::Image` камера делает канонический `F1`-снимок мира `512x512` без UI и с полным охватом fade-рамки.
+- Для старых слотов добавлен временный бинарник `src/bin/migrate_save_previews.rs`, который проходит по `saves/`, пропускает уже валидные preview и дозаписывает недостающие `preview.png` + schema/meta patch без переписывания data-chunk-ов.
+- `ui/scroll_area` расширен до единого runtime для modal и panel viewport-ов: теперь он поддерживает wheel-scroll, drag scrollbar thumb, click по track и per-viewport приоритет/группы ввода.
+- Panel runtime избавлен от собственной scroll-математики и переведён на общий `ScrollAreaViewport`, поэтому один и тот же scrollbar теперь используется и в панелях, и в save/load меню.
 - Pipe runtime окончательно переведён на pressure+flux модель без pipe-capacity: `PipeGasField` хранит только частицы по stable node keys, а remembered edge-flow вынесен в runtime-only `PipeFluxField`.
 - `PipeSimulationConfig` очищен от legacy-параметров вместимости/локального transfer-limit и теперь задаёт pressure-конверсию, pipe flux, vent throughput и численную устойчивость новой модели.
 - Внутренний solver труб переписан на semi-implicit component solve с log pressure ratio, remembered edge flux и same-tick правилом `pipe hop first, vent refill after`, чтобы длинные магистрали, dead-end и ветвления работали одной и той же физикой.

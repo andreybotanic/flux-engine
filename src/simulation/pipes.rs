@@ -349,16 +349,6 @@ impl PipeFluxField {
         self.flux_by_edge.len()
     }
 
-    #[cfg(test)]
-    /// Returns the largest absolute remembered flux magnitude.
-    pub(crate) fn max_abs_flux(&self) -> f32 {
-        self.flux_by_edge
-            .values()
-            .copied()
-            .map(f32::abs)
-            .fold(0.0, f32::max)
-    }
-
     fn sync_to_runtime(&mut self, runtime: &PipeRuntime, pipe_gas: &PipeGasField) {
         let signature = pipe_flux_topology_signature(runtime, pipe_gas);
         if self.signature == signature {

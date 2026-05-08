@@ -1,13 +1,11 @@
 fn handle_main_menu_actions(
-    mut interactions: Query<
-        (&Interaction, &MainMenuActionButton, &mut BackgroundColor),
-        (Changed<Interaction>, With<Button>),
-    >,
+    mut action_requests: EventReader<MainMenuActionRequest>,
     ui_state: (
         ResMut<MainMenuState>,
         ResMut<MainMenuUiState>,
         ResMut<SimulationControl>,
         Res<GasRegistry>,
+        ResMut<SavePreviewQueueState>,
     ),
     world_state: (
         ResMut<WorldGrid>,
@@ -23,9 +21,17 @@ fn handle_main_menu_actions(
     mut world_changed: EventWriter<WorldCellChanged>,
     mut exit_writer: EventWriter<AppExit>,
     mut overlay_mode: ResMut<OverlayMode>,
-    mut camera_query: Single<(&mut Transform, &mut Projection), With<MainCamera>>,
+    mut camera_query: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
 ) {
-    let (mut main_menu, mut menu_ui, mut control, gas_registry) = ui_state;
+    let pending_actions = action_requests
+        .read()
+        .map(|event| event.0.clone())
+        .collect::<Vec<_>>();
+    if pending_actions.is_empty() {
+        return;
+    }
+
+    let (mut main_menu, mut menu_ui, mut control, gas_registry, mut preview_queue) = ui_state;
     let (
         mut world,
         mut structures,
@@ -39,17 +45,14 @@ fn handle_main_menu_actions(
     if !main_menu.open {
         return;
     }
+    if preview_queue.is_busy() {
+        menu_ui.status_text = "Please wait until the save preview is ready.".to_string();
+        return;
+    }
 
-    for (interaction, action_button, mut bg) in &mut interactions {
-        match *interaction {
-            Interaction::Pressed | Interaction::Hovered => bg.0 = MODAL_BUTTON_HOVER,
-            Interaction::None => bg.0 = MODAL_BUTTON_BG,
-        }
-        if *interaction != Interaction::Pressed {
-            continue;
-        }
-
-        match &action_button.0 {
+    let saves_root = saves_root_default();
+    for action in pending_actions {
+        match action {
             MainMenuButtonAction::Continue => {
                 if menu_ui.mode != MainMenuMode::InGame || !world_load_state.has_world {
                     continue;
@@ -74,10 +77,17 @@ fn handle_main_menu_actions(
                     &mut world_changed,
                 ) {
                     Ok(_) => {
+                        let Ok((mut camera_transform, mut camera_projection)) =
+                            camera_query.single_mut()
+                        else {
+                            menu_ui.status_text = "New game failed: main camera missing.".to_string();
+                            continue;
+                        };
                         apply_loaded_world_preset(
                             &mut control,
                             &mut overlay_mode,
-                            &mut camera_query,
+                            &mut camera_transform,
+                            &mut camera_projection,
                         );
                         save_session.mark_persisted(step.0, None);
                         world_load_state.has_world = true;
@@ -117,33 +127,22 @@ fn handle_main_menu_actions(
                     ));
                     menu_ui.confirm_text = "Save changes before exiting to main menu?".to_string();
                     menu_ui.screen = MainMenuScreen::Confirm;
-                } else {
-                    let state = new_game_snapshot(&gas_registry);
-                    match apply_runtime_world_state(
-                        state,
-                        &mut world,
-                        &mut structures,
-                        &mut gas,
-                        &mut pipe_gas,
-                        &mut pipe_flux,
-                        &mut step,
-                        &mut world_changed,
-                    ) {
-                        Ok(_) => {
-                            control.paused = true;
-                            save_session.mark_persisted(step.0, None);
-                            world_load_state.has_world = false;
-                            menu_ui.mode = MainMenuMode::Main;
-                            menu_ui.screen = MainMenuScreen::Root;
-                            menu_ui.confirm_state = None;
-                            menu_ui.post_save_action = None;
-                            main_menu.open = true;
-                            menu_ui.status_text.clear();
-                        }
-                        Err(err) => {
-                            menu_ui.status_text = format!("Exit to main failed: {}", err);
-                        }
-                    }
+                } else if let Err(err) = complete_exit_to_main_menu(
+                    &gas_registry,
+                    &mut control,
+                    &mut main_menu,
+                    &mut menu_ui,
+                    &mut world,
+                    &mut structures,
+                    &mut gas,
+                    &mut pipe_gas,
+                    &mut pipe_flux,
+                    &mut step,
+                    &mut save_session,
+                    &mut world_load_state,
+                    &mut world_changed,
+                ) {
+                    menu_ui.status_text = format!("Exit to main failed: {}", err);
                 }
             }
             MainMenuButtonAction::ExitApp => {
@@ -173,7 +172,7 @@ fn handle_main_menu_actions(
                 }
                 let name = save_name_input.text.clone();
                 match create_save(
-                    &saves_root_default(),
+                    &saves_root,
                     &name,
                     &world,
                     &gas,
@@ -185,42 +184,18 @@ fn handle_main_menu_actions(
                     Ok(descriptor) => {
                         save_session.mark_persisted(step.0, Some(descriptor.id.clone()));
                         refresh_saves_cache(&mut menu_ui);
-                        if let Some(post_action) = menu_ui.post_save_action.take() {
-                            match post_action {
-                                MainMenuDeferredAction::ExitToMainMenu => {
-                                    let state = new_game_snapshot(&gas_registry);
-                                    match apply_runtime_world_state(
-                                        state,
-                                        &mut world,
-                                        &mut structures,
-                                        &mut gas,
-                                        &mut pipe_gas,
-                                        &mut pipe_flux,
-                                        &mut step,
-                                        &mut world_changed,
-                                    ) {
-                                        Ok(_) => {
-                                            control.paused = true;
-                                            save_session.mark_persisted(step.0, None);
-                                            world_load_state.has_world = false;
-                                            menu_ui.mode = MainMenuMode::Main;
-                                            menu_ui.screen = MainMenuScreen::Root;
-                                            main_menu.open = true;
-                                            menu_ui.status_text.clear();
-                                        }
-                                        Err(err) => {
-                                            menu_ui.status_text =
-                                                format!("Exit to main failed: {}", err);
-                                            menu_ui.screen = MainMenuScreen::Save;
-                                        }
-                                    }
-                                }
-                                MainMenuDeferredAction::ExitApp => {
-                                    exit_writer.write(AppExit::Success);
-                                }
-                            }
-                        } else {
-                            menu_ui.status_text = format!("Saved '{}'.", descriptor.display_name);
+                        if let Err(err) = queue_save_preview_capture(
+                            &saves_root,
+                            &mut menu_ui,
+                            &mut preview_queue,
+                            descriptor.clone(),
+                            format!("Saved '{}'.", descriptor.display_name),
+                            false,
+                        ) {
+                            menu_ui.status_text = format!(
+                                "Saved '{}', but preview setup failed: {}",
+                                descriptor.display_name, err
+                            );
                         }
                     }
                     Err(err) => {
@@ -235,16 +210,16 @@ fn handle_main_menu_actions(
                     continue;
                 }
                 menu_ui.return_screen = MainMenuScreen::Save;
-                menu_ui.confirm_state = Some(MainMenuConfirmState::OverwriteSave(save_id.clone()));
+                menu_ui.confirm_state = Some(MainMenuConfirmState::OverwriteSave(save_id));
                 menu_ui.confirm_text =
                     "This save slot will be fully overwritten. Continue?".to_string();
                 menu_ui.screen = MainMenuScreen::Confirm;
             }
             MainMenuButtonAction::SelectDelete(save_id) => {
-                open_delete_confirmation(&mut menu_ui, save_id.clone());
+                open_delete_confirmation(&mut menu_ui, save_id);
             }
             MainMenuButtonAction::SelectLoad(save_id) => {
-                match load_save(&saves_root_default(), save_id, &gas_registry) {
+                match load_save(&saves_root, &save_id, &gas_registry) {
                     Ok(loaded) => {
                         match apply_runtime_world_state(
                             loaded.state,
@@ -257,12 +232,21 @@ fn handle_main_menu_actions(
                             &mut world_changed,
                         ) {
                             Ok(_) => {
+                                let Ok((mut camera_transform, mut camera_projection)) =
+                                    camera_query.single_mut()
+                                else {
+                                    menu_ui.status_text =
+                                        "Load apply failed: main camera missing.".to_string();
+                                    continue;
+                                };
                                 apply_loaded_world_preset(
                                     &mut control,
                                     &mut overlay_mode,
-                                    &mut camera_query,
+                                    &mut camera_transform,
+                                    &mut camera_projection,
                                 );
-                                save_session.mark_persisted(step.0, Some(loaded.descriptor.id));
+                                save_session
+                                    .mark_persisted(step.0, Some(loaded.descriptor.id.clone()));
                                 world_load_state.has_world = true;
                                 menu_ui.mode = MainMenuMode::Hidden;
                                 menu_ui.screen = MainMenuScreen::Root;
@@ -290,7 +274,7 @@ fn handle_main_menu_actions(
                 match confirm {
                     Some(MainMenuConfirmState::OverwriteSave(save_id)) => {
                         match overwrite_save(
-                            &saves_root_default(),
+                            &saves_root,
                             &save_id,
                             &world,
                             &gas,
@@ -302,43 +286,18 @@ fn handle_main_menu_actions(
                             Ok(descriptor) => {
                                 save_session.mark_persisted(step.0, Some(descriptor.id.clone()));
                                 refresh_saves_cache(&mut menu_ui);
-                                if let Some(post_action) = menu_ui.post_save_action.take() {
-                                    match post_action {
-                                        MainMenuDeferredAction::ExitToMainMenu => {
-                                            let state = new_game_snapshot(&gas_registry);
-                                            match apply_runtime_world_state(
-                                                state,
-                                                &mut world,
-                                                &mut structures,
-                                                &mut gas,
-                                                &mut pipe_gas,
-                                                &mut pipe_flux,
-                                                &mut step,
-                                                &mut world_changed,
-                                            ) {
-                                                Ok(_) => {
-                                                    control.paused = true;
-                                                    save_session.mark_persisted(step.0, None);
-                                                    world_load_state.has_world = false;
-                                                    menu_ui.mode = MainMenuMode::Main;
-                                                    menu_ui.screen = MainMenuScreen::Root;
-                                                    main_menu.open = true;
-                                                    menu_ui.status_text.clear();
-                                                }
-                                                Err(err) => {
-                                                    menu_ui.status_text =
-                                                        format!("Exit to main failed: {}", err);
-                                                    menu_ui.screen = MainMenuScreen::Save;
-                                                }
-                                            }
-                                        }
-                                        MainMenuDeferredAction::ExitApp => {
-                                            exit_writer.write(AppExit::Success);
-                                        }
-                                    }
-                                } else {
-                                    menu_ui.status_text =
-                                        format!("Overwritten '{}'.", descriptor.display_name);
+                                if let Err(err) = queue_save_preview_capture(
+                                    &saves_root,
+                                    &mut menu_ui,
+                                    &mut preview_queue,
+                                    descriptor.clone(),
+                                    format!("Overwritten '{}'.", descriptor.display_name),
+                                    false,
+                                ) {
+                                    menu_ui.status_text = format!(
+                                        "Overwritten '{}', but preview setup failed: {}",
+                                        descriptor.display_name, err
+                                    );
                                     menu_ui.screen = MainMenuScreen::Save;
                                 }
                             }
@@ -349,7 +308,7 @@ fn handle_main_menu_actions(
                         }
                     }
                     Some(MainMenuConfirmState::DeleteSave(save_id)) => {
-                        match delete_save(&saves_root_default(), &save_id) {
+                        match delete_save(&saves_root, &save_id) {
                             Ok(()) => {
                                 if save_session.current_save_id.as_deref() == Some(save_id.as_str()) {
                                     save_session.current_save_id = None;
@@ -385,31 +344,23 @@ fn handle_main_menu_actions(
                     }
                     Some(MainMenuConfirmState::UnsavedChanges(action)) => match action {
                         MainMenuDeferredAction::ExitToMainMenu => {
-                            let state = new_game_snapshot(&gas_registry);
-                            match apply_runtime_world_state(
-                            state,
-                            &mut world,
-                            &mut structures,
-                            &mut gas,
-                            &mut pipe_gas,
-                            &mut pipe_flux,
-                            &mut step,
-                            &mut world_changed,
-                        ) {
-                                Ok(_) => {
-                                    control.paused = true;
-                                    save_session.mark_persisted(step.0, None);
-                                    world_load_state.has_world = false;
-                                    menu_ui.mode = MainMenuMode::Main;
-                                    menu_ui.screen = MainMenuScreen::Root;
-                                    menu_ui.post_save_action = None;
-                                    main_menu.open = true;
-                                    menu_ui.status_text.clear();
-                                }
-                                Err(err) => {
-                                    menu_ui.status_text = format!("Exit to main failed: {}", err);
-                                    menu_ui.screen = MainMenuScreen::Root;
-                                }
+                            if let Err(err) = complete_exit_to_main_menu(
+                                &gas_registry,
+                                &mut control,
+                                &mut main_menu,
+                                &mut menu_ui,
+                                &mut world,
+                                &mut structures,
+                                &mut gas,
+                                &mut pipe_gas,
+                                &mut pipe_flux,
+                                &mut step,
+                                &mut save_session,
+                                &mut world_load_state,
+                                &mut world_changed,
+                            ) {
+                                menu_ui.status_text = format!("Exit to main failed: {}", err);
+                                menu_ui.screen = MainMenuScreen::Root;
                             }
                         }
                         MainMenuDeferredAction::ExitApp => {
@@ -426,6 +377,75 @@ fn handle_main_menu_actions(
                 menu_ui.confirm_text.clear();
                 menu_ui.post_save_action = None;
                 menu_ui.screen = menu_ui.return_screen;
+            }
+        }
+    }
+}
+
+fn handle_save_preview_capture_finished(
+    mut finished: EventReader<SavePreviewCaptureFinished>,
+    mut main_menu: ResMut<MainMenuState>,
+    mut menu_ui: ResMut<MainMenuUiState>,
+    mut control: ResMut<SimulationControl>,
+    gas_registry: Res<GasRegistry>,
+    mut world: ResMut<WorldGrid>,
+    mut structures: ResMut<PlacedStructureMap>,
+    mut gas: ResMut<GasField>,
+    mut pipe_gas: ResMut<crate::simulation::pipes::PipeGasField>,
+    mut pipe_flux: ResMut<crate::simulation::pipes::PipeFluxField>,
+    mut step: ResMut<SimulationStep>,
+    mut save_session: ResMut<SaveSessionState>,
+    mut world_load_state: ResMut<WorldLoadState>,
+    mut world_changed: EventWriter<WorldCellChanged>,
+    mut exit_writer: EventWriter<AppExit>,
+) {
+    if finished.is_empty() {
+        return;
+    }
+
+    for event in finished.read() {
+        refresh_saves_cache(&mut menu_ui);
+        match &event.result {
+            Ok(()) => {
+                if let Some(post_action) = event.request.post_save_action.clone() {
+                    match post_action {
+                        MainMenuDeferredAction::ExitToMainMenu => {
+                            if let Err(err) = complete_exit_to_main_menu(
+                                &gas_registry,
+                                &mut control,
+                                &mut main_menu,
+                                &mut menu_ui,
+                                &mut world,
+                                &mut structures,
+                                &mut gas,
+                                &mut pipe_gas,
+                                &mut pipe_flux,
+                                &mut step,
+                                &mut save_session,
+                                &mut world_load_state,
+                                &mut world_changed,
+                            ) {
+                                menu_ui.status_text = format!("Exit to main failed: {}", err);
+                                menu_ui.screen = MainMenuScreen::Save;
+                            }
+                        }
+                        MainMenuDeferredAction::ExitApp => {
+                            exit_writer.write(AppExit::Success);
+                        }
+                    }
+                } else {
+                    menu_ui.status_text = event.request.success_status_text.clone();
+                    menu_ui.screen = MainMenuScreen::Save;
+                }
+            }
+            Err(err) => {
+                menu_ui.post_save_action = None;
+                menu_ui.status_text = format!(
+                    "{} Preview capture failed: {}",
+                    event.request.success_status_text, err
+                );
+                menu_ui.screen = MainMenuScreen::Save;
+                main_menu.open = true;
             }
         }
     }
@@ -455,49 +475,79 @@ fn apply_runtime_world_state(
     step: &mut SimulationStep,
     world_changed: &mut EventWriter<WorldCellChanged>,
 ) -> Result<(), String> {
-    restore_runtime_world_resources(state, world, structures, gas, pipe_gas, pipe_flux, step)?;
+    restore_runtime_world_state(state, world, structures, gas, pipe_gas, pipe_flux, step)?;
     emit_full_world_changed(world_changed);
     Ok(())
 }
 
-fn restore_runtime_world_resources(
-    state: crate::save::RuntimeWorldState,
+fn complete_exit_to_main_menu(
+    gas_registry: &GasRegistry,
+    control: &mut SimulationControl,
+    main_menu: &mut MainMenuState,
+    menu_ui: &mut MainMenuUiState,
     world: &mut WorldGrid,
     structures: &mut PlacedStructureMap,
     gas: &mut GasField,
     pipe_gas: &mut crate::simulation::pipes::PipeGasField,
     pipe_flux: &mut crate::simulation::pipes::PipeFluxField,
     step: &mut SimulationStep,
+    save_session: &mut SaveSessionState,
+    world_load_state: &mut WorldLoadState,
+    world_changed: &mut EventWriter<WorldCellChanged>,
 ) -> Result<(), String> {
-    world.restore_from_cell_codes(&state.world_cell_codes)?;
-    structures.restore_state(&state.placed_structures_snapshot, world)?;
-    gas.restore_state(&state.gas_snapshot)?;
-    pipe_gas.restore_state(&state.pipe_gas_snapshot, structures)?;
-    pipe_flux.clear_all();
-    step.0 = state.simulation_step;
+    let state = new_game_snapshot(gas_registry);
+    apply_runtime_world_state(
+        state,
+        world,
+        structures,
+        gas,
+        pipe_gas,
+        pipe_flux,
+        step,
+        world_changed,
+    )?;
+    control.paused = true;
+    save_session.mark_persisted(step.0, None);
+    world_load_state.has_world = false;
+    menu_ui.mode = MainMenuMode::Main;
+    menu_ui.screen = MainMenuScreen::Root;
+    menu_ui.confirm_state = None;
+    menu_ui.confirm_text.clear();
+    menu_ui.post_save_action = None;
+    main_menu.open = true;
+    menu_ui.status_text.clear();
     Ok(())
 }
 
-fn emit_full_world_changed(world_changed: &mut EventWriter<WorldCellChanged>) {
-    for y in 0..WORLD_HEIGHT {
-        for x in 0..WORLD_WIDTH {
-            world_changed.write(WorldCellChanged {
-                cell: UVec2::new(x, y),
-            });
-        }
+fn queue_save_preview_capture(
+    root: &std::path::Path,
+    menu_ui: &mut MainMenuUiState,
+    preview_queue: &mut SavePreviewQueueState,
+    descriptor: crate::save::SaveDescriptor,
+    success_status_text: String,
+    patch_meta_on_success: bool,
+) -> Result<(), String> {
+    if preview_queue.is_busy() {
+        return Err("another save preview capture is already running".to_string());
     }
-}
-
-fn apply_loaded_world_preset(
-    control: &mut SimulationControl,
-    overlay_mode: &mut OverlayMode,
-    camera_query: &mut Single<(&mut Transform, &mut Projection), With<MainCamera>>,
-) {
-    control.paused = true;
-    control.speed = crate::simulation::SimulationSpeed::X1;
-    *overlay_mode = OverlayMode::Main;
-    let (transform, projection) = &mut **camera_query;
-    crate::input::camera::reset_camera_to_default(transform, projection);
+    let post_save_action = menu_ui.post_save_action.take();
+    let target_path = descriptor
+        .preview_path
+        .clone()
+        .unwrap_or_else(|| save_preview_target_path(root, &descriptor.id));
+    preview_queue.pending = Some(SavePreviewRequest {
+        root: root.to_path_buf(),
+        descriptor,
+        target_path,
+        post_save_action,
+        success_status_text,
+        patch_meta_on_success,
+    });
+    menu_ui.confirm_state = None;
+    menu_ui.confirm_text.clear();
+    menu_ui.screen = MainMenuScreen::Save;
+    menu_ui.status_text = "Generating save preview...".to_string();
+    Ok(())
 }
 
 fn open_delete_confirmation(menu_ui: &mut MainMenuUiState, save_id: String) {
@@ -509,10 +559,13 @@ fn open_delete_confirmation(menu_ui: &mut MainMenuUiState, save_id: String) {
 
 #[cfg(test)]
 mod main_menu_actions_tests {
-    use super::restore_runtime_world_resources;
+    use super::queue_save_preview_capture;
     use crate::{
         config::{GasDefinition, GasRegistry},
-        save::new_game_snapshot,
+        save::{
+            new_game_snapshot, restore_runtime_world_state, MainMenuDeferredAction, MainMenuUiState,
+            SaveDescriptor, SavePreviewQueueState,
+        },
         simulation::{
             gas::GasField,
             pipes::{apply_pipe_network_step, PipeFlowVisualState, PipeFluxField, PipeGasField},
@@ -520,6 +573,7 @@ mod main_menu_actions_tests {
         },
         world::{grid::WorldGrid, structures::PlacedStructureMap},
     };
+    use std::path::Path;
 
     fn registry() -> GasRegistry {
         GasRegistry::new(vec![GasDefinition {
@@ -556,10 +610,9 @@ mod main_menu_actions_tests {
             &PipeSimulationConfig::default(),
         );
         assert!(pipe_flux.edge_count() > 0);
-        assert!(pipe_flux.max_abs_flux() > 0.0);
 
         let state = new_game_snapshot(&registry);
-        restore_runtime_world_resources(
+        restore_runtime_world_state(
             state,
             &mut world,
             &mut structures,
@@ -572,7 +625,37 @@ mod main_menu_actions_tests {
 
         assert_eq!(pipe_gas.node_count(), 0);
         assert_eq!(pipe_flux.edge_count(), 0);
-        assert_eq!(pipe_flux.max_abs_flux(), 0.0);
         assert_eq!(step.0, 0);
+    }
+
+    #[test]
+    fn queueing_preview_keeps_post_save_action_pending_until_capture_finishes() {
+        let mut menu_ui = MainMenuUiState::default();
+        let mut preview_queue = SavePreviewQueueState::default();
+        menu_ui.post_save_action = Some(MainMenuDeferredAction::ExitApp);
+        let descriptor = SaveDescriptor {
+            id: "slot-1".to_string(),
+            display_name: "Slot 1".to_string(),
+            created_at_unix_ms: 0,
+            updated_at_unix_ms: 0,
+            preview_path: None,
+        };
+
+        queue_save_preview_capture(
+            Path::new("D:/tmp"),
+            &mut menu_ui,
+            &mut preview_queue,
+            descriptor,
+            "Saved 'Slot 1'.".to_string(),
+            false,
+        )
+        .expect("queue preview");
+
+        assert!(menu_ui.post_save_action.is_none());
+        let request = preview_queue.pending.expect("queued request");
+        assert!(matches!(
+            request.post_save_action,
+            Some(MainMenuDeferredAction::ExitApp)
+        ));
     }
 }

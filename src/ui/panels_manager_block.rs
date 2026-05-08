@@ -17,10 +17,8 @@ impl PanelRect {
 
 #[derive(Clone, Copy, Debug)]
 struct PanelHitRect {
-    panel_id: PanelId,
     rect: PanelRect,
     global_z: i32,
-    scrollable: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -214,70 +212,54 @@ impl PanelManager {
                     });
             });
 
-            root.spawn((
-                Node {
-                    width: Val::Percent(100.0),
-                    padding: UiRect::all(Val::Px(10.0)),
-                    display: if state.collapsed {
-                        Display::None
-                    } else {
-                        Display::Flex
-                    },
-                    flex_direction: FlexDirection::Column,
-                    overflow: Overflow::clip_y(),
-                    ..default()
-                },
-                ScrollPosition::default(),
-                PanelContentViewport { panel_id },
-            ))
-            .with_children(|viewport| {
-                let inner = viewport
-                    .spawn((
-                        Node {
-                            width: Val::Percent(100.0),
-                            display: Display::Flex,
-                            flex_direction: FlexDirection::Column,
-                            row_gap: Val::Px(8.0),
-                            ..default()
-                        },
-                        PanelContentInner {
-                            _panel_id: panel_id,
-                        },
-                    ))
-                    .with_children(build_content)
-                    .id();
-                content_inner_entity = Some(inner);
-            });
-
-            root.spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    right: Val::Px(2.0),
-                    top: Val::Px(PANEL_HEADER_HEIGHT + PANEL_CONTENT_PADDING_Y),
-                    bottom: Val::Px(PANEL_CONTENT_PADDING_Y),
-                    width: Val::Px(SCROLLBAR_TRACK_WIDTH),
-                    display: Display::None,
-                    ..default()
-                    },
-                    BackgroundColor(crate::ui::palette::PANEL_SCROLLBAR_TRACK_BG),
-                    Visibility::Hidden,
-                    PanelScrollbarTrack { panel_id },
-                ))
-            .with_children(|track| {
-                track.spawn((
+            let viewport = root
+                .spawn((
                     Node {
-                        position_type: PositionType::Absolute,
-                        left: Val::Px(0.0),
-                        right: Val::Px(0.0),
-                        top: Val::Px(0.0),
-                        height: Val::Px(SCROLLBAR_THUMB_MIN_HEIGHT),
+                        width: Val::Percent(100.0),
+                        padding: UiRect::all(Val::Px(10.0)),
+                        display: if state.collapsed {
+                            Display::None
+                        } else {
+                            Display::Flex
+                        },
+                        flex_direction: FlexDirection::Column,
+                        overflow: Overflow::clip_y(),
                         ..default()
                     },
-                    BackgroundColor(crate::ui::palette::PANEL_SCROLLBAR_THUMB_BG),
-                    Visibility::Hidden,
-                    PanelScrollbarThumb { panel_id },
-                ));
-            });
+                    ScrollPosition::default(),
+                    RelativeCursorPosition::default(),
+                    ScrollAreaViewport::panel(0),
+                    PanelContentViewport { panel_id },
+                ))
+                .with_children(|viewport| {
+                    let inner = viewport
+                        .spawn((
+                            Node {
+                                width: Val::Percent(100.0),
+                                display: Display::Flex,
+                                flex_direction: FlexDirection::Column,
+                                row_gap: Val::Px(8.0),
+                                ..default()
+                            },
+                            PanelContentInner {
+                                _panel_id: panel_id,
+                            },
+                        ))
+                        .with_children(build_content)
+                        .id();
+                    content_inner_entity = Some(inner);
+                })
+                .id();
+            spawn_scroll_area_scrollbar_with_style(
+                root,
+                viewport,
+                ScrollAreaScrollbarStyle {
+                    right_px: 2.0,
+                    top_px: PANEL_HEADER_HEIGHT + PANEL_CONTENT_PADDING_Y,
+                    bottom_px: PANEL_CONTENT_PADDING_Y,
+                    width_px: 6.0,
+                },
+            );
         });
 
         let root_entity = panel_root.id();
@@ -320,14 +302,6 @@ impl PanelManager {
         self.hit_rects.iter().any(|item| item.rect.contains(cursor))
     }
 
-/// Runs `topmost_scrollable_panel_at` logic.
-    pub fn topmost_scrollable_panel_at(&self, cursor: Vec2) -> Option<PanelId> {
-        self.hit_rects
-            .iter()
-            .filter(|item| item.scrollable && item.rect.contains(cursor))
-            .max_by_key(|item| item.global_z)
-            .map(|item| item.panel_id)
-    }
 }
 
 #[derive(Component, Clone, Copy)]
@@ -343,16 +317,6 @@ struct PanelContentViewport {
 #[derive(Component, Clone, Copy)]
 struct PanelContentInner {
     _panel_id: PanelId,
-}
-
-#[derive(Component, Clone, Copy)]
-struct PanelScrollbarTrack {
-    panel_id: PanelId,
-}
-
-#[derive(Component, Clone, Copy)]
-struct PanelScrollbarThumb {
-    panel_id: PanelId,
 }
 
 #[derive(Component, Clone, Copy)]
@@ -395,8 +359,6 @@ impl Plugin for PanelPlugin {
                     sync_panel_measured_sizes,
                     apply_panel_layout,
                     sync_panel_visual_state,
-                    apply_panel_scrolling,
-                    sync_panel_scrollbar_visuals,
                     update_panel_hit_rects,
                 )
                     .chain(),

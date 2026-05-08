@@ -213,18 +213,22 @@
 
 ### Сохранения
 
-- Версия схемы сохранения повышена до `4`.
+- Версия схемы сохранения повышена до `5`.
 - Primary storage для структур теперь один: `placed_structures.bin` (`PlacedStructureSnapshot`).
 - В runtime snapshot теперь входят:
   - `PlacedStructureSnapshot`;
   - `PipeGasSnapshot` в node-based формате;
   - обычный `GasFieldSnapshot`;
   - snapshot world-клеток.
+- В save-meta добавлен отдельный preview-chunk `preview_png` (`preview.png`, формат `png_v1`); `SaveDescriptor` теперь хранит optional `preview_path`.
 - Старые чанки `gas_structures` и `pipe_layout` больше не используются для записи новых сейвов, но их чтение сохранено для миграции schema `3`.
 - При загрузке старого сейва выполняется runtime-миграция:
   - `GasStructureGrid` + `PipeLayoutSnapshot` восстанавливаются из legacy chunk-ов;
   - затем переводятся в `PlacedStructureSnapshot`;
   - дальше игра уже работает только на новой модели.
+- После `create_save(...)` и `overwrite_save(...)` сначала коммитятся data-chunk-и слота, а затем отдельно ставится в очередь offscreen-capture preview; это позволяет не откатывать сам слот, если превью не удалось записать.
+- Каноническое preview строится отдельной offscreen-камерой `RenderTarget::Image` размером `512x512` в `F1`-режиме, без UI, с фиксированным охватом всего мира вместе с внешней fade-рамкой.
+- Для старых сейвов добавлен временный служебный бин `src/bin/migrate_save_previews.rs`: он загружает legacy/current slot через обычный save API, восстанавливает runtime world-state, делает тот же offscreen-capture preview и затем патчит `meta.toml` без переписывания старых data-chunk-ов.
 - Добавлен API удаления слота сохранения (`delete_save`) с валидацией целевого слота.
 - Для ручной визуальной проверки pipe-сценариев добавлен служебный бинарник `src/bin/generate_pipe_scenario_saves.rs`: он создаёт пять стартовых сейвов через обычный `create_save(...)`, поэтому format/save-schema у эталонных сценариев полностью совпадает с игровыми слотами.
 
@@ -239,7 +243,9 @@
 - Для крайних позиций курсора (в т.ч. конец строки) X-координата каретки берётся с boundary реального glyph (`start/end`), чтобы каретка отображалась на границе символа, а не в его середине.
 - Добавлен регрессионный unit-тест на trailing-space через `cosmic-text` shaping: строка с пробелом в конце должна иметь большую вычисленную ширину, чем та же строка без завершающего пробела.
 - Добавлен project-шрифт `assets/fonts/ui_main.ttf`, который централизованно применяется ко всем UI-текстам через `UiPlugin`.
-- Для списков вне panel-системы добавлен общий `ui/scroll_area`-модуль: он переиспользует ту же схему `ScrollPosition + wheel input + custom scrollbar thumb/track`, что и panel-content scroll, и сейчас применяется в save/load списке главного меню.
+- Для списков вне panel-системы добавлен общий `ui/scroll_area`-модуль: теперь он является единым владельцем wheel-scroll, drag-thumb и click-on-track логики как для panel-content, так и для save/load списка.
+- `ScrollAreaViewport` хранит per-viewport флаги `enabled`, `interaction_group` (`Panel` / `Modal`) и `input_priority`, чтобы modal scroll мог глобально приоритизироваться над panel-scroll, не дублируя математику в panel runtime.
+- Карточки save/load собираются отдельным блоком editor UI: primary action (`Load` / `Overwrite`) теперь живёт на root-card hit-area, а `Delete` остаётся отдельной кнопкой внутри карточки, чтобы delete-click не триггерил загрузку слота.
 
 ### GPU backend: политика запуска и отказоустойчивость
 

@@ -37,6 +37,7 @@ fn handle_escape_and_main_menu(
     mut active_tool: ResMut<ActiveEditorTool>,
     mut main_menu: ResMut<MainMenuState>,
     mut menu_ui: ResMut<MainMenuUiState>,
+    preview_queue: Res<SavePreviewQueueState>,
     world_load_state: Res<WorldLoadState>,
     mut structure_edit: ResMut<StructureEditState>,
     mut control: ResMut<crate::simulation::SimulationControl>,
@@ -45,6 +46,9 @@ fn handle_escape_and_main_menu(
     mut brush_drag: ResMut<BrushDragState>,
 ) {
     if !keys.just_pressed(KeyCode::Escape) {
+        return;
+    }
+    if preview_queue.is_busy() {
         return;
     }
 

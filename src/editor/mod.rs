@@ -6,9 +6,12 @@ use crate::{
     input::camera::MainCamera,
     render::{GasVisualSettings, OverlayMode},
     save::{
-        create_save, delete_save, list_saves, load_save, new_game_snapshot, overwrite_save,
-        saves_root_default, MainMenuConfirmState, MainMenuDeferredAction, MainMenuMode,
-        MainMenuScreen, MainMenuUiState, SaveSessionState, WorldLoadState,
+        apply_loaded_world_preset, create_save, delete_save, emit_full_world_changed, list_saves,
+        load_save, new_game_snapshot, overwrite_save, restore_runtime_world_state,
+        save_preview_target_path, saves_root_default, MainMenuConfirmState,
+        MainMenuDeferredAction, MainMenuMode, MainMenuScreen, MainMenuUiState,
+        SavePreviewCaptureFinished, SavePreviewQueueState, SavePreviewRequest, SaveSessionState,
+        WorldLoadState,
     },
     simulation::{
         gas::GasField, GasSimulationConfig, SimulationControl, SimulationPerfStats,
@@ -26,8 +29,7 @@ use crate::{
     },
     world::{
         grid::{
-            cell_center, world_to_cell, CellMaterial, WorldGrid, CELL_SIZE, WORLD_HEIGHT,
-            WORLD_WIDTH,
+            cell_center, world_to_cell, CellMaterial, WorldGrid, CELL_SIZE,
         },
         structures::{PlacedStructureMap, StructureParams, StructureRotation},
         WorldCellChanged,
@@ -365,7 +367,24 @@ struct MainMenuConfirmCancelLabel;
 #[derive(Component, Clone)]
 struct MainMenuActionButton(MainMenuButtonAction);
 
-#[derive(Clone)]
+#[derive(Component, Clone, Copy)]
+struct MainMenuButtonPalette {
+    idle: Color,
+    hover: Color,
+}
+
+#[derive(Component, Clone)]
+struct MainMenuSaveCard {
+    primary_action: MainMenuButtonAction,
+}
+
+#[derive(Component)]
+struct MainMenuSaveCardDeleteButton;
+
+#[derive(Event, Clone)]
+struct MainMenuActionRequest(MainMenuButtonAction);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum MainMenuButtonAction {
     Continue,
     NewGame,
@@ -452,12 +471,22 @@ impl Plugin for EditorPlugin {
             .init_resource::<StructureEditState>()
             .init_resource::<SelectionDragState>()
             .init_resource::<BrushDragState>()
+            .add_event::<MainMenuActionRequest>()
             .add_systems(Startup, (setup_editor_ui, setup_editor_overlays))
             .add_systems(Update, handle_escape_and_main_menu)
-            .add_systems(Update, handle_main_menu_actions)
             .add_systems(Update, handle_editor_ui_actions)
             .add_systems(Update, refresh_editor_ui)
-            .add_systems(Update, refresh_main_menu_ui)
+            .add_systems(
+                Update,
+                (
+                    emit_main_menu_button_actions,
+                    update_main_menu_save_card_interactions,
+                    handle_main_menu_actions,
+                    handle_save_preview_capture_finished,
+                    refresh_main_menu_ui,
+                )
+                    .chain(),
+            )
             .add_systems(
                 Update,
                 (

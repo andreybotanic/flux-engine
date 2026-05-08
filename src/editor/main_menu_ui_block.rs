@@ -2,6 +2,7 @@ fn refresh_main_menu_ui(
     mut commands: Commands,
     main_menu: Res<MainMenuState>,
     mut menu_ui: ResMut<MainMenuUiState>,
+    mut images: ResMut<Assets<Image>>,
     mut root_visibility: Single<&mut Visibility, (With<MainMenuRoot>, Without<MainMenuBackdrop>)>,
     mut root_background: Single<&mut BackgroundColor, With<MainMenuRoot>>,
     mut backdrop_visibility: Single<&mut Visibility, (With<MainMenuBackdrop>, Without<MainMenuRoot>)>,
@@ -124,19 +125,17 @@ fn refresh_main_menu_ui(
                 _ => Display::None,
             },
             MainMenuScreen::Save => match action_button.0 {
-                MainMenuButtonAction::BackToRoot | MainMenuButtonAction::CreateNewSave => {
-                    Display::Flex
-                }
-                MainMenuButtonAction::SelectOverwrite(_) | MainMenuButtonAction::SelectDelete(_) => {
+                    MainMenuButtonAction::BackToRoot | MainMenuButtonAction::CreateNewSave => {
+                        Display::Flex
+                    }
+                MainMenuButtonAction::SelectDelete(_) => {
                     Display::Flex
                 }
                 _ => Display::None,
             },
             MainMenuScreen::Load => match action_button.0 {
                 MainMenuButtonAction::BackToRoot => Display::Flex,
-                MainMenuButtonAction::SelectLoad(_) | MainMenuButtonAction::SelectDelete(_) => {
-                    Display::Flex
-                }
+                MainMenuButtonAction::SelectDelete(_) => Display::Flex,
                 _ => Display::None,
             },
             MainMenuScreen::Confirm => match action_button.0 {
@@ -254,161 +253,12 @@ fn refresh_main_menu_ui(
     save_list_entities.1.offset_y = 0.0;
 
     let saves = menu_ui.saves.clone();
-    let mut created = Vec::new();
-    let screen_for_buttons = screen;
-    commands.entity(*save_list_entities.0).with_children(|parent| {
-        if saves.is_empty() {
-            let row = parent
-                .spawn((
-                    Node {
-                        width: Val::Px(730.0),
-                        height: Val::Px(32.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(crate::ui::palette::TRANSPARENT),
-                ))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("No saves found."),
-                        TextFont::from_font_size(14.0),
-                        TextColor(crate::ui::palette::TEXT_MUTED),
-                        TextLayout::new_with_justify(JustifyText::Center),
-                    ));
-                })
-                .id();
-            created.push(row);
-            return;
-        }
-
-        for descriptor in saves {
-            let created_text = format_save_datetime(descriptor.created_at_unix_ms);
-            let updated_text = format_save_datetime(descriptor.updated_at_unix_ms);
-            let primary_action = match screen_for_buttons {
-                MainMenuScreen::Save => MainMenuButtonAction::SelectOverwrite(descriptor.id.clone()),
-                MainMenuScreen::Load => MainMenuButtonAction::SelectLoad(descriptor.id.clone()),
-                _ => continue,
-            };
-            let primary_label = match screen_for_buttons {
-                MainMenuScreen::Save => "Overwrite",
-                MainMenuScreen::Load => "Load",
-                _ => "",
-            };
-            let delete_action = MainMenuButtonAction::SelectDelete(descriptor.id.clone());
-
-            let card = parent
-                .spawn((
-                    Node {
-                        width: Val::Px(730.0),
-                        min_height: Val::Px(86.0),
-                        padding: UiRect::all(Val::Px(10.0)),
-                        justify_content: JustifyContent::SpaceBetween,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(PANEL_BG),
-                ))
-                .with_children(|row| {
-                    row.spawn((
-                        Node {
-                            display: Display::Flex,
-                            flex_direction: FlexDirection::Column,
-                            row_gap: Val::Px(4.0),
-                            ..default()
-                        },
-                    ))
-                    .with_children(|meta| {
-                        meta.spawn((
-                            Text::new(descriptor.display_name.clone()),
-                            TextFont::from_font_size(16.0),
-                            TextColor(crate::ui::palette::TEXT_PRIMARY),
-                        ));
-                        meta.spawn((
-                            Text::new(format!("Created: {created_text}")),
-                            TextFont::from_font_size(13.0),
-                            TextColor(crate::ui::palette::TEXT_MUTED),
-                        ));
-                        meta.spawn((
-                            Text::new(format!("Updated: {updated_text}")),
-                            TextFont::from_font_size(13.0),
-                            TextColor(crate::ui::palette::TEXT_MUTED),
-                        ));
-                    });
-                    row.spawn((
-                        Node {
-                            display: Display::Flex,
-                            flex_direction: FlexDirection::Column,
-                            row_gap: Val::Px(6.0),
-                            ..default()
-                        },
-                    ))
-                    .with_children(|actions| {
-                        actions
-                            .spawn((
-                                Button,
-                                Node {
-                                    width: Val::Px(120.0),
-                                    height: Val::Px(32.0),
-                                    justify_content: JustifyContent::Center,
-                                    align_items: AlignItems::Center,
-                                    ..default()
-                                },
-                                BackgroundColor(BUTTON_IDLE),
-                                MainMenuActionButton(primary_action),
-                            ))
-                            .with_children(|button| {
-                                button.spawn((
-                                    Text::new(primary_label),
-                                    TextFont::from_font_size(13.0),
-                                    TextColor(crate::ui::palette::TEXT_PRIMARY),
-                                ));
-                            });
-                        actions
-                            .spawn((
-                                Button,
-                                Node {
-                                    width: Val::Px(120.0),
-                                    height: Val::Px(32.0),
-                                    justify_content: JustifyContent::Center,
-                                    align_items: AlignItems::Center,
-                                    ..default()
-                                },
-                                BackgroundColor(MODAL_BUTTON_BG),
-                                MainMenuActionButton(delete_action),
-                            ))
-                            .with_children(|button| {
-                                button.spawn((
-                                    Text::new("Delete"),
-                                    TextFont::from_font_size(13.0),
-                                    TextColor(crate::ui::palette::TEXT_ON_DARK),
-                                ));
-                            });
-                    });
-                })
-                .id();
-            created.push(card);
-        }
-    });
-    menu_ui.list_item_entities = created;
-}
-
-fn format_save_datetime(unix_ms: i64) -> String {
-    use time::{OffsetDateTime, UtcOffset};
-
-    let ns = (unix_ms as i128).saturating_mul(1_000_000);
-    let Ok(datetime_utc) = OffsetDateTime::from_unix_timestamp_nanos(ns) else {
-        return format!("unix_ms={unix_ms}");
-    };
-    let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
-    let local = datetime_utc.to_offset(offset);
-    let month: u8 = local.month().into();
-    format!(
-        "{:02}.{:02}.{:04} {:02}:{:02}",
-        local.day(),
-        month,
-        local.year(),
-        local.hour(),
-        local.minute()
-    )
+    rebuild_main_menu_save_list(
+        &mut commands,
+        *save_list_entities.0,
+        screen,
+        &saves,
+        &mut menu_ui.list_item_entities,
+        &mut images,
+    );
 }

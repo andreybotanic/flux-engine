@@ -639,7 +639,8 @@ fn setup_editor_ui(
                             position_type: PositionType::Relative,
                             flex_direction: FlexDirection::Column,
                             width: Val::Percent(100.0),
-                            height: Val::Px(350.0),
+                            flex_grow: 1.0,
+                            min_height: Val::Px(0.0),
                             ..default()
                         },
                         MainMenuSaveListRoot,
@@ -652,14 +653,15 @@ fn setup_editor_ui(
                                     height: Val::Percent(100.0),
                                     display: Display::Flex,
                                     flex_direction: FlexDirection::Column,
-                                    align_items: AlignItems::Center,
+                                    align_items: AlignItems::Stretch,
                                     padding: UiRect::right(Val::Px(10.0)),
                                     overflow: Overflow::scroll_y(),
+                                    min_height: Val::Px(0.0),
                                     ..default()
                                 },
                                 bevy::ui::ScrollPosition::default(),
                                 bevy::ui::RelativeCursorPosition::default(),
-                                ScrollAreaViewport,
+                                ScrollAreaViewport::modal(100),
                                 MainMenuSaveListViewport,
                             ))
                             .with_children(|viewport| {
@@ -668,8 +670,8 @@ fn setup_editor_ui(
                                         width: Val::Percent(100.0),
                                         display: Display::Flex,
                                         flex_direction: FlexDirection::Column,
-                                        align_items: AlignItems::Center,
-                                        row_gap: Val::Px(6.0),
+                                        align_items: AlignItems::Stretch,
+                                        row_gap: Val::Px(10.0),
                                         ..default()
                                     },
                                     MainMenuSaveListContent,

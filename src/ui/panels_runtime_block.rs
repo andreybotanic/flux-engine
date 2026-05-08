@@ -151,7 +151,12 @@ fn apply_panel_layout(
 
 fn sync_panel_visual_state(
     panels: Res<PanelManager>,
-    mut viewport_nodes: Query<(&PanelContentViewport, &mut Node, &mut ScrollPosition)>,
+    mut viewport_nodes: Query<(
+        &PanelContentViewport,
+        &mut Node,
+        &mut ScrollPosition,
+        &mut ScrollAreaViewport,
+    )>,
     mut collapse_labels: Query<(&PanelCollapseButtonLabel, &mut Text)>,
     mut close_query: Query<&mut Visibility>,
     windows: Query<&Window, With<PrimaryWindow>>,
@@ -160,7 +165,7 @@ fn sync_panel_visual_state(
         return;
     };
 
-    for (viewport, mut node, mut scroll_position) in &mut viewport_nodes {
+    for (viewport, mut node, mut scroll_position, mut scroll_area) in &mut viewport_nodes {
         let Some(panel) = panels.panels.get(&viewport.panel_id) else {
             continue;
         };
@@ -174,6 +179,7 @@ fn sync_panel_visual_state(
         } else {
             Overflow::visible()
         };
+        scroll_area.enabled = panel.state.visible && panel.state.scroll_enabled && !panel.state.collapsed;
         if panel.state.scroll_enabled {
             let available_height = (window.height() - panel.spec.margin_y * 2.0).max(0.0);
             let max_total = match panel.spec.scroll_policy {
@@ -209,162 +215,6 @@ fn sync_panel_visual_state(
                     Visibility::Hidden
                 };
             }
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct PanelScrollMetrics {
-    viewport_height_px: f32,
-    content_height_px: f32,
-    max_scroll_logical: f32,
-}
-
-fn panel_scroll_metrics(computed: &ComputedNode) -> PanelScrollMetrics {
-    let viewport_height_px = computed.size().y.max(0.0);
-    let content_height_px = computed.content_size().y.max(viewport_height_px);
-    let max_scroll_logical = ((content_height_px - viewport_height_px).max(0.0)
-        * computed.inverse_scale_factor())
-    .max(0.0);
-
-    PanelScrollMetrics {
-        viewport_height_px,
-        content_height_px,
-        max_scroll_logical,
-    }
-}
-
-fn apply_panel_scrolling(
-    mut mouse_wheel: EventReader<MouseWheel>,
-    windows: Query<&Window, With<PrimaryWindow>>,
-    panels: Res<PanelManager>,
-    scroll_block: Res<crate::ui::scroll_area::UiScrollBlockState>,
-    mut viewport_nodes: Query<(&PanelContentViewport, &ComputedNode, &mut ScrollPosition)>,
-) {
-    if scroll_block.block_panel_scrolling {
-        return;
-    }
-    let Ok(window) = windows.single() else {
-        return;
-    };
-    let Some(cursor) = window.cursor_position() else {
-        return;
-    };
-    let Some(target_panel) = panels.topmost_scrollable_panel_at(cursor) else {
-        return;
-    };
-
-    let mut delta = 0.0f32;
-    for event in mouse_wheel.read() {
-        let y = match event.unit {
-            MouseScrollUnit::Line => event.y * 36.0,
-            MouseScrollUnit::Pixel => event.y,
-        };
-        delta += y;
-    }
-
-    if delta.abs() <= f32::EPSILON {
-        return;
-    }
-
-    for (viewport, computed, mut scroll_position) in &mut viewport_nodes {
-        if viewport.panel_id != target_panel {
-            continue;
-        }
-        let metrics = panel_scroll_metrics(computed);
-        let max_scroll = metrics.max_scroll_logical;
-        let next = (scroll_position.offset_y - delta).max(0.0);
-        scroll_position.offset_y = next.min(max_scroll);
-    }
-}
-
-fn sync_panel_scrollbar_visuals(
-    panels: Res<PanelManager>,
-    viewport_nodes: Query<(&PanelContentViewport, &ComputedNode, &ScrollPosition)>,
-    track_sizes: Query<(&PanelScrollbarTrack, &ComputedNode)>,
-    mut scrollbar_nodes: Query<
-        (
-            Option<&PanelScrollbarTrack>,
-            Option<&PanelScrollbarThumb>,
-            &mut Node,
-            &mut Visibility,
-        ),
-        Or<(With<PanelScrollbarTrack>, With<PanelScrollbarThumb>)>,
-    >,
-) {
-    let mut viewport_data = HashMap::new();
-    for (viewport, computed, scroll_position) in &viewport_nodes {
-        let metrics = panel_scroll_metrics(computed);
-        viewport_data.insert(viewport.panel_id, (metrics, scroll_position.offset_y));
-    }
-
-    let mut track_height_by_panel = HashMap::new();
-    for (track, computed) in &track_sizes {
-        track_height_by_panel.insert(track.panel_id, computed.size().y.max(0.0));
-    }
-
-    for (maybe_track, maybe_thumb, mut node, mut visibility) in &mut scrollbar_nodes {
-        if let Some(track) = maybe_track {
-            let Some(panel) = panels.panels.get(&track.panel_id) else {
-                *visibility = Visibility::Hidden;
-                node.display = Display::None;
-                continue;
-            };
-            let Some((metrics, _)) = viewport_data.get(&track.panel_id).copied() else {
-                *visibility = Visibility::Hidden;
-                node.display = Display::None;
-                continue;
-            };
-            let max_scroll = metrics.max_scroll_logical;
-            let show = panel.state.visible
-                && panel.state.scroll_enabled
-                && !panel.state.collapsed
-                && max_scroll > 1.0;
-            *visibility = if show {
-                Visibility::Visible
-            } else {
-                Visibility::Hidden
-            };
-            node.display = if show { Display::Flex } else { Display::None };
-            continue;
-        }
-
-        if let Some(thumb) = maybe_thumb {
-            let Some(panel) = panels.panels.get(&thumb.panel_id) else {
-                *visibility = Visibility::Hidden;
-                continue;
-            };
-            let Some((metrics, offset_y)) = viewport_data.get(&thumb.panel_id).copied() else {
-                *visibility = Visibility::Hidden;
-                continue;
-            };
-            let track_h = track_height_by_panel
-                .get(&thumb.panel_id)
-                .copied()
-                .unwrap_or(0.0);
-            let max_scroll = metrics.max_scroll_logical;
-            let show = panel.state.visible
-                && panel.state.scroll_enabled
-                && !panel.state.collapsed
-                && max_scroll > 1.0
-                && track_h > 1.0;
-            if !show {
-                *visibility = Visibility::Hidden;
-                continue;
-            }
-
-            let ratio = (metrics.viewport_height_px / metrics.content_height_px).clamp(0.0, 1.0);
-            let thumb_h = (ratio * track_h).clamp(
-                SCROLLBAR_THUMB_MIN_HEIGHT,
-                track_h.max(SCROLLBAR_THUMB_MIN_HEIGHT),
-            );
-            let travel = (track_h - thumb_h).max(0.0);
-            let scroll_ratio = (offset_y / max_scroll).clamp(0.0, 1.0);
-            let thumb_top = scroll_ratio * travel;
-
-            node.top = Val::Px(thumb_top);
-            node.height = Val::Px(thumb_h);
-            *visibility = Visibility::Visible;
         }
     }
 }
@@ -417,7 +267,6 @@ fn update_panel_hit_rects(
         };
 
         next.push(PanelHitRect {
-            panel_id: *panel_id,
             rect: PanelRect {
                 left,
                 top,
@@ -425,7 +274,6 @@ fn update_panel_hit_rects(
                 height,
             },
             global_z: panel.state.opened_at as i32,
-            scrollable: panel.state.scroll_enabled && !panel.state.collapsed,
         });
     }
 

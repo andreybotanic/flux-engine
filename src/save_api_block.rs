@@ -3,6 +3,11 @@ pub fn saves_root_default() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("saves")
 }
 
+/// Returns the canonical preview PNG path for one save slot.
+pub fn save_preview_target_path(root: &Path, save_id: &str) -> PathBuf {
+    root.join(save_id).join(PREVIEW_PNG_FILE)
+}
+
 /// Runs `list_saves` logic.
 pub fn list_saves(root: &Path) -> Result<Vec<SaveDescriptor>, SaveError> {
     if !root.exists() {
@@ -34,11 +39,13 @@ pub fn list_saves(root: &Path) -> Result<Vec<SaveDescriptor>, SaveError> {
             continue;
         }
         let meta = read_meta(&meta_path)?;
+        let preview_path = preview_path_from_meta(&path, &meta);
         saves.push(SaveDescriptor {
             id: meta.save_id,
             display_name: meta.display_name,
             created_at_unix_ms: meta.created_at_unix_ms,
             updated_at_unix_ms: meta.updated_at_unix_ms,
+            preview_path,
         });
     }
 
@@ -82,6 +89,7 @@ pub fn create_save(
         display_name: display_name.to_string(),
         created_at_unix_ms: now,
         updated_at_unix_ms: now,
+        preview_path: Some(save_preview_target_path(root, &save_id)),
     };
 
     write_slot(
@@ -123,6 +131,7 @@ pub fn overwrite_save(
         display_name: previous.display_name,
         created_at_unix_ms: previous.created_at_unix_ms,
         updated_at_unix_ms: now_unix_ms()?,
+        preview_path: Some(save_preview_target_path(root, save_id)),
     };
     write_slot(
         root,
@@ -172,6 +181,15 @@ pub fn load_save(
 
     let world_codes = read_world_cells_chunk(&world_path)?;
     let gas_file = read_gas_chunk(&gas_path)?;
+    let legacy_pipe_layout_snapshot = if placed_structures_path.is_none() {
+        Some(if let Some(path) = pipe_layout_path.as_ref() {
+            read_pipe_layout_chunk(path)?
+        } else {
+            crate::world::pipes::PipeGrid::default().snapshot_state()
+        })
+    } else {
+        None
+    };
     let placed_structures_snapshot = if let Some(path) = placed_structures_path {
         read_placed_structures_chunk(&path)?
     } else {
@@ -180,15 +198,15 @@ pub fn load_save(
         } else {
             crate::world::gas_structures::GasStructureGrid::default().snapshot_state()
         };
-        let legacy_pipe_layout_snapshot = if let Some(path) = pipe_layout_path {
-            read_pipe_layout_chunk(&path)?
-        } else {
-            crate::world::pipes::PipeGrid::default().snapshot_state()
-        };
-        migrate_schema3_structures_to_placed(&legacy_structures_snapshot, &legacy_pipe_layout_snapshot)?
+        migrate_schema3_structures_to_placed(
+            &legacy_structures_snapshot,
+            legacy_pipe_layout_snapshot
+                .as_ref()
+                .expect("legacy pipe layout snapshot must exist for schema3 migration"),
+        )?
     };
     let pipe_gas_snapshot = if let Some(path) = pipe_gas_path {
-        read_pipe_gas_chunk(&path, gas_registry)?
+        read_pipe_gas_chunk(&path, gas_registry, legacy_pipe_layout_snapshot.as_ref())?
     } else {
         crate::simulation::pipes::PipeGasField::from_registry(gas_registry).snapshot_state()
     };
@@ -204,10 +222,11 @@ pub fn load_save(
 
     Ok(LoadedSave {
         descriptor: SaveDescriptor {
-            id: meta.save_id,
-            display_name: meta.display_name,
+            id: meta.save_id.clone(),
+            display_name: meta.display_name.clone(),
             created_at_unix_ms: meta.created_at_unix_ms,
             updated_at_unix_ms: meta.updated_at_unix_ms,
+            preview_path: preview_path_from_meta(&slot_dir, &meta),
         },
         state: RuntimeWorldState {
             world_cell_codes: world_codes,

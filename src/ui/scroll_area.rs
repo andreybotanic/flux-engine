@@ -9,9 +9,56 @@ use crate::ui::palette;
 
 const SCROLLBAR_THUMB_MIN_HEIGHT: f32 = 18.0;
 
-#[derive(Component, Clone, Copy)]
-/// Marks a generic scrollable UI viewport that reacts to mouse wheel input.
-pub struct ScrollAreaViewport;
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+/// Defines which UI layer owns scroll interaction priority.
+pub enum ScrollAreaInteractionGroup {
+    #[default]
+    Panel,
+    Modal,
+}
+
+impl ScrollAreaInteractionGroup {
+    fn sort_rank(self) -> i32 {
+        match self {
+            Self::Panel => 0,
+            Self::Modal => 1,
+        }
+    }
+}
+
+#[derive(Component, Clone, Copy, Debug)]
+/// Marks one generic scrollable viewport and stores its input priority settings.
+pub struct ScrollAreaViewport {
+    pub enabled: bool,
+    pub interaction_group: ScrollAreaInteractionGroup,
+    pub input_priority: i32,
+}
+
+impl ScrollAreaViewport {
+    /// Builds a viewport configuration for panel UI.
+    pub const fn panel(input_priority: i32) -> Self {
+        Self {
+            enabled: true,
+            interaction_group: ScrollAreaInteractionGroup::Panel,
+            input_priority,
+        }
+    }
+
+    /// Builds a viewport configuration for modal UI.
+    pub const fn modal(input_priority: i32) -> Self {
+        Self {
+            enabled: true,
+            interaction_group: ScrollAreaInteractionGroup::Modal,
+            input_priority,
+        }
+    }
+}
+
+impl Default for ScrollAreaViewport {
+    fn default() -> Self {
+        Self::panel(0)
+    }
+}
 
 #[derive(Component, Clone, Copy)]
 /// Stores the scrollbar track linked to one `ScrollAreaViewport`.
@@ -25,10 +72,41 @@ pub struct ScrollAreaScrollbarThumb {
     pub viewport: Entity,
 }
 
+#[derive(Clone, Copy, Debug)]
+/// Configures the placement of one generic scrollbar track.
+pub struct ScrollAreaScrollbarStyle {
+    pub right_px: f32,
+    pub top_px: f32,
+    pub bottom_px: f32,
+    pub width_px: f32,
+}
+
+impl Default for ScrollAreaScrollbarStyle {
+    fn default() -> Self {
+        Self {
+            right_px: 2.0,
+            top_px: 0.0,
+            bottom_px: 0.0,
+            width_px: 6.0,
+        }
+    }
+}
+
 #[derive(Resource, Default, Clone, Copy, Debug)]
 /// Blocks background panel scrolling while a modal UI captures wheel input.
 pub struct UiScrollBlockState {
     pub block_panel_scrolling: bool,
+}
+
+#[derive(Resource, Default, Clone, Copy, Debug)]
+struct ScrollAreaDragState {
+    active: Option<ActiveScrollAreaDrag>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ActiveScrollAreaDrag {
+    viewport: Entity,
+    cursor_to_thumb_top_px: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -36,6 +114,14 @@ struct ScrollAreaMetrics {
     viewport_height_px: f32,
     content_height_px: f32,
     max_scroll_logical: f32,
+}
+
+#[derive(Clone, Copy)]
+struct ScrollAreaTargetCandidate {
+    viewport: Entity,
+    interaction_group: ScrollAreaInteractionGroup,
+    input_priority: i32,
+    global_z: i32,
 }
 
 fn scroll_area_metrics(computed: &ComputedNode) -> ScrollAreaMetrics {
@@ -63,6 +149,37 @@ fn next_scroll_offset(current: f32, delta: f32, max_scroll: f32) -> f32 {
     (current - delta).clamp(0.0, max_scroll.max(0.0))
 }
 
+fn scroll_offset_from_track_click(
+    cursor_y_px: f32,
+    thumb_height_px: f32,
+    track_height_px: f32,
+    max_scroll: f32,
+) -> f32 {
+    let travel = (track_height_px - thumb_height_px).max(0.0);
+    if travel <= f32::EPSILON || max_scroll <= f32::EPSILON {
+        return 0.0;
+    }
+
+    let thumb_top = (cursor_y_px - (thumb_height_px * 0.5)).clamp(0.0, travel);
+    (thumb_top / travel) * max_scroll
+}
+
+fn scroll_offset_from_thumb_drag(
+    cursor_y_px: f32,
+    cursor_to_thumb_top_px: f32,
+    thumb_height_px: f32,
+    track_height_px: f32,
+    max_scroll: f32,
+) -> f32 {
+    let travel = (track_height_px - thumb_height_px).max(0.0);
+    if travel <= f32::EPSILON || max_scroll <= f32::EPSILON {
+        return 0.0;
+    }
+
+    let thumb_top = (cursor_y_px - cursor_to_thumb_top_px).clamp(0.0, travel);
+    (thumb_top / travel) * max_scroll
+}
+
 fn scrollbar_thumb_layout(
     viewport_height_px: f32,
     content_height_px: f32,
@@ -84,9 +201,34 @@ fn scrollbar_thumb_layout(
     Some((scroll_ratio * travel, thumb_height))
 }
 
+fn viewport_is_scroll_target_allowed(
+    viewport: &ScrollAreaViewport,
+    scroll_block: UiScrollBlockState,
+) -> bool {
+    viewport.enabled
+        && !(scroll_block.block_panel_scrolling
+            && viewport.interaction_group == ScrollAreaInteractionGroup::Panel)
+}
+
+fn choose_topmost_scroll_target(
+    candidates: impl IntoIterator<Item = ScrollAreaTargetCandidate>,
+) -> Option<Entity> {
+    candidates
+        .into_iter()
+        .max_by_key(|candidate| {
+            (
+                candidate.interaction_group.sort_rank(),
+                candidate.input_priority,
+                candidate.global_z,
+            )
+        })
+        .map(|candidate| candidate.viewport)
+}
+
 fn apply_scroll_area_scrolling(
     mut mouse_wheel: EventReader<MouseWheel>,
     windows: Query<&Window, With<PrimaryWindow>>,
+    scroll_block: Res<UiScrollBlockState>,
     mut viewport_nodes: Query<
         (
             Entity,
@@ -95,6 +237,7 @@ fn apply_scroll_area_scrolling(
             &RelativeCursorPosition,
             &Node,
             Option<&GlobalZIndex>,
+            &ScrollAreaViewport,
         ),
         With<ScrollAreaViewport>,
     >,
@@ -105,26 +248,6 @@ fn apply_scroll_area_scrolling(
     if window.cursor_position().is_none() {
         return;
     }
-
-    let mut target_viewport = None;
-    let mut best_z = i32::MIN;
-    for (entity, computed, _, relative_cursor, node, global_z) in &mut viewport_nodes {
-        if node.display == Display::None
-            || !normalized_cursor_is_inside(relative_cursor.normalized)
-            || scroll_area_metrics(computed).max_scroll_logical <= 1.0
-        {
-            continue;
-        }
-        let z = global_z.map(|value| value.0).unwrap_or(0);
-        if z >= best_z {
-            best_z = z;
-            target_viewport = Some(entity);
-        }
-    }
-
-    let Some(target_viewport) = target_viewport else {
-        return;
-    };
 
     let mut delta = 0.0f32;
     for event in mouse_wheel.read() {
@@ -138,7 +261,28 @@ fn apply_scroll_area_scrolling(
         return;
     }
 
-    for (entity, computed, mut scroll_position, _, _, _) in &mut viewport_nodes {
+    let Some(target_viewport) = choose_topmost_scroll_target(viewport_nodes.iter_mut().filter_map(
+        |(entity, computed, _, relative_cursor, node, global_z, viewport)| {
+            if node.display == Display::None
+                || !normalized_cursor_is_inside(relative_cursor.normalized)
+                || scroll_area_metrics(computed).max_scroll_logical <= 1.0
+                || !viewport_is_scroll_target_allowed(viewport, *scroll_block)
+            {
+                return None;
+            }
+
+            Some(ScrollAreaTargetCandidate {
+                viewport: entity,
+                interaction_group: viewport.interaction_group,
+                input_priority: viewport.input_priority,
+                global_z: global_z.map(|value| value.0).unwrap_or(0),
+            })
+        },
+    )) else {
+        return;
+    };
+
+    for (entity, computed, mut scroll_position, _, _, _, _) in &mut viewport_nodes {
         if entity != target_viewport {
             continue;
         }
@@ -148,9 +292,214 @@ fn apply_scroll_area_scrolling(
     }
 }
 
+fn handle_scroll_area_mouse_input(
+    buttons: Res<ButtonInput<MouseButton>>,
+    scroll_block: Res<UiScrollBlockState>,
+    mut drag_state: ResMut<ScrollAreaDragState>,
+    mut viewport_queries: ParamSet<(
+        Query<
+            (
+                Entity,
+                &ComputedNode,
+                &ScrollPosition,
+                &ScrollAreaViewport,
+                &Node,
+                Option<&GlobalZIndex>,
+            ),
+            With<ScrollAreaViewport>,
+        >,
+        Query<&mut ScrollPosition, With<ScrollAreaViewport>>,
+    )>,
+    track_nodes: Query<
+        (
+            &ScrollAreaScrollbarTrack,
+            &ComputedNode,
+            &RelativeCursorPosition,
+            &Node,
+        ),
+        With<ScrollAreaScrollbarTrack>,
+    >,
+) {
+    if buttons.just_released(MouseButton::Left) || !buttons.pressed(MouseButton::Left) {
+        drag_state.active = None;
+    }
+
+    if let Some(active_drag) = drag_state.active {
+        let (viewport_entity, metrics, enabled) = {
+            let viewport_query = viewport_queries.p0();
+            let Ok((viewport_entity, computed, _, viewport, node, _)) =
+                viewport_query.get(active_drag.viewport)
+            else {
+                drag_state.active = None;
+                return;
+            };
+            (
+                viewport_entity,
+                scroll_area_metrics(computed),
+                node.display != Display::None
+                    && viewport_is_scroll_target_allowed(viewport, *scroll_block),
+                )
+        };
+        if !enabled {
+            drag_state.active = None;
+            return;
+        }
+        let mut scroll_positions = viewport_queries.p1();
+        let Ok(mut scroll_position) = scroll_positions.get_mut(viewport_entity) else {
+            drag_state.active = None;
+            return;
+        };
+        if metrics.max_scroll_logical <= 1.0 {
+            drag_state.active = None;
+            return;
+        }
+
+        for (track, track_computed, relative_cursor, track_node) in &track_nodes {
+            if track.viewport != viewport_entity || track_node.display == Display::None {
+                continue;
+            }
+            let Some(cursor) = relative_cursor.normalized else {
+                continue;
+            };
+            let track_height = track_computed.size().y.max(0.0);
+            let Some((_, thumb_height)) = scrollbar_thumb_layout(
+                metrics.viewport_height_px,
+                metrics.content_height_px,
+                track_height,
+                scroll_position.offset_y,
+                metrics.max_scroll_logical,
+            ) else {
+                drag_state.active = None;
+                return;
+            };
+            let cursor_y_px = cursor.y * track_height;
+            scroll_position.offset_y = scroll_offset_from_thumb_drag(
+                cursor_y_px,
+                active_drag.cursor_to_thumb_top_px,
+                thumb_height,
+                track_height,
+                metrics.max_scroll_logical,
+            );
+            break;
+        }
+        return;
+    }
+
+    if !buttons.just_pressed(MouseButton::Left) {
+        return;
+    }
+
+    let mut best_target: Option<(ScrollAreaTargetCandidate, f32, f32, f32, f32, f32)> = None;
+    for (track, track_computed, relative_cursor, track_node) in &track_nodes {
+        if track_node.display == Display::None || !normalized_cursor_is_inside(relative_cursor.normalized)
+        {
+            continue;
+        }
+        let (viewport_entity, offset_y, metrics, interaction_group, input_priority, global_z, enabled) =
+            {
+                let viewport_query = viewport_queries.p0();
+                let Ok((viewport_entity, computed, scroll_position, viewport, node, global_z)) =
+                    viewport_query.get(track.viewport)
+                else {
+                    continue;
+                };
+                (
+                    viewport_entity,
+                    scroll_position.offset_y,
+                    scroll_area_metrics(computed),
+                    viewport.interaction_group,
+                    viewport.input_priority,
+                    global_z.map(|value| value.0).unwrap_or(0),
+                    node.display != Display::None
+                        && viewport_is_scroll_target_allowed(viewport, *scroll_block),
+                )
+            };
+        if !enabled || metrics.max_scroll_logical <= 1.0 {
+            continue;
+        }
+        let track_height = track_computed.size().y.max(0.0);
+        let Some((thumb_top, thumb_height)) = scrollbar_thumb_layout(
+            metrics.viewport_height_px,
+            metrics.content_height_px,
+            track_height,
+            offset_y,
+            metrics.max_scroll_logical,
+        ) else {
+            continue;
+        };
+        let cursor_y_px = relative_cursor.normalized.unwrap_or_default().y * track_height;
+        let candidate = (
+            ScrollAreaTargetCandidate {
+                viewport: viewport_entity,
+                interaction_group,
+                input_priority,
+                global_z,
+            },
+            cursor_y_px,
+            thumb_top,
+            thumb_height,
+            track_height,
+            metrics.max_scroll_logical,
+        );
+        let candidate_key = (
+            candidate.0.interaction_group.sort_rank(),
+            candidate.0.input_priority,
+            candidate.0.global_z,
+        );
+        let is_better = best_target
+            .as_ref()
+            .map(|(existing, ..)| {
+                let existing_key = (
+                    existing.interaction_group.sort_rank(),
+                    existing.input_priority,
+                    existing.global_z,
+                );
+                candidate_key > existing_key
+            })
+            .unwrap_or(true);
+        if is_better {
+            best_target = Some(candidate);
+        }
+    }
+
+    let Some((candidate, cursor_y_px, thumb_top, thumb_height, track_height, max_scroll)) =
+        best_target
+    else {
+        return;
+    };
+
+    let mut scroll_positions = viewport_queries.p1();
+    let Ok(mut scroll_position) = scroll_positions.get_mut(candidate.viewport) else {
+        return;
+    };
+    if (thumb_top..=thumb_top + thumb_height).contains(&cursor_y_px) {
+        drag_state.active = Some(ActiveScrollAreaDrag {
+            viewport: candidate.viewport,
+            cursor_to_thumb_top_px: cursor_y_px - thumb_top,
+        });
+        return;
+    }
+
+    scroll_position.offset_y = scroll_offset_from_track_click(
+        cursor_y_px,
+        thumb_height,
+        track_height,
+        max_scroll,
+    );
+}
+
 fn sync_scroll_area_scrollbar_visuals(
-    viewport_nodes: Query<(Entity, &ComputedNode, &ScrollPosition), With<ScrollAreaViewport>>,
-    mut scrollbar_queries: ParamSet<(
+    mut queries: ParamSet<(
+        Query<
+            (
+                Entity,
+                &ComputedNode,
+                &ScrollPosition,
+                &ScrollAreaViewport,
+                &Node,
+            ),
+            With<ScrollAreaViewport>,
+        >,
         Query<(&ScrollAreaScrollbarTrack, &ComputedNode)>,
         Query<
             (
@@ -167,26 +516,30 @@ fn sync_scroll_area_scrollbar_visuals(
     )>,
 ) {
     let mut viewport_data = std::collections::HashMap::new();
-    for (entity, computed, scroll_position) in &viewport_nodes {
+    for (entity, computed, scroll_position, viewport, node) in &queries.p0() {
         viewport_data.insert(
             entity,
-            (scroll_area_metrics(computed), scroll_position.offset_y),
+            (
+                scroll_area_metrics(computed),
+                scroll_position.offset_y,
+                viewport.enabled && node.display != Display::None,
+            ),
         );
     }
 
     let mut track_height_by_viewport = std::collections::HashMap::new();
-    for (track, computed) in &scrollbar_queries.p0() {
+    for (track, computed) in &queries.p1() {
         track_height_by_viewport.insert(track.viewport, computed.size().y.max(0.0));
     }
 
-    for (maybe_track, maybe_thumb, mut node, mut visibility) in &mut scrollbar_queries.p1() {
+    for (maybe_track, maybe_thumb, mut node, mut visibility) in &mut queries.p2() {
         if let Some(track) = maybe_track {
-            let Some((metrics, _)) = viewport_data.get(&track.viewport).copied() else {
+            let Some((metrics, _, enabled)) = viewport_data.get(&track.viewport).copied() else {
                 *visibility = Visibility::Hidden;
                 node.display = Display::None;
                 continue;
             };
-            let show = metrics.max_scroll_logical > 1.0;
+            let show = enabled && metrics.max_scroll_logical > 1.0;
             *visibility = if show {
                 Visibility::Visible
             } else {
@@ -197,7 +550,8 @@ fn sync_scroll_area_scrollbar_visuals(
         }
 
         if let Some(thumb) = maybe_thumb {
-            let Some((metrics, offset_y)) = viewport_data.get(&thumb.viewport).copied() else {
+            let Some((metrics, offset_y, enabled)) = viewport_data.get(&thumb.viewport).copied()
+            else {
                 *visibility = Visibility::Hidden;
                 continue;
             };
@@ -218,26 +572,40 @@ fn sync_scroll_area_scrollbar_visuals(
 
             node.top = Val::Px(thumb_top);
             node.height = Val::Px(thumb_height);
-            *visibility = Visibility::Visible;
+            *visibility = if enabled {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
         }
     }
 }
 
 /// Spawns one scrollbar track + thumb pair for a generic scroll area viewport.
 pub fn spawn_scroll_area_scrollbar(parent: &mut ChildSpawnerCommands, viewport: Entity) {
+    spawn_scroll_area_scrollbar_with_style(parent, viewport, ScrollAreaScrollbarStyle::default());
+}
+
+/// Spawns one scrollbar track + thumb pair with explicit placement config.
+pub fn spawn_scroll_area_scrollbar_with_style(
+    parent: &mut ChildSpawnerCommands,
+    viewport: Entity,
+    style: ScrollAreaScrollbarStyle,
+) {
     parent
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                right: Val::Px(2.0),
-                top: Val::Px(0.0),
-                bottom: Val::Px(0.0),
-                width: Val::Px(6.0),
+                right: Val::Px(style.right_px),
+                top: Val::Px(style.top_px),
+                bottom: Val::Px(style.bottom_px),
+                width: Val::Px(style.width_px),
                 display: Display::None,
                 ..default()
             },
             BackgroundColor(palette::PANEL_SCROLLBAR_TRACK_BG),
             Visibility::Hidden,
+            RelativeCursorPosition::default(),
             ScrollAreaScrollbarTrack { viewport },
         ))
         .with_children(|track| {
@@ -262,20 +630,27 @@ pub struct ScrollAreaPlugin;
 
 impl Plugin for ScrollAreaPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<UiScrollBlockState>().add_systems(
-            Update,
-            (
-                apply_scroll_area_scrolling,
-                sync_scroll_area_scrollbar_visuals,
-            ),
-        );
+        app.init_resource::<UiScrollBlockState>()
+            .init_resource::<ScrollAreaDragState>()
+            .add_systems(
+                Update,
+                (
+                    apply_scroll_area_scrolling,
+                    handle_scroll_area_mouse_input,
+                    sync_scroll_area_scrollbar_visuals,
+                ),
+            );
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{next_scroll_offset, normalized_cursor_is_inside, scrollbar_thumb_layout};
-    use bevy::prelude::Vec2;
+    use super::{
+        choose_topmost_scroll_target, next_scroll_offset, normalized_cursor_is_inside,
+        scroll_offset_from_thumb_drag, scroll_offset_from_track_click, scrollbar_thumb_layout,
+        ScrollAreaInteractionGroup, ScrollAreaTargetCandidate,
+    };
+    use bevy::prelude::{Entity, Vec2};
 
     #[test]
     fn normalized_cursor_check_accepts_points_inside_unit_rect() {
@@ -306,5 +681,42 @@ mod tests {
         assert!(height >= 18.0);
         assert!(top > 0.0);
         assert!(top + height <= 180.0 + f32::EPSILON);
+    }
+
+    #[test]
+    fn track_click_centers_thumb_before_mapping_to_scroll() {
+        let offset = scroll_offset_from_track_click(90.0, 40.0, 180.0, 400.0);
+        assert!((offset - 200.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn thumb_drag_uses_grab_offset() {
+        let offset = scroll_offset_from_thumb_drag(120.0, 10.0, 40.0, 180.0, 400.0);
+        assert!((offset - 314.2857).abs() < 0.001);
+    }
+
+    #[test]
+    fn target_selection_prefers_modal_then_priority_then_z() {
+        let selected = choose_topmost_scroll_target([
+            ScrollAreaTargetCandidate {
+                viewport: Entity::from_raw(1),
+                interaction_group: ScrollAreaInteractionGroup::Panel,
+                input_priority: 10,
+                global_z: 100,
+            },
+            ScrollAreaTargetCandidate {
+                viewport: Entity::from_raw(2),
+                interaction_group: ScrollAreaInteractionGroup::Modal,
+                input_priority: 0,
+                global_z: 1,
+            },
+            ScrollAreaTargetCandidate {
+                viewport: Entity::from_raw(3),
+                interaction_group: ScrollAreaInteractionGroup::Modal,
+                input_priority: 1,
+                global_z: 0,
+            },
+        ]);
+        assert_eq!(selected, Some(Entity::from_raw(3)));
     }
 }

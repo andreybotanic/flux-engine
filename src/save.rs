@@ -12,9 +12,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::GasRegistry,
+    render::OverlayMode,
     simulation::{
         gas::{GasField, GasFieldSnapshot},
-        pipes::{PipeContainerKind, PipeGasSnapshot, PipeNodeGasSnapshotEntry, PipeNodeKey},
+        pipes::{
+            PipeContainerKind, PipeFluxField, PipeGasField, PipeGasSnapshot,
+            PipeNodeGasSnapshotEntry, PipeNodeKey,
+        },
+        SimulationStep,
     },
     world::{
         gas_structures::GasStructureSnapshot,
@@ -23,10 +28,11 @@ use crate::{
             PlacedStructureMap, PlacedStructureSnapshot, PlacedStructureSnapshotEntry,
             StructureKind, StructureParams, StructureRotation,
         },
+        WorldCellChanged,
     },
 };
 
-const SCHEMA_VERSION: u32 = 4;
+const SCHEMA_VERSION: u32 = 5;
 const WORLD_CELLS_MAGIC: &[u8; 4] = b"FXWC";
 const GAS_STATE_MAGIC: &[u8; 4] = b"FXGS";
 const GAS_STRUCTURES_MAGIC: &[u8; 4] = b"FXST";
@@ -45,10 +51,12 @@ const CHUNK_GAS_STRUCTURES_ID: &str = "gas_structures";
 const CHUNK_PIPE_LAYOUT_ID: &str = "pipe_layout";
 const CHUNK_PIPE_GAS_ID: &str = "pipe_gas";
 const CHUNK_PLACED_STRUCTURES_ID: &str = "placed_structures";
+const CHUNK_PREVIEW_PNG_ID: &str = "preview_png";
 const WORLD_CELLS_FILE: &str = "world_cells.bin";
 const GAS_STATE_FILE: &str = "gas_state.bin";
 const PIPE_GAS_FILE: &str = "pipe_gas.bin";
 const PLACED_STRUCTURES_FILE: &str = "placed_structures.bin";
+const PREVIEW_PNG_FILE: &str = "preview.png";
 const META_FILE: &str = "meta.toml";
 
 static SAVE_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -154,6 +162,39 @@ pub struct SaveDescriptor {
     pub display_name: String,
     pub created_at_unix_ms: i64,
     pub updated_at_unix_ms: i64,
+    pub preview_path: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug)]
+/// Describes one pending save-preview capture request.
+pub struct SavePreviewRequest {
+    pub root: PathBuf,
+    pub descriptor: SaveDescriptor,
+    pub target_path: PathBuf,
+    pub post_save_action: Option<MainMenuDeferredAction>,
+    pub success_status_text: String,
+    pub patch_meta_on_success: bool,
+}
+
+#[derive(Resource, Default, Clone, Debug)]
+/// Stores queued and active save-preview capture work.
+pub struct SavePreviewQueueState {
+    pub pending: Option<SavePreviewRequest>,
+    pub active: bool,
+}
+
+impl SavePreviewQueueState {
+    /// Returns `true` when a preview capture is queued or currently running.
+    pub fn is_busy(&self) -> bool {
+        self.active || self.pending.is_some()
+    }
+}
+
+#[derive(Event, Clone, Debug)]
+/// Reports the result of one save-preview capture attempt.
+pub struct SavePreviewCaptureFinished {
+    pub request: SavePreviewRequest,
+    pub result: Result<(), String>,
 }
 
 #[derive(Clone, Debug)]
@@ -191,6 +232,49 @@ impl fmt::Display for SaveError {
 }
 
 impl std::error::Error for SaveError {}
+
+/// Restores runtime world resources from one loaded save snapshot.
+pub fn restore_runtime_world_state(
+    state: RuntimeWorldState,
+    world: &mut WorldGrid,
+    structures: &mut PlacedStructureMap,
+    gas: &mut GasField,
+    pipe_gas: &mut PipeGasField,
+    pipe_flux: &mut PipeFluxField,
+    step: &mut SimulationStep,
+) -> Result<(), String> {
+    world.restore_from_cell_codes(&state.world_cell_codes)?;
+    structures.restore_state(&state.placed_structures_snapshot, world)?;
+    gas.restore_state(&state.gas_snapshot)?;
+    pipe_gas.restore_state(&state.pipe_gas_snapshot, structures)?;
+    pipe_flux.clear_all();
+    step.0 = state.simulation_step;
+    Ok(())
+}
+
+/// Emits `WorldCellChanged` for every cell so render state can fully resync.
+pub fn emit_full_world_changed(world_changed: &mut EventWriter<WorldCellChanged>) {
+    for y in 0..WORLD_HEIGHT {
+        for x in 0..WORLD_WIDTH {
+            world_changed.write(WorldCellChanged {
+                cell: UVec2::new(x, y),
+            });
+        }
+    }
+}
+
+/// Applies the canonical post-load presentation preset used by `New Game` and `Load`.
+pub fn apply_loaded_world_preset(
+    control: &mut crate::simulation::SimulationControl,
+    overlay_mode: &mut OverlayMode,
+    camera_transform: &mut Transform,
+    camera_projection: &mut Projection,
+) {
+    control.paused = true;
+    control.speed = crate::simulation::SimulationSpeed::X1;
+    *overlay_mode = OverlayMode::Main;
+    crate::input::camera::reset_camera_to_default(camera_transform, camera_projection);
+}
 
 include!("save_api_block.rs");
 include!("save_meta_io_block.rs");

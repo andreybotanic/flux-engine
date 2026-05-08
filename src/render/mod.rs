@@ -1,8 +1,10 @@
 mod pipe_highlight_material;
+mod save_preview;
 pub mod world_view;
 
 use bevy::prelude::*;
 use pipe_highlight_material::PipeHighlightMaterialPlugin;
+use save_preview::SavePreviewPlugin;
 
 use self::world_view::{
     apply_overlay_mode, apply_overlay_visibility_mode, draw_cursor_grid_overlay,
@@ -19,6 +21,7 @@ pub struct RenderPlugin;
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(PipeHighlightMaterialPlugin)
+            .add_plugins(SavePreviewPlugin)
             .init_resource::<OverlayMode>()
             .init_resource::<GasVisualSettings>()
             .init_resource::<WallEntities>()

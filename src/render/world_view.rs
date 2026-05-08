@@ -45,6 +45,7 @@ const BACKDROP_TILE_SIZE: f32 = 256.0;
 const OUTER_BORDER_LAYERS: u32 = 4;
 const WORLD_FADE_WIDTH_CELLS: f32 = 4.0;
 const WORLD_FADE_ALPHA_MAX: f32 = 1.0;
+pub(crate) const WORLD_PREVIEW_TARGET_SIZE_PX: u32 = 512;
 
 #[derive(Resource, Clone)]
 /// Stores `GasSimulationImages` state.
@@ -222,6 +223,10 @@ fn world_fade_alpha(distance_from_world: f32, fade_width_world: f32) -> f32 {
     let t = (distance_from_world / fade_width_world).clamp(0.0, 1.0);
     let smoothstep = t * t * (3.0 - 2.0 * t);
     smoothstep.clamp(0.0, WORLD_FADE_ALPHA_MAX)
+}
+
+pub(crate) fn preview_world_extent() -> Vec2 {
+    world_dimensions() + Vec2::splat(CELL_SIZE * WORLD_FADE_WIDTH_CELLS * 2.0)
 }
 
 #[derive(Resource, Clone, Copy, PartialEq, Eq, Default)]

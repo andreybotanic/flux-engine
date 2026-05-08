@@ -599,7 +599,11 @@ fn write_pipe_gas_chunk(
         .map_err(|err| SaveError::Io(format!("Failed to write '{}': {}", path.display(), err)))
 }
 
-fn read_pipe_gas_chunk(path: &Path, gas_registry: &GasRegistry) -> Result<crate::simulation::pipes::PipeGasSnapshot, SaveError> {
+fn read_pipe_gas_chunk(
+    path: &Path,
+    gas_registry: &GasRegistry,
+    legacy_pipe_layout: Option<&crate::world::pipes::PipeLayoutSnapshot>,
+) -> Result<crate::simulation::pipes::PipeGasSnapshot, SaveError> {
     let bytes = fs::read(path)
         .map_err(|err| SaveError::Io(format!("Failed to read '{}': {}", path.display(), err)))?;
     let mut cursor = Cursor::new(bytes.as_slice());
@@ -654,6 +658,33 @@ fn read_pipe_gas_chunk(path: &Path, gas_registry: &GasRegistry) -> Result<crate:
         gas_ids.push(id);
     }
 
+    let data_start = cursor.position() as usize;
+    let remaining = bytes.len().saturating_sub(data_start);
+    let dense_legacy_len = node_count
+        .checked_mul(gas_count)
+        .and_then(|value| value.checked_mul(std::mem::size_of::<u32>()))
+        .unwrap_or(usize::MAX);
+    if legacy_pipe_layout.is_some()
+        && node_count == (WORLD_WIDTH * WORLD_HEIGHT) as usize
+        && remaining == dense_legacy_len
+    {
+        let Some(pipe_layout) = legacy_pipe_layout else {
+            return Err(SaveError::Validation(format!(
+                "Pipe gas chunk '{}' uses legacy dense format but no pipe layout is available",
+                path.display()
+            )));
+        };
+        return read_legacy_dense_pipe_gas_chunk(
+            path,
+            &mut cursor,
+            gas_registry,
+            gas_ids,
+            node_count,
+            gas_count,
+            pipe_layout,
+        );
+    }
+
     let mut nodes = Vec::with_capacity(node_count);
     for _ in 0..node_count {
         let kind = match read_exact_array::<1>(&mut cursor)?[0] {
@@ -680,6 +711,43 @@ fn read_pipe_gas_chunk(path: &Path, gas_registry: &GasRegistry) -> Result<crate:
         gas_registry,
     )?;
     Ok(mapped)
+}
+
+fn read_legacy_dense_pipe_gas_chunk(
+    path: &Path,
+    cursor: &mut Cursor<&[u8]>,
+    gas_registry: &GasRegistry,
+    gas_ids: Vec<String>,
+    node_count: usize,
+    gas_count: usize,
+    pipe_layout: &crate::world::pipes::PipeLayoutSnapshot,
+) -> Result<crate::simulation::pipes::PipeGasSnapshot, SaveError> {
+    let expected_cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
+    if node_count != expected_cells || pipe_layout.cells.len() != expected_cells {
+        return Err(SaveError::Validation(format!(
+            "Legacy dense pipe gas chunk '{}' has unexpected cell count {} (expected {})",
+            path.display(),
+            node_count,
+            expected_cells
+        )));
+    }
+
+    const LEGACY_PIPE_PRESENT_BIT: u8 = 0b0001_0000;
+    let mut nodes = Vec::new();
+    for idx in 0..node_count {
+        let mut species = Vec::with_capacity(gas_count);
+        for _ in 0..gas_count {
+            species.push(read_u32(cursor)?);
+        }
+        if (pipe_layout.cells[idx] & LEGACY_PIPE_PRESENT_BIT) == 0 {
+            continue;
+        }
+        let x = (idx as u32) % WORLD_WIDTH;
+        let y = (idx as u32) / WORLD_WIDTH;
+        nodes.push((PipeContainerKind::Pipe, UVec2::new(x, y), species));
+    }
+
+    map_saved_pipe_gas_snapshot_to_registry(&SavedPipeGasChunk { gas_ids, nodes }, gas_registry)
 }
 
 fn map_saved_pipe_gas_snapshot_to_registry(

@@ -1,10 +1,14 @@
 use std::collections::HashMap;
 
-use crate::ui::palette;
+use crate::ui::{
+    palette,
+    scroll_area::{
+        spawn_scroll_area_scrollbar_with_style, ScrollAreaScrollbarStyle, ScrollAreaViewport,
+    },
+};
 use bevy::{
-    input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
-    ui::{ComputedNode, ScrollPosition},
+    ui::{ComputedNode, RelativeCursorPosition, ScrollPosition},
     window::PrimaryWindow,
 };
 
@@ -13,8 +17,6 @@ const PANEL_CONTENT_PADDING_Y: f32 = 10.0;
 const PANEL_HEADER_BUTTON_SIZE: f32 = 24.0;
 const PANEL_HEADER_BUTTON_BG: Color = palette::PANEL_HEADER_BUTTON_BG;
 const PANEL_HEADER_TEXT: Color = palette::TEXT_PRIMARY;
-const SCROLLBAR_TRACK_WIDTH: f32 = 6.0;
-const SCROLLBAR_THUMB_MIN_HEIGHT: f32 = 18.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 /// Stores `PanelId` state.
