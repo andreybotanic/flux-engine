@@ -76,6 +76,8 @@ pub fn run() {
         .insert_resource(game_config.gas_visual)
         .insert_resource(game_config.gas_main_visual)
         .insert_resource(game_config.cell_visuals)
+        .insert_resource(game_config.world_cell_hud)
+        .insert_resource(game_config.structure_hud)
         .insert_resource(game_config.structure_visuals)
         .insert_resource(game_config.cell_visual_layouts)
         .insert_resource(SimulationBackendConfig {

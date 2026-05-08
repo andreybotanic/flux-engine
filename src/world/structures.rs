@@ -1073,9 +1073,83 @@ mod tests {
         LayerKind, LayerMarkerKind, PlacedStructureMap, StructureKind, StructureRotation,
     };
     use crate::{
-        config::{CellVisualPlacementConfigMap, StructureVisualConfigMap},
+        config::{CellVisualPlacementConfigMap, StructureVisualConfigMap, VisualPlacementConfig},
         world::grid::{CellMaterial, WorldGrid},
     };
+
+    fn structure_visuals() -> StructureVisualConfigMap {
+        StructureVisualConfigMap::from_entries(vec![
+            (
+                StructureKind::Pipe,
+                VisualPlacementConfig {
+                    label: "Pipe".to_string(),
+                    draw_priority: 100,
+                    size_in_cells: bevy::prelude::UVec2::ONE,
+                },
+            ),
+            (
+                StructureKind::GasPipeBridge,
+                VisualPlacementConfig {
+                    label: "Bridge".to_string(),
+                    draw_priority: 110,
+                    size_in_cells: bevy::prelude::UVec2::new(3, 1),
+                },
+            ),
+            (
+                StructureKind::Vent,
+                VisualPlacementConfig {
+                    label: "Vent".to_string(),
+                    draw_priority: 120,
+                    size_in_cells: bevy::prelude::UVec2::ONE,
+                },
+            ),
+            (
+                StructureKind::GasSource,
+                VisualPlacementConfig {
+                    label: "Gas Source".to_string(),
+                    draw_priority: 130,
+                    size_in_cells: bevy::prelude::UVec2::ONE,
+                },
+            ),
+            (
+                StructureKind::GasSink,
+                VisualPlacementConfig {
+                    label: "Gas Sink".to_string(),
+                    draw_priority: 130,
+                    size_in_cells: bevy::prelude::UVec2::ONE,
+                },
+            ),
+        ])
+    }
+
+    fn cell_visual_layouts() -> CellVisualPlacementConfigMap {
+        CellVisualPlacementConfigMap::from_entries(vec![
+            (
+                CellMaterial::Boundary,
+                VisualPlacementConfig {
+                    label: "Boundary".to_string(),
+                    draw_priority: 1000,
+                    size_in_cells: bevy::prelude::UVec2::ONE,
+                },
+            ),
+            (
+                CellMaterial::Brick,
+                VisualPlacementConfig {
+                    label: "Brick".to_string(),
+                    draw_priority: 1000,
+                    size_in_cells: bevy::prelude::UVec2::ONE,
+                },
+            ),
+            (
+                CellMaterial::Metal,
+                VisualPlacementConfig {
+                    label: "Metal".to_string(),
+                    draw_priority: 1000,
+                    size_in_cells: bevy::prelude::UVec2::ONE,
+                },
+            ),
+        ])
+    }
 
     #[test]
     fn bridge_descriptor_uses_expected_cells_for_both_orientations() {
@@ -1136,8 +1210,8 @@ mod tests {
 
     #[test]
     fn structure_descriptors_report_size_in_cells() {
-        let structure_visuals = StructureVisualConfigMap::default();
-        let cell_visual_layouts = CellVisualPlacementConfigMap::default();
+        let structure_visuals = structure_visuals();
+        let cell_visual_layouts = cell_visual_layouts();
         assert_eq!(
             structure_descriptor(StructureKind::Pipe, StructureRotation::Deg0).size_in_cells(),
             bevy::prelude::UVec2::ONE

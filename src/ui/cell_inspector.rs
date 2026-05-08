@@ -1,19 +1,18 @@
 use bevy::{prelude::*, window::PrimaryWindow};
 
+use super::cell_inspector_model::{build_cell_inspector_blocks, CellInspectorBlockView};
 use crate::{
-    config::GasRegistry,
+    config::{
+        CellVisualPlacementConfigMap, GasRegistry, StructureHudConfigMap, StructureVisualConfigMap,
+        WorldCellHudConfig,
+    },
     editor::{is_cursor_over_ui, ActiveEditorTool, MainMenuState},
     input::camera::MainCamera,
-    render::OverlayMode,
     save::WorldLoadState,
     simulation::{
         gas::GasField,
-        pipes::{
-            pipe_cell_display_blocks_with_transfers,
-            pressure::{format_pressure_pa, pipe_pressure_pa, world_pressure_pa},
-            PipeContainerKind, PipeFlowVisualState, PipeGasField,
-        },
-        GasSimulationConfig, SimulationControl,
+        pipes::{PipeFlowVisualState, PipeGasField},
+        GasSimulationConfig,
     },
     ui::palette,
     ui::panels::PanelManager,
@@ -24,15 +23,33 @@ use crate::{
 };
 
 #[derive(Component)]
-pub(crate) struct CellInspectorText;
+pub(crate) struct CellInspectorRoot;
 
 #[derive(Component)]
-pub(crate) struct CellInspectorPanel;
+pub(crate) struct CellInspectorBlockSlot {
+    index: usize,
+}
 
-const CELL_INSPECTOR_WIDTH: f32 = 310.0;
+#[derive(Component)]
+pub(crate) struct CellInspectorBlockTitle {
+    index: usize,
+}
+
+#[derive(Component)]
+pub(crate) struct CellInspectorBlockBody {
+    index: usize,
+}
+
+const CELL_INSPECTOR_WIDTH: f32 = 320.0;
 const CELL_INSPECTOR_MIN_HEIGHT: f32 = 108.0;
 const CELL_INSPECTOR_LINE_HEIGHT: f32 = 16.0;
-const CELL_INSPECTOR_VERTICAL_PADDING: f32 = 18.0;
+const CELL_INSPECTOR_ROOT_PADDING: f32 = 6.0;
+const CELL_INSPECTOR_BLOCK_PADDING: f32 = 8.0;
+const CELL_INSPECTOR_BLOCK_GAP: f32 = 6.0;
+const CELL_INSPECTOR_BLOCK_CONTENT_GAP: f32 = 3.0;
+const CELL_INSPECTOR_BLOCK_RADIUS: f32 = 8.0;
+const CELL_INSPECTOR_ROOT_RADIUS: f32 = 10.0;
+const CELL_INSPECTOR_BLOCK_SLOT_COUNT: usize = 8;
 
 /// Runs `setup_cell_inspector` logic.
 pub(crate) fn setup_cell_inspector(mut commands: Commands) {
@@ -44,19 +61,27 @@ pub(crate) fn setup_cell_inspector(mut commands: Commands) {
                 left: Val::Px(12.0),
                 width: Val::Px(CELL_INSPECTOR_WIDTH),
                 min_height: Val::Px(CELL_INSPECTOR_MIN_HEIGHT),
-                padding: UiRect::all(Val::Px(7.0)),
+                padding: UiRect::all(Val::Px(CELL_INSPECTOR_ROOT_PADDING)),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(CELL_INSPECTOR_BLOCK_GAP),
                 ..default()
             },
-            BackgroundColor(palette::HUD_BG),
-            CellInspectorPanel,
+            BackgroundColor(palette::TRANSPARENT),
+            BorderRadius::all(Val::Px(CELL_INSPECTOR_ROOT_RADIUS)),
+            BoxShadow::new(
+                palette::HUD_SHADOW,
+                Val::Px(0.0),
+                Val::Px(5.0),
+                Val::Px(0.0),
+                Val::Px(12.0),
+            ),
+            Visibility::Hidden,
+            CellInspectorRoot,
         ))
         .with_children(|parent| {
-            parent.spawn((
-                Text::new("FluxEngine loading..."),
-                TextFont::from_font_size(13.0),
-                TextColor(palette::TEXT_ON_DARK),
-                CellInspectorText,
-            ));
+            for index in 0..CELL_INSPECTOR_BLOCK_SLOT_COUNT {
+                spawn_cell_inspector_block_slot(parent, index);
+            }
         });
 }
 
@@ -64,42 +89,56 @@ pub(crate) fn setup_cell_inspector(mut commands: Commands) {
 pub(crate) fn update_cell_inspector(
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
-    active_tool: Res<ActiveEditorTool>,
-    main_menu: Res<MainMenuState>,
-    world_load_state: Res<WorldLoadState>,
-    debug_mode: Res<crate::debug::DebugMode>,
-    panel_manager: Res<PanelManager>,
-    gas: Res<GasField>,
-    config: Res<GasSimulationConfig>,
-    gas_registry: Res<GasRegistry>,
-    world: Res<WorldGrid>,
+    ui_state: (
+        Res<ActiveEditorTool>,
+        Res<MainMenuState>,
+        Res<WorldLoadState>,
+        Res<crate::debug::DebugMode>,
+        Res<PanelManager>,
+    ),
+    gas_state: (
+        Res<GasField>,
+        Res<GasSimulationConfig>,
+        Res<GasRegistry>,
+        Res<WorldCellHudConfig>,
+        Res<CellVisualPlacementConfigMap>,
+        Res<StructureHudConfigMap>,
+        Res<StructureVisualConfigMap>,
+        Res<WorldGrid>,
+    ),
     pipe_state: (
         Res<PlacedStructureMap>,
         Res<PipeGasField>,
         Res<PipeFlowVisualState>,
-        Res<SimulationControl>,
     ),
-    overlay_mode: Res<OverlayMode>,
-    mut text_query: Single<&mut Text, With<CellInspectorText>>,
-    mut panel_query: Single<(&mut Node, &mut Visibility), With<CellInspectorPanel>>,
+    mut ui_queries: ParamSet<(
+        Single<(&mut Node, &mut Visibility), With<CellInspectorRoot>>,
+        Query<(&CellInspectorBlockSlot, &mut Node)>,
+        Query<(&CellInspectorBlockTitle, &mut Text)>,
+        Query<(&CellInspectorBlockBody, &mut Node, &mut Text)>,
+    )>,
 ) {
+    let (active_tool, main_menu, world_load_state, debug_mode, panel_manager) = ui_state;
+    let (
+        gas,
+        config,
+        gas_registry,
+        world_cell_hud,
+        cell_visual_layouts,
+        structure_hud,
+        structure_visuals,
+        world,
+    ) = gas_state;
+    let (structures, pipe_gas, flow_state) = pipe_state;
     let (camera, camera_transform) = *camera_query;
-    let text = &mut *text_query;
-    let (node, visibility) = &mut *panel_query;
-    let (pipe_layout, pipe_gas, flow_state, _control) = pipe_state;
-
     if !world_load_state.has_world {
+        let (_, visibility) = &mut *ui_queries.p0();
         **visibility = Visibility::Hidden;
         return;
     }
 
-    let overlay_name = match *overlay_mode {
-        OverlayMode::Main => "F1 Main",
-        OverlayMode::Gas => "F2 Gas",
-        OverlayMode::Pipes => "F3 Pipes",
-    };
-
     let Some(cursor_position) = window.cursor_position() else {
+        let (_, visibility) = &mut *ui_queries.p0();
         **visibility = Visibility::Hidden;
         return;
     };
@@ -112,143 +151,165 @@ pub(crate) fn update_cell_inspector(
         main_menu.open,
         Some(&panel_manager),
     ) {
+        let (_, visibility) = &mut *ui_queries.p0();
         **visibility = Visibility::Hidden;
         return;
     }
 
     let Ok(cursor_world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_position)
     else {
+        let (_, visibility) = &mut *ui_queries.p0();
         **visibility = Visibility::Hidden;
         return;
     };
     let Some(cell) = world_to_cell(cursor_world_pos) else {
+        let (_, visibility) = &mut *ui_queries.p0();
         **visibility = Visibility::Hidden;
         return;
     };
-    **visibility = Visibility::Visible;
 
-    let message = build_cell_inspector_message(
-        overlay_name,
+    let blocks = build_cell_inspector_blocks(
         cell,
         &world,
         &gas,
         &config.pipe,
         &gas_registry,
-        &pipe_layout,
+        &world_cell_hud,
+        &cell_visual_layouts,
+        &structure_hud,
+        &structure_visuals,
+        &structures,
         &pipe_gas,
         &flow_state,
         false,
     );
-    let panel_height = estimate_cell_inspector_height(&message);
-    node.min_height = Val::Px(panel_height);
+    let panel_height = estimate_cell_inspector_height(&blocks);
+    let panel_position = compute_hud_position(
+        cursor_position,
+        Vec2::new(CELL_INSPECTOR_WIDTH, panel_height),
+        Vec2::new(window.width(), window.height()),
+        Vec2::new(24.0, 18.0),
+    );
 
-    if let Some(cursor_position) = window.cursor_position() {
-        let panel_size = Vec2::new(CELL_INSPECTOR_WIDTH, panel_height);
-        let panel_position = compute_hud_position(
-            cursor_position,
-            panel_size,
-            Vec2::new(window.width(), window.height()),
-            Vec2::new(24.0, 18.0),
-        );
+    {
+        let (node, visibility) = &mut *ui_queries.p0();
+        **visibility = Visibility::Visible;
+        node.min_height = Val::Px(panel_height);
         node.left = Val::Px(panel_position.x);
         node.top = Val::Px(panel_position.y);
     }
 
-    text.0 = message;
+    sync_cell_inspector_slots(&blocks, &mut ui_queries);
 }
 
-fn build_cell_inspector_message(
-    overlay_name: &str,
-    cell: UVec2,
-    world: &WorldGrid,
-    gas: &GasField,
-    pipe_config: &crate::simulation::PipeSimulationConfig,
-    gas_registry: &GasRegistry,
-    structures: &PlacedStructureMap,
-    pipe_gas: &PipeGasField,
-    flow_state: &PipeFlowVisualState,
-    include_transfers: bool,
-) -> String {
-    let cell_kind = if world.is_solid(cell.x, cell.y) {
-        "solid"
-    } else {
-        "empty"
-    };
-    let mut message = format!("{overlay_name}\n({}, {}) {}\n", cell.x, cell.y, cell_kind);
-    append_gas_lines(&mut message, gas_registry, |gas_index| {
-        gas.amount_rounded(cell.x, cell.y, gas_index)
-    });
-    message.push_str(&format!(
-        "Total: {} particles",
-        gas.total_amount_rounded(cell.x, cell.y)
-    ));
-    message.push_str(&format!(
-        "\nPressure: {}",
-        format_pressure_pa(world_pressure_pa(
-            pipe_config,
-            gas.total_amount_rounded(cell.x, cell.y),
+fn spawn_cell_inspector_block_slot(parent: &mut ChildSpawnerCommands, index: usize) {
+    parent
+        .spawn((
+            Node {
+                display: Display::None,
+                width: Val::Percent(100.0),
+                padding: UiRect::all(Val::Px(CELL_INSPECTOR_BLOCK_PADDING)),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(CELL_INSPECTOR_BLOCK_CONTENT_GAP),
+                border: UiRect::all(Val::Px(1.0)),
+                ..default()
+            },
+            BackgroundColor(palette::HUD_BG),
+            BorderColor(palette::HUD_BORDER),
+            BorderRadius::all(Val::Px(CELL_INSPECTOR_BLOCK_RADIUS)),
+            CellInspectorBlockSlot { index },
         ))
-    ));
+        .with_children(|block_parent| {
+            block_parent.spawn((
+                Text::new(""),
+                TextFont::from_font_size(13.0),
+                TextColor(palette::TEXT_ON_DARK),
+                CellInspectorBlockTitle { index },
+            ));
+            block_parent.spawn((
+                Node {
+                    display: Display::None,
+                    ..default()
+                },
+                Text::new(""),
+                TextFont::from_font_size(12.0),
+                TextColor(palette::HUD_TEXT_MUTED),
+                CellInspectorBlockBody { index },
+            ));
+        });
+}
 
-    let display_blocks = pipe_cell_display_blocks_with_transfers(
-        structures,
-        pipe_gas,
-        flow_state,
-        cell.x,
-        cell.y,
-        include_transfers,
+fn sync_cell_inspector_slots(
+    blocks: &[CellInspectorBlockView],
+    ui_queries: &mut ParamSet<(
+        Single<(&mut Node, &mut Visibility), With<CellInspectorRoot>>,
+        Query<(&CellInspectorBlockSlot, &mut Node)>,
+        Query<(&CellInspectorBlockTitle, &mut Text)>,
+        Query<(&CellInspectorBlockBody, &mut Node, &mut Text)>,
+    )>,
+) {
+    debug_assert!(
+        blocks.len() <= CELL_INSPECTOR_BLOCK_SLOT_COUNT,
+        "cell inspector requires more slots than preallocated"
     );
-    if !display_blocks.is_empty() {
-        message.push_str("\n\n");
-        for (index, block) in display_blocks.iter().enumerate() {
-            if index > 0 {
-                message.push('\n');
-            }
-            let label = match block.kind {
-                PipeContainerKind::Pipe if structures.has_vent_at(cell.x, cell.y) => "Pipe + Vent",
-                PipeContainerKind::Pipe => "Pipe",
-                PipeContainerKind::BridgePipe => "Bridge Pipe",
+
+    {
+        let mut block_query = ui_queries.p1();
+        for (slot, mut node) in block_query.iter_mut() {
+            node.display = if blocks.get(slot.index).is_some() {
+                Display::Flex
+            } else {
+                Display::None
             };
-            message.push_str(label);
-            message.push('\n');
-            append_gas_lines(&mut message, gas_registry, |gas_index| {
-                block.species_counts.get(gas_index).copied().unwrap_or(0)
-            });
-            message.push_str(&format!(
-                "{} total: {} particles",
-                label, block.total_particles
-            ));
-            message.push_str(&format!(
-                "\n{} pressure: {}",
-                label,
-                format_pressure_pa(pipe_pressure_pa(pipe_config, block.total_particles))
-            ));
-            if index + 1 < display_blocks.len() {
-                message.push_str("\n\n");
-            }
         }
     }
 
-    message
-}
+    {
+        let mut title_query = ui_queries.p2();
+        for (title, mut text) in title_query.iter_mut() {
+            text.0 = blocks
+                .get(title.index)
+                .map(|block| block.title.clone())
+                .unwrap_or_default();
+        }
+    }
 
-fn append_gas_lines<F>(message: &mut String, gas_registry: &GasRegistry, mut amount_for: F)
-where
-    F: FnMut(usize) -> u32,
-{
-    for (gas_index, gas_def) in gas_registry.all().iter().enumerate() {
-        message.push_str(&format!(
-            "{}: {} particles\n",
-            gas_def.id.to_uppercase(),
-            amount_for(gas_index)
-        ));
+    {
+        let mut body_query = ui_queries.p3();
+        for (body, mut node, mut text) in body_query.iter_mut() {
+            if let Some(block) = blocks.get(body.index) {
+                if block.lines.is_empty() {
+                    node.display = Display::None;
+                    text.0.clear();
+                } else {
+                    node.display = Display::Flex;
+                    text.0 = block.lines.join("\n");
+                }
+            } else {
+                node.display = Display::None;
+                text.0.clear();
+            }
+        }
     }
 }
 
-fn estimate_cell_inspector_height(message: &str) -> f32 {
-    let line_count = message.lines().count().max(1) as f32;
-    (line_count * CELL_INSPECTOR_LINE_HEIGHT + CELL_INSPECTOR_VERTICAL_PADDING)
-        .max(CELL_INSPECTOR_MIN_HEIGHT)
+fn estimate_cell_inspector_height(blocks: &[CellInspectorBlockView]) -> f32 {
+    let block_heights = blocks
+        .iter()
+        .map(estimate_cell_inspector_block_height)
+        .sum::<f32>();
+    let gaps = blocks.len().saturating_sub(1) as f32 * CELL_INSPECTOR_BLOCK_GAP;
+    (block_heights + gaps + CELL_INSPECTOR_ROOT_PADDING * 2.0).max(CELL_INSPECTOR_MIN_HEIGHT)
+}
+
+fn estimate_cell_inspector_block_height(block: &CellInspectorBlockView) -> f32 {
+    let line_count = 1 + block.lines.len();
+    let gap = if block.lines.is_empty() {
+        0.0
+    } else {
+        CELL_INSPECTOR_BLOCK_CONTENT_GAP
+    };
+    line_count as f32 * CELL_INSPECTOR_LINE_HEIGHT + gap + CELL_INSPECTOR_BLOCK_PADDING * 2.0
 }
 
 fn compute_hud_position(cursor: Vec2, panel_size: Vec2, viewport_size: Vec2, offset: Vec2) -> Vec2 {
@@ -268,50 +329,14 @@ fn compute_hud_position(cursor: Vec2, panel_size: Vec2, viewport_size: Vec2, off
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_cell_inspector_message, compute_hud_position, estimate_cell_inspector_height,
-    };
-    use crate::{
-        config::{GasDefinition, GasRegistry},
-        simulation::{
-            gas::GasField,
-            pipes::{
-                pressure::{format_pressure_pa, pipe_pressure_pa, world_pressure_pa},
-                PipeFlowVisualState, PipeGasField, PipeTransferRecord, PipeTransferVisualPath,
-            },
-            PipeSimulationConfig,
-        },
-        world::{grid::WorldGrid, structures::PlacedStructureMap},
-    };
+    use super::{compute_hud_position, estimate_cell_inspector_height, CellInspectorBlockView};
     use bevy::prelude::*;
-
-    fn registry() -> GasRegistry {
-        GasRegistry::new(vec![
-            GasDefinition {
-                id: "h2".to_string(),
-                label: "Hydrogen".to_string(),
-                color: [0.7, 0.8, 1.0],
-                molecular_mass: 2.016,
-            },
-            GasDefinition {
-                id: "o2".to_string(),
-                label: "Oxygen".to_string(),
-                color: [0.5, 0.8, 1.0],
-                molecular_mass: 31.998,
-            },
-        ])
-        .expect("test registry")
-    }
-
-    fn pipe_config() -> PipeSimulationConfig {
-        PipeSimulationConfig::default()
-    }
 
     #[test]
     fn hud_flips_to_left_and_up_near_screen_edge() {
         let pos = compute_hud_position(
             Vec2::new(1590.0, 890.0),
-            Vec2::new(310.0, 108.0),
+            Vec2::new(320.0, 108.0),
             Vec2::new(1600.0, 900.0),
             Vec2::new(24.0, 18.0),
         );
@@ -320,151 +345,30 @@ mod tests {
     }
 
     #[test]
-    fn pipe_block_is_added_when_hovered_cell_contains_pipe() {
-        let registry = registry();
-        let world = WorldGrid::default();
-        let mut structures = PlacedStructureMap::default();
-        let mut pipe_gas = PipeGasField::from_registry(&registry);
-        let flow_state = PipeFlowVisualState::default();
-        let mut gas = GasField::from_registry(&registry);
-        assert!(structures.place_pipe(12, 14, &world));
-        assert!(structures.place_vent(12, 14, &world));
-        gas.set_amount(12, 14, 0, 5.0);
-        pipe_gas.sync_to_structures(&structures);
-        pipe_gas.add_species_counts(0, &[7, 2]);
-
-        let message = build_cell_inspector_message(
-            "F3 Pipes",
-            UVec2::new(12, 14),
-            &world,
-            &gas,
-            &pipe_config(),
-            &registry,
-            &structures,
-            &pipe_gas,
-            &flow_state,
-            true,
-        );
-
-        assert!(message.contains("Pipe + Vent"));
-        assert!(message.contains("Pipe + Vent total: 9 particles"));
-        assert!(message.contains(&format!(
-            "Pipe + Vent pressure: {}",
-            format_pressure_pa(pipe_pressure_pa(&pipe_config(), 9))
-        )));
-        assert!(message.contains("H2: 7 particles"));
-        assert!(message.contains("O2: 2 particles"));
-    }
-
-    #[test]
-    fn panel_height_grows_when_pipe_block_is_present() {
-        let short = "F1 Main\n(1, 1) empty\nH2: 0 particles\nTotal: 0 particles\nPressure: 0Pa";
-        let tall = "F3 Pipes\n(1, 1) empty\nH2: 0 particles\nTotal: 0 particles\nPressure: 0Pa\n\nPipe\nH2: 10 particles\nPipe total: 10 particles\nPipe pressure: 250Pa";
-        assert!(estimate_cell_inspector_height(tall) > estimate_cell_inspector_height(short));
-    }
-
-    #[test]
-    fn pipe_block_uses_transient_flow_when_storage_is_empty() {
-        let registry = registry();
-        let world = WorldGrid::default();
-        let mut structures = PlacedStructureMap::default();
-        let pipe_gas = PipeGasField::from_registry(&registry);
-        let gas = GasField::from_registry(&registry);
-        let flow_state = PipeFlowVisualState {
-            transfers: vec![PipeTransferRecord {
-                from: UVec2::new(8, 9),
-                to: UVec2::new(9, 9),
-                gas_counts: vec![4, 1],
-                total_amount: 5,
-                visual_path: PipeTransferVisualPath::Straight,
-            }],
-        };
-        assert!(structures.place_pipe(8, 9, &world));
-        let mut pipe_gas = pipe_gas;
-        pipe_gas.sync_to_structures(&structures);
-
-        let message = build_cell_inspector_message(
-            "F3 Pipes",
-            UVec2::new(8, 9),
-            &world,
-            &gas,
-            &pipe_config(),
-            &registry,
-            &structures,
-            &pipe_gas,
-            &flow_state,
-            true,
-        );
-
-        assert!(message.contains("H2: 4 particles"));
-        assert!(message.contains("O2: 1 particles"));
-        assert!(message.contains("Pipe total: 5 particles"));
-    }
-
-    #[test]
-    fn pipe_block_ignores_transient_flow_when_requested() {
-        let registry = registry();
-        let world = WorldGrid::default();
-        let mut structures = PlacedStructureMap::default();
-        let pipe_gas = PipeGasField::from_registry(&registry);
-        let gas = GasField::from_registry(&registry);
-        let flow_state = PipeFlowVisualState {
-            transfers: vec![PipeTransferRecord {
-                from: UVec2::new(8, 9),
-                to: UVec2::new(9, 9),
-                gas_counts: vec![4, 1],
-                total_amount: 5,
-                visual_path: PipeTransferVisualPath::Straight,
-            }],
-        };
-        assert!(structures.place_pipe(8, 9, &world));
-        let mut pipe_gas = pipe_gas;
-        pipe_gas.sync_to_structures(&structures);
-
-        let message = build_cell_inspector_message(
-            "F3 Pipes",
-            UVec2::new(8, 9),
-            &world,
-            &gas,
-            &pipe_config(),
-            &registry,
-            &structures,
-            &pipe_gas,
-            &flow_state,
-            false,
-        );
-
-        assert!(message.contains("H2: 0 particles"));
-        assert!(message.contains("O2: 0 particles"));
-        assert!(message.contains("Pipe total: 0 particles"));
-    }
-
-    #[test]
-    fn message_shows_world_pressure_line() {
-        let registry = registry();
-        let world = WorldGrid::default();
-        let structures = PlacedStructureMap::default();
-        let pipe_gas = PipeGasField::from_registry(&registry);
-        let mut gas = GasField::from_registry(&registry);
-        gas.set_amount(4, 5, 0, 1_250.0);
-
-        let message = build_cell_inspector_message(
-            "F1 Main",
-            UVec2::new(4, 5),
-            &world,
-            &gas,
-            &pipe_config(),
-            &registry,
-            &structures,
-            &pipe_gas,
-            &PipeFlowVisualState::default(),
-            false,
-        );
-
-        assert!(message.contains("Total: 1250 particles"));
-        assert!(message.contains(&format!(
-            "Pressure: {}",
-            format_pressure_pa(world_pressure_pa(&pipe_config(), 1_250))
-        )));
+    fn panel_height_grows_with_more_blocks_and_lines() {
+        let short = vec![CellInspectorBlockView {
+            title: "Cell".to_string(),
+            lines: vec!["Particles: 0".to_string()],
+        }];
+        let tall = vec![
+            CellInspectorBlockView {
+                title: "Cell".to_string(),
+                lines: vec![
+                    "Coordinates: (1, 1)".to_string(),
+                    "State: Empty".to_string(),
+                    "Pressure: 0Pa".to_string(),
+                    "Particles: 0".to_string(),
+                ],
+            },
+            CellInspectorBlockView {
+                title: "Pipe".to_string(),
+                lines: vec![
+                    "Pressure: 250Pa".to_string(),
+                    "Particles: 10".to_string(),
+                    "Gases: Hydrogen 100%".to_string(),
+                ],
+            },
+        ];
+        assert!(estimate_cell_inspector_height(&tall) > estimate_cell_inspector_height(&short));
     }
 }

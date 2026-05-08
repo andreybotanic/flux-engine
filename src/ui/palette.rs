@@ -30,6 +30,9 @@ pub const SELECT_OPTION_SELECTED: Color = Color::srgba(0.86, 0.90, 0.98, 1.0);
 pub const SELECT_BORDER: Color = Color::srgba(0.66, 0.68, 0.71, 1.0);
 
 pub const HUD_BG: Color = Color::srgba(0.12, 0.14, 0.16, 0.90);
+pub const HUD_BORDER: Color = Color::srgba(1.0, 1.0, 1.0, 0.10);
+pub const HUD_TEXT_MUTED: Color = Color::srgba(0.88, 0.91, 0.94, 0.88);
+pub const HUD_SHADOW: Color = Color::srgba(0.0, 0.0, 0.0, 0.34);
 pub const TRANSPARENT: Color = Color::NONE;
 pub const WARNING_ACCENT: Color = Color::srgba(0.97, 0.89, 0.20, 0.95);
 pub const DANGER_ACCENT: Color = Color::srgba(1.0, 0.24, 0.24, 0.28);

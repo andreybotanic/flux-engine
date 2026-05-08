@@ -1,2 +1,6 @@
+label = "Vent"
 draw_priority = 120
 size_in_cells = [1, 1]
+
+[hud]
+sort_order = 30

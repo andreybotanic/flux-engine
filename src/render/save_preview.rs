@@ -17,7 +17,9 @@ use crate::{
     save::{SavePreviewCaptureFinished, SavePreviewQueueState, SavePreviewRequest},
 };
 
-use super::{world_view::preview_world_extent, world_view::WORLD_PREVIEW_TARGET_SIZE_PX, OverlayMode};
+use super::{
+    world_view::preview_world_extent, world_view::WORLD_PREVIEW_TARGET_SIZE_PX, OverlayMode,
+};
 
 #[derive(Component)]
 struct SavePreviewCamera;
@@ -85,7 +87,9 @@ fn setup_save_preview_camera(mut commands: Commands, mut images: ResMut<Assets<I
         SavePreviewCamera,
     ));
 
-    commands.insert_resource(SavePreviewRenderTarget { image: image_handle });
+    commands.insert_resource(SavePreviewRenderTarget {
+        image: image_handle,
+    });
 }
 
 fn attach_ui_target_camera_to_root_nodes(
@@ -110,7 +114,10 @@ fn arm_save_preview_capture(
     mut runtime: ResMut<SavePreviewRuntimeState>,
     mut overlay_mode: ResMut<OverlayMode>,
     mut structure_edit: ResMut<StructureEditState>,
-    mut preview_camera: Single<(&mut Camera, &mut Projection, &mut Transform), With<SavePreviewCamera>>,
+    mut preview_camera: Single<
+        (&mut Camera, &mut Projection, &mut Transform),
+        With<SavePreviewCamera>,
+    >,
 ) {
     if runtime.active_request.is_some() {
         return;
@@ -271,7 +278,10 @@ mod tests {
         if remaining > 0 {
             remaining -= 1;
         }
-        assert_eq!(remaining, 0, "first update should only consume settle frame");
+        assert_eq!(
+            remaining, 0,
+            "first update should only consume settle frame"
+        );
 
         let ready_to_arm = remaining == 0;
         assert!(ready_to_arm, "second update may arm the screenshot capture");

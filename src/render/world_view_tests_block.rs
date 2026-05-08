@@ -5,6 +5,7 @@ mod tests {
         bridge_visual_size, bridge_visual_transform,
         build_pipe_mask_image, build_vent_overlay_image, build_world_fade_mask_image, grid_fade,
         bridge_curve_progress_for_transfer,
+        cursor_highlight_segments,
         flow_packet_position, pipe_flow_packet_visual, pipe_flow_packet_visible,
         pipe_flow_square_size, pipe_gas_square_size,
         pipe_overlay_block_offset, pipe_overlay_block_visible,
@@ -12,7 +13,10 @@ mod tests {
         pipe_highlight_visibility, vent_world_visibility, world_fade_alpha,
         OverlayMode,
     };
-    use crate::config::{CellVisualPlacementConfigMap, GasDefinition, GasRegistry, StructureVisualConfigMap};
+    use crate::config::{
+        CellVisualPlacementConfigMap, GasDefinition, GasRegistry, StructureVisualConfigMap,
+        VisualPlacementConfig,
+    };
     use crate::simulation::pipes::{
         pipe_cell_display_total_particles_with_transfers, PipeContainerKind, PipeFlowVisualState,
         PipeGasField,
@@ -46,6 +50,80 @@ mod tests {
 
     fn pipe_config() -> PipeSimulationConfig {
         PipeSimulationConfig::default()
+    }
+
+    fn structure_visuals() -> StructureVisualConfigMap {
+        StructureVisualConfigMap::from_entries(vec![
+            (
+                crate::world::structures::StructureKind::Pipe,
+                VisualPlacementConfig {
+                    label: "Pipe".to_string(),
+                    draw_priority: 100,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+            (
+                crate::world::structures::StructureKind::GasPipeBridge,
+                VisualPlacementConfig {
+                    label: "Bridge".to_string(),
+                    draw_priority: 110,
+                    size_in_cells: UVec2::new(3, 1),
+                },
+            ),
+            (
+                crate::world::structures::StructureKind::Vent,
+                VisualPlacementConfig {
+                    label: "Vent".to_string(),
+                    draw_priority: 120,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+            (
+                crate::world::structures::StructureKind::GasSource,
+                VisualPlacementConfig {
+                    label: "Gas Source".to_string(),
+                    draw_priority: 130,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+            (
+                crate::world::structures::StructureKind::GasSink,
+                VisualPlacementConfig {
+                    label: "Gas Sink".to_string(),
+                    draw_priority: 130,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+        ])
+    }
+
+    fn cell_visual_layouts() -> CellVisualPlacementConfigMap {
+        CellVisualPlacementConfigMap::from_entries(vec![
+            (
+                crate::world::grid::CellMaterial::Boundary,
+                VisualPlacementConfig {
+                    label: "Boundary".to_string(),
+                    draw_priority: 1000,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+            (
+                crate::world::grid::CellMaterial::Brick,
+                VisualPlacementConfig {
+                    label: "Brick".to_string(),
+                    draw_priority: 1000,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+            (
+                crate::world::grid::CellMaterial::Metal,
+                VisualPlacementConfig {
+                    label: "Metal".to_string(),
+                    draw_priority: 1000,
+                    size_in_cells: UVec2::ONE,
+                },
+            ),
+        ])
     }
 
     #[test]
@@ -164,8 +242,8 @@ mod tests {
 
     #[test]
     fn default_visual_priorities_keep_pipe_below_bridge_and_walls() {
-        let structure_visuals = StructureVisualConfigMap::default();
-        let cell_visual_layouts = CellVisualPlacementConfigMap::default();
+        let structure_visuals = structure_visuals();
+        let cell_visual_layouts = cell_visual_layouts();
         assert!(structure_visuals.get(crate::world::structures::StructureKind::Pipe).draw_priority
             < structure_visuals
                 .get(crate::world::structures::StructureKind::GasPipeBridge)
@@ -336,7 +414,7 @@ mod tests {
 
     #[test]
     fn bridge_visual_keeps_base_horizontal_size_for_all_rotations() {
-        let structure_visuals = StructureVisualConfigMap::default();
+        let structure_visuals = structure_visuals();
         assert_eq!(
             bridge_visual_size(StructureRotation::Deg0, &structure_visuals),
             Vec2::new(CELL_SIZE * 3.0, CELL_SIZE)
@@ -570,5 +648,82 @@ mod tests {
         );
 
         assert_eq!(position, expected);
+    }
+
+    #[test]
+    fn cursor_highlight_segments_stay_inside_hovered_cell() {
+        let cell = UVec2::new(10, 10);
+        let center = crate::world::grid::cell_center(cell.x, cell.y);
+        let min_x = center.x - CELL_SIZE * 0.5;
+        let max_x = center.x + CELL_SIZE * 0.5;
+        let min_y = center.y - CELL_SIZE * 0.5;
+        let max_y = center.y + CELL_SIZE * 0.5;
+
+        for (start, end) in cursor_highlight_segments(cell) {
+            for point in [start, end] {
+                assert!(point.x >= min_x && point.x <= max_x);
+                assert!(point.y >= min_y && point.y <= max_y);
+            }
+        }
+    }
+
+    #[test]
+    fn cursor_highlight_segments_stay_close_to_cell_border() {
+        let cell = UVec2::new(10, 10);
+        let center = crate::world::grid::cell_center(cell.x, cell.y);
+        let min_x = center.x - CELL_SIZE * 0.5;
+        let max_x = center.x + CELL_SIZE * 0.5;
+        let min_y = center.y - CELL_SIZE * 0.5;
+        let max_y = center.y + CELL_SIZE * 0.5;
+
+        for (start, end) in cursor_highlight_segments(cell) {
+            if (start.y - end.y).abs() < 1e-6 {
+                let border_distance = (max_y - start.y).abs().min((start.y - min_y).abs());
+                assert!(border_distance <= 1.0);
+            }
+            if (start.x - end.x).abs() < 1e-6 {
+                let border_distance = (max_x - start.x).abs().min((start.x - min_x).abs());
+                assert!(border_distance <= 1.0);
+            }
+        }
+    }
+
+    #[test]
+    fn cursor_highlight_segments_are_symmetric_between_opposite_sides() {
+        let cell = UVec2::new(12, 7);
+        let center = crate::world::grid::cell_center(cell.x, cell.y);
+        let segments = cursor_highlight_segments(cell);
+        let top = segments
+            .iter()
+            .filter(|(start, end)| start.y == end.y && start.y > center.y)
+            .collect::<Vec<_>>();
+        let bottom = segments
+            .iter()
+            .filter(|(start, end)| start.y == end.y && start.y < center.y)
+            .collect::<Vec<_>>();
+        let left = segments
+            .iter()
+            .filter(|(start, end)| start.x == end.x && start.x < center.x)
+            .collect::<Vec<_>>();
+        let right = segments
+            .iter()
+            .filter(|(start, end)| start.x == end.x && start.x > center.x)
+            .collect::<Vec<_>>();
+
+        assert_eq!(top.len(), bottom.len());
+        assert_eq!(left.len(), right.len());
+        for (top_segment, bottom_segment) in top.iter().zip(bottom.iter()) {
+            assert!((top_segment.0.x - bottom_segment.0.x).abs() < 1e-6);
+            assert!((top_segment.1.x - bottom_segment.1.x).abs() < 1e-6);
+        }
+        for (left_segment, right_segment) in left.iter().zip(right.iter()) {
+            assert!((left_segment.0.y - right_segment.0.y).abs() < 1e-6);
+            assert!((left_segment.1.y - right_segment.1.y).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn cursor_highlight_segments_use_expected_dash_count() {
+        assert_eq!(cursor_highlight_segments(UVec2::new(0, 0)).len(), 16);
     }
 }

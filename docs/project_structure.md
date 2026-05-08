@@ -15,7 +15,7 @@ FluxEngine/
 |-- config/                  # Внешние TOML-конфиги игрового/симуляционного поведения.
 |   |-- backups/             # Резервные копии конфигов.
 |   |-- gases/               # Конфиги отдельных газов.
-|   `-- structures/          # Конфиги appearance-метаданных стен и структур.
+|   `-- structures/          # Конфиги базовых entity-параметров, appearance и HUD-метаданных стен и структур.
 |-- docs/                    # Проектная документация.
 |-- src/                     # Исходный код Rust.
 |   |-- app/                 # Сборка и запуск Bevy-приложения.
@@ -58,9 +58,9 @@ FluxEngine/
 - `Cargo.lock`: Зафиксированные версии зависимостей Cargo.
 - `Cargo.toml`: Манифест Rust-проекта и зависимости.
 - `config/backups/simulation.toml.pre_tuning_20260503_174021.toml`: Резервная копия конфигурации симуляции для отката/сравнения.
-- `config/cell_types.toml`: Настройки визуала/параметров типов клеток.
+- `config/cell_types.toml`: Настройки визуала/параметров типов клеток и HUD-конфиг world-клетки для свободного газа.
 - `config/gases/*.toml`: Конфиги отдельных газов (физические и визуальные параметры).
-- `config/structures/*.toml`: Конфиги appearance-метаданных встроенных стен и структур (`draw_priority`, `size_in_cells`).
+- `config/structures/*.toml`: Конфиги базовых параметров, appearance и HUD-метаданных встроенных стен и структур (`label`, `draw_priority`, `size_in_cells`, `hud.sort_order` и описания substance-контейнеров).
 - `config/simulation.toml`: Основные параметры симуляции и runtime-настройки, включая секцию `[pipe]` для pressure-driven труб.
 - `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
 - `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
@@ -69,9 +69,10 @@ FluxEngine/
 - `src/app/mod.rs`: Сборка Bevy-приложения, плагины, backend-инициализация и запуск.
 - `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
+- `src/config/hud.rs`: Публичные типы runtime-конфигов HUD, включая substance-контейнеры и режимы видимости по hover, без встроенных entity-label/fallback-конфигов.
 - `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации TOML-конфигов, включая `config/structures/*.toml`.
 - `src/config/config_tests_block.rs`: Тесты загрузки и валидации конфигов.
-- `src/config/mod.rs`: Публичные конфиг-типы, runtime-реестры visual/layout-метаданных и входная точка загрузки конфигов.
+- `src/config/mod.rs`: Публичные конфиг-типы, runtime-реестры base/visual/layout/HUD-метаданных и входная точка загрузки конфигов.
 - `src/debug/mod.rs`: Debug-режимы, оверлейные метрики и диагностические ресурсы.
 - `src/editor/editor_ui_block.rs`: Runtime-обработка editor UI: tooltip, state sync, панели.
 - `src/editor/input_block.rs`: Мышь/кисть/выделение и применение инструментов к миру, unified pipe/structure-сети и мосту.
@@ -95,6 +96,7 @@ FluxEngine/
 - `src/render/pipe_highlight_material.rs`: Кастомный `Material2d` и helper-логика для shader-подсветки труб в `F3`.
 - `src/render/save_preview.rs`: Offscreen preview pipeline для save-slots: отдельная камера, settle-frame в каноническом `F1`, screenshot capture, PNG-запись и восстановление UI/overlay состояния после кадра.
 - `src/render/world_view.rs`: Публичные render-системы world view, config-driven appearance z-order и layer-based pipe/bridge visuals.
+- `src/render/world_view_cursor_highlight_block.rs`: Helper отрисовки внутренней белой пунктирной рамки внутри наведённой клетки.
 - `src/render/world_view_overlay_block.rs`: Логика overlay-режимов `F1/F2/F3`, курсорной сетки, multi-container pipe gas-square sizing, flow-packet анимации и фильтрации визуального шума для пакетов `< 5` частиц.
 - `src/render/world_view_setup_block.rs`: Построение сущностей мира/слоёв, config-driven z-order стен/структур и спавн визуалов из `PlacedStructureMap`.
 - `src/render/world_view_tests_block.rs`: Тесты вспомогательной математики рендера.
@@ -126,12 +128,13 @@ FluxEngine/
 - `src/simulation/pipes/tests.rs`: Acceptance/regression тесты новой pipe-модели, включая быстрые `_smoke` проверки для самых долгих сценариев и полные канонические scenario 1..5.
 - `src/simulation/runtime_tick_block.rs`: Runtime-шаги симуляции, GPU/CPU подшаги и perf-метрики, включая отдельный замер времени pipe pre-step.
 - `src/simulation/simulation_tests_block.rs`: Тесты конфигурации тика и структурных pre-step правил.
-- `src/ui/cell_inspector.rs`: Панель инспектора клетки под курсором, включая world-gas, pressure HUD и список pipe-контейнеров для труб/моста.
+- `src/ui/cell_inspector.rs`: Runtime-сборка и позиционирование HUD инспектора клетки как стека отдельных entity-блоков с общей тенью.
+- `src/ui/cell_inspector_model.rs`: Модель данных и formatter HUD инспектора клетки, включая config-driven контейнеры, solid-материалы как отдельные блоки и registry-driven отображение состава газа.
 - `src/ui/input_field.rs`: Публичные типы text-input и точка сборки input-систем.
 - `src/ui/input_field_helpers_block.rs`: Вспомогательная геометрия курсора текста и точный hit-test/каретка через `ComputedTextBlock`.
 - `src/ui/input_field_systems_block.rs`: Системы focus/keyboard/render/caret для текстовых полей.
 - `src/ui/mod.rs`: UI-плагин и wiring общих UI-систем.
-- `src/ui/palette.rs`: Единая палитра цветов UI (панели, меню, текст, input/select, tooltip, HUD).
+- `src/ui/palette.rs`: Единая палитра цветов UI (панели, меню, текст, input/select, tooltip, HUD и тени HUD).
 - `src/ui/panels.rs`: Публичные типы panel-системы и композиция блоков панели.
 - `src/ui/panels_manager_block.rs`: Состояние и API PanelManager, hit-rect и управление панелями.
 - `src/ui/panels_runtime_block.rs`: Runtime-системы панели: layout, состояние viewport-ов и события заголовка; input scroll делегирован общему `scroll_area`.

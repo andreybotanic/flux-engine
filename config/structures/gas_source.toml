@@ -1,2 +1,6 @@
+label = "Gas Source"
 draw_priority = 130
 size_in_cells = [1, 1]
+
+[hud]
+sort_order = 40

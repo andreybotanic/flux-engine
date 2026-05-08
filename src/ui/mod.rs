@@ -1,4 +1,5 @@
 pub mod cell_inspector;
+mod cell_inspector_model;
 pub mod input_field;
 pub mod palette;
 pub mod panels;

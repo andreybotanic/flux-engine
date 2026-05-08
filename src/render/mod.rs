@@ -7,8 +7,8 @@ use pipe_highlight_material::PipeHighlightMaterialPlugin;
 use save_preview::SavePreviewPlugin;
 
 use self::world_view::{
-    apply_overlay_mode, apply_overlay_visibility_mode, draw_cursor_grid_overlay,
-    setup_simulation_images, setup_world_view, sync_gas_display_texture,
+    apply_overlay_mode, apply_overlay_visibility_mode, draw_cursor_cell_highlight,
+    draw_cursor_grid_overlay, setup_simulation_images, setup_world_view, sync_gas_display_texture,
     sync_gas_structure_visuals, sync_pipe_flow_packets, sync_pipe_overlay_visuals,
     sync_pipe_world_visuals, sync_structure_edit_highlight, sync_wall_visuals, update_overlay_mode,
     GasStructureEntities, PipeEntities, WallEntities,
@@ -55,6 +55,7 @@ impl Plugin for RenderPlugin {
                 (
                     sync_pipe_flow_packets.after(sync_pipe_overlay_visuals),
                     draw_cursor_grid_overlay,
+                    draw_cursor_cell_highlight,
                 ),
             );
     }

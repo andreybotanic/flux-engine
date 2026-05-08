@@ -9,3 +9,12 @@ gas_tint = [0.72, 0.72, 0.74]
 [metal]
 main_tint = [0.99, 0.99, 0.99]
 gas_tint = [0.71, 0.71, 0.73]
+
+[world_cell_hud]
+label = "Cell"
+sort_order = 0
+
+[[world_cell_hud.substance_containers]]
+substance = "gas"
+backing = "world_cell"
+visible_on_hover = "same_cell"

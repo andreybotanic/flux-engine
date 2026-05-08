@@ -1,2 +1,12 @@
+label = "Pipe"
 draw_priority = 100
 size_in_cells = [1, 1]
+
+[hud]
+sort_order = 10
+
+[[hud.substance_containers]]
+substance = "gas"
+backing = "pipe_node"
+kind = "pipe"
+visible_on_hover = "same_cell"

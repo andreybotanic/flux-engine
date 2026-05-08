@@ -8,10 +8,9 @@ use crate::{
     save::{
         apply_loaded_world_preset, create_save, delete_save, emit_full_world_changed, list_saves,
         load_save, new_game_snapshot, overwrite_save, restore_runtime_world_state,
-        save_preview_target_path, saves_root_default, MainMenuConfirmState,
-        MainMenuDeferredAction, MainMenuMode, MainMenuScreen, MainMenuUiState,
-        SavePreviewCaptureFinished, SavePreviewQueueState, SavePreviewRequest, SaveSessionState,
-        WorldLoadState,
+        save_preview_target_path, saves_root_default, MainMenuConfirmState, MainMenuDeferredAction,
+        MainMenuMode, MainMenuScreen, MainMenuUiState, SavePreviewCaptureFinished,
+        SavePreviewQueueState, SavePreviewRequest, SaveSessionState, WorldLoadState,
     },
     simulation::{
         gas::GasField, GasSimulationConfig, SimulationControl, SimulationPerfStats,
@@ -28,9 +27,7 @@ use crate::{
         select_field::{spawn_select_field, SelectFieldConfig, SelectFieldId, SelectFieldState},
     },
     world::{
-        grid::{
-            cell_center, world_to_cell, CellMaterial, WorldGrid, CELL_SIZE,
-        },
+        grid::{cell_center, world_to_cell, CellMaterial, WorldGrid, CELL_SIZE},
         structures::{PlacedStructureMap, StructureParams, StructureRotation},
         WorldCellChanged,
     },

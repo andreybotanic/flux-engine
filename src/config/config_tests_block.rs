@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::grid::CellMaterial;
 
     fn make_temp_root(prefix: &str) -> PathBuf {
         let unique = format!(
@@ -73,31 +74,52 @@ gas_tint = [0.72, 0.72, 0.74]
 [metal]
 main_tint = [0.99, 0.99, 0.99]
 gas_tint = [0.71, 0.71, 0.73]
+
+[world_cell_hud]
+label = "Cell"
+sort_order = 0
+
+[[world_cell_hud.substance_containers]]
+substance = "gas"
+backing = "world_cell"
+visible_on_hover = "same_cell"
 "#,
         )
         .expect("write cell types");
 
         for (file_name, content) in [
-            ("pipe.toml", "draw_priority = 100\nsize_in_cells = [1, 1]\n"),
-            ("vent.toml", "draw_priority = 120\nsize_in_cells = [1, 1]\n"),
+            (
+                "pipe.toml",
+                "label = \"Pipe\"\ndraw_priority = 100\nsize_in_cells = [1, 1]\n\n[hud]\nsort_order = 10\n\n[[hud.substance_containers]]\nsubstance = \"gas\"\nbacking = \"pipe_node\"\nkind = \"pipe\"\nvisible_on_hover = \"same_cell\"\n",
+            ),
+            (
+                "vent.toml",
+                "label = \"Vent\"\ndraw_priority = 120\nsize_in_cells = [1, 1]\n\n[hud]\nsort_order = 30\n",
+            ),
             (
                 "gas_source.toml",
-                "draw_priority = 130\nsize_in_cells = [1, 1]\n",
+                "label = \"Gas Source\"\ndraw_priority = 130\nsize_in_cells = [1, 1]\n\n[hud]\nsort_order = 40\n",
             ),
             (
                 "gas_sink.toml",
-                "draw_priority = 130\nsize_in_cells = [1, 1]\n",
+                "label = \"Gas Sink\"\ndraw_priority = 130\nsize_in_cells = [1, 1]\n\n[hud]\nsort_order = 50\n",
             ),
             (
                 "gas_pipe_bridge.toml",
-                "draw_priority = 110\nsize_in_cells = [3, 1]\n",
+                "label = \"Bridge\"\ndraw_priority = 110\nsize_in_cells = [3, 1]\n\n[hud]\nsort_order = 20\n\n[[hud.substance_containers]]\nsubstance = \"gas\"\nbacking = \"pipe_node\"\nkind = \"bridge_pipe\"\nvisible_on_hover = \"container_cell\"\n",
             ),
             (
                 "boundary.toml",
-                "draw_priority = 1000\nsize_in_cells = [1, 1]\n",
+                "label = \"Boundary\"\ndraw_priority = 1000\nsize_in_cells = [1, 1]\n",
             ),
-            ("brick.toml", "draw_priority = 1000\nsize_in_cells = [1, 1]\n"),
-            ("metal.toml", "draw_priority = 1000\nsize_in_cells = [1, 1]\n"),
+            (
+                "brick.toml",
+                "label = \"Brick\"\ndraw_priority = 1000\nsize_in_cells = [1, 1]\n",
+            ),
+            (
+                "metal.toml",
+                "label = \"Metal\"\ndraw_priority = 1000\nsize_in_cells = [1, 1]\n",
+            ),
         ] {
             fs::write(root.join("structures").join(file_name), content)
                 .expect("write structure visual config");
@@ -232,7 +254,7 @@ color = [0.8, 0.8, 1.0]
         write_minimal_configs(&root);
         fs::write(
             root.join("structures").join("gas_pipe_bridge.toml"),
-            "draw_priority = 110\nsize_in_cells = [2, 1]\n",
+            "label = \"Bridge\"\ndraw_priority = 110\nsize_in_cells = [2, 1]\n",
         )
         .expect("overwrite bridge config");
         fs::write(
@@ -250,6 +272,113 @@ color = [0.8, 0.8, 1.0]
             Err(err) => err,
         };
         assert!(err.contains("GasPipeBridge") || err.contains("gas_pipe_bridge"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn config_loader_reads_hud_metadata_for_world_and_structures() {
+        let root = make_temp_root("flux_cfg_hud_ok");
+        write_minimal_configs(&root);
+        fs::write(
+            root.join("gases").join("h2.toml"),
+            r#"id = "h2"
+label = "Hydrogen"
+molecular_mass = 2.016
+color = [0.8, 0.8, 1.0]
+"#,
+        )
+        .expect("write gas");
+
+        let config = GameConfig::load_from_root(&root).expect("config should load");
+        assert_eq!(config.world_cell_hud.label, "Cell");
+        assert_eq!(config.structure_visuals.get(StructureKind::Pipe).label, "Pipe");
+        assert_eq!(config.cell_visual_layouts.get(CellMaterial::Brick).label, "Brick");
+        assert_eq!(
+            config.structure_hud.get(StructureKind::GasPipeBridge).sort_order,
+            20
+        );
+        assert_eq!(
+            config.structure_hud.get(StructureKind::Vent).substance_containers,
+            Vec::<SubstanceContainerConfig>::new()
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn config_loader_rejects_world_cell_backing_inside_structure_hud() {
+        let root = make_temp_root("flux_cfg_bad_world_backing");
+        write_minimal_configs(&root);
+        fs::write(
+            root.join("structures").join("vent.toml"),
+            r#"label = "Vent"
+draw_priority = 120
+size_in_cells = [1, 1]
+
+[hud]
+sort_order = 30
+
+[[hud.substance_containers]]
+substance = "gas"
+backing = "world_cell"
+visible_on_hover = "same_cell"
+"#,
+        )
+        .expect("overwrite vent config");
+        fs::write(
+            root.join("gases").join("h2.toml"),
+            r#"id = "h2"
+label = "Hydrogen"
+molecular_mass = 2.016
+color = [0.8, 0.8, 1.0]
+"#,
+        )
+        .expect("write gas");
+
+        let err = match GameConfig::load_from_root(&root) {
+            Ok(_) => panic!("invalid structure HUD must fail"),
+            Err(err) => err,
+        };
+        assert!(err.contains("world_cell backing"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn config_loader_rejects_bridge_pipe_visibility_outside_center_only_mode() {
+        let root = make_temp_root("flux_cfg_bad_bridge_visibility");
+        write_minimal_configs(&root);
+        fs::write(
+            root.join("structures").join("gas_pipe_bridge.toml"),
+            r#"label = "Bridge"
+draw_priority = 110
+size_in_cells = [3, 1]
+
+[hud]
+sort_order = 20
+
+[[hud.substance_containers]]
+substance = "gas"
+backing = "pipe_node"
+kind = "bridge_pipe"
+visible_on_hover = "same_cell"
+"#,
+        )
+        .expect("overwrite bridge config");
+        fs::write(
+            root.join("gases").join("h2.toml"),
+            r#"id = "h2"
+label = "Hydrogen"
+molecular_mass = 2.016
+color = [0.8, 0.8, 1.0]
+"#,
+        )
+        .expect("write gas");
+
+        let err = match GameConfig::load_from_root(&root) {
+            Ok(_) => panic!("bridge visibility mismatch must fail"),
+            Err(err) => err,
+        };
+        assert!(err.contains("container_cell visibility"));
         let _ = fs::remove_dir_all(root);
     }
 }

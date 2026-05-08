@@ -338,7 +338,7 @@ fn handle_scroll_area_mouse_input(
                 scroll_area_metrics(computed),
                 node.display != Display::None
                     && viewport_is_scroll_target_allowed(viewport, *scroll_block),
-                )
+            )
         };
         if !enabled {
             drag_state.active = None;
@@ -391,29 +391,37 @@ fn handle_scroll_area_mouse_input(
 
     let mut best_target: Option<(ScrollAreaTargetCandidate, f32, f32, f32, f32, f32)> = None;
     for (track, track_computed, relative_cursor, track_node) in &track_nodes {
-        if track_node.display == Display::None || !normalized_cursor_is_inside(relative_cursor.normalized)
+        if track_node.display == Display::None
+            || !normalized_cursor_is_inside(relative_cursor.normalized)
         {
             continue;
         }
-        let (viewport_entity, offset_y, metrics, interaction_group, input_priority, global_z, enabled) =
-            {
-                let viewport_query = viewport_queries.p0();
-                let Ok((viewport_entity, computed, scroll_position, viewport, node, global_z)) =
-                    viewport_query.get(track.viewport)
-                else {
-                    continue;
-                };
-                (
-                    viewport_entity,
-                    scroll_position.offset_y,
-                    scroll_area_metrics(computed),
-                    viewport.interaction_group,
-                    viewport.input_priority,
-                    global_z.map(|value| value.0).unwrap_or(0),
-                    node.display != Display::None
-                        && viewport_is_scroll_target_allowed(viewport, *scroll_block),
-                )
+        let (
+            viewport_entity,
+            offset_y,
+            metrics,
+            interaction_group,
+            input_priority,
+            global_z,
+            enabled,
+        ) = {
+            let viewport_query = viewport_queries.p0();
+            let Ok((viewport_entity, computed, scroll_position, viewport, node, global_z)) =
+                viewport_query.get(track.viewport)
+            else {
+                continue;
             };
+            (
+                viewport_entity,
+                scroll_position.offset_y,
+                scroll_area_metrics(computed),
+                viewport.interaction_group,
+                viewport.input_priority,
+                global_z.map(|value| value.0).unwrap_or(0),
+                node.display != Display::None
+                    && viewport_is_scroll_target_allowed(viewport, *scroll_block),
+            )
+        };
         if !enabled || metrics.max_scroll_logical <= 1.0 {
             continue;
         }
@@ -480,12 +488,8 @@ fn handle_scroll_area_mouse_input(
         return;
     }
 
-    scroll_position.offset_y = scroll_offset_from_track_click(
-        cursor_y_px,
-        thumb_height,
-        track_height,
-        max_scroll,
-    );
+    scroll_position.offset_y =
+        scroll_offset_from_track_click(cursor_y_px, thumb_height, track_height, max_scroll);
 }
 
 fn sync_scroll_area_scrollbar_visuals(

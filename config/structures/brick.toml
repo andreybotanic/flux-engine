@@ -1,2 +1,3 @@
+label = "Brick"
 draw_priority = 1000
 size_in_cells = [1, 1]

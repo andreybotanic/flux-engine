@@ -335,4 +335,5 @@ pub(crate) struct PipeEntities {
 
 include!("world_view_setup_block.rs");
 include!("world_view_overlay_block.rs");
+include!("world_view_cursor_highlight_block.rs");
 include!("world_view_tests_block.rs");
