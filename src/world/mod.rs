@@ -1,6 +1,4 @@
-pub mod gas_structures;
 pub mod grid;
-pub mod pipes;
 pub mod structures;
 
 use bevy::prelude::*;

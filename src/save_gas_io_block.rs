@@ -152,97 +152,6 @@ fn read_gas_chunk(path: &Path) -> Result<SavedGasChunk, SaveError> {
     })
 }
 
-#[allow(dead_code)]
-fn write_gas_structures_chunk(
-    path: &Path,
-    snapshot: &GasStructureSnapshot,
-) -> Result<(), SaveError> {
-    let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-    if snapshot.kinds.len() != cells
-        || snapshot.gas_indices.len() != cells
-        || snapshot.amounts.len() != cells
-    {
-        return Err(SaveError::Validation(format!(
-            "Gas structures snapshot length mismatch while writing chunk: kinds={}, gas_indices={}, amounts={}, expected={}",
-            snapshot.kinds.len(),
-            snapshot.gas_indices.len(),
-            snapshot.amounts.len(),
-            cells
-        )));
-    }
-
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(GAS_STRUCTURES_MAGIC);
-    bytes.extend_from_slice(&GAS_STRUCTURES_VERSION.to_le_bytes());
-    bytes.extend_from_slice(&WORLD_WIDTH.to_le_bytes());
-    bytes.extend_from_slice(&WORLD_HEIGHT.to_le_bytes());
-    bytes.extend_from_slice(&(cells as u32).to_le_bytes());
-    for idx in 0..cells {
-        bytes.push(snapshot.kinds[idx]);
-        bytes.extend_from_slice(&snapshot.gas_indices[idx].to_le_bytes());
-        bytes.extend_from_slice(&snapshot.amounts[idx].to_le_bytes());
-    }
-
-    fs::write(path, bytes)
-        .map_err(|err| SaveError::Io(format!("Failed to write '{}': {}", path.display(), err)))
-}
-
-fn read_gas_structures_chunk(path: &Path) -> Result<GasStructureSnapshot, SaveError> {
-    let bytes = fs::read(path)
-        .map_err(|err| SaveError::Io(format!("Failed to read '{}': {}", path.display(), err)))?;
-    let mut cursor = Cursor::new(bytes.as_slice());
-
-    let magic = read_exact_array::<4>(&mut cursor)?;
-    if &magic != GAS_STRUCTURES_MAGIC {
-        return Err(SaveError::Validation(format!(
-            "Invalid gas structures chunk magic in '{}'",
-            path.display()
-        )));
-    }
-    let version = read_u16(&mut cursor)?;
-    if version != GAS_STRUCTURES_VERSION {
-        return Err(SaveError::Validation(format!(
-            "Unsupported gas structures chunk version {} in '{}'",
-            version,
-            path.display()
-        )));
-    }
-    let width = read_u32(&mut cursor)?;
-    let height = read_u32(&mut cursor)?;
-    let cells = read_u32(&mut cursor)? as usize;
-    let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-    if width != WORLD_WIDTH || height != WORLD_HEIGHT || cells != expected {
-        return Err(SaveError::Validation(format!(
-            "Gas structures chunk dimensions mismatch in '{}': got {}x{} cells={}, expected {}x{} cells={}",
-            path.display(),
-            width,
-            height,
-            cells,
-            WORLD_WIDTH,
-            WORLD_HEIGHT,
-            expected
-        )));
-    }
-
-    let mut kinds = Vec::with_capacity(cells);
-    let mut gas_indices = Vec::with_capacity(cells);
-    let mut amounts = Vec::with_capacity(cells);
-    for _ in 0..cells {
-        let kind = read_exact_array::<1>(&mut cursor)?[0];
-        let gas_index = read_u32(&mut cursor)?;
-        let amount = read_u32(&mut cursor)?;
-        kinds.push(kind);
-        gas_indices.push(gas_index);
-        amounts.push(amount);
-    }
-
-    Ok(GasStructureSnapshot {
-        kinds,
-        gas_indices,
-        amounts,
-    })
-}
-
 fn write_placed_structures_chunk(
     path: &Path,
     snapshot: &PlacedStructureSnapshot,
@@ -389,50 +298,6 @@ fn read_placed_structures_chunk(path: &Path) -> Result<PlacedStructureSnapshot, 
     Ok(PlacedStructureSnapshot { entries, pipe_cuts })
 }
 
-fn migrate_schema3_structures_to_placed(
-    structures: &crate::world::gas_structures::GasStructureSnapshot,
-    pipe_layout: &crate::world::pipes::PipeLayoutSnapshot,
-) -> Result<PlacedStructureSnapshot, SaveError> {
-    let world = WorldGrid::default();
-    let mut placed = PlacedStructureMap::default();
-    let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-    if structures.kinds.len() != expected || pipe_layout.cells.len() != expected {
-        return Err(SaveError::Validation(
-            "Legacy structure snapshots have unexpected size during schema3 migration".to_string(),
-        ));
-    }
-    for y in 0..WORLD_HEIGHT {
-        for x in 0..WORLD_WIDTH {
-            let idx = (y * WORLD_WIDTH + x) as usize;
-            match structures.kinds[idx] {
-                1 => {
-                    let _ = placed.place_gas_source(
-                        x,
-                        y,
-                        structures.gas_indices[idx] as usize,
-                        structures.amounts[idx],
-                        &world,
-                    );
-                }
-                2 => {
-                    let _ = placed.place_gas_sink(x, y, structures.amounts[idx], &world);
-                }
-                _ => {}
-            }
-            let encoded = pipe_layout.cells[idx];
-            let has_pipe = (encoded & 0b0001_0000) != 0;
-            let has_vent = (encoded & 0b0010_0000) != 0;
-            if has_pipe {
-                let _ = placed.place_pipe(x, y, &world);
-            }
-            if has_vent {
-                let _ = placed.place_vent(x, y, &world);
-            }
-        }
-    }
-    Ok(placed.snapshot_state())
-}
-
 fn map_saved_gas_snapshot_to_registry(
     saved: &SavedGasChunk,
     gas_registry: &GasRegistry,
@@ -478,78 +343,6 @@ fn map_saved_gas_snapshot_to_registry(
             .collect(),
         velocity: saved.velocity.clone(),
     })
-}
-
-#[allow(dead_code)]
-fn write_pipe_layout_chunk(
-    path: &Path,
-    snapshot: &crate::world::pipes::PipeLayoutSnapshot,
-) -> Result<(), SaveError> {
-    let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-    if snapshot.cells.len() != expected {
-        return Err(SaveError::Validation(format!(
-            "Pipe layout snapshot length mismatch while writing chunk: got {}, expected {}",
-            snapshot.cells.len(),
-            expected
-        )));
-    }
-
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(PIPE_LAYOUT_MAGIC);
-    bytes.extend_from_slice(&PIPE_LAYOUT_VERSION.to_le_bytes());
-    bytes.extend_from_slice(&WORLD_WIDTH.to_le_bytes());
-    bytes.extend_from_slice(&WORLD_HEIGHT.to_le_bytes());
-    bytes.extend_from_slice(&(expected as u32).to_le_bytes());
-    bytes.extend_from_slice(&snapshot.cells);
-
-    fs::write(path, bytes)
-        .map_err(|err| SaveError::Io(format!("Failed to write '{}': {}", path.display(), err)))
-}
-
-fn read_pipe_layout_chunk(path: &Path) -> Result<crate::world::pipes::PipeLayoutSnapshot, SaveError> {
-    let bytes = fs::read(path)
-        .map_err(|err| SaveError::Io(format!("Failed to read '{}': {}", path.display(), err)))?;
-    let mut cursor = Cursor::new(bytes.as_slice());
-    let magic = read_exact_array::<4>(&mut cursor)?;
-    if &magic != PIPE_LAYOUT_MAGIC {
-        return Err(SaveError::Validation(format!(
-            "Invalid pipe layout chunk magic in '{}'",
-            path.display()
-        )));
-    }
-    let version = read_u16(&mut cursor)?;
-    if version != PIPE_LAYOUT_VERSION {
-        return Err(SaveError::Validation(format!(
-            "Unsupported pipe layout chunk version {} in '{}'",
-            version,
-            path.display()
-        )));
-    }
-    let width = read_u32(&mut cursor)?;
-    let height = read_u32(&mut cursor)?;
-    let count = read_u32(&mut cursor)? as usize;
-    let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-    if width != WORLD_WIDTH || height != WORLD_HEIGHT || count != expected {
-        return Err(SaveError::Validation(format!(
-            "Pipe layout chunk dimensions mismatch in '{}': got {}x{} cells={}, expected {}x{} cells={}",
-            path.display(),
-            width,
-            height,
-            count,
-            WORLD_WIDTH,
-            WORLD_HEIGHT,
-            expected
-        )));
-    }
-    let mut cells = vec![0u8; count];
-    cursor.read_exact(&mut cells).map_err(|err| {
-        SaveError::Parse(format!(
-            "Failed to read pipe layout payload '{}': {}",
-            path.display(),
-            err
-        ))
-    })?;
-    Ok(crate::world::pipes::PipeLayoutSnapshot { cells })
 }
 
 fn write_pipe_gas_chunk(
@@ -602,7 +395,6 @@ fn write_pipe_gas_chunk(
 fn read_pipe_gas_chunk(
     path: &Path,
     gas_registry: &GasRegistry,
-    legacy_pipe_layout: Option<&crate::world::pipes::PipeLayoutSnapshot>,
 ) -> Result<crate::simulation::pipes::PipeGasSnapshot, SaveError> {
     let bytes = fs::read(path)
         .map_err(|err| SaveError::Io(format!("Failed to read '{}': {}", path.display(), err)))?;
@@ -658,33 +450,6 @@ fn read_pipe_gas_chunk(
         gas_ids.push(id);
     }
 
-    let data_start = cursor.position() as usize;
-    let remaining = bytes.len().saturating_sub(data_start);
-    let dense_legacy_len = node_count
-        .checked_mul(gas_count)
-        .and_then(|value| value.checked_mul(std::mem::size_of::<u32>()))
-        .unwrap_or(usize::MAX);
-    if legacy_pipe_layout.is_some()
-        && node_count == (WORLD_WIDTH * WORLD_HEIGHT) as usize
-        && remaining == dense_legacy_len
-    {
-        let Some(pipe_layout) = legacy_pipe_layout else {
-            return Err(SaveError::Validation(format!(
-                "Pipe gas chunk '{}' uses legacy dense format but no pipe layout is available",
-                path.display()
-            )));
-        };
-        return read_legacy_dense_pipe_gas_chunk(
-            path,
-            &mut cursor,
-            gas_registry,
-            gas_ids,
-            node_count,
-            gas_count,
-            pipe_layout,
-        );
-    }
-
     let mut nodes = Vec::with_capacity(node_count);
     for _ in 0..node_count {
         let kind = match read_exact_array::<1>(&mut cursor)?[0] {
@@ -711,43 +476,6 @@ fn read_pipe_gas_chunk(
         gas_registry,
     )?;
     Ok(mapped)
-}
-
-fn read_legacy_dense_pipe_gas_chunk(
-    path: &Path,
-    cursor: &mut Cursor<&[u8]>,
-    gas_registry: &GasRegistry,
-    gas_ids: Vec<String>,
-    node_count: usize,
-    gas_count: usize,
-    pipe_layout: &crate::world::pipes::PipeLayoutSnapshot,
-) -> Result<crate::simulation::pipes::PipeGasSnapshot, SaveError> {
-    let expected_cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-    if node_count != expected_cells || pipe_layout.cells.len() != expected_cells {
-        return Err(SaveError::Validation(format!(
-            "Legacy dense pipe gas chunk '{}' has unexpected cell count {} (expected {})",
-            path.display(),
-            node_count,
-            expected_cells
-        )));
-    }
-
-    const LEGACY_PIPE_PRESENT_BIT: u8 = 0b0001_0000;
-    let mut nodes = Vec::new();
-    for idx in 0..node_count {
-        let mut species = Vec::with_capacity(gas_count);
-        for _ in 0..gas_count {
-            species.push(read_u32(cursor)?);
-        }
-        if (pipe_layout.cells[idx] & LEGACY_PIPE_PRESENT_BIT) == 0 {
-            continue;
-        }
-        let x = (idx as u32) % WORLD_WIDTH;
-        let y = (idx as u32) / WORLD_WIDTH;
-        nodes.push((PipeContainerKind::Pipe, UVec2::new(x, y), species));
-    }
-
-    map_saved_pipe_gas_snapshot_to_registry(&SavedPipeGasChunk { gas_ids, nodes }, gas_registry)
 }
 
 fn map_saved_pipe_gas_snapshot_to_registry(

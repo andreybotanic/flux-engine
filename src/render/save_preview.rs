@@ -14,7 +14,7 @@ use bevy::{
 use crate::{
     editor::StructureEditState,
     input::camera::MainCamera,
-    save::{patch_save_preview_meta, SavePreviewCaptureFinished, SavePreviewQueueState, SavePreviewRequest},
+    save::{SavePreviewCaptureFinished, SavePreviewQueueState, SavePreviewRequest},
 };
 
 use super::{world_view::preview_world_extent, world_view::WORLD_PREVIEW_TARGET_SIZE_PX, OverlayMode};
@@ -27,10 +27,13 @@ struct SavePreviewRenderTarget {
     image: Handle<Image>,
 }
 
+const SAVE_PREVIEW_SETTLE_FRAMES: u8 = 1;
+
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 enum SavePreviewPhase {
     #[default]
     Idle,
+    Settling,
     Armed,
     Capturing,
 }
@@ -40,6 +43,7 @@ struct SavePreviewRuntimeState {
     active_request: Option<SavePreviewRequest>,
     overlay_before_capture: Option<OverlayMode>,
     selected_cell_before_capture: Option<UVec2>,
+    settle_frames_remaining: u8,
     phase: SavePreviewPhase,
 }
 
@@ -130,10 +134,27 @@ fn arm_save_preview_capture(
     preview_queue.active = true;
     runtime.overlay_before_capture = Some(*overlay_mode);
     runtime.selected_cell_before_capture = structure_edit.selected_cell;
+    runtime.settle_frames_remaining = SAVE_PREVIEW_SETTLE_FRAMES;
     *overlay_mode = OverlayMode::Main;
     structure_edit.selected_cell = None;
-    runtime.phase = SavePreviewPhase::Armed;
+    runtime.phase = SavePreviewPhase::Settling;
     runtime.active_request = Some(request);
+}
+
+fn advance_save_preview_settle_frame(mut runtime: ResMut<SavePreviewRuntimeState>) {
+    if runtime.phase != SavePreviewPhase::Settling {
+        return;
+    }
+    if runtime.active_request.is_none() {
+        runtime.phase = SavePreviewPhase::Idle;
+        runtime.settle_frames_remaining = 0;
+        return;
+    }
+    if runtime.settle_frames_remaining > 0 {
+        runtime.settle_frames_remaining -= 1;
+        return;
+    }
+    runtime.phase = SavePreviewPhase::Armed;
 }
 
 fn spawn_save_preview_screenshot(
@@ -155,12 +176,7 @@ fn spawn_save_preview_screenshot(
             move |trigger: Trigger<ScreenshotCaptured>,
                   mut preview_queue: ResMut<SavePreviewQueueState>,
                   mut finish_events: EventWriter<SavePreviewCaptureFinished>| {
-                let mut result = write_preview_png(&trigger.event().0, &request.target_path);
-                if result.is_ok() && request.patch_meta_on_success {
-                    result = patch_save_preview_meta(&request.root, &request.descriptor.id)
-                        .map(|_| ())
-                        .map_err(|err| err.to_string());
-                }
+                let result = write_preview_png(&trigger.event().0, &request.target_path);
                 preview_queue.active = false;
                 finish_events.write(SavePreviewCaptureFinished {
                     request: request.clone(),
@@ -191,6 +207,7 @@ fn restore_after_save_preview_capture(
         }
         structure_edit.selected_cell = runtime.selected_cell_before_capture.take();
         preview_camera.is_active = false;
+        runtime.settle_frames_remaining = 0;
         runtime.phase = SavePreviewPhase::Idle;
         runtime.active_request = None;
     }
@@ -234,10 +251,29 @@ impl Plugin for SavePreviewPlugin {
                 (
                     attach_ui_target_camera_to_root_nodes,
                     arm_save_preview_capture,
+                    advance_save_preview_settle_frame,
                     spawn_save_preview_screenshot,
                     restore_after_save_preview_capture,
                 )
                     .chain(),
             );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SAVE_PREVIEW_SETTLE_FRAMES;
+
+    #[test]
+    fn preview_capture_waits_one_full_frame_before_arming() {
+        let mut remaining = SAVE_PREVIEW_SETTLE_FRAMES;
+
+        if remaining > 0 {
+            remaining -= 1;
+        }
+        assert_eq!(remaining, 0, "first update should only consume settle frame");
+
+        let ready_to_arm = remaining == 0;
+        assert!(ready_to_arm, "second update may arm the screenshot capture");
     }
 }

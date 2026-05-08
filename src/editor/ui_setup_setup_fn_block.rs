@@ -234,13 +234,13 @@ fn setup_editor_ui(
             width: DEBUG_PANEL_WIDTH,
             margin_x: DEBUG_PANEL_RIGHT,
             margin_y: DEBUG_PANEL_TOP,
-            stack_gap: DEBUG_AND_GAS_PANEL_GAP,
+            stack_gap: DEFAULT_PANEL_STACK_GAP,
             controls: PanelControls {
                 show_collapse: true,
                 show_close: false,
                 custom_actions: Vec::new(),
             },
-            scroll_policy: PanelScrollPolicy::Never,
+            scroll_policy: PanelScrollPolicy::AutoHalfScreen,
             background: PANEL_BG,
             header_background: crate::ui::palette::PANEL_HEADER_BG,
             initial_visible: false,
@@ -281,7 +281,7 @@ fn setup_editor_ui(
             width: GAS_PANEL_WIDTH,
             margin_x: GAS_PANEL_RIGHT,
             margin_y: DEBUG_PANEL_TOP,
-            stack_gap: DEBUG_AND_GAS_PANEL_GAP,
+            stack_gap: DEFAULT_PANEL_STACK_GAP,
             controls: PanelControls {
                 show_collapse: true,
                 show_close: false,
@@ -308,7 +308,7 @@ fn setup_editor_ui(
             width: STRUCTURE_PANEL_WIDTH,
             margin_x: STRUCTURE_PANEL_RIGHT,
             margin_y: DEBUG_PANEL_TOP,
-            stack_gap: DEBUG_AND_GAS_PANEL_GAP,
+            stack_gap: DEFAULT_PANEL_STACK_GAP,
             controls: PanelControls {
                 show_collapse: true,
                 show_close: false,

@@ -22,7 +22,7 @@ use crate::{
         palette,
         panels::{
             PanelControls, PanelCorner, PanelId, PanelManager, PanelOpenOrder, PanelScrollPolicy,
-            PanelSpec,
+            PanelSpec, DEFAULT_PANEL_STACK_GAP,
         },
         scroll_area::{spawn_scroll_area_scrollbar, ScrollAreaViewport, UiScrollBlockState},
         select_field::{spawn_select_field, SelectFieldConfig, SelectFieldId, SelectFieldState},
@@ -68,7 +68,6 @@ const DEBUG_TOOLBAR_HEIGHT: f32 = 56.0;
 const DEBUG_PANEL_RIGHT: f32 = 12.0;
 const DEBUG_PANEL_TOP: f32 = 12.0;
 const DEBUG_PANEL_WIDTH: f32 = 286.0;
-const DEBUG_AND_GAS_PANEL_GAP: f32 = 12.0;
 
 const GAS_PANEL_RIGHT: f32 = 12.0;
 const GAS_PANEL_WIDTH: f32 = 286.0;

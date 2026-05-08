@@ -156,6 +156,8 @@
   - `vent_choked_pressure_ratio`,
   - `pressure_epsilon_pa`.
 - `SimulationPerfStats` дополнительно хранит `last_pipe_step_ms` и `avg_pipe_step_ms`, а debug-панель показывает отдельное время расчёта труб рядом с общим временем simulation step.
+- Debug Panel использует стандартный panel-режим `AutoHalfScreen`: её общая высота ограничивается половиной доступной высоты окна с учётом верхнего/нижнего отступа, а при превышении этого лимита включается общий scrollbar.
+- Editor-панели используют общий `ui::panels::DEFAULT_PANEL_STACK_GAP`, поэтому расстояние между stacked-панелями семантически относится ко всей panel-системе, а не к конкретной паре `Debug/Gas`.
 - Для самых долгих канонических pipe-сценариев в `src/simulation/pipes/tests.rs` есть быстрые `_smoke` версии: они проверяют раннее сокращение pressure-gap и факт потока по ключевым веткам, а полные acceptance-сценарии запускаются только после успешного smoke-gate.
 
 ### Контракт pipe-тика
@@ -221,14 +223,10 @@
   - обычный `GasFieldSnapshot`;
   - snapshot world-клеток.
 - В save-meta добавлен отдельный preview-chunk `preview_png` (`preview.png`, формат `png_v1`); `SaveDescriptor` теперь хранит optional `preview_path`.
-- Старые чанки `gas_structures` и `pipe_layout` больше не используются для записи новых сейвов, но их чтение сохранено для миграции schema `3`.
-- При загрузке старого сейва выполняется runtime-миграция:
-  - `GasStructureGrid` + `PipeLayoutSnapshot` восстанавливаются из legacy chunk-ов;
-  - затем переводятся в `PlacedStructureSnapshot`;
-  - дальше игра уже работает только на новой модели.
+- `load_save(...)` принимает только текущую schema `5`; старые версии сейвов больше не конвертируются и считаются несовместимыми.
 - После `create_save(...)` и `overwrite_save(...)` сначала коммитятся data-chunk-и слота, а затем отдельно ставится в очередь offscreen-capture preview; это позволяет не откатывать сам слот, если превью не удалось записать.
+- Перед фактическим screenshot-capture preview-pipeline выдерживает один полный кадр в принудительном `OverlayMode::Main`, чтобы offscreen PNG гарантированно снимался в каноническом `F1`, а не в остаточном `F2/F3`.
 - Каноническое preview строится отдельной offscreen-камерой `RenderTarget::Image` размером `512x512` в `F1`-режиме, без UI, с фиксированным охватом всего мира вместе с внешней fade-рамкой.
-- Для старых сейвов добавлен временный служебный бин `src/bin/migrate_save_previews.rs`: он загружает legacy/current slot через обычный save API, восстанавливает runtime world-state, делает тот же offscreen-capture preview и затем патчит `meta.toml` без переписывания старых data-chunk-ов.
 - Добавлен API удаления слота сохранения (`delete_save`) с валидацией целевого слота.
 - Для ручной визуальной проверки pipe-сценариев добавлен служебный бинарник `src/bin/generate_pipe_scenario_saves.rs`: он создаёт пять стартовых сейвов через обычный `create_save(...)`, поэтому format/save-schema у эталонных сценариев полностью совпадает с игровыми слотами.
 

@@ -83,7 +83,7 @@ fn read_meta(path: &Path) -> Result<SaveMetaToml, SaveError> {
 }
 
 fn validate_meta_dimensions(meta: &SaveMetaToml) -> Result<(), SaveError> {
-    if meta.schema_version < 2 || meta.schema_version > SCHEMA_VERSION {
+    if meta.schema_version != SCHEMA_VERSION {
         return Err(SaveError::Validation(format!(
             "Unsupported save schema version {}",
             meta.schema_version
@@ -104,35 +104,6 @@ fn preview_path_from_meta(slot_dir: &Path, meta: &SaveMetaToml) -> Option<PathBu
         .find(|chunk| chunk.id == CHUNK_PREVIEW_PNG_ID)
         .map(|chunk| slot_dir.join(&chunk.file))
         .filter(|path| path.exists())
-}
-
-fn ensure_preview_chunk_meta(meta: &mut SaveMetaToml) {
-    if meta.chunks.iter().any(|chunk| chunk.id == CHUNK_PREVIEW_PNG_ID) {
-        return;
-    }
-    meta.chunks.push(SaveChunkMetaToml {
-        id: CHUNK_PREVIEW_PNG_ID.to_string(),
-        file: PREVIEW_PNG_FILE.to_string(),
-        format: "png_v1".to_string(),
-    });
-}
-
-/// Patches one existing save slot so its meta file references the preview PNG chunk.
-pub fn patch_save_preview_meta(root: &Path, save_id: &str) -> Result<PathBuf, SaveError> {
-    let slot_dir = root.join(save_id);
-    let meta_path = slot_dir.join(META_FILE);
-    if !meta_path.exists() {
-        return Err(SaveError::Validation(format!(
-            "Save slot '{}' has no meta file",
-            save_id
-        )));
-    }
-
-    let mut meta = read_meta(&meta_path)?;
-    meta.schema_version = SCHEMA_VERSION;
-    ensure_preview_chunk_meta(&mut meta);
-    write_meta(&meta_path, &meta)?;
-    Ok(slot_dir.join(PREVIEW_PNG_FILE))
 }
 
 fn write_slot(

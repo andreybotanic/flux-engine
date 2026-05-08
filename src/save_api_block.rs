@@ -39,6 +39,9 @@ pub fn list_saves(root: &Path) -> Result<Vec<SaveDescriptor>, SaveError> {
             continue;
         }
         let meta = read_meta(&meta_path)?;
+        if validate_meta_dimensions(&meta).is_err() {
+            continue;
+        }
         let preview_path = preview_path_from_meta(&path, &meta);
         saves.push(SaveDescriptor {
             id: meta.save_id,
@@ -172,44 +175,19 @@ pub fn load_save(
         slot_dir.join(chunk_map.get(CHUNK_GAS_STATE_ID).ok_or_else(|| {
             SaveError::Validation("Save meta missing gas_state chunk".to_string())
         })?);
-    let placed_structures_path = chunk_map
-        .get(CHUNK_PLACED_STRUCTURES_ID)
-        .map(|file| slot_dir.join(file));
-    let structures_path = chunk_map.get(CHUNK_GAS_STRUCTURES_ID).map(|file| slot_dir.join(file));
-    let pipe_layout_path = chunk_map.get(CHUNK_PIPE_LAYOUT_ID).map(|file| slot_dir.join(file));
-    let pipe_gas_path = chunk_map.get(CHUNK_PIPE_GAS_ID).map(|file| slot_dir.join(file));
+    let placed_structures_path = slot_dir.join(
+        chunk_map.get(CHUNK_PLACED_STRUCTURES_ID).ok_or_else(|| {
+            SaveError::Validation("Save meta missing placed_structures chunk".to_string())
+        })?,
+    );
+    let pipe_gas_path = slot_dir.join(chunk_map.get(CHUNK_PIPE_GAS_ID).ok_or_else(|| {
+        SaveError::Validation("Save meta missing pipe_gas chunk".to_string())
+    })?);
 
     let world_codes = read_world_cells_chunk(&world_path)?;
     let gas_file = read_gas_chunk(&gas_path)?;
-    let legacy_pipe_layout_snapshot = if placed_structures_path.is_none() {
-        Some(if let Some(path) = pipe_layout_path.as_ref() {
-            read_pipe_layout_chunk(path)?
-        } else {
-            crate::world::pipes::PipeGrid::default().snapshot_state()
-        })
-    } else {
-        None
-    };
-    let placed_structures_snapshot = if let Some(path) = placed_structures_path {
-        read_placed_structures_chunk(&path)?
-    } else {
-        let legacy_structures_snapshot = if let Some(path) = structures_path {
-            read_gas_structures_chunk(&path)?
-        } else {
-            crate::world::gas_structures::GasStructureGrid::default().snapshot_state()
-        };
-        migrate_schema3_structures_to_placed(
-            &legacy_structures_snapshot,
-            legacy_pipe_layout_snapshot
-                .as_ref()
-                .expect("legacy pipe layout snapshot must exist for schema3 migration"),
-        )?
-    };
-    let pipe_gas_snapshot = if let Some(path) = pipe_gas_path {
-        read_pipe_gas_chunk(&path, gas_registry, legacy_pipe_layout_snapshot.as_ref())?
-    } else {
-        crate::simulation::pipes::PipeGasField::from_registry(gas_registry).snapshot_state()
-    };
+    let placed_structures_snapshot = read_placed_structures_chunk(&placed_structures_path)?;
+    let pipe_gas_snapshot = read_pipe_gas_chunk(&pipe_gas_path, gas_registry)?;
 
     if gas_file.width != WORLD_WIDTH || gas_file.height != WORLD_HEIGHT {
         return Err(SaveError::Validation(format!(

@@ -18,6 +18,9 @@ const PANEL_HEADER_BUTTON_SIZE: f32 = 24.0;
 const PANEL_HEADER_BUTTON_BG: Color = palette::PANEL_HEADER_BUTTON_BG;
 const PANEL_HEADER_TEXT: Color = palette::TEXT_PRIMARY;
 
+/// Default gap between panels stacked in the same corner.
+pub const DEFAULT_PANEL_STACK_GAP: f32 = 12.0;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 /// Stores `PanelId` state.
 pub struct PanelId(&'static str);

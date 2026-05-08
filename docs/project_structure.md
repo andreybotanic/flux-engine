@@ -28,7 +28,7 @@ FluxEngine/
 |   |-- simulation/          # CPU/GPU симуляция газа, pipe pre-step и parity-инфраструктура.
 |   |   `-- pipes/           # Внутренние модули pressure/fixtures/solver/test-инфраструктуры труб.
 |   |-- ui/                  # Общие UI-компоненты и панели.
-|   `-- world/               # Клеточный мир, unified structures и legacy-модули миграции.
+|   `-- world/               # Клеточный мир и unified structures.
 |-- AGENTS.md                # Правила работы агента.
 |-- Cargo.toml               # Манифест проекта.
 |-- Cargo.lock               # Lock-файл зависимостей.
@@ -69,7 +69,6 @@ FluxEngine/
 - `src/app/mod.rs`: Сборка Bevy-приложения, плагины, backend-инициализация и запуск.
 - `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
-- `src/bin/migrate_save_previews.rs`: Временный служебный бинарник для миграции старых save-slots: прогоняет штатный load + offscreen preview capture и дозаписывает `preview.png`/meta schema `5`.
 - `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации TOML-конфигов, включая `config/structures/*.toml`.
 - `src/config/config_tests_block.rs`: Тесты загрузки и валидации конфигов.
 - `src/config/mod.rs`: Публичные конфиг-типы, runtime-реестры visual/layout-метаданных и входная точка загрузки конфигов.
@@ -94,15 +93,15 @@ FluxEngine/
 - `src/main.rs`: Точка входа бинаря; запускает приложение.
 - `src/render/mod.rs`: Плагин рендера и порядок render-систем, включая pipe visuals.
 - `src/render/pipe_highlight_material.rs`: Кастомный `Material2d` и helper-логика для shader-подсветки труб в `F3`.
-- `src/render/save_preview.rs`: Offscreen preview pipeline для save-slots: отдельная камера, screenshot capture, PNG-запись и восстановление UI/overlay состояния после кадра.
+- `src/render/save_preview.rs`: Offscreen preview pipeline для save-slots: отдельная камера, settle-frame в каноническом `F1`, screenshot capture, PNG-запись и восстановление UI/overlay состояния после кадра.
 - `src/render/world_view.rs`: Публичные render-системы world view, config-driven appearance z-order и layer-based pipe/bridge visuals.
 - `src/render/world_view_overlay_block.rs`: Логика overlay-режимов `F1/F2/F3`, курсорной сетки, multi-container pipe gas-square sizing, flow-packet анимации и фильтрации визуального шума для пакетов `< 5` частиц.
 - `src/render/world_view_setup_block.rs`: Построение сущностей мира/слоёв, config-driven z-order стен/структур и спавн визуалов из `PlacedStructureMap`.
 - `src/render/world_view_tests_block.rs`: Тесты вспомогательной математики рендера.
 - `src/save.rs`: Публичный save/load API, типы состояния меню/сессии и queue/event контракты preview-capture.
 - `src/save_api_block.rs`: Операции верхнего уровня: list/create/overwrite/load snapshot и canonical preview-path для slot-а.
-- `src/save_gas_io_block.rs`: Чтение/запись gas, unified placed-structures и node-based pipe-gas chunk, плюс миграция schema `3`.
-- `src/save_meta_io_block.rs`: Метаданные сейва, версия схемы, preview-chunk `png_v1` и точечный patch helper для preview-миграции.
+- `src/save_gas_io_block.rs`: Чтение/запись chunk-ов мира, газа, unified placed-structures и node-based pipe-gas формата текущей save-схемы.
+- `src/save_meta_io_block.rs`: Метаданные сейва, валидация единственной поддерживаемой save-схемы и preview-chunk `png_v1`.
 - `src/save_tests_block.rs`: Тесты сохранения/загрузки и валидации формата.
 - `src/simulation/backend.rs`: Конфиг backend и параметры размера мира для симуляции.
 - `src/simulation/discrete_step.rs`: Публичные контракты дискретного CPU-шага газа.
@@ -140,9 +139,7 @@ FluxEngine/
 - `src/ui/scroll_area.rs`: Общий scroll-area runtime для modal/panel viewport-ов: wheel input, drag thumb, click on track, visibility scrollbar и приоритет групп ввода.
 - `src/ui/select_field.rs`: Dropdown/select-компонент для UI-панелей и его тесты.
 - `src/ui/sim_controls.rs`: UI-контролы симуляции (pause/speed/hotkeys).
-- `src/world/gas_structures.rs`: Legacy Source/Sink grid и snapshot schema `2/3`, сохранённый для backward-compatible загрузки и старых unit-тестов.
 - `src/world/grid.rs`: Клеточная сетка мира, материалы, координатные утилиты и тесты.
 - `src/world/mod.rs`: Плагин мира и события изменений клеток.
-- `src/world/pipes.rs`: Legacy `PipeGrid`/`PipeLayoutSnapshot`, сохранённые для schema `3` миграции и регрессионных тестов.
 - `src/world/structures.rs`: Unified layer/descriptor-модель структур, `PlacedStructureMap`, rotation, bridge-footprint и pipe-cut state.
 - `tmp_size.rs`: Временный локальный вспомогательный Rust-файл для ручных проверок/черновых экспериментов.

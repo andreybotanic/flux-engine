@@ -190,7 +190,6 @@ fn handle_main_menu_actions(
                             &mut preview_queue,
                             descriptor.clone(),
                             format!("Saved '{}'.", descriptor.display_name),
-                            false,
                         ) {
                             menu_ui.status_text = format!(
                                 "Saved '{}', but preview setup failed: {}",
@@ -292,7 +291,6 @@ fn handle_main_menu_actions(
                                     &mut preview_queue,
                                     descriptor.clone(),
                                     format!("Overwritten '{}'.", descriptor.display_name),
-                                    false,
                                 ) {
                                     menu_ui.status_text = format!(
                                         "Overwritten '{}', but preview setup failed: {}",
@@ -525,7 +523,6 @@ fn queue_save_preview_capture(
     preview_queue: &mut SavePreviewQueueState,
     descriptor: crate::save::SaveDescriptor,
     success_status_text: String,
-    patch_meta_on_success: bool,
 ) -> Result<(), String> {
     if preview_queue.is_busy() {
         return Err("another save preview capture is already running".to_string());
@@ -536,12 +533,10 @@ fn queue_save_preview_capture(
         .clone()
         .unwrap_or_else(|| save_preview_target_path(root, &descriptor.id));
     preview_queue.pending = Some(SavePreviewRequest {
-        root: root.to_path_buf(),
         descriptor,
         target_path,
         post_save_action,
         success_status_text,
-        patch_meta_on_success,
     });
     menu_ui.confirm_state = None;
     menu_ui.confirm_text.clear();
@@ -647,7 +642,6 @@ mod main_menu_actions_tests {
             &mut preview_queue,
             descriptor,
             "Saved 'Slot 1'.".to_string(),
-            false,
         )
         .expect("queue preview");
 
