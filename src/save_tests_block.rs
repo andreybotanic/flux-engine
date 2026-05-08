@@ -69,8 +69,7 @@ mod tests {
         assert!(structures.place_vent(20, 20, &world));
         assert!(structures.place_vent(21, 20, &world));
         pipe_gas.sync_to_structures(&structures);
-        let accepted = pipe_gas.add_species_counts_limited(0, &[70, 30, 0]);
-        assert_eq!(accepted.iter().copied().sum::<u32>(), 100);
+        pipe_gas.add_species_counts(0, &[70_000, 30_000, 0]);
 
         let descriptor = create_save(
             &root,
@@ -120,7 +119,7 @@ mod tests {
         assert!(restored_structures.editable_structure_at(15, 14).is_some());
         assert!(restored_structures.has_pipe_at(20, 20));
         assert!(restored_structures.has_vent_at(20, 20));
-        assert_eq!(restored_pipe_gas.total_amount_particles(0), 100);
+        assert_eq!(restored_pipe_gas.total_amount_particles(0), 100_000);
 
         let _ = fs::remove_dir_all(root);
     }

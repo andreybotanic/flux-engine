@@ -17,6 +17,7 @@ mod tests {
         PipeGasField,
         PipeTransferRecord, PipeTransferVisualPath,
     };
+    use crate::simulation::PipeSimulationConfig;
     use bevy::prelude::Visibility;
     use bevy::math::{UVec2, Vec2, Vec3};
     use crate::world::{
@@ -40,6 +41,10 @@ mod tests {
             },
         ])
         .expect("test registry")
+    }
+
+    fn pipe_config() -> PipeSimulationConfig {
+        PipeSimulationConfig::default()
     }
 
     #[test]
@@ -227,26 +232,32 @@ mod tests {
 
     #[test]
     fn pipe_gas_square_size_scales_with_amount_and_hits_expected_max() {
-        let low = pipe_gas_square_size(1);
-        let mid = pipe_gas_square_size(500);
-        let full = pipe_gas_square_size(1_000);
+        let config = pipe_config();
+        let low = pipe_gas_square_size(&config, 1);
+        let mid = pipe_gas_square_size(&config, 500);
+        let full = pipe_gas_square_size(&config, 1_000);
+        let denser = pipe_gas_square_size(&config, 10_000);
 
         assert!(low > 0.0);
         assert!(mid > low);
         assert!(full > mid);
-        assert!((full - super::CELL_SIZE * 0.63).abs() < 1e-6);
+        assert!(denser > full);
+        assert!(denser < super::CELL_SIZE * 0.63);
     }
 
     #[test]
     fn pipe_flow_square_size_stays_smaller_than_static_square() {
-        let static_half = pipe_gas_square_size(500);
-        let flow_half = pipe_flow_square_size(500);
-        let flow_full = pipe_flow_square_size(1_000);
+        let config = pipe_config();
+        let static_half = pipe_gas_square_size(&config, 500);
+        let flow_half = pipe_flow_square_size(&config, 500);
+        let flow_full = pipe_flow_square_size(&config, 1_000);
+        let flow_dense = pipe_flow_square_size(&config, 10_000);
 
         assert!(flow_half > 0.0);
         assert!(flow_full > flow_half);
         assert!(flow_half < static_half);
-        assert!((flow_full - super::CELL_SIZE * 0.504).abs() < 1e-6);
+        assert!(flow_dense > flow_full);
+        assert!(flow_dense < super::CELL_SIZE * 0.504);
     }
 
     #[test]
@@ -257,14 +268,18 @@ mod tests {
 
     #[test]
     fn pipe_flow_packet_visual_gets_brighter_and_less_transparent_with_more_gas() {
-        let low = pipe_flow_packet_visual(1);
-        let mid = pipe_flow_packet_visual(500);
-        let full = pipe_flow_packet_visual(1_000);
+        let config = pipe_config();
+        let low = pipe_flow_packet_visual(&config, 1);
+        let mid = pipe_flow_packet_visual(&config, 500);
+        let full = pipe_flow_packet_visual(&config, 1_000);
+        let denser = pipe_flow_packet_visual(&config, 10_000);
 
         assert!(low.intensity < mid.intensity && mid.intensity < full.intensity);
         assert!(low.fill_alpha < mid.fill_alpha && mid.fill_alpha < full.fill_alpha);
         assert!(low.fill_alpha < 0.2);
-        assert!((full.fill_alpha - 0.92).abs() < 1e-6);
+        assert!(denser.intensity > full.intensity);
+        assert!(denser.fill_alpha > full.fill_alpha);
+        assert!(denser.fill_alpha < 0.92);
     }
 
     #[test]

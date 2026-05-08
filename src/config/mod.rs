@@ -332,10 +332,18 @@ impl GameConfig {
             },
             pipe: PipeSimulationConfig {
                 cell_volume_ratio: simulation.pipe.cell_volume_ratio,
-                segment_capacity_particles: simulation.pipe.segment_capacity_particles,
-                edge_transfer_per_tick: simulation.pipe.edge_transfer_per_tick,
-                vent_transfer_per_tick: simulation.pipe.vent_transfer_per_tick,
-                pressure_epsilon: simulation.pipe.pressure_epsilon,
+                cell_particle_pressure_pa: simulation.pipe.cell_particle_pressure_pa,
+                pipe_flux_gain: simulation.pipe.pipe_flux_gain,
+                pipe_flux_damping: simulation.pipe.pipe_flux_damping,
+                max_pipe_flux_particles_per_tick: simulation
+                    .pipe
+                    .max_pipe_flux_particles_per_tick,
+                vent_discharge_coefficient: simulation.pipe.vent_discharge_coefficient,
+                max_vent_flux_particles_per_tick: simulation
+                    .pipe
+                    .max_vent_flux_particles_per_tick,
+                vent_choked_pressure_ratio: simulation.pipe.vent_choked_pressure_ratio,
+                pressure_epsilon_pa: simulation.pipe.pressure_epsilon_pa,
             },
         };
 

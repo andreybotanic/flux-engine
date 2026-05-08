@@ -39,10 +39,14 @@ buoyancy_force_cap = 0.30
 
 [pipe]
 cell_volume_ratio = 25.0
-segment_capacity_particles = 1000
-edge_transfer_per_tick = 200
-vent_transfer_per_tick = 200
-pressure_epsilon = 0.01
+cell_particle_pressure_pa = 1.0
+pipe_flux_gain = 180.0
+pipe_flux_damping = 0.82
+max_pipe_flux_particles_per_tick = 2000.0
+vent_discharge_coefficient = 110.0
+max_vent_flux_particles_per_tick = 1500.0
+vent_choked_pressure_ratio = 0.53
+pressure_epsilon_pa = 0.01
 
 [visual]
 gamma = 1.0

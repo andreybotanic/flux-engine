@@ -6,13 +6,10 @@ fn effective_target_hz(base_hz: u32, speed: SimulationSpeed) -> f64 {
 fn initialize_gas_state_from_registry(
     mut commands: Commands,
     registry: Res<GasRegistry>,
-    config: Res<GasSimulationConfig>,
 ) {
     commands.insert_resource(GasField::from_registry(&registry));
-    commands.insert_resource(crate::simulation::pipes::PipeGasField::from_registry_with_capacity(
-        &registry,
-        config.pipe.segment_capacity_particles,
-    ));
+    commands.insert_resource(crate::simulation::pipes::PipeGasField::from_registry(&registry));
+    commands.insert_resource(crate::simulation::pipes::PipeFluxField::default());
 }
 
 fn apply_fixed_rate_config(
@@ -81,6 +78,7 @@ fn run_simulation_tick(
     mut gas: ResMut<GasField>,
     structures: Res<PlacedStructureMap>,
     mut pipe_gas: ResMut<crate::simulation::pipes::PipeGasField>,
+    mut pipe_flux: ResMut<crate::simulation::pipes::PipeFluxField>,
     mut pipe_flow_visuals: ResMut<crate::simulation::pipes::PipeFlowVisualState>,
     world: Res<WorldGrid>,
     mut step: ResMut<SimulationStep>,
@@ -98,14 +96,23 @@ fn run_simulation_tick(
         return;
     }
 
+    let pipe_started_at = Instant::now();
     let changed_by_pipes = crate::simulation::pipes::apply_pipe_network_step(
         &structures,
         &mut pipe_gas,
+        &mut pipe_flux,
         &mut gas,
         &world,
         &mut pipe_flow_visuals,
         &config.pipe,
     );
+    let pipe_elapsed_ms = pipe_started_at.elapsed().as_secs_f32() * 1000.0;
+    perf.last_pipe_step_ms = pipe_elapsed_ms;
+    perf.avg_pipe_step_ms = if perf.avg_pipe_step_ms <= f32::EPSILON {
+        pipe_elapsed_ms
+    } else {
+        perf.avg_pipe_step_ms * 0.9 + pipe_elapsed_ms * 0.1
+    };
     let changed_by_structures = apply_gas_structures_pre_step(&structures, &mut gas, &world);
     if (changed_by_pipes || changed_by_structures) && backend.backend == SimulationBackend::Gpu {
         gpu_state.needs_full_upload = true;

@@ -18,7 +18,7 @@ use crate::{
     simulation::{
         gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
         pipes::{pipe_cell_display_blocks_with_transfers, PipeFlowVisualState, PipeGasField},
-        SimulationStep,
+        GasSimulationConfig, SimulationStep,
     },
     ui::panels::PanelManager,
     world::grid::{

@@ -14,6 +14,7 @@ fn handle_main_menu_actions(
         ResMut<PlacedStructureMap>,
         ResMut<GasField>,
         ResMut<crate::simulation::pipes::PipeGasField>,
+        ResMut<crate::simulation::pipes::PipeFluxField>,
         ResMut<SimulationStep>,
         ResMut<SaveSessionState>,
         ResMut<WorldLoadState>,
@@ -30,6 +31,7 @@ fn handle_main_menu_actions(
         mut structures,
         mut gas,
         mut pipe_gas,
+        mut pipe_flux,
         mut step,
         mut save_session,
         mut world_load_state,
@@ -67,6 +69,7 @@ fn handle_main_menu_actions(
                     &mut structures,
                     &mut gas,
                     &mut pipe_gas,
+                    &mut pipe_flux,
                     &mut step,
                     &mut world_changed,
                 ) {
@@ -122,6 +125,7 @@ fn handle_main_menu_actions(
                         &mut structures,
                         &mut gas,
                         &mut pipe_gas,
+                        &mut pipe_flux,
                         &mut step,
                         &mut world_changed,
                     ) {
@@ -191,6 +195,7 @@ fn handle_main_menu_actions(
                                         &mut structures,
                                         &mut gas,
                                         &mut pipe_gas,
+                                        &mut pipe_flux,
                                         &mut step,
                                         &mut world_changed,
                                     ) {
@@ -247,6 +252,7 @@ fn handle_main_menu_actions(
                             &mut structures,
                             &mut gas,
                             &mut pipe_gas,
+                            &mut pipe_flux,
                             &mut step,
                             &mut world_changed,
                         ) {
@@ -306,6 +312,7 @@ fn handle_main_menu_actions(
                                                 &mut structures,
                                                 &mut gas,
                                                 &mut pipe_gas,
+                                                &mut pipe_flux,
                                                 &mut step,
                                                 &mut world_changed,
                                             ) {
@@ -385,6 +392,7 @@ fn handle_main_menu_actions(
                             &mut structures,
                             &mut gas,
                             &mut pipe_gas,
+                            &mut pipe_flux,
                             &mut step,
                             &mut world_changed,
                         ) {
@@ -443,15 +451,30 @@ fn apply_runtime_world_state(
     structures: &mut PlacedStructureMap,
     gas: &mut GasField,
     pipe_gas: &mut crate::simulation::pipes::PipeGasField,
+    pipe_flux: &mut crate::simulation::pipes::PipeFluxField,
     step: &mut SimulationStep,
     world_changed: &mut EventWriter<WorldCellChanged>,
+) -> Result<(), String> {
+    restore_runtime_world_resources(state, world, structures, gas, pipe_gas, pipe_flux, step)?;
+    emit_full_world_changed(world_changed);
+    Ok(())
+}
+
+fn restore_runtime_world_resources(
+    state: crate::save::RuntimeWorldState,
+    world: &mut WorldGrid,
+    structures: &mut PlacedStructureMap,
+    gas: &mut GasField,
+    pipe_gas: &mut crate::simulation::pipes::PipeGasField,
+    pipe_flux: &mut crate::simulation::pipes::PipeFluxField,
+    step: &mut SimulationStep,
 ) -> Result<(), String> {
     world.restore_from_cell_codes(&state.world_cell_codes)?;
     structures.restore_state(&state.placed_structures_snapshot, world)?;
     gas.restore_state(&state.gas_snapshot)?;
     pipe_gas.restore_state(&state.pipe_gas_snapshot, structures)?;
+    pipe_flux.clear_all();
     step.0 = state.simulation_step;
-    emit_full_world_changed(world_changed);
     Ok(())
 }
 
@@ -482,4 +505,74 @@ fn open_delete_confirmation(menu_ui: &mut MainMenuUiState, save_id: String) {
     menu_ui.confirm_state = Some(MainMenuConfirmState::DeleteSave(save_id));
     menu_ui.confirm_text = "This save slot will be deleted permanently. Continue?".to_string();
     menu_ui.screen = MainMenuScreen::Confirm;
+}
+
+#[cfg(test)]
+mod main_menu_actions_tests {
+    use super::restore_runtime_world_resources;
+    use crate::{
+        config::{GasDefinition, GasRegistry},
+        save::new_game_snapshot,
+        simulation::{
+            gas::GasField,
+            pipes::{apply_pipe_network_step, PipeFlowVisualState, PipeFluxField, PipeGasField},
+            PipeSimulationConfig, SimulationStep,
+        },
+        world::{grid::WorldGrid, structures::PlacedStructureMap},
+    };
+
+    fn registry() -> GasRegistry {
+        GasRegistry::new(vec![GasDefinition {
+            id: "h2".to_string(),
+            label: "Hydrogen".to_string(),
+            molecular_mass: 2.016,
+            color: [0.7, 0.8, 1.0],
+        }])
+        .expect("test registry")
+    }
+
+    #[test]
+    fn restoring_runtime_world_resets_pipe_flux_but_keeps_saved_pipe_gas() {
+        let registry = registry();
+        let mut world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        let mut gas = GasField::from_registry(&registry);
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        let mut pipe_flux = PipeFluxField::default();
+        let mut step = SimulationStep(99);
+
+        assert!(structures.place_pipe(8, 8, &world));
+        assert!(structures.place_pipe(9, 8, &world));
+        assert!(structures.place_vent(8, 8, &world));
+        pipe_gas.sync_to_structures(&structures);
+        gas.set_amount(8, 8, 0, 100_000.0);
+        let _ = apply_pipe_network_step(
+            &structures,
+            &mut pipe_gas,
+            &mut pipe_flux,
+            &mut gas,
+            &world,
+            &mut PipeFlowVisualState::default(),
+            &PipeSimulationConfig::default(),
+        );
+        assert!(pipe_flux.edge_count() > 0);
+        assert!(pipe_flux.max_abs_flux() > 0.0);
+
+        let state = new_game_snapshot(&registry);
+        restore_runtime_world_resources(
+            state,
+            &mut world,
+            &mut structures,
+            &mut gas,
+            &mut pipe_gas,
+            &mut pipe_flux,
+            &mut step,
+        )
+        .expect("restore runtime world");
+
+        assert_eq!(pipe_gas.node_count(), 0);
+        assert_eq!(pipe_flux.edge_count(), 0);
+        assert_eq!(pipe_flux.max_abs_flux(), 0.0);
+        assert_eq!(step.0, 0);
+    }
 }

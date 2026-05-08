@@ -9,10 +9,11 @@ use crate::{
     simulation::{
         gas::GasField,
         pipes::{
+            pressure::{format_pressure_pa, pipe_pressure_pa, world_pressure_pa},
             pipe_cell_display_blocks_with_transfers, PipeContainerKind, PipeFlowVisualState,
             PipeGasField,
         },
-        SimulationControl,
+        GasSimulationConfig, SimulationControl,
     },
     ui::palette,
     ui::panels::PanelManager,
@@ -69,6 +70,7 @@ pub(crate) fn update_cell_inspector(
     debug_mode: Res<crate::debug::DebugMode>,
     panel_manager: Res<PanelManager>,
     gas: Res<GasField>,
+    config: Res<GasSimulationConfig>,
     gas_registry: Res<GasRegistry>,
     world: Res<WorldGrid>,
     pipe_state: (
@@ -130,6 +132,7 @@ pub(crate) fn update_cell_inspector(
         cell,
         &world,
         &gas,
+        &config.pipe,
         &gas_registry,
         &pipe_layout,
         &pipe_gas,
@@ -159,6 +162,7 @@ fn build_cell_inspector_message(
     cell: UVec2,
     world: &WorldGrid,
     gas: &GasField,
+    pipe_config: &crate::simulation::PipeSimulationConfig,
     gas_registry: &GasRegistry,
     structures: &PlacedStructureMap,
     pipe_gas: &PipeGasField,
@@ -177,6 +181,13 @@ fn build_cell_inspector_message(
     message.push_str(&format!(
         "Total: {} particles",
         gas.total_amount_rounded(cell.x, cell.y)
+    ));
+    message.push_str(&format!(
+        "\nPressure: {}",
+        format_pressure_pa(world_pressure_pa(
+            pipe_config,
+            gas.total_amount_rounded(cell.x, cell.y),
+        ))
     ));
 
     let display_blocks = pipe_cell_display_blocks_with_transfers(
@@ -204,10 +215,14 @@ fn build_cell_inspector_message(
                 block.species_counts.get(gas_index).copied().unwrap_or(0)
             });
             message.push_str(&format!(
-                "{} total: {} / {}",
+                "{} total: {} particles",
                 label,
-                block.total_particles,
-                pipe_gas.capacity_particles()
+                block.total_particles
+            ));
+            message.push_str(&format!(
+                "\n{} pressure: {}",
+                label,
+                format_pressure_pa(pipe_pressure_pa(pipe_config, block.total_particles))
             ));
             if index + 1 < display_blocks.len() {
                 message.push_str("\n\n");
@@ -262,8 +277,10 @@ mod tests {
         simulation::{
             gas::GasField,
             pipes::{
+                pressure::{format_pressure_pa, pipe_pressure_pa, world_pressure_pa},
                 PipeFlowVisualState, PipeGasField, PipeTransferRecord, PipeTransferVisualPath,
             },
+            PipeSimulationConfig,
         },
         world::{grid::WorldGrid, structures::PlacedStructureMap},
     };
@@ -285,6 +302,10 @@ mod tests {
             },
         ])
         .expect("test registry")
+    }
+
+    fn pipe_config() -> PipeSimulationConfig {
+        PipeSimulationConfig::default()
     }
 
     #[test]
@@ -311,13 +332,14 @@ mod tests {
         assert!(structures.place_vent(12, 14, &world));
         gas.set_amount(12, 14, 0, 5.0);
         pipe_gas.sync_to_structures(&structures);
-        pipe_gas.add_species_counts_limited(0, &[7, 2]);
+        pipe_gas.add_species_counts(0, &[7, 2]);
 
         let message = build_cell_inspector_message(
             "F3 Pipes",
             UVec2::new(12, 14),
             &world,
             &gas,
+            &pipe_config(),
             &registry,
             &structures,
             &pipe_gas,
@@ -326,15 +348,19 @@ mod tests {
         );
 
         assert!(message.contains("Pipe + Vent"));
-        assert!(message.contains("Pipe + Vent total: 9 / 1000"));
+        assert!(message.contains("Pipe + Vent total: 9 particles"));
+        assert!(message.contains(&format!(
+            "Pipe + Vent pressure: {}",
+            format_pressure_pa(pipe_pressure_pa(&pipe_config(), 9))
+        )));
         assert!(message.contains("H2: 7 particles"));
         assert!(message.contains("O2: 2 particles"));
     }
 
     #[test]
     fn panel_height_grows_when_pipe_block_is_present() {
-        let short = "F1 Main\n(1, 1) empty\nH2: 0 particles\nTotal: 0 particles";
-        let tall = "F3 Pipes\n(1, 1) empty\nH2: 0 particles\nTotal: 0 particles\n\nPipe\nH2: 10 particles\nPipe total: 10 / 1000";
+        let short = "F1 Main\n(1, 1) empty\nH2: 0 particles\nTotal: 0 particles\nPressure: 0Pa";
+        let tall = "F3 Pipes\n(1, 1) empty\nH2: 0 particles\nTotal: 0 particles\nPressure: 0Pa\n\nPipe\nH2: 10 particles\nPipe total: 10 particles\nPipe pressure: 250Pa";
         assert!(estimate_cell_inspector_height(tall) > estimate_cell_inspector_height(short));
     }
 
@@ -363,6 +389,7 @@ mod tests {
             UVec2::new(8, 9),
             &world,
             &gas,
+            &pipe_config(),
             &registry,
             &structures,
             &pipe_gas,
@@ -372,7 +399,7 @@ mod tests {
 
         assert!(message.contains("H2: 4 particles"));
         assert!(message.contains("O2: 1 particles"));
-        assert!(message.contains("Pipe total: 5 / 1000"));
+        assert!(message.contains("Pipe total: 5 particles"));
     }
 
     #[test]
@@ -400,6 +427,7 @@ mod tests {
             UVec2::new(8, 9),
             &world,
             &gas,
+            &pipe_config(),
             &registry,
             &structures,
             &pipe_gas,
@@ -409,6 +437,35 @@ mod tests {
 
         assert!(message.contains("H2: 0 particles"));
         assert!(message.contains("O2: 0 particles"));
-        assert!(message.contains("Pipe total: 0 / 1000"));
+        assert!(message.contains("Pipe total: 0 particles"));
+    }
+
+    #[test]
+    fn message_shows_world_pressure_line() {
+        let registry = registry();
+        let world = WorldGrid::default();
+        let structures = PlacedStructureMap::default();
+        let pipe_gas = PipeGasField::from_registry(&registry);
+        let mut gas = GasField::from_registry(&registry);
+        gas.set_amount(4, 5, 0, 1_250.0);
+
+        let message = build_cell_inspector_message(
+            "F1 Main",
+            UVec2::new(4, 5),
+            &world,
+            &gas,
+            &pipe_config(),
+            &registry,
+            &structures,
+            &pipe_gas,
+            &PipeFlowVisualState::default(),
+            false,
+        );
+
+        assert!(message.contains("Total: 1250 particles"));
+        assert!(message.contains(&format!(
+            "Pressure: {}",
+            format_pressure_pa(world_pressure_pa(&pipe_config(), 1_250))
+        )));
     }
 }

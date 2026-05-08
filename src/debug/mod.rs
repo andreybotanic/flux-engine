@@ -6,7 +6,7 @@ use crate::{
     simulation::{
         apply_gas_structures_pre_step, do_one_substep,
         gas::GasField,
-        pipes::{apply_pipe_network_step, PipeFlowVisualState, PipeGasField},
+        pipes::{apply_pipe_network_step, PipeFlowVisualState, PipeFluxField, PipeGasField},
         BlockSyncState, GasSimulationConfig, SimulationControl, SimulationStep,
     },
     world::{
@@ -99,6 +99,7 @@ fn handle_debug_keys(
     mut gas: ResMut<GasField>,
     structures: Res<PlacedStructureMap>,
     mut pipe_gas: ResMut<PipeGasField>,
+    mut pipe_flux: ResMut<PipeFluxField>,
     mut pipe_flow_visuals: ResMut<PipeFlowVisualState>,
     world: Res<WorldGrid>,
     mut step: ResMut<SimulationStep>,
@@ -118,6 +119,7 @@ fn handle_debug_keys(
         let _ = apply_pipe_network_step(
             &structures,
             &mut pipe_gas,
+            &mut pipe_flux,
             &mut gas,
             &world,
             &mut pipe_flow_visuals,

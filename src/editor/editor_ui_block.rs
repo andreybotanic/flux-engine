@@ -403,10 +403,12 @@ fn refresh_editor_ui(
         let mut perf_text = ui.text_set_primary.p2();
         let speed_mult = sim_control.speed.multiplier();
         perf_text.0 = format!(
-            "Iterations: {} | Step ms: {:.3} | avg: {:.3} | Target Hz: {} x {} = {:.1} | Actual Hz: {:.1} | GPU compute/upload/readback/total: {:.3}/{:.3}/{:.3}/{:.3} ms",
+            "Iterations: {} | Step ms: {:.3} | avg: {:.3} | Pipe ms: {:.3} | avg: {:.3} | Target Hz: {} x {} = {:.1} | Actual Hz: {:.1} | GPU compute/upload/readback/total: {:.3}/{:.3}/{:.3}/{:.3} ms",
             sim_step.0,
             sim_perf.last_step_ms,
             sim_perf.avg_step_ms,
+            sim_perf.last_pipe_step_ms,
+            sim_perf.avg_pipe_step_ms,
             sim_rate.target_hz,
             speed_mult,
             sim_perf.target_hz_effective,

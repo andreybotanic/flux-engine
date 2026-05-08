@@ -112,20 +112,28 @@ impl Default for SolverTuning {
 /// Stores configuration for the pressure-driven pipe simulation.
 pub struct PipeSimulationConfig {
     pub cell_volume_ratio: f32,
-    pub segment_capacity_particles: u32,
-    pub edge_transfer_per_tick: u32,
-    pub vent_transfer_per_tick: u32,
-    pub pressure_epsilon: f32,
+    pub cell_particle_pressure_pa: f32,
+    pub pipe_flux_gain: f32,
+    pub pipe_flux_damping: f32,
+    pub max_pipe_flux_particles_per_tick: f32,
+    pub vent_discharge_coefficient: f32,
+    pub max_vent_flux_particles_per_tick: f32,
+    pub vent_choked_pressure_ratio: f32,
+    pub pressure_epsilon_pa: f32,
 }
 
 impl Default for PipeSimulationConfig {
     fn default() -> Self {
         Self {
             cell_volume_ratio: 25.0,
-            segment_capacity_particles: 1_000,
-            edge_transfer_per_tick: 200,
-            vent_transfer_per_tick: 200,
-            pressure_epsilon: 0.01,
+            cell_particle_pressure_pa: 1.0,
+            pipe_flux_gain: 8_000.0,
+            pipe_flux_damping: 0.993,
+            max_pipe_flux_particles_per_tick: 50_000.0,
+            vent_discharge_coefficient: 7.8,
+            max_vent_flux_particles_per_tick: 200_000.0,
+            vent_choked_pressure_ratio: 0.53,
+            pressure_epsilon_pa: 0.01,
         }
     }
 }
@@ -179,6 +187,8 @@ pub struct SimulationPerfStats {
     pub avg_step_ms: f32,
     pub actual_hz: f32,
     pub target_hz_effective: f32,
+    pub last_pipe_step_ms: f32,
+    pub avg_pipe_step_ms: f32,
     pub last_gpu_compute_ms: f32,
     pub last_upload_to_gpu_ms: f32,
     pub last_readback_from_gpu_ms: f32,
@@ -194,6 +204,8 @@ impl Default for SimulationPerfStats {
             avg_step_ms: 0.0,
             actual_hz: 0.0,
             target_hz_effective: 30.0,
+            last_pipe_step_ms: 0.0,
+            avg_pipe_step_ms: 0.0,
             last_gpu_compute_ms: 0.0,
             last_upload_to_gpu_ms: 0.0,
             last_readback_from_gpu_ms: 0.0,

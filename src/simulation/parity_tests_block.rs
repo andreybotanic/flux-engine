@@ -7,7 +7,7 @@ mod tests {
     };
     use crate::simulation::{
         gas::GasField,
-        pipes::{apply_pipe_network_step, PipeFlowVisualState, PipeGasField},
+        pipes::{apply_pipe_network_step, PipeFlowVisualState, PipeFluxField, PipeGasField},
     };
     use crate::simulation::gpu_solver::GpuGasSolver;
     use crate::world::{
@@ -89,6 +89,8 @@ mod tests {
         let mut gpu_field = cpu_field.clone();
         let mut cpu_pipe = PipeGasField::from_registry(&registry);
         let mut gpu_pipe = PipeGasField::from_registry(&registry);
+        let mut cpu_flux = PipeFluxField::default();
+        let mut gpu_flux = PipeFluxField::default();
         cpu_pipe.sync_to_structures(&structures);
         gpu_pipe.sync_to_structures(&structures);
         let mut cpu_visuals = PipeFlowVisualState::default();
@@ -104,6 +106,7 @@ mod tests {
             let _ = apply_pipe_network_step(
                 &structures,
                 &mut cpu_pipe,
+                &mut cpu_flux,
                 &mut cpu_field,
                 &world,
                 &mut cpu_visuals,
@@ -120,6 +123,7 @@ mod tests {
             let changed = apply_pipe_network_step(
                 &structures,
                 &mut gpu_pipe,
+                &mut gpu_flux,
                 &mut gpu_field,
                 &world,
                 &mut gpu_visuals,

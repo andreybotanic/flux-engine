@@ -664,8 +664,12 @@ fn pipe_overlay_slot_offset(slot: usize, total_slots: usize) -> Vec2 {
     }
 }
 
-fn pipe_overlay_slot_size(total_particles: u32, total_slots: usize) -> f32 {
-    let base = pipe_gas_square_size(total_particles);
+fn pipe_overlay_slot_size(
+    config: &crate::simulation::PipeSimulationConfig,
+    total_particles: u32,
+    total_slots: usize,
+) -> f32 {
+    let base = pipe_gas_square_size(config, total_particles);
     if total_slots <= 1 {
         base
     } else {

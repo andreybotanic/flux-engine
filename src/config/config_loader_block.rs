@@ -31,10 +31,14 @@ struct SolverTuningToml {
 #[derive(Deserialize)]
 struct PipeToml {
     cell_volume_ratio: f32,
-    segment_capacity_particles: u32,
-    edge_transfer_per_tick: u32,
-    vent_transfer_per_tick: u32,
-    pressure_epsilon: f32,
+    cell_particle_pressure_pa: f32,
+    pipe_flux_gain: f32,
+    pipe_flux_damping: f32,
+    max_pipe_flux_particles_per_tick: f32,
+    vent_discharge_coefficient: f32,
+    max_vent_flux_particles_per_tick: f32,
+    vent_choked_pressure_ratio: f32,
+    pressure_epsilon_pa: f32,
 }
 
 #[derive(Deserialize)]
