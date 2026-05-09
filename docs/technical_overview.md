@@ -327,6 +327,14 @@
 
 ### Рендер мира и главное меню
 
+- В `src/ui/modal.rs` добавлена переиспользуемая modal-подсистема backdrop-эффектов; любая модалка может выбрать один из двух режимов:
+  - `PanelFrosted`: снаружи fullscreen-фон остаётся чётким, а blur живёт только внутри clipped panel-surface, как у матовой пластины;
+  - `FullscreenBlur`: весь backdrop под модалкой заменяется размытой fullscreen-копией.
+- Источник backdrop и эффект разведены отдельно: modal runtime поддерживает комбинации `Asset(...)` и `WorldSnapshot` с любым из двух режимов, а текущее главное меню использует `Asset + PanelFrosted`, тогда как внутриигровое меню использует `WorldSnapshot + FullscreenBlur`.
+- Внешняя тень modal-shell вынесена в reusable helper: `modal_panel_box_shadow()` добавляет более тёмную `BoxShadow`-рамку вокруг `ModalPanelSurface`, не меняя clipped frosted/fullscreen backdrop-логику внутри панели.
+- Поверх panel-local blur теперь есть отдельный глобально поддержанный `panel_overlay_tint`: это полупрозрачный цветовой слой между blur и контентом, который можно включать и задавать индивидуально для каждой модалки через `ModalBackdropSpec`.
+- Для `PanelFrosted` используется единый helper `cover`-layout: sharp fullscreen-изображение и panel-local blur получают одинаковое масштабирование без искажения пропорций, а панель через `Overflow::clip()` показывает только тот участок blur, который реально находится под ней.
+- Для `WorldSnapshot` modal runtime поднимает отдельную offscreen-камеру и делает snapshot текущего мира в `RenderTarget::Image`, затем один раз блюрит получившийся кадр и переиспользует его, пока модалка не закрыта; при новом открытии или изменении размера окна snapshot переснимается.
 - Добавлен отдельный fullscreen-фон для `Main Menu` (`assets/sprites/ui/main_menu_background.png`); он показывается только в режиме `MainMenuMode::Main`.
 - Pipe-спрайты загружаются из отдельных world-ассетов для всех connection-mask вариантов; silhouette-варианты для ghost-preview также хранятся в `assets/sprites/world/`.
 - Порядок appearance-рисования стен и структур теперь конфигозависимый: основной world-спрайт получает `z` из общего `draw_priority`, а при равенстве используется детерминированный tie-break (`PlacedStructureId` для структур, координаты клетки для стен).

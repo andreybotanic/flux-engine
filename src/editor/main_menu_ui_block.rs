@@ -2,10 +2,10 @@ fn refresh_main_menu_ui(
     mut commands: Commands,
     main_menu: Res<MainMenuState>,
     mut menu_ui: ResMut<MainMenuUiState>,
+    icon_set: Res<EditorIconSet>,
     mut images: ResMut<Assets<Image>>,
-    mut root_visibility: Single<&mut Visibility, (With<MainMenuRoot>, Without<MainMenuBackdrop>)>,
-    mut root_background: Single<&mut BackgroundColor, With<MainMenuRoot>>,
-    mut backdrop_visibility: Single<&mut Visibility, (With<MainMenuBackdrop>, Without<MainMenuRoot>)>,
+    mut root_visibility: Single<&mut Visibility, With<MainMenuRoot>>,
+    mut backdrop_spec: Single<&mut ModalBackdropSpec, With<MainMenuRoot>>,
     mut text_set: ParamSet<(
         Single<&mut Text, With<MainMenuTitleText>>,
         Single<&mut Text, With<MainMenuStatusText>>,
@@ -19,7 +19,6 @@ fn refresh_main_menu_ui(
         Single<&mut Node, With<MainMenuSaveNameRow>>,
         Single<&mut Node, With<MainMenuSaveListRoot>>,
         Query<(&MainMenuActionButton, &mut Node), With<Button>>,
-        Single<&mut Node, (With<MainMenuBackdrop>, Without<MainMenuRoot>)>,
     )>,
     confirm_button_set: (
         Single<&Children, With<MainMenuConfirmPrimaryLabel>>,
@@ -49,32 +48,21 @@ fn refresh_main_menu_ui(
         save_name_row.display = Display::None;
         let mut save_list = node_set.p5();
         save_list.display = Display::None;
-        let mut backdrop_node = node_set.p7();
-        backdrop_node.display = Display::None;
-        **backdrop_visibility = Visibility::Hidden;
         return;
     }
 
     let screen = menu_ui.screen;
     let mode = menu_ui.mode;
-    root_background.0 = if mode == MainMenuMode::Main {
-        crate::ui::palette::TRANSPARENT
-    } else {
-        MODAL_OVERLAY_BG
-    };
-    let show_main_backdrop = mode == MainMenuMode::Main;
-    {
-        let mut backdrop_node = node_set.p7();
-        backdrop_node.display = if show_main_backdrop {
-            Display::Flex
-        } else {
-            Display::None
-        };
-    }
-    **backdrop_visibility = if show_main_backdrop {
-        Visibility::Visible
-    } else {
-        Visibility::Hidden
+    **backdrop_spec = match mode {
+        MainMenuMode::Main => ModalBackdropSpec::panel_frosted(
+            ModalBackdropSource::Asset(icon_set.main_menu_background.clone()),
+            crate::ui::modal::MAIN_MENU_PANEL_TINT,
+        )
+        .with_panel_overlay_tint(crate::ui::modal::MAIN_MENU_PANEL_OVERLAY_TINT),
+        MainMenuMode::InGame | MainMenuMode::Hidden => ModalBackdropSpec::fullscreen_blur(
+            ModalBackdropSource::WorldSnapshot,
+            crate::ui::modal::IN_GAME_MENU_PANEL_TINT,
+        ),
     };
 
     {

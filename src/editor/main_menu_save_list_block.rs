@@ -60,9 +60,9 @@ fn update_main_menu_save_card_interactions(
             && cards_are_active
             && normalized_cursor_is_inside(relative_cursor.normalized);
         background.0 = if hovered {
-            crate::ui::palette::SELECT_OPTION_HOVER
+            MENU_MODAL_CARD_HOVER
         } else {
-            PANEL_BG
+            MENU_MODAL_CARD_BG
         };
         if hovered {
             hovered_action = Some(card.primary_action.clone());
@@ -148,7 +148,7 @@ fn rebuild_main_menu_save_list(
                         column_gap: Val::Px(16.0),
                         ..default()
                     },
-                    BackgroundColor(PANEL_BG),
+                    BackgroundColor(MENU_MODAL_CARD_BG),
                     RelativeCursorPosition::default(),
                     MainMenuSaveCard { primary_action },
                 ))
@@ -223,7 +223,7 @@ fn rebuild_main_menu_save_list(
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BackgroundColor(crate::ui::palette::PANEL_HEADER_BG),
+                        BackgroundColor(MENU_MODAL_PREVIEW_BG),
                     ))
                     .with_children(|preview| {
                         if let Some(handle) = preview_handle {

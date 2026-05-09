@@ -133,6 +133,10 @@ FluxEngine/
 - `src/ui/input_field.rs`: Публичные типы text-input и точка сборки input-систем.
 - `src/ui/input_field_helpers_block.rs`: Вспомогательная геометрия курсора текста и точный hit-test/каретка через `ComputedTextBlock`.
 - `src/ui/input_field_systems_block.rs`: Системы focus/keyboard/render/caret для текстовых полей.
+- `src/ui/modal.rs`: Публичные типы reusable modal backdrop subsystem, helper-ы спавна backdrop-слоёв и wiring `ModalPlugin`.
+- `src/ui/modal_capture_block.rs`: Snapshot/capture runtime для modal backdrop-ов: offscreen-камера, resize target-а, blur world-snapshot и cache lifecycle.
+- `src/ui/modal_runtime_block.rs`: Выбор topmost модалки, cover-layout backdrop-изображений и переключение режимов `PanelFrosted` / `FullscreenBlur`.
+- `src/ui/modal_tests_block.rs`: Unit-тесты modal helper-ов, cover-layout и правил refresh/capture для world-snapshot backdrop.
 - `src/ui/mod.rs`: UI-плагин и wiring общих UI-систем.
 - `src/ui/palette.rs`: Единая палитра цветов UI (панели, меню, текст, input/select, tooltip, HUD и тени HUD).
 - `src/ui/panels.rs`: Публичные типы panel-системы и композиция блоков панели.

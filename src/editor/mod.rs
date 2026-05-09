@@ -18,6 +18,11 @@ use crate::{
     },
     ui::{
         input_field::{TextInputDisplay, TextInputField, TextInputStyle},
+        modal::{
+            modal_panel_box_shadow, spawn_modal_backdrop_chrome, spawn_modal_panel_backdrop,
+            ModalBackdropController, ModalBackdropSource, ModalBackdropSpec, ModalPanelSurface,
+            ModalRoot,
+        },
         palette,
         panels::{
             PanelControls, PanelCorner, PanelId, PanelManager, PanelOpenOrder, PanelScrollPolicy,
@@ -41,10 +46,13 @@ const DEBUG_PANEL_TEXT_COLOR: Color = palette::TEXT_PRIMARY;
 const TOOL_BUTTON_SIZE: f32 = 40.0;
 const TOOL_ICON_SIZE: f32 = 20.0;
 const TOOLTIP_BG: Color = palette::TOOLTIP_BG;
-const MODAL_OVERLAY_BG: Color = palette::MODAL_OVERLAY_BG;
-const MODAL_BG: Color = palette::MODAL_BG;
-const MODAL_BUTTON_BG: Color = palette::MODAL_BUTTON_BG;
-const MODAL_BUTTON_HOVER: Color = palette::MODAL_BUTTON_HOVER;
+const MODAL_BUTTON_BG: Color = palette::MENU_MODAL_BUTTON_BG;
+const MODAL_BUTTON_HOVER: Color = palette::MENU_MODAL_BUTTON_HOVER;
+const MENU_MODAL_CARD_BG: Color = palette::MENU_MODAL_CARD_BG;
+const MENU_MODAL_CARD_HOVER: Color = palette::MENU_MODAL_CARD_HOVER;
+const MENU_MODAL_INPUT_BG: Color = palette::MENU_MODAL_INPUT_BG;
+const MENU_MODAL_INPUT_FOCUSED: Color = palette::MENU_MODAL_INPUT_FOCUSED;
+const MENU_MODAL_PREVIEW_BG: Color = palette::MENU_MODAL_PREVIEW_BG;
 
 const TOP_LEFT_SIM_PANEL_WIDTH: f32 = 320.0;
 const TOP_LEFT_SIM_PANEL_HEIGHT: f32 = 112.0;
@@ -349,9 +357,6 @@ struct MainMenuSaveListViewport;
 struct MainMenuSaveListContent;
 
 #[derive(Component)]
-struct MainMenuBackdrop;
-
-#[derive(Component)]
 struct MainMenuConfirmPrimaryLabel;
 
 #[derive(Component)]
@@ -437,6 +442,7 @@ struct EditorIconSet {
     source_silhouette: Handle<Image>,
     sink_silhouette: Handle<Image>,
     select_arrow: Handle<Image>,
+    main_menu_background: Handle<Image>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

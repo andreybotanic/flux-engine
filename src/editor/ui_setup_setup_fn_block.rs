@@ -73,6 +73,7 @@ fn setup_editor_ui(
         source_silhouette: asset_server.load("sprites/world/tile_gas_source.png"),
         sink_silhouette: asset_server.load("sprites/world/tile_gas_sink.png"),
         select_arrow: asset_server.load("sprites/ui/select_arrow.png"),
+        main_menu_background: asset_server.load("sprites/ui/main_menu_background.png"),
     };
     commands.insert_resource(icon_set.clone());
 
@@ -341,344 +342,355 @@ fn setup_editor_ui(
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(MODAL_OVERLAY_BG),
+            BackgroundColor(crate::ui::palette::TRANSPARENT),
             GlobalZIndex(1500),
             Visibility::Hidden,
             MainMenuRoot,
+            ModalRoot,
+            ModalBackdropController,
+            ModalBackdropSpec::panel_frosted(
+                ModalBackdropSource::Asset(icon_set.main_menu_background.clone()),
+                crate::ui::modal::MAIN_MENU_PANEL_TINT,
+            ),
         ))
         .with_children(|parent| {
-            parent.spawn((
-                ImageNode::new(asset_server.load("sprites/ui/main_menu_background.png")),
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(0.0),
-                    right: Val::Px(0.0),
-                    top: Val::Px(0.0),
-                    bottom: Val::Px(0.0),
-                    ..default()
-                },
-                MainMenuBackdrop,
-            ));
+            spawn_modal_backdrop_chrome(parent);
             parent
                 .spawn((
                     Node {
+                        position_type: PositionType::Relative,
                         width: Val::Px(780.0),
                         height: Val::Px(640.0),
                         display: Display::Flex,
-                        flex_direction: FlexDirection::Column,
-                        justify_content: JustifyContent::FlexStart,
-                        align_items: AlignItems::Center,
-                        row_gap: Val::Px(10.0),
-                        padding: UiRect::all(Val::Px(18.0)),
+                        overflow: Overflow::clip(),
                         ..default()
                     },
-                    BackgroundColor(MODAL_BG),
+                    ImageNode::default(),
+                    BackgroundColor(crate::ui::modal::MAIN_MENU_PANEL_TINT),
+                    modal_panel_box_shadow(),
+                    ModalPanelSurface,
                 ))
                 .with_children(|panel| {
+                    spawn_modal_panel_backdrop(panel);
                     panel.spawn((
                         Node {
                             width: Val::Percent(100.0),
-                            justify_content: JustifyContent::Center,
-                            ..default()
-                        },
-                        Text::new("Main Menu"),
-                        TextFont::from_font_size(24.0),
-                        TextColor(crate::ui::palette::TEXT_HEADER),
-                        TextLayout::new_with_justify(JustifyText::Center),
-                        MainMenuTitleText,
-                    ));
-                    panel.spawn((
-                        Node {
-                            width: Val::Percent(100.0),
-                            justify_content: JustifyContent::Center,
-                            ..default()
-                        },
-                        Text::new(""),
-                        TextFont::from_font_size(14.0),
-                        TextColor(crate::ui::palette::TEXT_SECONDARY),
-                        TextLayout::new_with_justify(JustifyText::Center),
-                        MainMenuStatusText,
-                    ));
-
-                    panel
-                        .spawn((
-                            Node {
-                                display: Display::Flex,
-                                flex_direction: FlexDirection::Column,
-                                width: Val::Percent(100.0),
-                                align_items: AlignItems::Center,
-                                row_gap: Val::Px(8.0),
-                                ..default()
-                            },
-                            MainMenuRootActions,
-                        ))
-                        .with_children(|actions| {
-                            spawn_main_menu_action_button(
-                                actions,
-                                "Continue",
-                                MainMenuButtonAction::Continue,
-                                220.0,
-                            );
-                            spawn_main_menu_action_button(
-                                actions,
-                                "New Game",
-                                MainMenuButtonAction::NewGame,
-                                220.0,
-                            );
-                            spawn_main_menu_action_button(
-                                actions,
-                                "Save",
-                                MainMenuButtonAction::OpenSaveScreen,
-                                220.0,
-                            );
-                            spawn_main_menu_action_button(
-                                actions,
-                                "Load",
-                                MainMenuButtonAction::OpenLoadScreen,
-                                220.0,
-                            );
-                            spawn_main_menu_action_button(
-                                actions,
-                                "Exit To Main",
-                                MainMenuButtonAction::ExitToMainMenu,
-                                220.0,
-                            );
-                            spawn_main_menu_action_button(
-                                actions,
-                                "Exit",
-                                MainMenuButtonAction::ExitApp,
-                                220.0,
-                            );
-                        });
-
-                    panel
-                        .spawn((
-                            Node {
-                                display: Display::None,
-                                flex_direction: FlexDirection::Row,
-                                width: Val::Percent(100.0),
-                                justify_content: JustifyContent::Center,
-                                align_items: AlignItems::Center,
-                                column_gap: Val::Px(8.0),
-                                ..default()
-                            },
-                            MainMenuSaveNameRow,
-                        ))
-                        .with_children(|row| {
-                            row.spawn((
-                                Text::new("Save Name:"),
-                                TextFont::from_font_size(14.0),
-                                TextColor(crate::ui::palette::TEXT_PRIMARY),
-                                TextLayout::new_with_justify(JustifyText::Center),
-                            ));
-                            row.spawn((
-                                Button,
-                                Node {
-                                    min_width: Val::Px(520.0),
-                                    height: Val::Px(34.0),
-                                    justify_content: JustifyContent::FlexStart,
-                                    align_items: AlignItems::Center,
-                                    padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                                    ..default()
-                                },
-                                BackgroundColor(BUTTON_IDLE),
-                                TextInputField::new_string(
-                                    "New Save",
-                                    64,
-                                    crate::ui::input_field::InputAllowedChars::Any,
-                                ),
-                                TextInputStyle {
-                                    idle_bg: BUTTON_IDLE,
-                                    focused_bg: INPUT_FOCUSED,
-                                },
-                                bevy::ui::RelativeCursorPosition::default(),
-                                MainMenuSaveNameInputField,
-                            ))
-                            .with_children(|button| {
-                                button.spawn((
-                                    Text::new("New Save"),
-                                    TextFont::from_font_size(14.0),
-                                    TextColor(crate::ui::palette::TEXT_PRIMARY),
-                                    TextInputDisplay,
-                                ));
-                            });
-                        });
-
-                    panel
-                        .spawn((
-                            Node {
-                                display: Display::None,
-                                flex_direction: FlexDirection::Row,
-                                width: Val::Percent(100.0),
-                                justify_content: JustifyContent::Center,
-                                column_gap: Val::Px(8.0),
-                                ..default()
-                            },
-                            MainMenuSaveActions,
-                        ))
-                        .with_children(|actions| {
-                            spawn_main_menu_action_button(
-                                actions,
-                                "Back",
-                                MainMenuButtonAction::BackToRoot,
-                                140.0,
-                            );
-                            spawn_main_menu_action_button(
-                                actions,
-                                "Create New Save",
-                                MainMenuButtonAction::CreateNewSave,
-                                220.0,
-                            );
-                        });
-
-                    panel
-                        .spawn((
-                            Node {
-                                display: Display::None,
-                                flex_direction: FlexDirection::Row,
-                                width: Val::Percent(100.0),
-                                justify_content: JustifyContent::Center,
-                                column_gap: Val::Px(8.0),
-                                ..default()
-                            },
-                            MainMenuLoadActions,
-                        ))
-                        .with_children(|actions| {
-                            spawn_main_menu_action_button(
-                                actions,
-                                "Back",
-                                MainMenuButtonAction::BackToRoot,
-                                140.0,
-                            );
-                        });
-
-                    panel
-                        .spawn((
-                            Node {
-                                display: Display::None,
-                                flex_direction: FlexDirection::Row,
-                                width: Val::Percent(100.0),
-                                justify_content: JustifyContent::Center,
-                                column_gap: Val::Px(8.0),
-                                ..default()
-                            },
-                            MainMenuConfirmActions,
-                        ))
-                        .with_children(|actions| {
-                            actions
-                                .spawn((
-                                    Button,
-                                    Node {
-                                        width: Val::Px(160.0),
-                                        height: Val::Px(38.0),
-                                        justify_content: JustifyContent::Center,
-                                        align_items: AlignItems::Center,
-                                        ..default()
-                                    },
-                                    BackgroundColor(MODAL_BUTTON_BG),
-                                    MainMenuActionButton(MainMenuButtonAction::ConfirmPrimary),
-                                    MainMenuConfirmPrimaryLabel,
-                                ))
-                                .with_children(|button| {
-                                    button.spawn((
-                                        Text::new("Yes"),
-                                        TextFont::from_font_size(15.0),
-                                        TextColor(crate::ui::palette::TEXT_ON_DARK),
-                                        TextLayout::new_with_justify(JustifyText::Center),
-                                    ));
-                                });
-                            actions
-                                .spawn((
-                                    Button,
-                                    Node {
-                                        width: Val::Px(160.0),
-                                        height: Val::Px(38.0),
-                                        justify_content: JustifyContent::Center,
-                                        align_items: AlignItems::Center,
-                                        ..default()
-                                    },
-                                    BackgroundColor(MODAL_BUTTON_BG),
-                                    MainMenuActionButton(MainMenuButtonAction::ConfirmSecondary),
-                                    MainMenuConfirmSecondaryLabel,
-                                ))
-                                .with_children(|button| {
-                                    button.spawn((
-                                        Text::new("No"),
-                                        TextFont::from_font_size(15.0),
-                                        TextColor(crate::ui::palette::TEXT_ON_DARK),
-                                        TextLayout::new_with_justify(JustifyText::Center),
-                                    ));
-                                });
-                            actions
-                                .spawn((
-                                    Button,
-                                    Node {
-                                        width: Val::Px(160.0),
-                                        height: Val::Px(38.0),
-                                        justify_content: JustifyContent::Center,
-                                        align_items: AlignItems::Center,
-                                        ..default()
-                                    },
-                                    BackgroundColor(MODAL_BUTTON_BG),
-                                    MainMenuActionButton(MainMenuButtonAction::ConfirmCancel),
-                                    MainMenuConfirmCancelLabel,
-                                ))
-                                .with_children(|button| {
-                                    button.spawn((
-                                        Text::new("Cancel"),
-                                        TextFont::from_font_size(15.0),
-                                        TextColor(crate::ui::palette::TEXT_ON_DARK),
-                                        TextLayout::new_with_justify(JustifyText::Center),
-                                    ));
-                                });
-                        });
-
-                    panel.spawn((
-                        Node {
-                            display: Display::None,
-                            position_type: PositionType::Relative,
+                            height: Val::Percent(100.0),
+                            display: Display::Flex,
                             flex_direction: FlexDirection::Column,
-                            width: Val::Percent(100.0),
-                            flex_grow: 1.0,
-                            min_height: Val::Px(0.0),
+                            justify_content: JustifyContent::FlexStart,
+                            align_items: AlignItems::Center,
+                            row_gap: Val::Px(10.0),
+                            padding: UiRect::all(Val::Px(18.0)),
                             ..default()
                         },
-                        MainMenuSaveListRoot,
                     ))
-                    .with_children(|list_root| {
-                        let viewport = list_root
+                    .with_children(|panel| {
+                        panel.spawn((
+                            Node {
+                                width: Val::Percent(100.0),
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            Text::new("Main Menu"),
+                            TextFont::from_font_size(24.0),
+                            TextColor(crate::ui::palette::TEXT_HEADER),
+                            TextLayout::new_with_justify(JustifyText::Center),
+                            MainMenuTitleText,
+                        ));
+                        panel.spawn((
+                            Node {
+                                width: Val::Percent(100.0),
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            Text::new(""),
+                            TextFont::from_font_size(14.0),
+                            TextColor(crate::ui::palette::TEXT_SECONDARY),
+                            TextLayout::new_with_justify(JustifyText::Center),
+                            MainMenuStatusText,
+                        ));
+
+                        panel
                             .spawn((
                                 Node {
-                                    width: Val::Percent(100.0),
-                                    height: Val::Percent(100.0),
                                     display: Display::Flex,
                                     flex_direction: FlexDirection::Column,
-                                    align_items: AlignItems::Stretch,
-                                    padding: UiRect::right(Val::Px(10.0)),
-                                    overflow: Overflow::scroll_y(),
-                                    min_height: Val::Px(0.0),
+                                    width: Val::Percent(100.0),
+                                    align_items: AlignItems::Center,
+                                    row_gap: Val::Px(8.0),
                                     ..default()
                                 },
-                                bevy::ui::ScrollPosition::default(),
-                                bevy::ui::RelativeCursorPosition::default(),
-                                ScrollAreaViewport::modal(100),
-                                MainMenuSaveListViewport,
+                                MainMenuRootActions,
                             ))
-                            .with_children(|viewport| {
-                                viewport.spawn((
+                            .with_children(|actions| {
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Continue",
+                                    MainMenuButtonAction::Continue,
+                                    220.0,
+                                );
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "New Game",
+                                    MainMenuButtonAction::NewGame,
+                                    220.0,
+                                );
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Save",
+                                    MainMenuButtonAction::OpenSaveScreen,
+                                    220.0,
+                                );
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Load",
+                                    MainMenuButtonAction::OpenLoadScreen,
+                                    220.0,
+                                );
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Exit To Main",
+                                    MainMenuButtonAction::ExitToMainMenu,
+                                    220.0,
+                                );
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Exit",
+                                    MainMenuButtonAction::ExitApp,
+                                    220.0,
+                                );
+                            });
+
+                        panel
+                            .spawn((
+                                Node {
+                                    display: Display::None,
+                                    flex_direction: FlexDirection::Row,
+                                    width: Val::Percent(100.0),
+                                    justify_content: JustifyContent::Center,
+                                    align_items: AlignItems::Center,
+                                    column_gap: Val::Px(8.0),
+                                    ..default()
+                                },
+                                MainMenuSaveNameRow,
+                            ))
+                            .with_children(|row| {
+                                row.spawn((
+                                    Text::new("Save Name:"),
+                                    TextFont::from_font_size(14.0),
+                                    TextColor(crate::ui::palette::TEXT_PRIMARY),
+                                    TextLayout::new_with_justify(JustifyText::Center),
+                                ));
+                                row.spawn((
+                                    Button,
+                                    Node {
+                                        min_width: Val::Px(520.0),
+                                        height: Val::Px(34.0),
+                                        justify_content: JustifyContent::FlexStart,
+                                        align_items: AlignItems::Center,
+                                        padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(MENU_MODAL_INPUT_BG),
+                                    TextInputField::new_string(
+                                        "New Save",
+                                        64,
+                                        crate::ui::input_field::InputAllowedChars::Any,
+                                    ),
+                                    TextInputStyle {
+                                        idle_bg: MENU_MODAL_INPUT_BG,
+                                        focused_bg: MENU_MODAL_INPUT_FOCUSED,
+                                    },
+                                    bevy::ui::RelativeCursorPosition::default(),
+                                    MainMenuSaveNameInputField,
+                                ))
+                                .with_children(|button| {
+                                    button.spawn((
+                                        Text::new("New Save"),
+                                        TextFont::from_font_size(14.0),
+                                        TextColor(crate::ui::palette::TEXT_PRIMARY),
+                                        TextInputDisplay,
+                                    ));
+                                });
+                            });
+
+                        panel
+                            .spawn((
+                                Node {
+                                    display: Display::None,
+                                    flex_direction: FlexDirection::Row,
+                                    width: Val::Percent(100.0),
+                                    justify_content: JustifyContent::Center,
+                                    column_gap: Val::Px(8.0),
+                                    ..default()
+                                },
+                                MainMenuSaveActions,
+                            ))
+                            .with_children(|actions| {
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Back",
+                                    MainMenuButtonAction::BackToRoot,
+                                    140.0,
+                                );
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Create New Save",
+                                    MainMenuButtonAction::CreateNewSave,
+                                    220.0,
+                                );
+                            });
+
+                        panel
+                            .spawn((
+                                Node {
+                                    display: Display::None,
+                                    flex_direction: FlexDirection::Row,
+                                    width: Val::Percent(100.0),
+                                    justify_content: JustifyContent::Center,
+                                    column_gap: Val::Px(8.0),
+                                    ..default()
+                                },
+                                MainMenuLoadActions,
+                            ))
+                            .with_children(|actions| {
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Back",
+                                    MainMenuButtonAction::BackToRoot,
+                                    140.0,
+                                );
+                            });
+
+                        panel
+                            .spawn((
+                                Node {
+                                    display: Display::None,
+                                    flex_direction: FlexDirection::Row,
+                                    width: Val::Percent(100.0),
+                                    justify_content: JustifyContent::Center,
+                                    column_gap: Val::Px(8.0),
+                                    ..default()
+                                },
+                                MainMenuConfirmActions,
+                            ))
+                            .with_children(|actions| {
+                                actions
+                                    .spawn((
+                                        Button,
+                                        Node {
+                                            width: Val::Px(160.0),
+                                            height: Val::Px(38.0),
+                                            justify_content: JustifyContent::Center,
+                                            align_items: AlignItems::Center,
+                                            ..default()
+                                        },
+                                        BackgroundColor(MODAL_BUTTON_BG),
+                                        MainMenuActionButton(MainMenuButtonAction::ConfirmPrimary),
+                                        MainMenuConfirmPrimaryLabel,
+                                    ))
+                                    .with_children(|button| {
+                                        button.spawn((
+                                            Text::new("Yes"),
+                                            TextFont::from_font_size(15.0),
+                                            TextColor(crate::ui::palette::TEXT_ON_DARK),
+                                            TextLayout::new_with_justify(JustifyText::Center),
+                                        ));
+                                    });
+                                actions
+                                    .spawn((
+                                        Button,
+                                        Node {
+                                            width: Val::Px(160.0),
+                                            height: Val::Px(38.0),
+                                            justify_content: JustifyContent::Center,
+                                            align_items: AlignItems::Center,
+                                            ..default()
+                                        },
+                                        BackgroundColor(MODAL_BUTTON_BG),
+                                        MainMenuActionButton(MainMenuButtonAction::ConfirmSecondary),
+                                        MainMenuConfirmSecondaryLabel,
+                                    ))
+                                    .with_children(|button| {
+                                        button.spawn((
+                                            Text::new("No"),
+                                            TextFont::from_font_size(15.0),
+                                            TextColor(crate::ui::palette::TEXT_ON_DARK),
+                                            TextLayout::new_with_justify(JustifyText::Center),
+                                        ));
+                                    });
+                                actions
+                                    .spawn((
+                                        Button,
+                                        Node {
+                                            width: Val::Px(160.0),
+                                            height: Val::Px(38.0),
+                                            justify_content: JustifyContent::Center,
+                                            align_items: AlignItems::Center,
+                                            ..default()
+                                        },
+                                        BackgroundColor(MODAL_BUTTON_BG),
+                                        MainMenuActionButton(MainMenuButtonAction::ConfirmCancel),
+                                        MainMenuConfirmCancelLabel,
+                                    ))
+                                    .with_children(|button| {
+                                        button.spawn((
+                                            Text::new("Cancel"),
+                                            TextFont::from_font_size(15.0),
+                                            TextColor(crate::ui::palette::TEXT_ON_DARK),
+                                            TextLayout::new_with_justify(JustifyText::Center),
+                                        ));
+                                    });
+                            });
+
+                        panel.spawn((
+                            Node {
+                                display: Display::None,
+                                position_type: PositionType::Relative,
+                                flex_direction: FlexDirection::Column,
+                                width: Val::Percent(100.0),
+                                flex_grow: 1.0,
+                                min_height: Val::Px(0.0),
+                                ..default()
+                            },
+                            MainMenuSaveListRoot,
+                        ))
+                        .with_children(|list_root| {
+                            let viewport = list_root
+                                .spawn((
                                     Node {
                                         width: Val::Percent(100.0),
+                                        height: Val::Percent(100.0),
                                         display: Display::Flex,
                                         flex_direction: FlexDirection::Column,
                                         align_items: AlignItems::Stretch,
-                                        row_gap: Val::Px(10.0),
+                                        padding: UiRect::right(Val::Px(10.0)),
+                                        overflow: Overflow::scroll_y(),
+                                        min_height: Val::Px(0.0),
                                         ..default()
                                     },
-                                    MainMenuSaveListContent,
-                                ));
-                            })
-                            .id();
-                        spawn_scroll_area_scrollbar(list_root, viewport);
+                                    bevy::ui::ScrollPosition::default(),
+                                    bevy::ui::RelativeCursorPosition::default(),
+                                    ScrollAreaViewport::modal(100),
+                                    MainMenuSaveListViewport,
+                                ))
+                                .with_children(|viewport| {
+                                    viewport.spawn((
+                                        Node {
+                                            width: Val::Percent(100.0),
+                                            display: Display::Flex,
+                                            flex_direction: FlexDirection::Column,
+                                            align_items: AlignItems::Stretch,
+                                            row_gap: Val::Px(10.0),
+                                            ..default()
+                                        },
+                                        MainMenuSaveListContent,
+                                    ));
+                                })
+                                .id();
+                            spawn_scroll_area_scrollbar(list_root, viewport);
+                        });
                     });
                 });
         });

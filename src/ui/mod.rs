@@ -1,6 +1,7 @@
 pub mod cell_inspector;
 mod cell_inspector_model;
 pub mod input_field;
+pub mod modal;
 pub mod palette;
 pub mod panels;
 pub mod scroll_area;
@@ -11,6 +12,7 @@ use bevy::prelude::*;
 
 use self::cell_inspector::{setup_cell_inspector, update_cell_inspector};
 use self::input_field::TextInputPlugin;
+use self::modal::ModalPlugin;
 use self::panels::PanelPlugin;
 use self::scroll_area::ScrollAreaPlugin;
 use self::select_field::SelectFieldPlugin;
@@ -58,6 +60,7 @@ impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
             TextInputPlugin,
+            ModalPlugin,
             PanelPlugin,
             ScrollAreaPlugin,
             SelectFieldPlugin,

@@ -1,5 +1,12 @@
 ﻿# Changelog
 
+## 2026-05-09
+- Главное меню переведено на reusable modal backdrop runtime: `Main Menu` теперь использует `PanelFrosted` с чётким fullscreen-фоном и blur только внутри панели, а `Game Menu` и его подэкраны используют `FullscreenBlur` с размытием всего мира.
+- Добавлена новая UI-подсистема `src/ui/modal*.rs` с двумя переиспользуемыми режимами модалок (`PanelFrosted` и `FullscreenBlur`), cover-layout для backdrop-изображений и snapshot-based blur для fullscreen меню поверх мира.
+- Кнопки, карточки сейвов, preview-frame и поле имени сейва в menu-модалках переведены на полностью непрозрачные menu-специфичные цвета, чтобы frosted-эффект оставался только у shell-панели.
+- Снаружи menu-модалок добавлена более тёмная общая `BoxShadow`-рамка, вынесенная в reusable helper modal-подсистемы.
+- Для reusable modal-shell добавлен настраиваемый `panel_overlay_tint`: `Main Menu` теперь дополнительно подмешивает полупрозрачный цвет поверх blur, а остальные модалки могут включать свой tint через `ModalBackdropSpec`.
+
 ## 2026-05-08
 - HUD инспектора клетки переработан в стек отдельных entity-блоков: свободный газ world-клетки показывается отдельно, каждая структура в клетке получила собственный блок, а название текущего overlay (`F1/F2/F3`) из HUD удалено.
 - `label` сущностей перенесён из HUD-секций в базовые конфиги `config/structures/*.toml`; те же label теперь используются и для HUD-блоков solid-материалов (`Boundary`, `Brick`, `Metal`).

@@ -22,6 +22,13 @@ pub const MODAL_OVERLAY_BG: Color = Color::srgba(0.02, 0.02, 0.03, 0.60);
 pub const MODAL_BG: Color = Color::srgba(0.96, 0.96, 0.97, 0.98);
 pub const MODAL_BUTTON_BG: Color = Color::srgba(0.78, 0.34, 0.32, 0.95);
 pub const MODAL_BUTTON_HOVER: Color = Color::srgba(0.86, 0.42, 0.38, 0.98);
+pub const MENU_MODAL_BUTTON_BG: Color = Color::srgba(0.78, 0.34, 0.32, 1.0);
+pub const MENU_MODAL_BUTTON_HOVER: Color = Color::srgba(0.86, 0.42, 0.38, 1.0);
+pub const MENU_MODAL_CARD_BG: Color = Color::srgba(0.91, 0.92, 0.93, 1.0);
+pub const MENU_MODAL_CARD_HOVER: Color = Color::srgba(0.93, 0.94, 0.96, 1.0);
+pub const MENU_MODAL_INPUT_BG: Color = Color::srgba(0.78, 0.80, 0.83, 1.0);
+pub const MENU_MODAL_INPUT_FOCUSED: Color = Color::srgba(0.66, 0.76, 0.86, 1.0);
+pub const MENU_MODAL_PREVIEW_BG: Color = Color::srgba(0.82, 0.84, 0.87, 1.0);
 
 pub const SELECT_BG: Color = Color::srgba(1.0, 1.0, 1.0, 1.0);
 pub const SELECT_BG_OPEN: Color = Color::srgba(0.94, 0.96, 1.0, 1.0);
