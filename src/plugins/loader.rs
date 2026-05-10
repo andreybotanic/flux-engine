@@ -21,8 +21,8 @@ use crate::plugins::{
     id::{PluginApiVersion, ENGINE_PLUGIN_API_VERSION},
     manifest::PluginManifest,
     source::{
-        resolve_plugin_layout, validate_archive_entry_path, PackagedPluginSource,
-        MANIFEST_FILE_NAME,
+        resolve_plugin_layout, validate_archive_entry_path, ExpandedPluginSource,
+        PackagedPluginSource, MANIFEST_FILE_NAME,
     },
 };
 
@@ -37,6 +37,20 @@ pub(crate) struct PackagedPluginCandidate {
 #[derive(Clone, Debug)]
 pub(crate) struct ValidatedPackagedPlugin {
     pub source: PackagedPluginSource,
+    pub manifest: PluginManifest,
+}
+
+/// Parsed expanded plugin candidate before DLL handshake validation.
+#[derive(Clone, Debug)]
+pub(crate) struct ExpandedPluginCandidate {
+    pub source: ExpandedPluginSource,
+    pub manifest: PluginManifest,
+}
+
+/// Successfully validated expanded plugin contract.
+#[derive(Clone, Debug)]
+pub(crate) struct ValidatedExpandedPlugin {
+    pub source: ExpandedPluginSource,
     pub manifest: PluginManifest,
 }
 
@@ -102,6 +116,24 @@ pub(crate) fn read_packaged_plugin_candidate(
     Ok(PackagedPluginCandidate { source, manifest })
 }
 
+/// Reads and validates only the manifest layer of one expanded plugin directory.
+pub(crate) fn read_expanded_plugin_candidate(
+    root_dir: &Path,
+) -> Result<ExpandedPluginCandidate, PluginContractError> {
+    let source = ExpandedPluginSource::new(root_dir.to_path_buf());
+    let manifest_path = root_dir.join(MANIFEST_FILE_NAME);
+    let manifest_bytes = fs::read(&manifest_path).map_err(|error| {
+        PluginContractError::Io(format!(
+            "failed to read expanded manifest '{}': {}",
+            manifest_path.display(),
+            error
+        ))
+    })?;
+    let manifest = PluginManifest::from_bytes(&manifest_bytes)?;
+
+    Ok(ExpandedPluginCandidate { source, manifest })
+}
+
 /// Validates archive extraction and DLL ABI handshake for one packaged plugin.
 pub(crate) fn validate_packaged_plugin_candidate(
     candidate: &PackagedPluginCandidate,
@@ -114,11 +146,33 @@ pub(crate) fn validate_packaged_plugin_candidate(
     }
 
     let extracted_root = extract_packaged_plugin_to_cache(candidate)?;
-    let result = validate_extracted_plugin(candidate, &extracted_root);
+    let result = validate_plugin_root(&candidate.manifest, &extracted_root);
     let _ = fs::remove_dir_all(&extracted_root);
     result?;
 
     Ok(ValidatedPackagedPlugin {
+        source: candidate.source.clone(),
+        manifest: candidate.manifest.clone(),
+    })
+}
+
+/// Validates cache-copy extraction and DLL ABI handshake for one expanded plugin.
+pub(crate) fn validate_expanded_plugin_candidate(
+    candidate: &ExpandedPluginCandidate,
+) -> Result<ValidatedExpandedPlugin, PluginContractError> {
+    if candidate.manifest.api_version != ENGINE_PLUGIN_API_VERSION {
+        return Err(PluginContractError::Manifest(format!(
+            "unsupported api_version '{}'; engine supports '{}'",
+            candidate.manifest.api_version, ENGINE_PLUGIN_API_VERSION
+        )));
+    }
+
+    let cached_root = copy_expanded_plugin_to_cache(candidate)?;
+    let result = validate_plugin_root(&candidate.manifest, &cached_root);
+    let _ = fs::remove_dir_all(&cached_root);
+    result?;
+
+    Ok(ValidatedExpandedPlugin {
         source: candidate.source.clone(),
         manifest: candidate.manifest.clone(),
     })
@@ -220,11 +274,65 @@ fn extract_packaged_plugin_to_cache(
     extraction_result.map(|_| extraction_root)
 }
 
-fn validate_extracted_plugin(
-    candidate: &PackagedPluginCandidate,
-    extracted_root: &Path,
+fn copy_expanded_plugin_to_cache(
+    candidate: &ExpandedPluginCandidate,
+) -> Result<PathBuf, PluginContractError> {
+    let cache_root = cache_generation_root(&candidate.manifest.id)?;
+    copy_directory_recursive(candidate.source.root_dir(), &cache_root)?;
+    Ok(cache_root)
+}
+
+fn copy_directory_recursive(
+    source_dir: &Path,
+    destination_dir: &Path,
 ) -> Result<(), PluginContractError> {
-    let resolved_paths = resolve_plugin_layout(extracted_root, &candidate.manifest)?;
+    fs::create_dir_all(destination_dir).map_err(|error| {
+        PluginContractError::Io(format!(
+            "failed to create plugin cache directory '{}': {}",
+            destination_dir.display(),
+            error
+        ))
+    })?;
+
+    for entry in fs::read_dir(source_dir).map_err(|error| {
+        PluginContractError::Io(format!(
+            "failed to read expanded plugin directory '{}': {}",
+            source_dir.display(),
+            error
+        ))
+    })? {
+        let entry = entry.map_err(|error| {
+            PluginContractError::Io(format!(
+                "failed to read one expanded plugin entry from '{}': {}",
+                source_dir.display(),
+                error
+            ))
+        })?;
+        let source_path = entry.path();
+        let destination_path = destination_dir.join(entry.file_name());
+        if source_path.is_dir() {
+            copy_directory_recursive(&source_path, &destination_path)?;
+            continue;
+        }
+
+        fs::copy(&source_path, &destination_path).map_err(|error| {
+            PluginContractError::Io(format!(
+                "failed to copy expanded plugin file '{}' into '{}': {}",
+                source_path.display(),
+                destination_path.display(),
+                error
+            ))
+        })?;
+    }
+
+    Ok(())
+}
+
+fn validate_plugin_root(
+    manifest: &PluginManifest,
+    plugin_root: &Path,
+) -> Result<(), PluginContractError> {
+    let resolved_paths = resolve_plugin_layout(plugin_root, manifest)?;
     let plugin_root_utf8 = path_to_utf8_string(&resolved_paths.root_dir);
     let config_root_utf8 = path_to_utf8_string(&resolved_paths.configs_dir);
     let assets_root_utf8 = path_to_utf8_string(&resolved_paths.assets_dir);
@@ -234,7 +342,7 @@ fn validate_extracted_plugin(
         let library = Library::new(&resolved_paths.dll_path).map_err(|error| {
             PluginContractError::Dll(format!(
                 "failed to load DLL '{}': {}",
-                candidate.manifest.dll.display(),
+                manifest.dll.display(),
                 error
             ))
         })?;

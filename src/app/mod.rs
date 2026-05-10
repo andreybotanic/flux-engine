@@ -11,7 +11,7 @@ use crate::{
     debug::DebugPlugin,
     editor::EditorPlugin,
     input::InputPlugin,
-    plugins::scan_packaged_plugin_contracts,
+    plugins::PluginBootstrapConfig,
     render::RenderPlugin,
     save::MainMenuUiState,
     simulation::{
@@ -25,22 +25,21 @@ use crate::{
 
 /// Runs `run` logic.
 pub fn run() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let game_config = GameConfig::load_from_default_location().unwrap_or_else(|err| {
         panic!("Failed to load game config files from ./config: {err}");
     });
-    let plugins_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("plugins");
-    let plugin_diagnostics = scan_packaged_plugin_contracts(&plugins_root);
-    plugin_diagnostics.log_to_stderr();
+    let plugin_bootstrap = crate::plugins::bootstrap_plugin_registry(
+        &PluginBootstrapConfig::from_repo_root(repo_root, false),
+    );
+    plugin_bootstrap.registry_state.log_to_stderr();
 
-    let asset_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("assets")
-        .to_string_lossy()
-        .to_string();
+    let asset_path = repo_root.join("assets").to_string_lossy().to_string();
 
     let mut app = App::new();
     app.insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Time::<Fixed>::from_hz(30.0));
-    if let Some(status_text) = plugin_diagnostics.main_menu_status_text() {
+    if let Some(status_text) = plugin_bootstrap.registry_state.main_menu_status_text() {
         app.insert_resource(MainMenuUiState {
             status_text,
             ..Default::default()
@@ -91,11 +90,15 @@ pub fn run() {
         .insert_resource(game_config.structure_hud)
         .insert_resource(game_config.structure_visuals)
         .insert_resource(game_config.cell_visual_layouts)
+        .insert_resource(plugin_bootstrap.source_registry)
+        .insert_resource(plugin_bootstrap.loaded_registry)
+        .insert_resource(plugin_bootstrap.enabled_set)
+        .insert_resource(plugin_bootstrap.content_registry)
+        .insert_resource(plugin_bootstrap.registry_state)
         .insert_resource(SimulationBackendConfig {
             backend: requested_backend,
         })
         .insert_resource(world_size)
-        .insert_resource(plugin_diagnostics)
         .add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {

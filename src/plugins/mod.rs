@@ -3,17 +3,29 @@ pub mod diagnostics;
 pub mod id;
 pub mod loader;
 pub mod manifest;
+pub mod registry;
 pub mod source;
+pub mod state;
 
 pub use self::diagnostics::{
     scan_packaged_plugin_contracts, PluginContractError, PluginStartupDiagnostics,
 };
 pub use self::id::{
-    PluginApiVersion, PluginId, PluginVersion, ENGINE_PLUGIN_API_VERSION,
+    PluginApiVersion, PluginId, PluginVersion, DEFAULT_PLUGIN_ID_VALUE, ENGINE_PLUGIN_API_VERSION,
     ENGINE_PLUGIN_API_VERSION_VALUE,
 };
 pub use self::manifest::PluginManifest;
+pub use self::registry::{
+    bootstrap_plugin_registry, ContentRegistry, LoadedPluginMetadata, LoadedPluginRegistry,
+    PluginBootstrapConfig, PluginBootstrapOutput, PluginSourceRecord, PluginSourceRegistry,
+};
 pub use self::source::{
-    validate_relative_plugin_path, ExpandedPluginSource, PackagedPluginSource, PluginSource,
-    PACKAGED_PLUGIN_EXTENSION,
+    discover_dev_plugin_sources, discover_packaged_plugin_sources, discover_plugin_sources,
+    validate_relative_plugin_path, DiscoveredPluginSource, ExpandedPluginSource,
+    PackagedPluginSource, PluginSource, PluginSourceDiscovery, PluginSourceKind,
+    RejectedPluginSource, PACKAGED_PLUGIN_EXTENSION,
+};
+pub use self::state::{
+    EnabledPluginSet, PluginRegistryEntry, PluginRegistryState, PluginRuntimeStatus,
+    PluginStateLoadResult, PLUGIN_STATE_SCHEMA_VERSION,
 };

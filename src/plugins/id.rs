@@ -7,6 +7,9 @@ use crate::plugins::diagnostics::PluginContractError;
 /// Current engine-side plugin API version.
 pub const ENGINE_PLUGIN_API_VERSION_VALUE: u32 = 1;
 
+/// Canonical identifier of the built-in default plugin.
+pub const DEFAULT_PLUGIN_ID_VALUE: &str = "flux.default";
+
 /// Current engine-side plugin API version wrapper.
 pub const ENGINE_PLUGIN_API_VERSION: PluginApiVersion =
     PluginApiVersion(ENGINE_PLUGIN_API_VERSION_VALUE);
@@ -34,7 +37,7 @@ impl fmt::Display for PluginApiVersion {
 }
 
 /// Canonical plugin identifier used across manifests and registries.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PluginId(String);
 
 impl PluginId {
@@ -87,6 +90,11 @@ impl PluginId {
     /// Returns the canonical string value.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// Returns the canonical built-in default plugin identifier.
+    pub fn default_plugin() -> Self {
+        Self::parse(DEFAULT_PLUGIN_ID_VALUE).expect("default plugin id must stay valid")
     }
 }
 

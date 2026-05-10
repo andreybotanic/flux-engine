@@ -22,6 +22,7 @@ FluxEngine/
 |   `-- plans/               # Плановые документы будущих крупных изменений.
 |       `-- plugin_system/   # Roadmap и этапные планы перехода на runtime-плагины.
 |-- plugins/                 # Runtime drop-in каталог packaged plugins (`*.fluxplugin`) рядом с игрой.
+|-- plugins_dev/             # Runtime dev-каталог expanded plugin-папок `plugins_dev/<plugin_id>/`.
 |-- src/                     # Исходный код Rust.
 |   |-- app/                 # Сборка и запуск Bevy-приложения.
 |   |-- bin/                 # Вспомогательные бинарники (перф, утилиты).
@@ -79,8 +80,10 @@ FluxEngine/
 - `docs/plans/plugin_system/*.md`: Детальные инструкции по этапам реализации plugin-system миграции.
 - `docs/project_structure.md`: Карта структуры проекта: дерево папок + зоны ответственности файлов.
 - `docs/technical_overview.md`: Техническая архитектура, подсистемы и инженерные ограничения.
+- `plugin_state.toml`: Локальный runtime-файл пользовательских настроек plugin enable-state; хранится в корне проекта и игнорируется через `.gitignore`.
 - `plugins/.gitkeep`: Фиксирует пустой runtime-каталог для packaged plugins; реальные `.fluxplugin` игнорируются через `.gitignore`.
-- `src/app/mod.rs`: Сборка Bevy-приложения, startup scan packaged plugins, backend-инициализация и запуск.
+- `plugins_dev/.gitkeep`: Фиксирует пустой runtime-каталог expanded dev plugins; реальные папки плагинов игнорируются через `.gitignore`.
+- `src/app/mod.rs`: Сборка Bevy-приложения, stage-2 plugin bootstrap, backend-инициализация и запуск.
 - `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
 - `src/config/hud.rs`: Публичные типы runtime-конфигов HUD, включая substance-контейнеры и режимы видимости по hover, без встроенных entity-label/fallback-конфигов.
@@ -109,10 +112,12 @@ FluxEngine/
 - `src/plugins/abi.rs`: C-compatible ABI stage-1: `FluxUtf8Slice`, `FluxStatus`, host/registrar structs и export names обязательных DLL-функций.
 - `src/plugins/diagnostics.rs`: Startup scan packaged archives, дедупликация `PluginId`, resource с результатами проверки и текст для статуса главного меню.
 - `src/plugins/id.rs`: Типизированные `PluginId`, `PluginVersion`, `PluginApiVersion` и проверка канонического формата ID.
-- `src/plugins/loader.rs`: Чтение packaged `.fluxplugin`, безопасный extraction в cache-копию, загрузка DLL и ABI handshake `create/register/destroy`.
+- `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL и ABI handshake `create/register/destroy`.
 - `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
-- `src/plugins/mod.rs`: Точка сборки plugin-contract подсистемы и её публичный re-export API.
-- `src/plugins/source.rs`: Описание packaged/dev source-типов, проверка относительных путей и resolve plugin layout внутри plugin root.
+- `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API.
+- `src/plugins/registry.rs`: Stage-2 bootstrap runtime registry/state, default plugin, source priority, `LoadedPluginRegistry` и `ContentRegistry`.
+- `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics и resolve plugin layout внутри plugin root.
+- `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses и aggregate `PluginRegistryState`.
 - `src/render/mod.rs`: Плагин рендера и порядок render-систем, включая pipe visuals.
 - `src/render/pipe_highlight_material.rs`: Кастомный `Material2d` и helper-логика для shader-подсветки труб в `F3`.
 - `src/render/save_preview.rs`: Offscreen preview pipeline для save-slots: отдельная камера, settle-frame в каноническом `F1`, screenshot capture, PNG-запись и восстановление UI/overlay состояния после кадра.

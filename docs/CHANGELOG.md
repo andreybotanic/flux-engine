@@ -1,6 +1,9 @@
 ﻿# Changelog
 
 ## 2026-05-10
+- Реализован stage-2 bootstrap системы runtime-плагинов: добавлены `PluginSourceRegistry`, `LoadedPluginRegistry`, `EnabledPluginSet`, `ContentRegistry` и aggregate `PluginRegistryState`.
+- На старте приложение теперь читает `plugin_state.toml`, поддерживает discovery packaged archives из `plugins/` и expanded dev plugins из `plugins_dev/`, а также всегда поднимает built-in default plugin `flux.default`.
+- В строке статуса главного меню теперь показывается единая модель состояний плагинов (`enabled`, `disabled`, `missing`, `error`) без поломки текущего `New Game`.
 - Реализован stage-1 runtime plugin contract: новый модуль `src/plugins/` валидирует packaged `.fluxplugin`, проверяет `manifest.toml`, типизированные plugin IDs, безопасный ZIP extraction и Windows DLL ABI handshake без подключения gameplay content.
 - На старте приложения добавлен packaged plugin scan из `plugins/*.fluxplugin`: сломанные плагины мягко отклоняются без panic, а понятная причина показывается в строке статуса главного меню.
 - Добавлен минимальный рабочий sample DLL-плагин `crates/flux_stage1_sample_plugin` и позитивный plugin-contract e2e-тест: он реально собирает `cdylib`, упаковывает `.fluxplugin` и проверяет, что startup scan принимает корректный packaged plugin.

@@ -22,3 +22,6 @@ tmp/
 config/backups/
 plugins/*.fluxplugin
 plugins/*.zip
+plugins_dev/*
+!plugins_dev/.gitkeep
+plugin_state.toml
