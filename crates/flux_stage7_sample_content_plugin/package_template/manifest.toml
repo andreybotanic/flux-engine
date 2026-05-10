@@ -1,0 +1,9 @@
+id = "flux.sample_content"
+display_name = "Flux Stage7 Sample Content Plugin"
+version = "1.0.0"
+api_version = 2
+dll = "bin/flux_stage7_sample_content_plugin.dll"
+configs = "config"
+assets = "assets"
+content = true
+description = "Sample stage-7 content plugin that registers Neon as an external gas substance."

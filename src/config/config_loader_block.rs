@@ -217,6 +217,22 @@ fn load_default_plugin_substances(gases_root: &Path) -> Result<Vec<SubstanceDefi
     Ok(by_id.into_values().collect())
 }
 
+fn load_plugin_substances(
+    gases_root: &Path,
+    content_registry: &ContentRegistry,
+) -> Result<Vec<SubstanceDefinition>, String> {
+    let mut substances = load_default_plugin_substances(gases_root)?;
+    let default_plugin = PluginId::default_plugin();
+    substances.extend(
+        content_registry
+            .substances()
+            .values()
+            .filter(|definition| definition.plugin_id != default_plugin)
+            .cloned(),
+    );
+    Ok(substances)
+}
+
 fn load_visual_placement_configs(
     structures_root: &Path,
 ) -> Result<

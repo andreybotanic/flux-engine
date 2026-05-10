@@ -59,8 +59,8 @@
 - Manifest валидируется отдельно от runtime: проверяются `PluginId`, semver `version`, точное совпадение `api_version` с версией движка и безопасность относительных путей.
 - Перед extraction перечисляются все ZIP entries и запрещаются `..`, absolute roots, `.`-сегменты и Windows drive-prefix; это исключает выход за пределы plugin root.
 - На Windows DLL загружается не из исходного архива и не из исходной dev-папки, а из временной generation-копии в `std::env::temp_dir()/FluxEngine/plugin_cache/...`; после ABI-проверки копия удаляется best-effort.
-- Стабильный stage-1 ABI ограничен plain C-compatible типами: `FluxUtf8Slice`, `FluxStatus`, `FluxHostApi`, `FluxRegistrar`, `FluxPluginHandle` и четырьмя обязательными export-функциями DLL.
-- ABI-валидация ограничивается handshake-сценарием `api_version -> create -> register -> destroy`; gameplay content через внешние DLL на текущем этапе ещё не подключается, а встроенный игровой content регистрируется через locked `flux.default`.
+- Стабильный ABI использует plain C-compatible типы: `FluxUtf8Slice`, `FluxStatus`, `FluxHostApi`, `FluxRegistrar`, `FluxPluginHandle` и четыре обязательные export-функции DLL.
+- Начиная с API version `2`, `FluxRegistrar` поддерживает callback `register_gas_substance`: content-плагин может зарегистрировать газовые вещества во время handshake-сценария `api_version -> create -> register -> destroy`.
 - Для позитивной e2e-проверки stage-1 в репозитории добавлен отдельный sample `cdylib` crate `crates/flux_stage1_sample_plugin`: unit-тесты собирают его, упаковывают в `.fluxplugin` и проверяют, что startup scan принимает рабочий DLL-плагин.
 - Если внешних plugins нет, игра стартует как раньше, но registry всё равно содержит `flux.default`. Если packaged/dev plugin сломан, приложение продолжает запуск и показывает понятную причину отклонения в `Main Menu`.
 
@@ -89,6 +89,19 @@
 - `config/gases/*.toml` больше не считается источником газов ядра. Это optional data-файлы default plugin-а: они могут переопределить/добавить default-plugin gas substances, а при пустой папке базовые `H2/O2/CO2` всё равно берутся из built-in default plugin definitions.
 - CPU/GPU free-gas path продолжает работать только с compact indices и массивом molecular masses; WGSL не содержит plugin-specific веток и читает dynamic `molecular_masses` storage buffer.
 - Perf/parity helpers используют default substance registry и динамический список mass-error метрик, поэтому проверочные пути не ограничивают runtime тремя газами.
+
+### External content plugin build workflow (stage 7)
+
+- Workspace теперь содержит `xtask/` как отдельный crate и cargo alias `.cargo/config.toml`: `cargo xtask ...` разворачивается в `cargo run -p xtask -- ...`.
+- `xtask` ищет plugin projects в `crates/*/package_template/manifest.toml`, читает runtime manifest тем же `PluginManifest`, сортирует проекты по `PluginId` и отклоняет дубли.
+- Поддерживаются команды:
+  - `cargo xtask build-plugin <plugin_id>` собирает plugin DLL, копирует `manifest.toml`, `bin/`, `config/`, `assets/` в `target/plugins/expanded/<plugin_id>/` и валидирует expanded root через runtime loader.
+  - `cargo xtask pack-plugin <plugin_id>` выполняет build, пишет `.fluxplugin` в `target/plugins/packages/<plugin_id>.fluxplugin` и валидирует archive через runtime loader.
+  - `cargo xtask build-all-plugins` собирает и упаковывает все найденные plugin projects в детерминированном порядке.
+- Упаковщик включает в archive только разрешённые package paths (`manifest.toml`, `bin/`, `config/`, `assets/`) и запрещает служебные/опасные segments вроде `target`, `.git`, editor cache, secrets, `..` и absolute paths.
+- Stage-7 sample content plugin находится в `crates/flux_stage7_sample_content_plugin`: его ABI v2 DLL регистрирует газ `flux.sample_content.substance.neon` с alias `neon`.
+- Runtime registration сохраняется в `PluginRuntimeRegistration`, затем `LoadedPluginRegistry` передаёт её в `ContentRegistry`. При включении/выключении content-плагина из `Main Menu -> Plugins` rebuild пересоздаёт `ContentRegistry`, `GasRegistry`, world/pipe gas fields, pipe flux state и GPU solver buffers, а gas dropdown-поля обновляются без перезапуска.
+- `GameConfig::load_from_default_location_with_content(...)` и `load_gas_registry_from_default_location(...)` строят `GasRegistry` из default substances плюс substances включённых content-плагинов. Save/load gate использует те же stable substance IDs, поэтому мир с plugin-owned газом требует соответствующий enabled content plugin.
 
 ## Симуляция газа: текущее состояние MVP
 

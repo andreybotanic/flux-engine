@@ -12,6 +12,7 @@ use crate::plugins::{
         ExpandedPluginCandidate, ValidatedExpandedPlugin, ValidatedPackagedPlugin,
     },
     manifest::PluginManifest,
+    registration::PluginRuntimeRegistration,
     PluginId, PluginVersion,
 };
 
@@ -100,7 +101,7 @@ pub struct PluginResolvedPaths {
 }
 
 /// One fully validated physical plugin source.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DiscoveredPluginSource {
     pub plugin_id: PluginId,
     pub display_name: String,
@@ -110,6 +111,7 @@ pub struct DiscoveredPluginSource {
     pub source_path: PathBuf,
     pub source: PluginSource,
     pub manifest: PluginManifest,
+    pub registration: PluginRuntimeRegistration,
 }
 
 impl DiscoveredPluginSource {
@@ -123,6 +125,7 @@ impl DiscoveredPluginSource {
             source_path: validated.source.archive_path().to_path_buf(),
             source: PluginSource::Archive(validated.source),
             manifest: validated.manifest,
+            registration: validated.registration,
         }
     }
 
@@ -136,6 +139,7 @@ impl DiscoveredPluginSource {
             source_path: validated.source.root_dir().to_path_buf(),
             source: PluginSource::Directory(validated.source),
             manifest: validated.manifest,
+            registration: validated.registration,
         }
     }
 }

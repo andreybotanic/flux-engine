@@ -278,7 +278,7 @@ mod tests {
             r#"id = "{manifest_id}"
 display_name = "Duplicate Test"
 version = "1.0.0"
-api_version = 1
+api_version = 2
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"

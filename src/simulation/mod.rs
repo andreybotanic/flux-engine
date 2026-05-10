@@ -207,6 +207,13 @@ impl GpuRuntimeState {
     pub fn mark_needs_full_upload(&mut self) {
         self.needs_full_upload = true;
     }
+
+    /// Drops the current GPU solver so the next world run recreates buffers from CPU state.
+    pub fn reset_solver(&mut self) {
+        self.solver = None;
+        self.needs_full_upload = false;
+        self.steps_since_readback = 0;
+    }
 }
 
 impl Default for SimulationControl {

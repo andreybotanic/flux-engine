@@ -200,3 +200,72 @@ fn gas_source_substance_is_required_even_without_free_particles() {
 
     let _ = fs::remove_dir_all(root);
 }
+
+#[test]
+fn plugin_owned_substance_is_required_content_when_used() {
+    let root = temp_saves_root("flux_save_plugin_substance_required");
+    let plugin_id = PluginId::parse("flux.sample_content").expect("plugin id");
+    let substance_id =
+        crate::plugins::SubstanceId::parse("flux.sample_content.substance.neon")
+            .expect("substance id");
+    let neon = crate::plugins::SubstanceDefinition::gas(
+        substance_id.clone(),
+        plugin_id.clone(),
+        "Neon",
+        20.180,
+        [1.0, 0.32, 0.78],
+        vec!["neon".to_string()],
+    )
+    .expect("neon substance");
+
+    let mut content_registry = test_content_registry();
+    content_registry.register_provider_plugin(plugin_id.clone());
+    content_registry.register_substance(neon.clone());
+    let mut substances = crate::plugins::default_plugin::default_substance_definitions();
+    substances.push(neon);
+    let registry = GasRegistry::from_substances(substances).expect("registry with neon");
+    let neon_index = registry
+        .index_of("flux.sample_content.substance.neon")
+        .expect("neon index");
+    let mut enabled_plugins = default_enabled_plugins();
+    enabled_plugins.set_enabled(&plugin_id, true);
+
+    let world = WorldGrid::default();
+    let mut gas = GasField::from_registry(&registry);
+    let structures = PlacedStructureMap::default();
+    let pipe_gas = PipeGasField::from_registry(&registry);
+    let _ = gas.apply_species_delta_with_lbm(20, 20, neon_index, 1_000.0);
+
+    let descriptor = super::create_save(
+        &root,
+        "plugin-substance-required",
+        &world,
+        &gas,
+        &structures,
+        &pipe_gas,
+        &registry,
+        &content_registry,
+        &enabled_plugins,
+        6,
+    )
+    .expect("save");
+    let meta_path = root.join(&descriptor.id).join(META_FILE);
+    let meta = read_meta(&meta_path).expect("read meta");
+    assert!(meta.required_content.iter().any(|item| {
+        item.kind == "substance"
+            && item.id == substance_id.as_str()
+            && item.plugin_id == "flux.sample_content"
+    }));
+
+    let missing_err = super::load_save(&root, &descriptor.id, &registry, &test_content_registry())
+        .expect_err("load must require content plugin");
+    assert!(missing_err
+        .to_string()
+        .contains("Missing plugin: flux.sample_content"));
+
+    let loaded = super::load_save(&root, &descriptor.id, &registry, &content_registry)
+        .expect("load with content plugin");
+    assert_eq!(loaded.state.simulation_step, 6);
+
+    let _ = fs::remove_dir_all(root);
+}

@@ -1,5 +1,5 @@
 [package]
-name = "flux_stage1_sample_plugin"
+name = "flux_stage7_sample_content_plugin"
 version = "0.1.0"
 edition = "2021"
 

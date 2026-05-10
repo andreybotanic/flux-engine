@@ -71,6 +71,25 @@ impl SelectFieldState {
         }
     }
 
+    /// Replaces the option list and preserves the selected label when possible.
+    pub fn set_options_preserving_selection(&mut self, id: SelectFieldId, options: Vec<String>) {
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return;
+        };
+        let previous_label = entry.options.get(entry.selected).cloned();
+        let selected = previous_label
+            .as_ref()
+            .and_then(|label| options.iter().position(|option| option == label))
+            .unwrap_or(0);
+        entry.options = options;
+        entry.selected = if entry.options.is_empty() {
+            0
+        } else {
+            selected.min(entry.options.len() - 1)
+        };
+        entry.open = false;
+    }
+
     /// Runs `selected_index` logic.
     pub fn selected_index(&self, id: SelectFieldId) -> Option<usize> {
         self.entries.get(&id).map(|entry| entry.selected)
@@ -126,6 +145,11 @@ pub struct SelectFieldArrow {
 /// Stores `SelectFieldOptionsRoot` state.
 pub struct SelectFieldOptionsRoot {
     pub id: SelectFieldId,
+}
+
+#[derive(Component, Clone)]
+struct SelectFieldRenderedOptions {
+    options: Vec<String>,
 }
 
 #[derive(Component, Clone, Copy)]
@@ -218,36 +242,40 @@ pub fn spawn_select_field(
                     BackgroundColor(SELECT_BORDER),
                     GlobalZIndex(1200),
                     SelectFieldOptionsRoot { id: config.id },
+                    SelectFieldRenderedOptions {
+                        options: config.options.clone(),
+                    },
                 ))
                 .with_children(|options| {
-                    for (option_index, option_label) in config.options.iter().enumerate() {
-                        options
-                            .spawn((
-                                Button,
-                                Node {
-                                    width: Val::Percent(100.0),
-                                    height: Val::Px(28.0),
-                                    justify_content: JustifyContent::FlexStart,
-                                    align_items: AlignItems::Center,
-                                    padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
-                                    ..default()
-                                },
-                                BackgroundColor(SELECT_BG),
-                                SelectFieldOptionButton {
-                                    id: config.id,
-                                    option_index,
-                                },
-                            ))
-                            .with_children(|button| {
-                                button.spawn((
-                                    Text::new(option_label.clone()),
-                                    TextFont::from_font_size(13.0),
-                                    TextColor(palette::TEXT_PRIMARY),
-                                ));
-                            });
-                    }
+                    spawn_option_buttons(options, config.id, &config.options);
                 });
         });
+}
+
+fn spawn_option_buttons(parent: &mut ChildSpawnerCommands, id: SelectFieldId, options: &[String]) {
+    for (option_index, option_label) in options.iter().enumerate() {
+        parent
+            .spawn((
+                Button,
+                Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Px(28.0),
+                    justify_content: JustifyContent::FlexStart,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::axes(Val::Px(8.0), Val::Px(0.0)),
+                    ..default()
+                },
+                BackgroundColor(SELECT_BG),
+                SelectFieldOptionButton { id, option_index },
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new(option_label.clone()),
+                    TextFont::from_font_size(13.0),
+                    TextColor(palette::TEXT_PRIMARY),
+                ));
+            });
+    }
 }
 
 /// Stores `SelectFieldPlugin` state.
@@ -319,9 +347,15 @@ fn collapse_open_selects_on_panel_click(
 }
 
 fn sync_select_field_visuals(
+    mut commands: Commands,
     state: Res<SelectFieldState>,
     mut labels: Query<(&SelectFieldLabel, &mut Text)>,
-    mut options_roots: Query<(&SelectFieldOptionsRoot, &mut Node)>,
+    mut options_roots: Query<(
+        Entity,
+        &SelectFieldOptionsRoot,
+        &mut SelectFieldRenderedOptions,
+        &mut Node,
+    )>,
     mut arrows: Query<(&SelectFieldArrow, &mut ImageNode)>,
     mut button_sets: ParamSet<(
         Query<(&SelectFieldToggleButton, &Interaction, &mut BackgroundColor), With<Button>>,
@@ -332,7 +366,17 @@ fn sync_select_field_visuals(
         text.0 = state.selected_label(label.id).unwrap_or("N/A").to_string();
     }
 
-    for (options_root, mut node) in &mut options_roots {
+    for (root_entity, options_root, mut rendered, mut node) in &mut options_roots {
+        if let Some(entry) = state.entries.get(&options_root.id) {
+            if rendered.options != entry.options {
+                commands.entity(root_entity).despawn_related::<Children>();
+                let options = entry.options.clone();
+                commands.entity(root_entity).with_children(|parent| {
+                    spawn_option_buttons(parent, options_root.id, &options)
+                });
+                rendered.options = options;
+            }
+        }
         node.display = if state.is_open(options_root.id) {
             Display::Flex
         } else {

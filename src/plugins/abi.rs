@@ -52,6 +52,25 @@ impl FluxStatus {
 pub type FluxWriteErrorFn =
     unsafe extern "C" fn(context: *mut c_void, message: FluxUtf8Slice) -> FluxStatus;
 
+/// C-compatible gas substance descriptor emitted by content plugins.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FluxGasSubstanceDescriptor {
+    pub id: FluxUtf8Slice,
+    pub label: FluxUtf8Slice,
+    pub alias: FluxUtf8Slice,
+    pub molecular_mass: f32,
+    pub color_r: f32,
+    pub color_g: f32,
+    pub color_b: f32,
+}
+
+/// Callback used by plugins to register one gas-capable substance.
+pub type FluxRegisterGasSubstanceFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    descriptor: *const FluxGasSubstanceDescriptor,
+) -> FluxStatus;
+
 /// Host callbacks and runtime paths exposed to one plugin instance.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -92,20 +111,25 @@ impl FluxHostApi {
 pub struct FluxRegistrar {
     pub struct_size: u32,
     pub api_version: u32,
-    pub reserved0: *mut c_void,
-    pub reserved1: *mut c_void,
+    pub register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
+    pub registration_context: *mut c_void,
     pub reserved2: *mut c_void,
+    pub reserved3: *mut c_void,
 }
 
 impl FluxRegistrar {
-    /// Creates the stage-1 registrar placeholder.
-    pub fn new() -> Self {
+    /// Creates the registrar payload used by `flux_plugin_register`.
+    pub fn new(
+        register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
+        registration_context: *mut c_void,
+    ) -> Self {
         Self {
             struct_size: std::mem::size_of::<Self>() as u32,
             api_version: ENGINE_PLUGIN_API_VERSION_VALUE,
-            reserved0: std::ptr::null_mut(),
-            reserved1: std::ptr::null_mut(),
+            register_gas_substance,
+            registration_context,
             reserved2: std::ptr::null_mut(),
+            reserved3: std::ptr::null_mut(),
         }
     }
 }

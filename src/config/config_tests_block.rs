@@ -176,6 +176,37 @@ color = [0.3, 0.3, 0.3]
     }
 
     #[test]
+    fn config_loader_includes_external_plugin_substances() {
+        let root = make_temp_root("flux_cfg_external_gas");
+        write_minimal_configs(&root);
+        let plugin_id = crate::plugins::PluginId::parse("flux.sample_content").expect("plugin id");
+        let substance = crate::plugins::SubstanceDefinition::gas(
+            crate::plugins::SubstanceId::parse("flux.sample_content.substance.neon")
+                .expect("substance id"),
+            plugin_id.clone(),
+            "Neon",
+            20.180,
+            [1.0, 0.32, 0.78],
+            vec!["neon".to_string()],
+        )
+        .expect("substance");
+        let mut content_registry = crate::plugins::default_plugin::default_content_registry();
+        content_registry.register_provider_plugin(plugin_id);
+        content_registry.register_substance(substance);
+
+        let config = GameConfig::load_from_root_with_content(&root, &content_registry)
+            .expect("config with external substance");
+        assert_eq!(config.gas_registry.count(), 4);
+        assert_eq!(config.gas_registry.index_of("neon"), Some(1));
+        assert_eq!(
+            config.gas_registry.stable_id_by_index(1).map(|id| id.as_str()),
+            Some("flux.sample_content.substance.neon")
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn config_loader_rejects_invalid_gas_values() {
         let root = make_temp_root("flux_cfg_bad");
         write_minimal_configs(&root);

@@ -28,12 +28,14 @@ use crate::{
 /// Runs `run` logic.
 pub fn run() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let game_config = GameConfig::load_from_default_location().unwrap_or_else(|err| {
-        panic!("Failed to load game config files from ./config: {err}");
-    });
     let plugin_bootstrap_config = PluginBootstrapConfig::from_repo_root(repo_root, false);
     let plugin_bootstrap = crate::plugins::bootstrap_plugin_registry(&plugin_bootstrap_config);
     plugin_bootstrap.registry_state.log_to_stderr();
+    let game_config =
+        GameConfig::load_from_default_location_with_content(&plugin_bootstrap.content_registry)
+            .unwrap_or_else(|err| {
+                panic!("Failed to load game config files from ./config: {err}");
+            });
     let default_plugin_content = DefaultPluginContent::default();
 
     let asset_path = repo_root.join("assets").to_string_lossy().to_string();

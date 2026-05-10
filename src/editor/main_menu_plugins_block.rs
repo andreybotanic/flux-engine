@@ -158,6 +158,14 @@ fn handle_plugin_toggle(
     loaded_registry: &mut LoadedPluginRegistry,
     enabled_set: &mut EnabledPluginSet,
     content_registry: &mut ContentRegistry,
+    gas_registry: &mut GasRegistry,
+    gas: &mut GasField,
+    pipe_gas: &mut crate::plugins::default_plugin::pipe_runtime::PipeGasField,
+    pipe_flux: &mut crate::plugins::default_plugin::pipe_runtime::PipeFluxField,
+    gpu_state: &mut crate::simulation::GpuRuntimeState,
+    select_fields: &mut SelectFieldState,
+    gas_settings: &mut GasToolSettings,
+    source_settings: &mut SourceStructureToolSettings,
     registry_state: &mut PluginRegistryState,
 ) {
     let old_registry_state = registry_state.clone();
@@ -186,6 +194,16 @@ fn handle_plugin_toggle(
     }
 
     let output = rebuild_plugin_registry_from_enabled_set(config, next_enabled_set);
+    let next_gas_registry =
+        match crate::config::GameConfig::load_gas_registry_from_default_location(
+            &output.content_registry,
+        ) {
+            Ok(registry) => registry,
+            Err(error) => {
+                menu_ui.status_text = format!("Plugin toggle failed: {}", error);
+                return;
+            }
+        };
     let list_requires_rebuild =
         plugin_list_requires_rebuild(&old_registry_state, &output.registry_state);
     output.registry_state.log_to_stderr();
@@ -194,9 +212,41 @@ fn handle_plugin_toggle(
     *loaded_registry = output.loaded_registry;
     *enabled_set = output.enabled_set;
     *content_registry = output.content_registry;
+    *gas_registry = next_gas_registry;
+    *gas = GasField::from_registry(gas_registry);
+    *pipe_gas = crate::plugins::default_plugin::pipe_runtime::PipeGasField::from_registry(gas_registry);
+    pipe_flux.clear_all();
+    gpu_state.reset_solver();
+    refresh_gas_select_options(select_fields, gas_registry, gas_settings, source_settings);
     *registry_state = output.registry_state;
     menu_ui.status_text.clear();
     menu_ui.needs_plugin_list_refresh = list_requires_rebuild;
+}
+
+fn refresh_gas_select_options(
+    select_fields: &mut SelectFieldState,
+    gas_registry: &GasRegistry,
+    gas_settings: &mut GasToolSettings,
+    source_settings: &mut SourceStructureToolSettings,
+) {
+    let options = gas_select_options(gas_registry);
+    select_fields.set_options_preserving_selection(GAS_SELECT_ADD_ID, options.clone());
+    select_fields.set_options_preserving_selection(GAS_SELECT_SOURCE_ID, options);
+    if gas_registry.count() == 0 {
+        gas_settings.gas_index = 0;
+        source_settings.gas_index = 0;
+        return;
+    }
+    gas_settings.gas_index = gas_settings.gas_index.min(gas_registry.count() - 1);
+    source_settings.gas_index = source_settings.gas_index.min(gas_registry.count() - 1);
+}
+
+fn gas_select_options(gas_registry: &GasRegistry) -> Vec<String> {
+    gas_registry
+        .all()
+        .iter()
+        .map(|gas| gas.id.to_uppercase())
+        .collect()
 }
 
 fn plugin_list_requires_rebuild(

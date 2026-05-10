@@ -1,6 +1,9 @@
 ﻿# Changelog
 
 ## 2026-05-10
+- Реализован stage-7 plugin build workflow: добавлен `xtask` с командами `build-plugin`, `pack-plugin`, `build-all-plugins`, cargo alias `cargo xtask` и безопасная упаковка `.fluxplugin` через runtime validation.
+- ABI runtime-плагинов повышен до version `2`: content-плагины могут регистрировать gas substances через `FluxRegistrar`, а активные plugin-owned газы попадают в `GasRegistry`, dropdown выбора газа и save/load required content.
+- Добавлен sample content plugin `flux.sample_content`, который регистрирует газ Neon, и тесты для сборки/упаковки, registry integration, config loading и save/load gate с plugin-owned газом.
 - Реализован stage-6 plugin save schema: save schema повышена до `6`, world/structure/pipe chunks сохраняют stable plugin content IDs, а `meta.toml` хранит реально required content и диагностический список enabled plugins.
 - Добавлен load gate перед загрузкой мира: сейв с missing/disabled required content-плагином или отсутствующим content ID отклоняется понятной ошибкой, при этом non-content плагины не блокируют загрузку.
 - Ядро переведено с default enum-вариантов материалов, структур и `F3/Pipes` overlay на generic static ID wrapper-ы; конкретные IDs и legacy numeric save codes теперь выдаёт locked default plugin `flux.default`, без изменения save schema.

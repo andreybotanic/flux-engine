@@ -54,6 +54,12 @@
 
 7. Команды должны возвращать non-zero exit code при ошибке, чтобы их можно было использовать в CI.
 
+8. Для приёмки этапа нужен минимальный видимый content-плагин:
+   - завести sample crate в `crates/flux_stage7_sample_content_plugin`;
+   - выставить в manifest `content = true` и текущий `api_version`;
+   - через ABI registrar зарегистрировать хотя бы один новый газ;
+   - проверить, что после сборки, упаковки и включения плагина газ появляется в игровых dropdown.
+
 ## Edge cases
 
 - Plugin ID неизвестен.
@@ -70,6 +76,7 @@
 - package file list не содержит запрещённых путей;
 - unknown plugin ID возвращает ошибку;
 - build-all сортирует plugin IDs стабильно.
+- sample content plugin после `cargo run -p xtask -- build-all-plugins` попадает в `target/plugins/packages/` и проходит runtime validation.
 
 После этапа выполнить:
 - `cargo build --release`;

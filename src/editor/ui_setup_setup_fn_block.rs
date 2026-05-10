@@ -38,11 +38,7 @@ fn setup_editor_ui(
     let max_color_initial = gas_visual_settings
         .max_particles_for_max_color
         .clamp(1, 10_000);
-    let gas_select_options: Vec<String> = gas_registry
-        .all()
-        .iter()
-        .map(|gas| gas.id.to_uppercase())
-        .collect();
+    let gas_select_options = gas_select_options(&gas_registry);
     let sim_hz_initial_text = sim_hz_initial.to_string();
     let buoyancy_strength_initial_text = fmt_f32(buoyancy_strength_initial);
     let buoyancy_radius_initial_text = buoyancy_radius_initial.to_string();

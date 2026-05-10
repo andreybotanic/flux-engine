@@ -12,7 +12,7 @@ use serde::Deserialize;
 use crate::{
     plugins::{
         default_plugin::{default_substance_id_for_alias, pipe_runtime::PipeSimulationConfig},
-        SubstanceDefinition, SubstanceId, SubstanceRegistry,
+        ContentRegistry, PluginId, SubstanceDefinition, SubstanceId, SubstanceRegistry,
     },
     render::GasVisualSettings,
     simulation::{GasSimulationConfig, SimulationRateConfig, SolverTuning},
@@ -305,11 +305,28 @@ impl GameConfig {
         Self::load_from_root(&root)
     }
 
+    /// Loads config from the default location and includes enabled plugin content.
+    pub fn load_from_default_location_with_content(
+        content_registry: &ContentRegistry,
+    ) -> Result<Self, String> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
+        Self::load_from_root_with_content(&root, content_registry)
+    }
+
     /// Runs `load_from_root` logic.
     pub fn load_from_root(root: &Path) -> Result<Self, String> {
+        let content_registry = crate::plugins::default_plugin::default_content_registry();
+        Self::load_from_root_with_content(root, &content_registry)
+    }
+
+    /// Loads config from one root and appends external plugin substances.
+    pub fn load_from_root_with_content(
+        root: &Path,
+        content_registry: &ContentRegistry,
+    ) -> Result<Self, String> {
         let simulation = read_toml::<SimulationToml>(&root.join("simulation.toml"))?;
         let cell_types = read_toml::<CellTypesToml>(&root.join("cell_types.toml"))?;
-        let substances = load_default_plugin_substances(&root.join("gases"))?;
+        let substances = load_plugin_substances(&root.join("gases"), content_registry)?;
         let world_cell_hud =
             load_world_cell_hud_config(&root.join("cell_types.toml"), cell_types.world_cell_hud)?;
         let (structure_visuals, structure_hud, cell_visual_layouts) =
@@ -391,6 +408,15 @@ impl GameConfig {
             structure_visuals,
             cell_visual_layouts,
         })
+    }
+
+    /// Builds the current gas registry from default config and enabled plugin content.
+    pub fn load_gas_registry_from_default_location(
+        content_registry: &ContentRegistry,
+    ) -> Result<GasRegistry, String> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
+        let substances = load_plugin_substances(&root.join("gases"), content_registry)?;
+        GasRegistry::from_substances(substances)
     }
 }
 

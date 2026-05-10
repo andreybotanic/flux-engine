@@ -1,7 +1,7 @@
 id = "flux.sample_stage1"
 display_name = "Flux Stage1 Sample Plugin"
 version = "1.0.0"
-api_version = 1
+api_version = 2
 dll = "bin/flux_stage1_sample_plugin.dll"
 configs = "config"
 assets = "assets"

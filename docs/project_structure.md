@@ -6,6 +6,7 @@
 
 ```text
 FluxEngine/
+|-- .cargo/                  # Локальные cargo alias-ы проекта.
 |-- assets/                  # Графические и шейдерные ресурсы приложения.
 |   |-- fonts/               # UI-шрифты, загружаемые через AssetServer.
 |   |-- shaders/             # WGSL-шейдеры вычислений/рендера.
@@ -17,7 +18,8 @@ FluxEngine/
 |   |-- gases/               # Конфиги отдельных газов.
 |   `-- structures/          # Конфиги базовых entity-параметров, appearance и HUD-метаданных стен и структур.
 |-- crates/                  # Вспомогательные Rust-crate-ы, не входящие в основную библиотеку игры.
-|   `-- flux_stage1_sample_plugin/   # Минимальный sample DLL-плагин для stage-1 ABI и e2e-тестов packaged plugins.
+|   |-- flux_stage1_sample_plugin/   # Минимальный non-content sample DLL-плагин для ABI/e2e-тестов packaged plugins.
+|   `-- flux_stage7_sample_content_plugin/   # Sample content DLL-плагин stage-7, регистрирующий внешний газ.
 |-- docs/                    # Проектная документация.
 |   `-- plans/               # Плановые документы будущих крупных изменений.
 |       `-- plugin_system/   # Roadmap и этапные планы перехода на runtime-плагины.
@@ -35,8 +37,9 @@ FluxEngine/
 |   |-- simulation/          # CPU/GPU симуляция свободного газа и parity-инфраструктура.
 |   |-- ui/                  # Общие UI-компоненты и панели.
 |   `-- world/               # Клеточный мир и unified structures.
+|-- xtask/                   # Cargo helper crate для сборки и упаковки sample runtime-плагинов.
 |-- AGENTS.md                # Правила работы агента.
-|-- Cargo.toml               # Манифест проекта.
+|-- Cargo.toml               # Манифест проекта и workspace.
 |-- Cargo.lock               # Lock-файл зависимостей.
 `-- tmp_size.rs              # Локальный вспомогательный черновой файл.
 ```
@@ -44,6 +47,7 @@ FluxEngine/
 ## Файлы
 
 - `AGENTS.md`: Правила работы агента в этом репозитории.
+- `.cargo/config.toml`: Локальный cargo alias `cargo xtask` для запуска helper-crate-а `xtask`.
 - `assets/fonts/ui_main.ttf`: Основной UI-шрифт с поддержкой кириллицы для всех текстовых элементов интерфейса.
 - `assets/shaders/gas_solver.wgsl`: GPU-шейдер газового шага (WGSL), синхронизированный с CPU-эталоном.
 - `assets/shaders/pipe_highlight_material.wgsl`: WGSL-шейдер `Material2d` для яркой подсветки труб в `F3`.
@@ -62,17 +66,22 @@ FluxEngine/
 - `assets/sprites/world/tile_*.png`: Спрайты тайлов мира.
 - `assets/sprites/world/`: Не содержит статической fade-маски мира; затемняющая маска генерируется в runtime в `src/render/world_view.rs`.
 - `Cargo.lock`: Зафиксированные версии зависимостей Cargo.
-- `Cargo.toml`: Манифест Rust-проекта и зависимости.
+- `Cargo.toml`: Манифест Rust-проекта, workspace и зависимости; основной crate и `xtask` входят в workspace, sample plugin crates собираются отдельно через `xtask`.
 - `config/backups/simulation.toml.pre_tuning_20260503_174021.toml`: Резервная копия конфигурации симуляции для отката/сравнения.
 - `config/cell_types.toml`: Настройки визуала/параметров типов клеток и HUD-конфиг world-клетки для свободного газа.
 - `config/gases/*.toml`: Optional data-конфиги default plugin gas substances; при пустой папке базовые `H2/O2/CO2` берутся из built-in default plugin definitions.
 - `config/structures/*.toml`: Конфиги базовых параметров, appearance и HUD-метаданных встроенных стен и структур (`label`, `draw_priority`, `size_in_cells`, `hud.sort_order` и описания substance-контейнеров).
 - `config/simulation.toml`: Основные параметры симуляции и runtime-настройки, включая секцию `[pipe]` для pipe-runtime default plugin-а.
-- `crates/flux_stage1_sample_plugin/Cargo.toml`: Отдельный `cdylib` crate минимального рабочего stage-1 sample plugin-а.
+- `crates/flux_stage1_sample_plugin/Cargo.toml`: Отдельный `cdylib` crate минимального рабочего non-content sample plugin-а.
 - `crates/flux_stage1_sample_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample DLL, используемый позитивным e2e-тестом.
 - `crates/flux_stage1_sample_plugin/package_template/config/sample.toml`: Минимальный config-файл sample plugin package.
 - `crates/flux_stage1_sample_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample plugin package.
 - `crates/flux_stage1_sample_plugin/src/lib.rs`: Реализация sample DLL-плагина с обязательными ABI export-ами `flux_plugin_*`.
+- `crates/flux_stage7_sample_content_plugin/Cargo.toml`: Отдельный `cdylib` crate sample content plugin-а stage-7, собираемый вне основного workspace.
+- `crates/flux_stage7_sample_content_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample content plugin-а с `content = true`.
+- `crates/flux_stage7_sample_content_plugin/package_template/config/sample.toml`: Минимальный config-файл sample content plugin package.
+- `crates/flux_stage7_sample_content_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample content plugin package.
+- `crates/flux_stage7_sample_content_plugin/src/lib.rs`: ABI v2 sample DLL, регистрирующая внешний газ `flux.sample_content.substance.neon`.
 - `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
 - `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
 - `docs/plans/plugin_system/00_roadmap.md`: Общий roadmap будущей миграции FluxEngine на runtime-плагины.
@@ -86,7 +95,7 @@ FluxEngine/
 - `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
 - `src/config/hud.rs`: Публичные типы runtime-конфигов HUD, включая substance-контейнеры и режимы видимости по hover, без встроенных entity-label/fallback-конфигов.
-- `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации TOML-конфигов, включая `config/structures/*.toml`.
+- `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации TOML-конфигов, включая `config/structures/*.toml` и подключение gas substances из активного `ContentRegistry`.
 - `src/config/config_tests_block.rs`: Тесты загрузки и валидации конфигов.
 - `src/config/mod.rs`: Публичные конфиг-типы, compatibility `GasRegistry` поверх plugin-owned substance registry, runtime-реестры base/visual/layout/HUD-метаданных и входная точка загрузки конфигов.
 - `src/debug/mod.rs`: Debug-режимы, оверлейные метрики и диагностические ресурсы.
@@ -109,16 +118,17 @@ FluxEngine/
 - `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
 - `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем, включая новый `plugins`.
 - `src/main.rs`: Точка входа бинаря; запускает приложение.
-- `src/plugins/abi.rs`: C-compatible ABI stage-1: `FluxUtf8Slice`, `FluxStatus`, host/registrar structs и export names обязательных DLL-функций.
+- `src/plugins/abi.rs`: C-compatible ABI v2: `FluxUtf8Slice`, `FluxStatus`, host/registrar structs, gas registration callback и export names обязательных DLL-функций.
 - `src/plugins/content.rs`: Content registry runtime-модель: stable `ContentId`, provider plugins, descriptors клеток/структур/overlay, HUD metadata и registered substances.
 - `src/plugins/default_plugin.rs`: Built-in locked `flux.default` content/runtime: stable IDs для cells/structures/plugin overlays/substances, generic ID facade, legacy numeric save adapters, asset/config helpers, default descriptor registration и подключение pipe-runtime модуля.
 - `src/plugins/default_plugin_descriptors_block.rs`: Внутренний блок сборки descriptors default plugin-а: layer/collision rules, footprint, rotations, sprite metadata и HUD blocks.
 - `src/plugins/diagnostics.rs`: Startup scan packaged archives, дедупликация `PluginId`, resource с результатами проверки и текст для статуса главного меню.
 - `src/plugins/id.rs`: Типизированные `PluginId`, `PluginVersion`, `PluginApiVersion` и проверка канонического формата ID.
-- `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL и ABI handshake `create/register/destroy`.
+- `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL, ABI handshake `create/register/destroy` и сбор runtime content registration.
 - `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
 - `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API.
-- `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` и rebuild-helper для menu toggle; content registry создаётся через `src/plugins/content.rs` и default descriptors.
+- `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin content, включая внешние gas substances.
+- `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` и rebuild-helper для menu toggle; content registry создаётся из default descriptors плюс runtime registration включённых content-плагинов.
 - `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics и resolve plugin layout внутри plugin root.
 - `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses и aggregate `PluginRegistryState`.
 - `src/plugins/substances.rs`: Generic plugin-owned substance contract: `SubstanceId`, `SubstanceDefinition`, `SubstanceFlags` и deterministic `SubstanceRegistry` для compact runtime indices.
@@ -151,7 +161,7 @@ FluxEngine/
 - `src/simulation/gpu_solver_helpers_block.rs`: Вспомогательные функции буферов, bind-групп и dispatch.
 - `src/simulation/gpu_solver_impl_core_block.rs`: Core-инициализация/загрузка состояния GPU solver.
 - `src/simulation/gpu_solver_impl_exec_block.rs`: Исполнение шага GPU, readback и генерация параметров.
-- `src/simulation/mod.rs`: Плагин core-симуляции свободного газа, ресурсы состояния, schedule sets, CPU/GPU backend orchestration и общие perf-метрики.
+- `src/simulation/mod.rs`: Плагин core-симуляции свободного газа, ресурсы состояния, schedule sets, CPU/GPU backend orchestration, reset GPU solver state и общие perf-метрики.
 - `src/simulation/parity.rs`: Публичные parity API и сценарии сравнения CPU/GPU.
 - `src/simulation/parity_runtime_block.rs`: Runtime parity-метрики, прогоны сценариев и gate-оценка.
 - `src/simulation/parity_tests_block.rs`: Тесты parity-порогов, smoke и GPU-регрессий.
@@ -178,10 +188,13 @@ FluxEngine/
 - `src/ui/panels_runtime_block.rs`: Runtime-системы панели: layout, состояние viewport-ов и события заголовка; input scroll делегирован общему `scroll_area`.
 - `src/ui/panels_tests_block.rs`: Тесты layout/scroll/stack-поведения панелей.
 - `src/ui/scroll_area.rs`: Общий scroll-area runtime для modal/panel viewport-ов: wheel input, drag thumb, click on track, visibility scrollbar и приоритет групп ввода.
-- `src/ui/select_field.rs`: Dropdown/select-компонент для UI-панелей и его тесты.
+- `src/ui/select_field.rs`: Dropdown/select-компонент для UI-панелей, динамическая перерисовка option buttons при смене списка и его тесты.
 - `src/ui/sim_controls.rs`: UI-контролы симуляции (pause/speed/hotkeys).
 - `src/ui/toggle_switch.rs`: Переиспользуемый двухпозиционный toggle-switch UI-компонент для включения/выключения настроек.
 - `src/world/grid.rs`: Клеточная сетка мира, generic material ID wrapper, координатные утилиты и тесты.
 - `src/world/mod.rs`: Плагин мира и события изменений клеток.
 - `src/world/structures.rs`: Unified layer/descriptor-модель структур, generic structure/layer ID wrapper-ы, `PlacedStructureMap`, rotation, bridge-footprint compatibility helpers и pipe-cut state.
+- `xtask/Cargo.toml`: Манифест helper-crate-а для сборки и упаковки runtime-плагинов.
+- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `pack-plugin`, `build-all-plugins`, discovery plugin projects и безопасной упаковки `.fluxplugin`.
+- `xtask/src/main.rs`: CLI entrypoint, который запускает `xtask::run_from_env()` и возвращает non-zero exit code при ошибке.
 - `tmp_size.rs`: Временный локальный вспомогательный Rust-файл для ручных проверок/черновых экспериментов.

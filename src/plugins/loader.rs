@@ -12,18 +12,20 @@ use zip::ZipArchive;
 
 use crate::plugins::{
     abi::{
-        FluxHostApi, FluxPluginApiVersionFn, FluxPluginCreateFn, FluxPluginDestroyFn,
-        FluxPluginHandle, FluxPluginRegisterFn, FluxRegistrar, FluxStatus, FluxUtf8Slice,
-        FLUX_PLUGIN_API_VERSION_EXPORT_NAME, FLUX_PLUGIN_CREATE_EXPORT_NAME,
+        FluxGasSubstanceDescriptor, FluxHostApi, FluxPluginApiVersionFn, FluxPluginCreateFn,
+        FluxPluginDestroyFn, FluxPluginHandle, FluxPluginRegisterFn, FluxRegistrar, FluxStatus,
+        FluxUtf8Slice, FLUX_PLUGIN_API_VERSION_EXPORT_NAME, FLUX_PLUGIN_CREATE_EXPORT_NAME,
         FLUX_PLUGIN_DESTROY_EXPORT_NAME, FLUX_PLUGIN_REGISTER_EXPORT_NAME,
     },
     diagnostics::PluginContractError,
     id::{PluginApiVersion, ENGINE_PLUGIN_API_VERSION},
     manifest::PluginManifest,
+    registration::PluginRuntimeRegistration,
     source::{
         resolve_plugin_layout, validate_archive_entry_path, ExpandedPluginSource,
         PackagedPluginSource, MANIFEST_FILE_NAME,
     },
+    PluginId, SubstanceDefinition, SubstanceId, SubstanceRegistry,
 };
 
 /// Parsed packaged plugin candidate before DLL handshake validation.
@@ -38,6 +40,7 @@ pub(crate) struct PackagedPluginCandidate {
 pub(crate) struct ValidatedPackagedPlugin {
     pub source: PackagedPluginSource,
     pub manifest: PluginManifest,
+    pub registration: PluginRuntimeRegistration,
 }
 
 /// Parsed expanded plugin candidate before DLL handshake validation.
@@ -52,6 +55,7 @@ pub(crate) struct ExpandedPluginCandidate {
 pub(crate) struct ValidatedExpandedPlugin {
     pub source: ExpandedPluginSource,
     pub manifest: PluginManifest,
+    pub registration: PluginRuntimeRegistration,
 }
 
 /// Reads and validates only the manifest layer of one packaged plugin archive.
@@ -134,6 +138,24 @@ pub(crate) fn read_expanded_plugin_candidate(
     Ok(ExpandedPluginCandidate { source, manifest })
 }
 
+/// Validates one packaged plugin archive using the same contract as runtime discovery.
+pub fn validate_packaged_plugin_archive(
+    archive_path: &Path,
+) -> Result<(PluginManifest, PluginRuntimeRegistration), PluginContractError> {
+    let candidate = read_packaged_plugin_candidate(archive_path)?;
+    let validated = validate_packaged_plugin_candidate(&candidate)?;
+    Ok((validated.manifest, validated.registration))
+}
+
+/// Validates one expanded plugin directory using the same contract as runtime discovery.
+pub fn validate_expanded_plugin_root(
+    root_dir: &Path,
+) -> Result<(PluginManifest, PluginRuntimeRegistration), PluginContractError> {
+    let candidate = read_expanded_plugin_candidate(root_dir)?;
+    let validated = validate_expanded_plugin_candidate(&candidate)?;
+    Ok((validated.manifest, validated.registration))
+}
+
 /// Validates archive extraction and DLL ABI handshake for one packaged plugin.
 pub(crate) fn validate_packaged_plugin_candidate(
     candidate: &PackagedPluginCandidate,
@@ -148,11 +170,13 @@ pub(crate) fn validate_packaged_plugin_candidate(
     let extracted_root = extract_packaged_plugin_to_cache(candidate)?;
     let result = validate_plugin_root(&candidate.manifest, &extracted_root);
     let _ = fs::remove_dir_all(&extracted_root);
-    result?;
+    let registration = result?;
+    validate_runtime_registration(&candidate.manifest, &registration)?;
 
     Ok(ValidatedPackagedPlugin {
         source: candidate.source.clone(),
         manifest: candidate.manifest.clone(),
+        registration,
     })
 }
 
@@ -170,12 +194,37 @@ pub(crate) fn validate_expanded_plugin_candidate(
     let cached_root = copy_expanded_plugin_to_cache(candidate)?;
     let result = validate_plugin_root(&candidate.manifest, &cached_root);
     let _ = fs::remove_dir_all(&cached_root);
-    result?;
+    let registration = result?;
+    validate_runtime_registration(&candidate.manifest, &registration)?;
 
     Ok(ValidatedExpandedPlugin {
         source: candidate.source.clone(),
         manifest: candidate.manifest.clone(),
+        registration,
     })
+}
+
+/// Validates plugin-owned content registration against manifest-level constraints.
+pub fn validate_runtime_registration(
+    manifest: &PluginManifest,
+    registration: &PluginRuntimeRegistration,
+) -> Result<(), PluginContractError> {
+    if !manifest.content && !registration.is_empty() {
+        return Err(PluginContractError::Abi(format!(
+            "plugin '{}' has content = false but registered runtime content",
+            manifest.id
+        )));
+    }
+    if registration.gas_substances.is_empty() {
+        return Ok(());
+    }
+    SubstanceRegistry::new(registration.gas_substances.clone()).map_err(|error| {
+        PluginContractError::Abi(format!(
+            "plugin '{}' registered invalid gas substances: {}",
+            manifest.id, error
+        ))
+    })?;
+    Ok(())
 }
 
 fn extract_packaged_plugin_to_cache(
@@ -331,12 +380,13 @@ fn copy_directory_recursive(
 fn validate_plugin_root(
     manifest: &PluginManifest,
     plugin_root: &Path,
-) -> Result<(), PluginContractError> {
+) -> Result<PluginRuntimeRegistration, PluginContractError> {
     let resolved_paths = resolve_plugin_layout(plugin_root, manifest)?;
     let plugin_root_utf8 = path_to_utf8_string(&resolved_paths.root_dir);
     let config_root_utf8 = path_to_utf8_string(&resolved_paths.configs_dir);
     let assets_root_utf8 = path_to_utf8_string(&resolved_paths.assets_dir);
     let mut host_error_message = String::new();
+    let mut registration_collector = PluginRegistrationCollector::new(manifest.id.clone());
 
     unsafe {
         let library = Library::new(&resolved_paths.dll_path).map_err(|error| {
@@ -402,7 +452,10 @@ fn validate_plugin_root(
         }
 
         host_error_message.clear();
-        let mut registrar = FluxRegistrar::new();
+        let mut registrar = FluxRegistrar::new(
+            Some(register_gas_substance_callback),
+            (&mut registration_collector as *mut PluginRegistrationCollector).cast::<c_void>(),
+        );
         let register_status = register_fn(plugin_handle, &mut registrar);
         destroy_fn(plugin_handle);
         if !register_status.is_ok() {
@@ -415,7 +468,83 @@ fn validate_plugin_root(
         }
     }
 
-    Ok(())
+    if let Some(error) = registration_collector.error_message {
+        return Err(PluginContractError::Abi(error));
+    }
+
+    Ok(registration_collector.registration)
+}
+
+struct PluginRegistrationCollector {
+    plugin_id: PluginId,
+    registration: PluginRuntimeRegistration,
+    error_message: Option<String>,
+}
+
+impl PluginRegistrationCollector {
+    fn new(plugin_id: PluginId) -> Self {
+        Self {
+            plugin_id,
+            registration: PluginRuntimeRegistration::default(),
+            error_message: None,
+        }
+    }
+}
+
+unsafe extern "C" fn register_gas_substance_callback(
+    context: *mut c_void,
+    descriptor: *const FluxGasSubstanceDescriptor,
+) -> FluxStatus {
+    if context.is_null() || descriptor.is_null() {
+        return FluxStatus::INVALID_ARGUMENT;
+    }
+
+    let collector = &mut *(context.cast::<PluginRegistrationCollector>());
+    match gas_substance_from_abi(&collector.plugin_id, &*descriptor) {
+        Ok(definition) => {
+            collector.registration.gas_substances.push(definition);
+            FluxStatus::OK
+        }
+        Err(error) => {
+            collector.error_message = Some(error);
+            FluxStatus::FAILED
+        }
+    }
+}
+
+unsafe fn gas_substance_from_abi(
+    plugin_id: &PluginId,
+    descriptor: &FluxGasSubstanceDescriptor,
+) -> Result<SubstanceDefinition, String> {
+    let id = read_abi_utf8(descriptor.id, "gas substance id")?;
+    let label = read_abi_utf8(descriptor.label, "gas substance label")?;
+    let alias = read_abi_utf8(descriptor.alias, "gas substance alias")?;
+    let aliases = if alias.trim().is_empty() {
+        Vec::new()
+    } else {
+        vec![alias]
+    };
+    SubstanceDefinition::gas(
+        SubstanceId::parse(&id)?,
+        plugin_id.clone(),
+        label,
+        descriptor.molecular_mass,
+        [descriptor.color_r, descriptor.color_g, descriptor.color_b],
+        aliases,
+    )
+}
+
+unsafe fn read_abi_utf8(slice: FluxUtf8Slice, field_name: &str) -> Result<String, String> {
+    if slice.len == 0 {
+        return Ok(String::new());
+    }
+    if slice.ptr.is_null() {
+        return Err(format!("{field_name} has null pointer and non-zero length"));
+    }
+    let bytes = std::slice::from_raw_parts(slice.ptr, slice.len);
+    std::str::from_utf8(bytes)
+        .map(str::to_string)
+        .map_err(|error| format!("{field_name} is not valid UTF-8: {error}"))
 }
 
 fn cache_generation_root(
@@ -519,7 +648,10 @@ mod tests {
 
     use zip::{write::SimpleFileOptions, ZipWriter};
 
-    use crate::plugins::loader::read_packaged_plugin_candidate;
+    use crate::plugins::{
+        loader::{read_packaged_plugin_candidate, validate_runtime_registration},
+        PluginId, PluginManifest, PluginRuntimeRegistration, SubstanceDefinition, SubstanceId,
+    };
 
     fn make_temp_archive_path(prefix: &str) -> PathBuf {
         let unique = format!(
@@ -549,7 +681,7 @@ mod tests {
                 br#"id = "escape.test"
 display_name = "Escape"
 version = "1.0.0"
-api_version = 1
+api_version = 2
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"
@@ -563,5 +695,67 @@ content = false
         assert!(error.to_string().contains("must not contain '..'"));
 
         let _ = fs::remove_file(archive_path);
+    }
+
+    #[test]
+    fn plugin_contract_rejects_content_registration_from_non_content_plugin() {
+        let manifest = PluginManifest::from_str(
+            r#"id = "sample.plugin"
+display_name = "Sample"
+version = "1.0.0"
+api_version = 2
+dll = "bin/sample.dll"
+configs = "config"
+assets = "assets"
+content = false
+"#,
+        )
+        .expect("manifest");
+        let registration = PluginRuntimeRegistration {
+            gas_substances: vec![SubstanceDefinition::gas(
+                SubstanceId::parse("sample.plugin.substance.neon").expect("substance id"),
+                PluginId::parse("sample.plugin").expect("plugin id"),
+                "Neon",
+                20.180,
+                [1.0, 0.32, 0.78],
+                vec!["neon".to_string()],
+            )
+            .expect("substance")],
+        };
+
+        let error = validate_runtime_registration(&manifest, &registration)
+            .expect_err("non-content plugin must not register content");
+        assert!(error.to_string().contains("content = false"));
+    }
+
+    #[test]
+    fn plugin_contract_rejects_registered_substance_outside_plugin_namespace() {
+        let manifest = PluginManifest::from_str(
+            r#"id = "sample.plugin"
+display_name = "Sample"
+version = "1.0.0"
+api_version = 2
+dll = "bin/sample.dll"
+configs = "config"
+assets = "assets"
+content = true
+"#,
+        )
+        .expect("manifest");
+        let registration = PluginRuntimeRegistration {
+            gas_substances: vec![SubstanceDefinition::gas(
+                SubstanceId::parse("other.plugin.substance.neon").expect("substance id"),
+                PluginId::parse("sample.plugin").expect("plugin id"),
+                "Neon",
+                20.180,
+                [1.0, 0.32, 0.78],
+                vec!["neon".to_string()],
+            )
+            .expect("substance")],
+        };
+
+        let error = validate_runtime_registration(&manifest, &registration)
+            .expect_err("foreign namespace must fail");
+        assert!(error.to_string().contains("outside plugin namespace"));
     }
 }

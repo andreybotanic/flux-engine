@@ -2,7 +2,7 @@ use std::ffi::c_void;
 
 const ENGINE_PLUGIN_API_VERSION: u32 = 2;
 
-/// Borrowed UTF-8 string view shared across the stage-1 plugin ABI.
+/// Borrowed UTF-8 string view shared across the plugin ABI.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct FluxUtf8Slice {
@@ -27,7 +27,7 @@ impl FluxUtf8Slice {
     }
 }
 
-/// Integer status code returned by every stage-1 ABI function.
+/// Integer status code returned by every ABI function.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct FluxStatus(i32);
@@ -60,21 +60,7 @@ pub struct FluxHostApi {
     pub error_context: *mut c_void,
 }
 
-/// Future-proof registrar payload passed into `flux_plugin_register`.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct FluxRegistrar {
-    pub struct_size: u32,
-    pub api_version: u32,
-    pub register_gas_substance: Option<
-        unsafe extern "C" fn(*mut c_void, *const FluxGasSubstanceDescriptor) -> FluxStatus,
-    >,
-    pub registration_context: *mut c_void,
-    pub reserved2: *mut c_void,
-    pub reserved3: *mut c_void,
-}
-
-/// C-compatible gas substance descriptor supported by the v2 registrar.
+/// C-compatible gas substance descriptor emitted by this content plugin.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct FluxGasSubstanceDescriptor {
@@ -87,20 +73,37 @@ pub struct FluxGasSubstanceDescriptor {
     color_b: f32,
 }
 
+/// Callback used by the host registrar to accept one gas substance.
+pub type FluxRegisterGasSubstanceFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    descriptor: *const FluxGasSubstanceDescriptor,
+) -> FluxStatus;
+
+/// Registrar payload passed into `flux_plugin_register`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FluxRegistrar {
+    pub struct_size: u32,
+    pub api_version: u32,
+    pub register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
+    pub registration_context: *mut c_void,
+    pub reserved2: *mut c_void,
+    pub reserved3: *mut c_void,
+}
+
 /// Opaque sample plugin handle stored between create/register/destroy.
 #[repr(C)]
 pub struct FluxPluginHandle {
     api_version: u32,
-    saw_non_empty_plugin_root: bool,
 }
 
-/// Returns the plugin ABI version supported by this sample DLL.
+/// Returns the plugin ABI version supported by this DLL.
 #[no_mangle]
 pub extern "C" fn flux_plugin_api_version() -> u32 {
     ENGINE_PLUGIN_API_VERSION
 }
 
-/// Creates one sample plugin instance after validating the host payload.
+/// Creates one sample content plugin instance after validating the host payload.
 #[no_mangle]
 pub unsafe extern "C" fn flux_plugin_create(
     host: *const FluxHostApi,
@@ -122,13 +125,12 @@ pub unsafe extern "C" fn flux_plugin_create(
 
     let handle = Box::new(FluxPluginHandle {
         api_version: host.api_version,
-        saw_non_empty_plugin_root: !host.plugin_root.ptr.is_null() && host.plugin_root.len > 0,
     });
     *out_plugin = Box::into_raw(handle);
     FluxStatus::OK
 }
 
-/// Validates the registrar payload for the sample plugin.
+/// Registers the Neon gas substance exposed by this sample content plugin.
 #[no_mangle]
 pub unsafe extern "C" fn flux_plugin_register(
     plugin: *mut FluxPluginHandle,
@@ -140,20 +142,27 @@ pub unsafe extern "C" fn flux_plugin_register(
 
     let plugin = &mut *plugin;
     let registrar = &mut *registrar;
-    if plugin.api_version != ENGINE_PLUGIN_API_VERSION {
-        return FluxStatus::FAILED;
-    }
-    if registrar.struct_size != std::mem::size_of::<FluxRegistrar>() as u32 {
-        return FluxStatus::FAILED;
-    }
-    if registrar.api_version != ENGINE_PLUGIN_API_VERSION {
-        return FluxStatus::FAILED;
-    }
-    if !plugin.saw_non_empty_plugin_root {
+    if plugin.api_version != ENGINE_PLUGIN_API_VERSION
+        || registrar.struct_size != std::mem::size_of::<FluxRegistrar>() as u32
+        || registrar.api_version != ENGINE_PLUGIN_API_VERSION
+    {
         return FluxStatus::FAILED;
     }
 
-    FluxStatus::OK
+    let Some(register_gas) = registrar.register_gas_substance else {
+        return FluxStatus::FAILED;
+    };
+    let descriptor = FluxGasSubstanceDescriptor {
+        id: FluxUtf8Slice::from_str("flux.sample_content.substance.neon"),
+        label: FluxUtf8Slice::from_str("Neon"),
+        alias: FluxUtf8Slice::from_str("neon"),
+        molecular_mass: 20.180,
+        color_r: 1.0,
+        color_g: 0.32,
+        color_b: 0.78,
+    };
+
+    register_gas(registrar.registration_context, &descriptor)
 }
 
 /// Destroys one sample plugin instance allocated by `flux_plugin_create`.

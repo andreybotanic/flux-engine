@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2021"
 default-run = "flux_engine"
 
+[workspace]
+members = [".", "xtask"]
+exclude = [
+    "crates/flux_stage1_sample_plugin",
+    "crates/flux_stage7_sample_content_plugin",
+]
+resolver = "2"
+
 [dependencies]
 bevy = { version = "0.16", default-features = true }
 bytemuck = { version = "1.19", features = ["derive"] }

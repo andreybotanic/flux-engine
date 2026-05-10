@@ -4,8 +4,11 @@ fn handle_main_menu_actions(
         ResMut<MainMenuState>,
         ResMut<MainMenuUiState>,
         ResMut<SimulationControl>,
-        Res<GasRegistry>,
+        ResMut<GasRegistry>,
         ResMut<SavePreviewQueueState>,
+        ResMut<SelectFieldState>,
+        ResMut<GasToolSettings>,
+        ResMut<SourceStructureToolSettings>,
     ),
     world_state: (
         ResMut<WorldGrid>,
@@ -30,6 +33,7 @@ fn handle_main_menu_actions(
     mut exit_writer: EventWriter<AppExit>,
     mut overlay_mode: ResMut<OverlayMode>,
     mut camera_query: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
+    mut gpu_state: ResMut<crate::simulation::GpuRuntimeState>,
 ) {
     let pending_actions = action_requests
         .read()
@@ -39,7 +43,16 @@ fn handle_main_menu_actions(
         return;
     }
 
-    let (mut main_menu, mut menu_ui, mut control, gas_registry, mut preview_queue) = ui_state;
+    let (
+        mut main_menu,
+        mut menu_ui,
+        mut control,
+        mut gas_registry,
+        mut preview_queue,
+        mut select_fields,
+        mut gas_settings,
+        mut source_settings,
+    ) = ui_state;
     let (
         mut world,
         mut structures,
@@ -244,6 +257,14 @@ fn handle_main_menu_actions(
                     &mut loaded_plugin_registry,
                     &mut enabled_plugins,
                     &mut content_registry,
+                    &mut gas_registry,
+                    &mut gas,
+                    &mut pipe_gas,
+                    &mut pipe_flux,
+                    &mut gpu_state,
+                    &mut select_fields,
+                    &mut gas_settings,
+                    &mut source_settings,
                     &mut plugin_registry_state,
                 );
             }

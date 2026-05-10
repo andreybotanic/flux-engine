@@ -13,7 +13,7 @@ use crate::plugins::{
         RejectedPluginSource,
     },
     state::{EnabledPluginSet, PluginRegistryEntry, PluginRegistryState, PluginRuntimeStatus},
-    PluginId, PluginManifest, PluginVersion,
+    PluginId, PluginManifest, PluginRuntimeRegistration, PluginVersion, SubstanceRegistry,
 };
 
 /// Startup configuration used by the stage-2 plugin bootstrap.
@@ -76,6 +76,7 @@ pub struct LoadedPluginMetadata {
     pub source_name: String,
     pub source_path: Option<PathBuf>,
     pub manifest: Option<PluginManifest>,
+    pub registration: PluginRuntimeRegistration,
 }
 
 /// Runtime registry of enabled plugins that completed bootstrap successfully.
@@ -245,7 +246,7 @@ fn build_runtime_registries(
         let is_enabled = enabled_set.is_enabled(&plugin_id);
         let mut loaded_plugin = None;
 
-        let registry_entry = match selected_kind {
+        let mut registry_entry = match selected_kind {
             Some(PluginSourceKind::Packaged) => {
                 if let Some(source) = source_group.packaged {
                     if is_enabled {
@@ -277,10 +278,13 @@ fn build_runtime_registries(
         };
 
         if let Some(loaded) = loaded_plugin {
-            if loaded.content {
-                content_registry.register_provider_plugin(loaded.plugin_id.clone());
+            match register_loaded_plugin_content(&mut content_registry, &loaded) {
+                Ok(()) => loaded_plugins.push(loaded),
+                Err(error) => {
+                    registry_entry.status = PluginRuntimeStatus::Error;
+                    registry_entry.error_message = Some(error);
+                }
             }
-            loaded_plugins.push(loaded);
         }
         entries.push(registry_entry);
     }
@@ -380,6 +384,7 @@ fn default_loaded_plugin() -> LoadedPluginMetadata {
         source_name: "builtin".to_string(),
         source_path: None,
         manifest: None,
+        registration: PluginRuntimeRegistration::default(),
     }
 }
 
@@ -495,7 +500,36 @@ fn loaded_metadata_from_source(
         source_name: source.source_name.clone(),
         source_path: Some(source.source_path.clone()),
         manifest: Some(source.manifest.clone()),
+        registration: source.registration.clone(),
     }
+}
+
+fn register_loaded_plugin_content(
+    content_registry: &mut ContentRegistry,
+    loaded: &LoadedPluginMetadata,
+) -> Result<(), String> {
+    if !loaded.content {
+        return Ok(());
+    }
+
+    let mut next_substances = content_registry
+        .substances()
+        .values()
+        .cloned()
+        .collect::<Vec<_>>();
+    next_substances.extend(loaded.registration.gas_substances.iter().cloned());
+    SubstanceRegistry::new(next_substances).map_err(|error| {
+        format!(
+            "plugin '{}' content registration failed: {}",
+            loaded.plugin_id, error
+        )
+    })?;
+
+    content_registry.register_provider_plugin(loaded.plugin_id.clone());
+    for substance in &loaded.registration.gas_substances {
+        content_registry.register_substance(substance.clone());
+    }
+    Ok(())
 }
 
 fn default_plugin_version() -> PluginVersion {
@@ -607,6 +641,12 @@ mod tests {
             .join("flux_stage1_sample_plugin")
     }
 
+    fn sample_content_plugin_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("crates")
+            .join("flux_stage7_sample_content_plugin")
+    }
+
     fn cargo_binary() -> PathBuf {
         if let Some(path) = std::env::var_os("CARGO") {
             return PathBuf::from(path);
@@ -622,6 +662,15 @@ mod tests {
 
     fn build_sample_plugin_cdylib() -> PathBuf {
         let crate_root = sample_plugin_root();
+        build_plugin_cdylib(&crate_root, "flux_stage1_sample_plugin.dll")
+    }
+
+    fn build_sample_content_plugin_cdylib() -> PathBuf {
+        let crate_root = sample_content_plugin_root();
+        build_plugin_cdylib(&crate_root, "flux_stage7_sample_content_plugin.dll")
+    }
+
+    fn build_plugin_cdylib(crate_root: &Path, dll_name: &str) -> PathBuf {
         let status = Command::new(cargo_binary())
             .arg("build")
             .arg("--manifest-path")
@@ -631,10 +680,7 @@ mod tests {
             .expect("spawn cargo build for sample plugin");
         assert!(status.success(), "sample plugin cargo build failed");
 
-        crate_root
-            .join("target")
-            .join("debug")
-            .join("flux_stage1_sample_plugin.dll")
+        crate_root.join("target").join("debug").join(dll_name)
     }
 
     fn create_working_sample_plugin_archive(archive_path: &Path) {
@@ -700,6 +746,36 @@ mod tests {
         fs::copy(dll_path, root_dir.join("bin/flux_stage1_sample_plugin.dll")).expect("copy dll");
     }
 
+    fn create_working_sample_content_plugin_directory(root_dir: &Path) {
+        let crate_root = sample_content_plugin_root();
+        let dll_path = build_sample_content_plugin_cdylib();
+        let template_root = crate_root.join("package_template");
+
+        fs::create_dir_all(root_dir.join("config")).expect("create config dir");
+        fs::create_dir_all(root_dir.join("assets")).expect("create assets dir");
+        fs::create_dir_all(root_dir.join("bin")).expect("create bin dir");
+        fs::copy(
+            template_root.join("manifest.toml"),
+            root_dir.join("manifest.toml"),
+        )
+        .expect("copy manifest");
+        fs::copy(
+            template_root.join("config/sample.toml"),
+            root_dir.join("config/sample.toml"),
+        )
+        .expect("copy config");
+        fs::copy(
+            template_root.join("assets/placeholder.txt"),
+            root_dir.join("assets/placeholder.txt"),
+        )
+        .expect("copy asset");
+        fs::copy(
+            dll_path,
+            root_dir.join("bin/flux_stage7_sample_content_plugin.dll"),
+        )
+        .expect("copy dll");
+    }
+
     fn create_manifest_only_archive(archive_path: &Path, plugin_id: &str) {
         let file = File::create(archive_path).expect("create archive");
         let mut writer = ZipWriter::new(file);
@@ -708,7 +784,7 @@ mod tests {
             r#"id = "{plugin_id}"
 display_name = "Duplicate Test"
 version = "1.0.0"
-api_version = 1
+api_version = 2
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"
@@ -888,6 +964,47 @@ flux.sample_stage1 = true
             .content_registry
             .provider_plugins()
             .contains(&PluginId::default_plugin()));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_registry_enabled_content_plugin_registers_external_gas() {
+        let root = make_temp_root("flux_registry_content_gas");
+        create_working_sample_content_plugin_directory(
+            &root.join("plugins_dev/flux.sample_content"),
+        );
+        fs::write(
+            root.join("plugin_state.toml"),
+            r#"
+schema_version = 1
+
+[plugins]
+flux.sample_content = true
+"#,
+        )
+        .expect("write plugin state");
+
+        let output = bootstrap_from_root(&root, true);
+        assert!(output
+            .content_registry
+            .provider_plugins()
+            .contains(&PluginId::parse("flux.sample_content").expect("valid id")));
+        assert!(output
+            .content_registry
+            .substances()
+            .keys()
+            .any(|id| id.as_str() == "flux.sample_content.substance.neon"));
+
+        let registry = crate::config::GameConfig::load_gas_registry_from_default_location(
+            &output.content_registry,
+        )
+        .expect("gas registry with plugin substance");
+        assert_eq!(registry.index_of("neon"), Some(1));
+        assert_eq!(
+            registry.stable_id_by_index(1).map(|id| id.as_str()),
+            Some("flux.sample_content.substance.neon")
+        );
 
         let _ = fs::remove_dir_all(root);
     }
