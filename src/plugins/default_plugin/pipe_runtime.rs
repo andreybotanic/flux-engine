@@ -12,10 +12,7 @@ use crate::{
     },
     world::{
         grid::{WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
-        structures::{
-            bridge_center_cell, PlacedStructureMap, StructureKind, StructureParams,
-            StructureRotation,
-        },
+        structures::{bridge_center_cell, PlacedStructureMap, StructureParams, StructureRotation},
     },
 };
 
@@ -637,7 +634,8 @@ pub fn apply_gas_structures_pre_step(
     for structure in structures.iter() {
         match structure.params {
             StructureParams::GasSource { gas_index, amount }
-                if structure.kind == StructureKind::GasSource =>
+                if structure.kind
+                    == crate::plugins::default_plugin::gas_source_structure_kind() =>
             {
                 if gas.add_particles_no_impulse(
                     structure.origin.x,
@@ -650,7 +648,9 @@ pub fn apply_gas_structures_pre_step(
                     changed = true;
                 }
             }
-            StructureParams::GasSink { amount } if structure.kind == StructureKind::GasSink => {
+            StructureParams::GasSink { amount }
+                if structure.kind == crate::plugins::default_plugin::gas_sink_structure_kind() =>
+            {
                 if gas.remove_particles_proportional(
                     structure.origin.x,
                     structure.origin.y,
@@ -698,8 +698,9 @@ impl PipeRuntime {
                         let rotation = structures
                             .iter()
                             .find(|structure| {
-                                structure.kind == StructureKind::GasPipeBridge
-                                    && structure.origin == key.anchor
+                                crate::plugins::default_plugin::is_gas_pipe_bridge_structure(
+                                    structure.kind,
+                                ) && structure.origin == key.anchor
                             })
                             .map(|structure| structure.rotation)
                             .unwrap_or(StructureRotation::Deg0);
@@ -741,25 +742,20 @@ impl PipeRuntime {
         }
 
         for structure in structures.iter() {
-            match structure.kind {
-                StructureKind::Vent => {
-                    if let Some(node_id) = pipe_by_cell.get(&structure.origin).copied() {
-                        nodes[node_id].vent_cell = Some(structure.origin);
+            if crate::plugins::default_plugin::is_vent_structure(structure.kind) {
+                if let Some(node_id) = pipe_by_cell.get(&structure.origin).copied() {
+                    nodes[node_id].vent_cell = Some(structure.origin);
+                }
+            } else if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind) {
+                let Some(bridge_node_id) = bridge_by_origin.get(&structure.origin).copied() else {
+                    continue;
+                };
+                for port_cell in bridge_port_cells(structure.origin, structure.rotation) {
+                    if let Some(pipe_node_id) = pipe_by_cell.get(&port_cell).copied() {
+                        push_unique(&mut nodes[bridge_node_id].neighbors, pipe_node_id);
+                        push_unique(&mut nodes[pipe_node_id].neighbors, bridge_node_id);
                     }
                 }
-                StructureKind::GasPipeBridge => {
-                    let Some(bridge_node_id) = bridge_by_origin.get(&structure.origin).copied()
-                    else {
-                        continue;
-                    };
-                    for port_cell in bridge_port_cells(structure.origin, structure.rotation) {
-                        if let Some(pipe_node_id) = pipe_by_cell.get(&port_cell).copied() {
-                            push_unique(&mut nodes[bridge_node_id].neighbors, pipe_node_id);
-                            push_unique(&mut nodes[pipe_node_id].neighbors, bridge_node_id);
-                        }
-                    }
-                }
-                _ => {}
             }
         }
 
@@ -770,16 +766,20 @@ impl PipeRuntime {
 fn collect_pipe_node_keys(structures: &PlacedStructureMap) -> Vec<PipeNodeKey> {
     let mut keys = structures
         .iter()
-        .filter_map(|structure| match structure.kind {
-            StructureKind::Pipe => Some(PipeNodeKey {
-                kind: PipeContainerKind::Pipe,
-                anchor: structure.origin,
-            }),
-            StructureKind::GasPipeBridge => Some(PipeNodeKey {
-                kind: PipeContainerKind::BridgePipe,
-                anchor: structure.origin,
-            }),
-            _ => None,
+        .filter_map(|structure| {
+            if crate::plugins::default_plugin::is_pipe_structure(structure.kind) {
+                Some(PipeNodeKey {
+                    kind: PipeContainerKind::Pipe,
+                    anchor: structure.origin,
+                })
+            } else if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind) {
+                Some(PipeNodeKey {
+                    kind: PipeContainerKind::BridgePipe,
+                    anchor: structure.origin,
+                })
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
     keys.sort_by_key(|key| {
@@ -810,7 +810,8 @@ fn node_ids_for_cell(
             PipeContainerKind::Pipe if key.anchor == cell => Some(node_id),
             PipeContainerKind::BridgePipe => {
                 let bridge = structures.iter().find(|structure| {
-                    structure.kind == StructureKind::GasPipeBridge && structure.origin == key.anchor
+                    crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind)
+                        && structure.origin == key.anchor
                 })?;
                 (bridge_center_cell(bridge.origin, bridge.rotation) == Some(cell))
                     .then_some(node_id)
@@ -839,7 +840,8 @@ fn pipe_node_display_species_counts(
         PipeContainerKind::BridgePipe => structures
             .iter()
             .find(|structure| {
-                structure.kind == StructureKind::GasPipeBridge && structure.origin == key.anchor
+                crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind)
+                    && structure.origin == key.anchor
             })
             .and_then(|bridge| bridge_center_cell(bridge.origin, bridge.rotation))
             .unwrap_or(key.anchor),
@@ -898,7 +900,8 @@ fn transfer_visual_path(
     let bridge_rotation = structures
         .iter()
         .find(|structure| {
-            structure.kind == StructureKind::GasPipeBridge && structure.origin == bridge_origin
+            crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind)
+                && structure.origin == bridge_origin
         })
         .map(|structure| structure.rotation)
         .unwrap_or(StructureRotation::Deg0);

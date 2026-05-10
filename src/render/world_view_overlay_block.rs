@@ -13,7 +13,7 @@ pub fn update_overlay_mode(
         *overlay_mode = OverlayMode::Gas;
     }
     if input.just_pressed(KeyCode::F3) {
-        *overlay_mode = OverlayMode::Pipes;
+        *overlay_mode = crate::plugins::default_plugin::pipes_overlay_mode();
     }
 }
 
@@ -144,10 +144,11 @@ pub(crate) fn apply_overlay_mode(
             BOARD_GAS_COLOR,
             BACKDROP_GAS_COLOR,
         ),
-        OverlayMode::Pipes => (
+        mode if crate::plugins::default_plugin::is_pipes_overlay_mode(mode) => (
             BOARD_PIPE_COLOR,
             BACKDROP_PIPE_COLOR,
         ),
+        OverlayMode::Plugin(_) => (BOARD_MAIN_COLOR, BACKDROP_MAIN_COLOR),
     };
 
     for (mut board, mut visibility) in &mut visuals.p0() {
@@ -162,7 +163,10 @@ pub(crate) fn apply_overlay_mode(
         sprite.color = match *overlay_mode {
             OverlayMode::Main => wall_visual.main_tint,
             OverlayMode::Gas => wall_visual.gas_tint,
-            OverlayMode::Pipes => wall_visual.main_tint.with_alpha(0.18),
+            mode if crate::plugins::default_plugin::is_pipes_overlay_mode(mode) => {
+                wall_visual.main_tint.with_alpha(0.18)
+            }
+            OverlayMode::Plugin(_) => wall_visual.main_tint,
         };
         *visibility = world_layer_visibility(show_world);
     }
@@ -170,7 +174,10 @@ pub(crate) fn apply_overlay_mode(
         sprite.color = match *overlay_mode {
             OverlayMode::Main => outer_border_visual.main_tint,
             OverlayMode::Gas => outer_border_visual.gas_tint,
-            OverlayMode::Pipes => outer_border_visual.main_tint.with_alpha(0.12),
+            mode if crate::plugins::default_plugin::is_pipes_overlay_mode(mode) => {
+                outer_border_visual.main_tint.with_alpha(0.12)
+            }
+            OverlayMode::Plugin(_) => outer_border_visual.main_tint,
         };
         *visibility = world_layer_visibility(show_world);
     }
@@ -248,7 +255,10 @@ pub(crate) fn apply_overlay_visibility_mode(
     let (gas_visibility, gas_main_mode_visibility) = match *overlay_mode {
         OverlayMode::Main => (Visibility::Hidden, Visibility::Visible),
         OverlayMode::Gas => (Visibility::Visible, Visibility::Hidden),
-        OverlayMode::Pipes => (Visibility::Hidden, Visibility::Hidden),
+        mode if crate::plugins::default_plugin::is_pipes_overlay_mode(mode) => {
+            (Visibility::Hidden, Visibility::Hidden)
+        }
+        OverlayMode::Plugin(_) => (Visibility::Hidden, Visibility::Visible),
     };
 
     for mut visibility in &mut visuals.p0() {
@@ -516,7 +526,8 @@ pub(crate) fn sync_pipe_overlay_visuals(
         >,
     )>,
 ) {
-    let show_pipe_overlay = world_load_state.has_world && *overlay_mode == OverlayMode::Pipes;
+    let show_pipe_overlay =
+        world_load_state.has_world && crate::plugins::default_plugin::is_pipes_overlay_mode(*overlay_mode);
 
     for ((x, y), overlay_entities) in &pipe_entities.gas_overlays {
         let Some(border_entities) = pipe_entities.gas_overlay_borders.get(&(*x, *y)) else {
@@ -660,7 +671,7 @@ fn bridge_rotation_for_center_cell(
     cell: UVec2,
 ) -> Option<StructureRotation> {
     structures.iter().find_map(|structure| {
-        (structure.kind == StructureKind::GasPipeBridge
+        (crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind)
             && crate::world::structures::bridge_center_cell(structure.origin, structure.rotation)
                 == Some(cell))
             .then_some(structure.rotation)
@@ -749,7 +760,7 @@ fn pipe_flow_packets_enabled(
     structures_changed: bool,
 ) -> bool {
     has_world
-        && overlay_mode == OverlayMode::Pipes
+        && crate::plugins::default_plugin::is_pipes_overlay_mode(overlay_mode)
         && !paused
         && !structures_changed
 }

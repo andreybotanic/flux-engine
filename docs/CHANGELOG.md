@@ -1,6 +1,7 @@
 ﻿# Changelog
 
 ## 2026-05-10
+- Ядро переведено с default enum-вариантов материалов, структур и `F3/Pipes` overlay на generic static ID wrapper-ы; конкретные IDs и legacy numeric save codes теперь выдаёт locked default plugin `flux.default`, без изменения save schema.
 - Debug Panel больше не считает mass error отдельно для H2/O2/CO2: диагностический drift теперь агрегируется по сумме всех gas species из текущего registry.
 - Реализован stage-5 substance layer: `H2/O2/CO2` регистрируются default plugin-ом как plugin-owned substances со stable IDs, а `GasRegistry` работает как compatibility wrapper над `SubstanceRegistry`.
 - CPU/GPU free-gas path и perf/parity-инструменты очищены от runtime-ограничения на три газа: compact order и molecular masses берутся из registry, а GPU читает массы через dynamic storage buffer.

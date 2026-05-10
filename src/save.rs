@@ -25,7 +25,7 @@ use crate::{
         grid::{WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
         structures::{
             PlacedStructureMap, PlacedStructureSnapshot, PlacedStructureSnapshotEntry,
-            StructureKind, StructureParams, StructureRotation,
+            StructureParams, StructureRotation,
         },
         WorldCellChanged,
     },

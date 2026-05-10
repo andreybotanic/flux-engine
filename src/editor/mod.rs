@@ -119,7 +119,7 @@ pub struct CellToolSettings {
 impl Default for CellToolSettings {
     fn default() -> Self {
         Self {
-            material: CellMaterial::Brick,
+            material: crate::plugins::default_plugin::brick_cell_material(),
         }
     }
 }

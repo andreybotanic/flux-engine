@@ -141,10 +141,10 @@ fn bridge_hud_block() -> HudBlockConfig {
 fn cell_layers(material: CellMaterial) -> StructureDescriptor {
     StructureDescriptor {
         layers: vec![StructureLayer {
-            kind: LayerKind::Appearance,
+            kind: APPEARANCE_LAYER,
             cells: vec![LayerCellSpec {
                 local_cell: IVec2::ZERO,
-                marker_kind: LayerMarkerKind::Solid(material),
+                marker_kind: content_marker(material.as_str()),
                 collision: LayerCollisionKind::Special,
             }],
         }],
@@ -166,47 +166,48 @@ fn structure_layers_by_rotation(
 }
 
 fn structure_layers(kind: StructureKind, rotation: StructureRotation) -> StructureDescriptor {
-    match kind {
-        StructureKind::Pipe => StructureDescriptor {
+    match kind.as_str() {
+        ENTITY_PIPE_ID => StructureDescriptor {
             layers: vec![StructureLayer {
-                kind: LayerKind::Appearance,
+                kind: APPEARANCE_LAYER,
                 cells: vec![LayerCellSpec {
                     local_cell: IVec2::ZERO,
-                    marker_kind: LayerMarkerKind::Pipe,
+                    marker_kind: content_marker(ENTITY_PIPE_ID),
                     collision: LayerCollisionKind::RenderOnly,
                 }],
             }],
         },
-        StructureKind::Vent => StructureDescriptor {
+        ENTITY_VENT_ID => StructureDescriptor {
             layers: vec![
                 StructureLayer {
-                    kind: LayerKind::Appearance,
+                    kind: APPEARANCE_LAYER,
                     cells: vec![LayerCellSpec {
                         local_cell: IVec2::ZERO,
-                        marker_kind: LayerMarkerKind::Vent,
+                        marker_kind: content_marker(ENTITY_VENT_ID),
                         collision: LayerCollisionKind::Special,
                     }],
                 },
                 StructureLayer {
-                    kind: LayerKind::GasPipeConnections,
+                    kind: gas_pipe_connections_layer(),
                     cells: vec![LayerCellSpec {
                         local_cell: IVec2::ZERO,
-                        marker_kind: LayerMarkerKind::GasPipeConnectionBidirectional,
+                        marker_kind: gas_pipe_connection_bidirectional_marker(),
                         collision: LayerCollisionKind::Special,
                     }],
                 },
             ],
         },
-        StructureKind::GasSource => one_cell_structure(LayerMarkerKind::GasSource),
-        StructureKind::GasSink => one_cell_structure(LayerMarkerKind::GasSink),
-        StructureKind::GasPipeBridge => bridge_layers(rotation),
+        ENTITY_GAS_SOURCE_ID => one_cell_structure(content_marker(ENTITY_GAS_SOURCE_ID)),
+        ENTITY_GAS_SINK_ID => one_cell_structure(content_marker(ENTITY_GAS_SINK_ID)),
+        ENTITY_GAS_PIPE_BRIDGE_ID => bridge_layers(rotation),
+        _ => one_cell_structure(content_marker(kind.as_str())),
     }
 }
 
 fn one_cell_structure(marker_kind: LayerMarkerKind) -> StructureDescriptor {
     StructureDescriptor {
         layers: vec![StructureLayer {
-            kind: LayerKind::Appearance,
+            kind: APPEARANCE_LAYER,
             cells: vec![LayerCellSpec {
                 local_cell: IVec2::ZERO,
                 marker_kind,
@@ -220,23 +221,23 @@ fn bridge_layers(rotation: StructureRotation) -> StructureDescriptor {
     StructureDescriptor {
         layers: vec![
             StructureLayer {
-                kind: LayerKind::Appearance,
+                kind: APPEARANCE_LAYER,
                 cells: bridge_local_cells(rotation)
                     .into_iter()
                     .map(|local_cell| LayerCellSpec {
                         local_cell,
-                        marker_kind: LayerMarkerKind::GasPipeBridge,
+                        marker_kind: content_marker(ENTITY_GAS_PIPE_BRIDGE_ID),
                         collision: LayerCollisionKind::RenderOnly,
                     })
                     .collect(),
             },
             StructureLayer {
-                kind: LayerKind::GasPipeConnections,
+                kind: gas_pipe_connections_layer(),
                 cells: bridge_connection_local_cells(rotation)
                     .into_iter()
                     .map(|local_cell| LayerCellSpec {
                         local_cell,
-                        marker_kind: LayerMarkerKind::GasPipeConnectionBidirectional,
+                        marker_kind: gas_pipe_connection_bidirectional_marker(),
                         collision: LayerCollisionKind::Special,
                     })
                     .collect(),

@@ -547,11 +547,13 @@ fn update_editor_cursor_overlays(
         let mut blueprint = overlay_set.p0();
         let (ghost_transform, ghost_visibility, ghost_sprite) = &mut *blueprint;
         let ghost_image = match active_tool.selected {
-            Some(EditorTool::BuildSolid) => Some(match cell_settings.material {
-                CellMaterial::Brick => icon_set.brick_silhouette.clone(),
-                CellMaterial::Metal => icon_set.metal_silhouette.clone(),
-                CellMaterial::Boundary => icon_set.brick_silhouette.clone(),
-            }),
+            Some(EditorTool::BuildSolid) => Some(
+                if cell_settings.material == crate::plugins::default_plugin::metal_cell_material() {
+                    icon_set.metal_silhouette.clone()
+                } else {
+                    icon_set.brick_silhouette.clone()
+                },
+            ),
             Some(EditorTool::Gases) => Some(match pipe_settings.selected {
                 PipeToolKind::Pipe => icon_set.pipe_silhouette.clone(),
                 PipeToolKind::Vent => icon_set.vent_silhouette.clone(),
@@ -578,14 +580,14 @@ fn update_editor_cursor_overlays(
                     ),
                     Some(EditorTool::CreateGasSource) => {
                         crate::world::structures::structure_footprint_size_in_cells(
-                            crate::world::structures::StructureKind::GasSource,
+                            crate::plugins::default_plugin::gas_source_structure_kind(),
                             StructureRotation::Deg0,
                             &structure_visuals,
                         )
                     }
                     Some(EditorTool::CreateGasSink) => {
                         crate::world::structures::structure_footprint_size_in_cells(
-                            crate::world::structures::StructureKind::GasSink,
+                            crate::plugins::default_plugin::gas_sink_structure_kind(),
                             StructureRotation::Deg0,
                             &structure_visuals,
                         )
@@ -606,14 +608,14 @@ fn update_editor_cursor_overlays(
                     ),
                     Some(EditorTool::CreateGasSource) => {
                         crate::world::structures::structure_sprite_size_in_cells(
-                            crate::world::structures::StructureKind::GasSource,
+                            crate::plugins::default_plugin::gas_source_structure_kind(),
                             StructureRotation::Deg0,
                             &structure_visuals,
                         )
                     }
                     Some(EditorTool::CreateGasSink) => {
                         crate::world::structures::structure_sprite_size_in_cells(
-                            crate::world::structures::StructureKind::GasSink,
+                            crate::plugins::default_plugin::gas_sink_structure_kind(),
                             StructureRotation::Deg0,
                             &structure_visuals,
                         )
@@ -806,9 +808,9 @@ fn selected_pipe_structure_kind(
     pipe_tool: PipeToolKind,
 ) -> crate::world::structures::StructureKind {
     match pipe_tool {
-        PipeToolKind::Pipe => crate::world::structures::StructureKind::Pipe,
-        PipeToolKind::Vent => crate::world::structures::StructureKind::Vent,
-        PipeToolKind::Bridge => crate::world::structures::StructureKind::GasPipeBridge,
+        PipeToolKind::Pipe => crate::plugins::default_plugin::pipe_structure_kind(),
+        PipeToolKind::Vent => crate::plugins::default_plugin::vent_structure_kind(),
+        PipeToolKind::Bridge => crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
     }
 }
 

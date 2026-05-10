@@ -209,20 +209,24 @@ impl Default for CellTypeVisualConfig {
 impl CellTypeVisualConfig {
     /// Runs `main_tint` logic.
     pub fn main_tint(self, material: CellMaterial) -> Color {
-        let rgb = match material {
-            CellMaterial::Boundary => self.boundary_main_tint,
-            CellMaterial::Brick => self.brick_main_tint,
-            CellMaterial::Metal => self.metal_main_tint,
+        let rgb = if material == crate::plugins::default_plugin::boundary_cell_material() {
+            self.boundary_main_tint
+        } else if material == crate::plugins::default_plugin::metal_cell_material() {
+            self.metal_main_tint
+        } else {
+            self.brick_main_tint
         };
         Color::srgb(rgb[0], rgb[1], rgb[2])
     }
 
     /// Runs `gas_tint` logic.
     pub fn gas_tint(self, material: CellMaterial) -> Color {
-        let rgb = match material {
-            CellMaterial::Boundary => self.boundary_gas_tint,
-            CellMaterial::Brick => self.brick_gas_tint,
-            CellMaterial::Metal => self.metal_gas_tint,
+        let rgb = if material == crate::plugins::default_plugin::boundary_cell_material() {
+            self.boundary_gas_tint
+        } else if material == crate::plugins::default_plugin::metal_cell_material() {
+            self.metal_gas_tint
+        } else {
+            self.brick_gas_tint
         };
         Color::srgb(rgb[0], rgb[1], rgb[2])
     }

@@ -58,60 +58,60 @@ fn setup_editor_ui(
         erase: asset_server.load("sprites/ui/tool_erase.png"),
         pipe: asset_server.load(crate::plugins::default_plugin::pipe_mask_sprite_path(10)),
         vent: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
-            crate::world::structures::StructureKind::Vent,
+            crate::plugins::default_plugin::vent_structure_kind(),
         )),
         bridge: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
-            crate::world::structures::StructureKind::GasPipeBridge,
+            crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
         )),
         add_gas: asset_server.load("sprites/ui/tool_add_gas.png"),
         clear_gas: asset_server.load("sprites/ui/tool_clear_gas.png"),
         source: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
-            crate::world::structures::StructureKind::GasSource,
+            crate::plugins::default_plugin::gas_source_structure_kind(),
         )),
         sink: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
-            crate::world::structures::StructureKind::GasSink,
+            crate::plugins::default_plugin::gas_sink_structure_kind(),
         )),
         brick: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
-            CellMaterial::Brick,
+            crate::plugins::default_plugin::brick_cell_material(),
         )),
         metal: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
-            CellMaterial::Metal,
+            crate::plugins::default_plugin::metal_cell_material(),
         )),
         brick_silhouette: asset_server.load(
-            crate::plugins::default_plugin::cell_silhouette_path(CellMaterial::Brick)
+            crate::plugins::default_plugin::cell_silhouette_path(crate::plugins::default_plugin::brick_cell_material())
                 .expect("brick silhouette is registered"),
         ),
         metal_silhouette: asset_server.load(
-            crate::plugins::default_plugin::cell_silhouette_path(CellMaterial::Metal)
+            crate::plugins::default_plugin::cell_silhouette_path(crate::plugins::default_plugin::metal_cell_material())
                 .expect("metal silhouette is registered"),
         ),
         pipe_silhouette: asset_server.load(
             crate::plugins::default_plugin::structure_silhouette_path(
-                crate::world::structures::StructureKind::Pipe,
+                crate::plugins::default_plugin::pipe_structure_kind(),
             )
             .expect("pipe silhouette is registered"),
         ),
         vent_silhouette: asset_server.load(
             crate::plugins::default_plugin::structure_silhouette_path(
-                crate::world::structures::StructureKind::Vent,
+                crate::plugins::default_plugin::vent_structure_kind(),
             )
             .expect("vent silhouette is registered"),
         ),
         bridge_silhouette: asset_server.load(
             crate::plugins::default_plugin::structure_silhouette_path(
-                crate::world::structures::StructureKind::GasPipeBridge,
+                crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
             )
             .expect("bridge silhouette is registered"),
         ),
         source_silhouette: asset_server.load(
             crate::plugins::default_plugin::structure_silhouette_path(
-                crate::world::structures::StructureKind::GasSource,
+                crate::plugins::default_plugin::gas_source_structure_kind(),
             )
             .expect("source silhouette is registered"),
         ),
         sink_silhouette: asset_server.load(
             crate::plugins::default_plugin::structure_silhouette_path(
-                crate::world::structures::StructureKind::GasSink,
+                crate::plugins::default_plugin::gas_sink_structure_kind(),
             )
             .expect("sink silhouette is registered"),
         ),
@@ -190,7 +190,7 @@ fn setup_editor_ui(
             spawn_pipe_tool_button(
                 parent,
                 crate::plugins::default_plugin::structure_label(
-                    crate::world::structures::StructureKind::Pipe,
+                    crate::plugins::default_plugin::pipe_structure_kind(),
                 ),
                 PipeToolKind::Pipe,
                 icon_set.pipe.clone(),
@@ -198,7 +198,7 @@ fn setup_editor_ui(
             spawn_pipe_tool_button(
                 parent,
                 crate::plugins::default_plugin::structure_label(
-                    crate::world::structures::StructureKind::Vent,
+                    crate::plugins::default_plugin::vent_structure_kind(),
                 ),
                 PipeToolKind::Vent,
                 icon_set.vent.clone(),
@@ -206,7 +206,7 @@ fn setup_editor_ui(
             spawn_pipe_tool_button(
                 parent,
                 crate::plugins::default_plugin::structure_label(
-                    crate::world::structures::StructureKind::GasPipeBridge,
+                    crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
                 ),
                 PipeToolKind::Bridge,
                 icon_set.bridge.clone(),
@@ -233,14 +233,14 @@ fn setup_editor_ui(
         .with_children(|parent| {
             spawn_cell_material_button(
                 parent,
-                crate::plugins::default_plugin::cell_label(CellMaterial::Brick),
-                CellMaterial::Brick,
+                crate::plugins::default_plugin::cell_label(crate::plugins::default_plugin::brick_cell_material()),
+                crate::plugins::default_plugin::brick_cell_material(),
                 icon_set.brick.clone(),
             );
             spawn_cell_material_button(
                 parent,
-                crate::plugins::default_plugin::cell_label(CellMaterial::Metal),
-                CellMaterial::Metal,
+                crate::plugins::default_plugin::cell_label(crate::plugins::default_plugin::metal_cell_material()),
+                crate::plugins::default_plugin::metal_cell_material(),
                 icon_set.metal.clone(),
             );
         });
@@ -278,7 +278,7 @@ fn setup_editor_ui(
             spawn_tool_button(
                 parent,
                 crate::plugins::default_plugin::structure_label(
-                    crate::world::structures::StructureKind::GasSource,
+                    crate::plugins::default_plugin::gas_source_structure_kind(),
                 ),
                 EditorTool::CreateGasSource,
                 icon_set.source.clone(),
@@ -286,7 +286,7 @@ fn setup_editor_ui(
             spawn_tool_button(
                 parent,
                 crate::plugins::default_plugin::structure_label(
-                    crate::world::structures::StructureKind::GasSink,
+                    crate::plugins::default_plugin::gas_sink_structure_kind(),
                 ),
                 EditorTool::CreateGasSink,
                 icon_set.sink.clone(),

@@ -346,17 +346,9 @@ fn validate_structure_visual_placement(
             kind
         ));
     }
-    let expected = match kind {
-        StructureKind::Pipe
-        | StructureKind::Vent
-        | StructureKind::GasSource
-        | StructureKind::GasSink
-        | StructureKind::GasPipeBridge => {
-            crate::plugins::default_plugin::structure_content_descriptor(kind)
-                .visual
-                .size_in_cells
-        }
-    };
+    let expected = crate::plugins::default_plugin::structure_content_descriptor(kind)
+        .visual
+        .size_in_cells;
     if config.size_in_cells != expected {
         return Err(format!(
             "Structure visual config for {:?} must use size_in_cells [{}, {}], got [{}, {}]",
@@ -516,7 +508,7 @@ fn validate_structure_hud_config(
             ContainerBacking::PipeNode {
                 kind: ConfiguredPipeNodeKind::Pipe,
             } => {
-                if kind != StructureKind::Pipe {
+                if !crate::plugins::default_plugin::is_pipe_structure(kind) {
                     return Err(format!(
                         "HUD config for {:?} cannot use pipe-node backing 'pipe' in container {}",
                         kind, index
@@ -532,7 +524,7 @@ fn validate_structure_hud_config(
             ContainerBacking::PipeNode {
                 kind: ConfiguredPipeNodeKind::BridgePipe,
             } => {
-                if kind != StructureKind::GasPipeBridge {
+                if !crate::plugins::default_plugin::is_gas_pipe_bridge_structure(kind) {
                     return Err(format!(
                         "HUD config for {:?} cannot use pipe-node backing 'bridge_pipe' in container {}",
                         kind, index

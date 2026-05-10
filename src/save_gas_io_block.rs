@@ -162,13 +162,14 @@ fn write_placed_structures_chunk(
     bytes.extend_from_slice(&(snapshot.entries.len() as u32).to_le_bytes());
     bytes.extend_from_slice(&(snapshot.pipe_cuts.len() as u32).to_le_bytes());
     for entry in &snapshot.entries {
-        bytes.push(match entry.kind {
-            StructureKind::Pipe => 0,
-            StructureKind::Vent => 1,
-            StructureKind::GasSource => 2,
-            StructureKind::GasSink => 3,
-            StructureKind::GasPipeBridge => 4,
-        });
+        bytes.push(crate::plugins::default_plugin::legacy_structure_kind_code(entry.kind).ok_or_else(
+            || {
+                SaveError::Validation(format!(
+                    "Cannot write unknown placed structure content id '{}'",
+                    entry.kind.as_str()
+                ))
+            },
+        )?);
         bytes.extend_from_slice(&entry.origin.x.to_le_bytes());
         bytes.extend_from_slice(&entry.origin.y.to_le_bytes());
         bytes.push(match entry.rotation {
@@ -229,20 +230,15 @@ fn read_placed_structures_chunk(path: &Path) -> Result<PlacedStructureSnapshot, 
     let cut_count = read_u32(&mut cursor)? as usize;
     let mut entries = Vec::with_capacity(entry_count);
     for _ in 0..entry_count {
-        let kind = match read_exact_array::<1>(&mut cursor)?[0] {
-            0 => StructureKind::Pipe,
-            1 => StructureKind::Vent,
-            2 => StructureKind::GasSource,
-            3 => StructureKind::GasSink,
-            4 => StructureKind::GasPipeBridge,
-            value => {
-                return Err(SaveError::Validation(format!(
+        let raw_kind = read_exact_array::<1>(&mut cursor)?[0];
+        let kind = crate::plugins::default_plugin::legacy_structure_kind_from_code(raw_kind)
+            .ok_or_else(|| {
+                SaveError::Validation(format!(
                     "Unknown placed structure kind {} in '{}'",
-                    value,
+                    raw_kind,
                     path.display()
-                )))
-            }
-        };
+                ))
+            })?;
         let origin = UVec2::new(read_u32(&mut cursor)?, read_u32(&mut cursor)?);
         let rotation = match read_exact_array::<1>(&mut cursor)?[0] {
             0 => StructureRotation::Deg0,

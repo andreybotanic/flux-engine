@@ -7,7 +7,7 @@ use crate::{
         gas::GasField, gpu_solver::GpuGasSolver, GasSimulationConfig, SimulationStep, SolverTuning,
     },
     world::{
-        grid::{is_boundary, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
+        grid::{is_boundary, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
         structures::PlacedStructureMap,
     },
 };
@@ -94,18 +94,38 @@ fn populate_scenario(
     *structures = PlacedStructureMap::default();
     if with_internal_walls {
         for x in 20..=80 {
-            let _ = world.set_solid_with_material(x, 20, CellMaterial::Brick);
-            let _ = world.set_solid_with_material(x, 80, CellMaterial::Brick);
+            let _ = world.set_solid_with_material(
+                x,
+                20,
+                crate::plugins::default_plugin::brick_cell_material(),
+            );
+            let _ = world.set_solid_with_material(
+                x,
+                80,
+                crate::plugins::default_plugin::brick_cell_material(),
+            );
         }
         for y in 20..=80 {
-            let _ = world.set_solid_with_material(20, y, CellMaterial::Brick);
-            let _ = world.set_solid_with_material(80, y, CellMaterial::Brick);
+            let _ = world.set_solid_with_material(
+                20,
+                y,
+                crate::plugins::default_plugin::brick_cell_material(),
+            );
+            let _ = world.set_solid_with_material(
+                80,
+                y,
+                crate::plugins::default_plugin::brick_cell_material(),
+            );
         }
         for x in 48..=53 {
             let _ = world.set_empty(x, 20);
         }
         for y in 34..=71 {
-            let _ = world.set_solid_with_material(50, y, CellMaterial::Metal);
+            let _ = world.set_solid_with_material(
+                50,
+                y,
+                crate::plugins::default_plugin::metal_cell_material(),
+            );
         }
         let _ = world.set_empty(50, 52);
         let _ = world.set_empty(50, 53);

@@ -12,21 +12,41 @@ use crate::{
 
 /// Identifies the visual/runtime layer used by a structure or world cell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum LayerKind {
-    Appearance,
-    GasPipeConnections,
+pub struct LayerKind {
+    id: &'static str,
 }
+
+impl LayerKind {
+    /// Builds a layer id from a registered static content id.
+    pub const fn new(id: &'static str) -> Self {
+        Self { id }
+    }
+
+    /// Returns the stable id backing this layer.
+    pub fn as_str(self) -> &'static str {
+        self.id
+    }
+}
+
+/// Core appearance layer shared by world cells and placeable structures.
+pub const APPEARANCE_LAYER: LayerKind = LayerKind::new("flux.core.layer.appearance");
 
 /// Identifies the marker rendered inside a layer cell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LayerMarkerKind {
-    Solid(CellMaterial),
-    Pipe,
-    Vent,
-    GasSource,
-    GasSink,
-    GasPipeBridge,
-    GasPipeConnectionBidirectional,
+pub struct LayerMarkerKind {
+    id: &'static str,
+}
+
+impl LayerMarkerKind {
+    /// Builds a marker id from a registered static content id.
+    pub const fn new(id: &'static str) -> Self {
+        Self { id }
+    }
+
+    /// Returns the stable id backing this marker.
+    pub fn as_str(self) -> &'static str {
+        self.id
+    }
 }
 
 /// Defines whether a layer cell participates in collision checks.
@@ -101,12 +121,20 @@ impl StructureDescriptor {
 
 /// Enumerates placeable structure kinds stored in the runtime world.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum StructureKind {
-    Pipe,
-    Vent,
-    GasSource,
-    GasSink,
-    GasPipeBridge,
+pub struct StructureKind {
+    id: &'static str,
+}
+
+impl StructureKind {
+    /// Builds a structure content id from a registered static content id.
+    pub const fn new(id: &'static str) -> Self {
+        Self { id }
+    }
+
+    /// Returns the stable content id backing this structure kind.
+    pub fn as_str(self) -> &'static str {
+        self.id
+    }
 }
 
 /// Stores a canonical rotation for a placed structure.
@@ -269,10 +297,7 @@ impl PlacedStructureMap {
     /// Returns the first editable structure found in the cell.
     pub fn editable_structure_at(&self, x: u32, y: u32) -> Option<&PlacedStructure> {
         self.structures_at(x, y).into_iter().find(|structure| {
-            matches!(
-                structure.kind,
-                StructureKind::GasSource | StructureKind::GasSink
-            )
+            crate::plugins::default_plugin::is_editable_gas_structure(structure.kind)
         })
     }
 
@@ -280,37 +305,34 @@ impl PlacedStructureMap {
     pub fn has_pipe_at(&self, x: u32, y: u32) -> bool {
         self.structures_at(x, y)
             .into_iter()
-            .any(|structure| structure.kind == StructureKind::Pipe)
+            .any(|structure| crate::plugins::default_plugin::is_pipe_structure(structure.kind))
     }
 
     /// Returns true when a vent occupies the cell.
     pub fn has_vent_at(&self, x: u32, y: u32) -> bool {
         self.structures_at(x, y)
             .into_iter()
-            .any(|structure| structure.kind == StructureKind::Vent)
+            .any(|structure| crate::plugins::default_plugin::is_vent_structure(structure.kind))
     }
 
     /// Returns true when any bridge occupies the cell.
     pub fn has_bridge_at(&self, x: u32, y: u32) -> bool {
-        self.structures_at(x, y)
-            .into_iter()
-            .any(|structure| structure.kind == StructureKind::GasPipeBridge)
+        self.structures_at(x, y).into_iter().any(|structure| {
+            crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind)
+        })
     }
 
     /// Returns true when any structure in the cell blocks solid placement.
     pub fn blocks_solid_placement(&self, x: u32, y: u32) -> bool {
         self.structures_at(x, y).into_iter().any(|structure| {
-            matches!(
-                structure.kind,
-                StructureKind::Vent | StructureKind::GasSource | StructureKind::GasSink
-            )
+            crate::plugins::default_plugin::blocks_default_solid_placement(structure.kind)
         })
     }
 
     /// Places a plain pipe if the cell is valid and not already occupied by one.
     pub fn place_pipe(&mut self, x: u32, y: u32, world: &WorldGrid) -> bool {
         self.place_structure(
-            StructureKind::Pipe,
+            crate::plugins::default_plugin::pipe_structure_kind(),
             UVec2::new(x, y),
             StructureRotation::Deg0,
             StructureParams::None,
@@ -368,7 +390,7 @@ impl PlacedStructureMap {
     /// Places a vent if the cell is valid and not already occupied by one.
     pub fn place_vent(&mut self, x: u32, y: u32, world: &WorldGrid) -> bool {
         self.place_structure(
-            StructureKind::Vent,
+            crate::plugins::default_plugin::vent_structure_kind(),
             UVec2::new(x, y),
             StructureRotation::Deg0,
             StructureParams::None,
@@ -390,7 +412,7 @@ impl PlacedStructureMap {
             return None;
         }
         self.place_structure(
-            StructureKind::GasSource,
+            crate::plugins::default_plugin::gas_source_structure_kind(),
             UVec2::new(x, y),
             StructureRotation::Deg0,
             StructureParams::GasSource { gas_index, amount },
@@ -410,7 +432,7 @@ impl PlacedStructureMap {
             return None;
         }
         self.place_structure(
-            StructureKind::GasSink,
+            crate::plugins::default_plugin::gas_sink_structure_kind(),
             UVec2::new(x, y),
             StructureRotation::Deg0,
             StructureParams::GasSink { amount },
@@ -426,7 +448,7 @@ impl PlacedStructureMap {
         world: &WorldGrid,
     ) -> Option<PlacedStructureId> {
         self.place_structure(
-            StructureKind::GasPipeBridge,
+            crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
             origin,
             rotation,
             StructureParams::None,
@@ -451,7 +473,7 @@ impl PlacedStructureMap {
         else {
             return false;
         };
-        if structure.kind != StructureKind::GasSource {
+        if !crate::plugins::default_plugin::is_gas_source_structure(structure.kind) {
             return false;
         }
         let next = StructureParams::GasSource { gas_index, amount };
@@ -474,7 +496,7 @@ impl PlacedStructureMap {
         else {
             return false;
         };
-        if structure.kind != StructureKind::GasSink {
+        if !crate::plugins::default_plugin::is_gas_sink_structure(structure.kind) {
             return false;
         }
         let next = StructureParams::GasSink { amount };
@@ -606,13 +628,17 @@ impl PlacedStructureMap {
     pub fn pipe_bearing_structures_at(&self, x: u32, y: u32) -> Vec<&PlacedStructure> {
         self.structures_at(x, y)
             .into_iter()
-            .filter(|structure| match structure.kind {
-                StructureKind::Pipe => structure.origin == UVec2::new(x, y),
-                StructureKind::GasPipeBridge => {
+            .filter(|structure| {
+                if crate::plugins::default_plugin::is_pipe_structure(structure.kind) {
+                    structure.origin == UVec2::new(x, y)
+                } else if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(
+                    structure.kind,
+                ) {
                     bridge_center_cell(structure.origin, structure.rotation)
                         == Some(UVec2::new(x, y))
+                } else {
+                    false
                 }
-                _ => false,
             })
             .collect()
     }
@@ -622,12 +648,15 @@ impl PlacedStructureMap {
         self.structures_at(x, y)
             .into_iter()
             .filter(|structure| {
-                structure.kind == StructureKind::GasPipeBridge
+                crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind)
                     && structure
                         .descriptor()
                         .layers
                         .iter()
-                        .find(|layer| layer.kind == LayerKind::GasPipeConnections)
+                        .find(|layer| {
+                            layer.kind
+                                == crate::plugins::default_plugin::gas_pipe_connections_layer()
+                        })
                         .map(|layer| {
                             layer.cells.iter().any(|cell| {
                                 offset_world_cell(structure.origin, cell.local_cell)
@@ -689,79 +718,75 @@ impl PlacedStructureMap {
             }
         }
 
-        match kind {
-            StructureKind::Pipe => {
-                if is_boundary(origin.x, origin.y) || self.has_pipe_at(origin.x, origin.y) {
-                    return false;
-                }
-                if self
-                    .structures_at(origin.x, origin.y)
-                    .into_iter()
-                    .any(|structure| {
-                        matches!(
+        if crate::plugins::default_plugin::is_pipe_structure(kind) {
+            if is_boundary(origin.x, origin.y) || self.has_pipe_at(origin.x, origin.y) {
+                return false;
+            }
+            if self
+                .structures_at(origin.x, origin.y)
+                .into_iter()
+                .any(|structure| {
+                    crate::plugins::default_plugin::is_gas_source_structure(structure.kind)
+                        || crate::plugins::default_plugin::is_gas_sink_structure(structure.kind)
+                })
+            {
+                return false;
+            }
+        } else if crate::plugins::default_plugin::is_vent_structure(kind) {
+            if is_boundary(origin.x, origin.y)
+                || world.is_solid(origin.x, origin.y)
+                || self.has_vent_at(origin.x, origin.y)
+            {
+                return false;
+            }
+            if self
+                .structures_at(origin.x, origin.y)
+                .into_iter()
+                .any(|structure| {
+                    crate::plugins::default_plugin::is_gas_source_structure(structure.kind)
+                        || crate::plugins::default_plugin::is_gas_sink_structure(structure.kind)
+                        || crate::plugins::default_plugin::is_gas_pipe_bridge_structure(
                             structure.kind,
-                            StructureKind::GasSource | StructureKind::GasSink
                         )
-                    })
-                {
-                    return false;
-                }
+                })
+            {
+                return false;
             }
-            StructureKind::Vent => {
-                if is_boundary(origin.x, origin.y)
-                    || world.is_solid(origin.x, origin.y)
-                    || self.has_vent_at(origin.x, origin.y)
-                {
-                    return false;
-                }
-                if self
-                    .structures_at(origin.x, origin.y)
-                    .into_iter()
-                    .any(|structure| {
-                        matches!(
-                            structure.kind,
-                            StructureKind::GasSource
-                                | StructureKind::GasSink
-                                | StructureKind::GasPipeBridge
-                        )
-                    })
-                {
-                    return false;
-                }
+        } else if crate::plugins::default_plugin::is_gas_source_structure(kind)
+            || crate::plugins::default_plugin::is_gas_sink_structure(kind)
+        {
+            if is_boundary(origin.x, origin.y) || world.is_solid(origin.x, origin.y) {
+                return false;
             }
-            StructureKind::GasSource | StructureKind::GasSink => {
-                if is_boundary(origin.x, origin.y) || world.is_solid(origin.x, origin.y) {
-                    return false;
-                }
-                if !self.structures_at(origin.x, origin.y).is_empty() {
-                    return false;
-                }
+            if !self.structures_at(origin.x, origin.y).is_empty() {
+                return false;
             }
-            StructureKind::GasPipeBridge => {
-                if !matches!(rotation, StructureRotation::Deg0 | StructureRotation::Deg90) {
-                    return false;
-                }
-                for local in &occupied_cells {
-                    let Some(cell) = offset_world_cell(origin, *local) else {
-                        return false;
-                    };
-                    if is_boundary(cell.x, cell.y) {
-                        return false;
-                    }
-                    if self.has_vent_at(cell.x, cell.y) {
-                        return false;
-                    }
-                }
-                let Some(center) = bridge_center_cell(origin, rotation) else {
+        } else if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(kind) {
+            if !matches!(rotation, StructureRotation::Deg0 | StructureRotation::Deg90) {
+                return false;
+            }
+            for local in &occupied_cells {
+                let Some(cell) = offset_world_cell(origin, *local) else {
                     return false;
                 };
-                if self
-                    .pipe_bearing_structures_at(center.x, center.y)
-                    .into_iter()
-                    .any(|structure| structure.kind == StructureKind::GasPipeBridge)
-                {
+                if is_boundary(cell.x, cell.y) {
                     return false;
                 }
+                if self.has_vent_at(cell.x, cell.y) {
+                    return false;
+                }
+            }
+            let Some(center) = bridge_center_cell(origin, rotation) else {
+                return false;
+            };
+            if self
+                .pipe_bearing_structures_at(center.x, center.y)
+                .into_iter()
+                .any(|structure| {
+                    crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind)
+                })
+            {
+                return false;
             }
         }
 
@@ -817,12 +842,11 @@ pub fn structure_sprite_size_in_cells(
     let base_size = crate::plugins::default_plugin::structure_content_descriptor(kind)
         .visual
         .size_in_cells;
-    match kind {
-        StructureKind::GasPipeBridge => {
-            let _ = rotation;
-            base_size
-        }
-        _ => rotated_size_in_cells(base_size, rotation),
+    if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(kind) {
+        let _ = rotation;
+        base_size
+    } else {
+        rotated_size_in_cells(base_size, rotation)
     }
 }
 
@@ -891,7 +915,7 @@ fn layer_collision_blocked(
     cell: UVec2,
     incoming_kind: StructureKind,
 ) -> bool {
-    if layer_kind == LayerKind::Appearance && world.is_solid(cell.x, cell.y) {
+    if layer_kind == APPEARANCE_LAYER && world.is_solid(cell.x, cell.y) {
         let world_descriptor = cell_material_descriptor(
             world
                 .solid_material(cell.x, cell.y)
@@ -903,7 +927,7 @@ fn layer_collision_blocked(
                     .cells
                     .iter()
                     .any(|spec| spec.collision == LayerCollisionKind::Special)
-        }) && incoming_kind != StructureKind::GasPipeBridge
+        }) && !crate::plugins::default_plugin::is_gas_pipe_bridge_structure(incoming_kind)
         {
             return true;
         }
@@ -959,13 +983,7 @@ fn orthogonal_neighbors(cell: UVec2) -> Vec<UVec2> {
 }
 
 fn kind_sort_key(kind: StructureKind) -> u8 {
-    match kind {
-        StructureKind::Pipe => 0,
-        StructureKind::Vent => 1,
-        StructureKind::GasSource => 2,
-        StructureKind::GasSink => 3,
-        StructureKind::GasPipeBridge => 4,
-    }
+    crate::plugins::default_plugin::default_structure_sort_key(kind)
 }
 
 fn rotation_sort_key(rotation: StructureRotation) -> u8 {
@@ -991,17 +1009,17 @@ mod tests {
         bridge_connection_local_cells, bridge_local_cells, cell_material_descriptor,
         cell_material_sprite_size_in_cells, structure_descriptor,
         structure_footprint_size_in_cells, structure_sprite_size_in_cells, LayerCollisionKind,
-        LayerKind, LayerMarkerKind, PlacedStructureMap, StructureKind, StructureRotation,
+        PlacedStructureMap, StructureRotation, APPEARANCE_LAYER,
     };
     use crate::{
         config::{CellVisualPlacementConfigMap, StructureVisualConfigMap, VisualPlacementConfig},
-        world::grid::{CellMaterial, WorldGrid},
+        world::grid::WorldGrid,
     };
 
     fn structure_visuals() -> StructureVisualConfigMap {
         StructureVisualConfigMap::from_entries(vec![
             (
-                StructureKind::Pipe,
+                crate::plugins::default_plugin::pipe_structure_kind(),
                 VisualPlacementConfig {
                     label: "Pipe".to_string(),
                     draw_priority: 100,
@@ -1009,7 +1027,7 @@ mod tests {
                 },
             ),
             (
-                StructureKind::GasPipeBridge,
+                crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
                 VisualPlacementConfig {
                     label: "Bridge".to_string(),
                     draw_priority: 110,
@@ -1017,7 +1035,7 @@ mod tests {
                 },
             ),
             (
-                StructureKind::Vent,
+                crate::plugins::default_plugin::vent_structure_kind(),
                 VisualPlacementConfig {
                     label: "Vent".to_string(),
                     draw_priority: 120,
@@ -1025,7 +1043,7 @@ mod tests {
                 },
             ),
             (
-                StructureKind::GasSource,
+                crate::plugins::default_plugin::gas_source_structure_kind(),
                 VisualPlacementConfig {
                     label: "Gas Source".to_string(),
                     draw_priority: 130,
@@ -1033,7 +1051,7 @@ mod tests {
                 },
             ),
             (
-                StructureKind::GasSink,
+                crate::plugins::default_plugin::gas_sink_structure_kind(),
                 VisualPlacementConfig {
                     label: "Gas Sink".to_string(),
                     draw_priority: 130,
@@ -1046,7 +1064,7 @@ mod tests {
     fn cell_visual_layouts() -> CellVisualPlacementConfigMap {
         CellVisualPlacementConfigMap::from_entries(vec![
             (
-                CellMaterial::Boundary,
+                crate::plugins::default_plugin::boundary_cell_material(),
                 VisualPlacementConfig {
                     label: "Boundary".to_string(),
                     draw_priority: 1000,
@@ -1054,7 +1072,7 @@ mod tests {
                 },
             ),
             (
-                CellMaterial::Brick,
+                crate::plugins::default_plugin::brick_cell_material(),
                 VisualPlacementConfig {
                     label: "Brick".to_string(),
                     draw_priority: 1000,
@@ -1062,7 +1080,7 @@ mod tests {
                 },
             ),
             (
-                CellMaterial::Metal,
+                crate::plugins::default_plugin::metal_cell_material(),
                 VisualPlacementConfig {
                     label: "Metal".to_string(),
                     draw_priority: 1000,
@@ -1108,25 +1126,33 @@ mod tests {
 
     #[test]
     fn gas_pipe_connection_markers_exist_only_on_bridge_edges() {
-        let descriptor =
-            structure_descriptor(StructureKind::GasPipeBridge, StructureRotation::Deg0);
+        let descriptor = structure_descriptor(
+            crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+            StructureRotation::Deg0,
+        );
         let connection_layer = descriptor
             .layers
             .iter()
-            .find(|layer| layer.kind == LayerKind::GasPipeConnections)
+            .find(|layer| {
+                layer.kind == crate::plugins::default_plugin::gas_pipe_connections_layer()
+            })
             .expect("bridge has gas connection layer");
         assert_eq!(connection_layer.cells.len(), 2);
         assert!(connection_layer.cells.iter().all(|cell| {
-            cell.marker_kind == LayerMarkerKind::GasPipeConnectionBidirectional
+            cell.marker_kind
+                == crate::plugins::default_plugin::gas_pipe_connection_bidirectional_marker()
                 && cell.collision == LayerCollisionKind::Special
         }));
     }
 
     #[test]
     fn ordinary_pipe_has_only_appearance_layer() {
-        let descriptor = structure_descriptor(StructureKind::Pipe, StructureRotation::Deg0);
+        let descriptor = structure_descriptor(
+            crate::plugins::default_plugin::pipe_structure_kind(),
+            StructureRotation::Deg0,
+        );
         assert_eq!(descriptor.layers.len(), 1);
-        assert_eq!(descriptor.layers[0].kind, LayerKind::Appearance);
+        assert_eq!(descriptor.layers[0].kind, APPEARANCE_LAYER);
     }
 
     #[test]
@@ -1134,30 +1160,47 @@ mod tests {
         let structure_visuals = structure_visuals();
         let cell_visual_layouts = cell_visual_layouts();
         assert_eq!(
-            structure_descriptor(StructureKind::Pipe, StructureRotation::Deg0).size_in_cells(),
+            structure_descriptor(
+                crate::plugins::default_plugin::pipe_structure_kind(),
+                StructureRotation::Deg0
+            )
+            .size_in_cells(),
             bevy::prelude::UVec2::ONE
         );
         assert_eq!(
-            structure_descriptor(StructureKind::Vent, StructureRotation::Deg0).size_in_cells(),
+            structure_descriptor(
+                crate::plugins::default_plugin::vent_structure_kind(),
+                StructureRotation::Deg0
+            )
+            .size_in_cells(),
             bevy::prelude::UVec2::ONE
         );
         assert_eq!(
-            structure_descriptor(StructureKind::GasPipeBridge, StructureRotation::Deg0)
-                .size_in_cells(),
+            structure_descriptor(
+                crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+                StructureRotation::Deg0
+            )
+            .size_in_cells(),
             bevy::prelude::UVec2::new(3, 1)
         );
         assert_eq!(
-            structure_descriptor(StructureKind::GasPipeBridge, StructureRotation::Deg90)
-                .size_in_cells(),
+            structure_descriptor(
+                crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+                StructureRotation::Deg90
+            )
+            .size_in_cells(),
             bevy::prelude::UVec2::new(1, 3)
         );
         assert_eq!(
-            cell_material_sprite_size_in_cells(CellMaterial::Brick, &cell_visual_layouts),
+            cell_material_sprite_size_in_cells(
+                crate::plugins::default_plugin::brick_cell_material(),
+                &cell_visual_layouts
+            ),
             bevy::prelude::UVec2::ONE
         );
         assert_eq!(
             structure_footprint_size_in_cells(
-                StructureKind::Pipe,
+                crate::plugins::default_plugin::pipe_structure_kind(),
                 StructureRotation::Deg0,
                 &structure_visuals
             ),
@@ -1165,7 +1208,7 @@ mod tests {
         );
         assert_eq!(
             structure_footprint_size_in_cells(
-                StructureKind::GasPipeBridge,
+                crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
                 StructureRotation::Deg0,
                 &structure_visuals
             ),
@@ -1173,7 +1216,7 @@ mod tests {
         );
         assert_eq!(
             structure_footprint_size_in_cells(
-                StructureKind::GasPipeBridge,
+                crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
                 StructureRotation::Deg90,
                 &structure_visuals
             ),
@@ -1181,7 +1224,7 @@ mod tests {
         );
         assert_eq!(
             structure_sprite_size_in_cells(
-                StructureKind::GasPipeBridge,
+                crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
                 StructureRotation::Deg90,
                 &structure_visuals
             ),
@@ -1191,9 +1234,10 @@ mod tests {
 
     #[test]
     fn walls_use_special_appearance_cell() {
-        let descriptor = cell_material_descriptor(CellMaterial::Brick);
+        let descriptor =
+            cell_material_descriptor(crate::plugins::default_plugin::brick_cell_material());
         assert_eq!(descriptor.layers.len(), 1);
-        assert_eq!(descriptor.layers[0].kind, LayerKind::Appearance);
+        assert_eq!(descriptor.layers[0].kind, APPEARANCE_LAYER);
         assert_eq!(descriptor.layers[0].cells.len(), 1);
         assert_eq!(
             descriptor.layers[0].cells[0].collision,
@@ -1205,7 +1249,11 @@ mod tests {
     fn bridge_can_pass_through_wall_but_vent_cannot_be_placed_on_it() {
         let mut world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
-        assert!(world.set_solid_with_material(20, 20, CellMaterial::Brick));
+        assert!(world.set_solid_with_material(
+            20,
+            20,
+            crate::plugins::default_plugin::brick_cell_material()
+        ));
         assert!(structures
             .place_bridge(
                 bevy::prelude::UVec2::new(19, 20),

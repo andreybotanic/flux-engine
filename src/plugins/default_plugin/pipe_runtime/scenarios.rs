@@ -1,10 +1,7 @@
 use crate::{
     config::GasRegistry,
     simulation::gas::GasField,
-    world::{
-        grid::{CellMaterial, WorldGrid},
-        structures::PlacedStructureMap,
-    },
+    world::{grid::WorldGrid, structures::PlacedStructureMap},
 };
 
 use super::{PipeGasField, PipeSimulationConfig};
@@ -152,12 +149,28 @@ fn scenario_five_star_three_rooms(
 
 fn build_room(world: &mut WorldGrid, left: u32, top: u32, right: u32, bottom: u32) {
     for x in left..=right {
-        let _ = world.set_solid_with_material(x, top, CellMaterial::Brick);
-        let _ = world.set_solid_with_material(x, bottom, CellMaterial::Brick);
+        let _ = world.set_solid_with_material(
+            x,
+            top,
+            crate::plugins::default_plugin::brick_cell_material(),
+        );
+        let _ = world.set_solid_with_material(
+            x,
+            bottom,
+            crate::plugins::default_plugin::brick_cell_material(),
+        );
     }
     for y in top..=bottom {
-        let _ = world.set_solid_with_material(left, y, CellMaterial::Brick);
-        let _ = world.set_solid_with_material(right, y, CellMaterial::Brick);
+        let _ = world.set_solid_with_material(
+            left,
+            y,
+            crate::plugins::default_plugin::brick_cell_material(),
+        );
+        let _ = world.set_solid_with_material(
+            right,
+            y,
+            crate::plugins::default_plugin::brick_cell_material(),
+        );
     }
 }
 

@@ -53,7 +53,7 @@ mod tests {
     fn structure_visuals() -> StructureVisualConfigMap {
         StructureVisualConfigMap::from_entries(vec![
             (
-                crate::world::structures::StructureKind::Pipe,
+                crate::plugins::default_plugin::pipe_structure_kind(),
                 VisualPlacementConfig {
                     label: "Pipe".to_string(),
                     draw_priority: 100,
@@ -61,7 +61,7 @@ mod tests {
                 },
             ),
             (
-                crate::world::structures::StructureKind::GasPipeBridge,
+                crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
                 VisualPlacementConfig {
                     label: "Bridge".to_string(),
                     draw_priority: 110,
@@ -69,7 +69,7 @@ mod tests {
                 },
             ),
             (
-                crate::world::structures::StructureKind::Vent,
+                crate::plugins::default_plugin::vent_structure_kind(),
                 VisualPlacementConfig {
                     label: "Vent".to_string(),
                     draw_priority: 120,
@@ -77,7 +77,7 @@ mod tests {
                 },
             ),
             (
-                crate::world::structures::StructureKind::GasSource,
+                crate::plugins::default_plugin::gas_source_structure_kind(),
                 VisualPlacementConfig {
                     label: "Gas Source".to_string(),
                     draw_priority: 130,
@@ -85,7 +85,7 @@ mod tests {
                 },
             ),
             (
-                crate::world::structures::StructureKind::GasSink,
+                crate::plugins::default_plugin::gas_sink_structure_kind(),
                 VisualPlacementConfig {
                     label: "Gas Sink".to_string(),
                     draw_priority: 130,
@@ -98,7 +98,7 @@ mod tests {
     fn cell_visual_layouts() -> CellVisualPlacementConfigMap {
         CellVisualPlacementConfigMap::from_entries(vec![
             (
-                crate::world::grid::CellMaterial::Boundary,
+                crate::plugins::default_plugin::boundary_cell_material(),
                 VisualPlacementConfig {
                     label: "Boundary".to_string(),
                     draw_priority: 1000,
@@ -106,7 +106,7 @@ mod tests {
                 },
             ),
             (
-                crate::world::grid::CellMaterial::Brick,
+                crate::plugins::default_plugin::brick_cell_material(),
                 VisualPlacementConfig {
                     label: "Brick".to_string(),
                     draw_priority: 1000,
@@ -114,7 +114,7 @@ mod tests {
                 },
             ),
             (
-                crate::world::grid::CellMaterial::Metal,
+                crate::plugins::default_plugin::metal_cell_material(),
                 VisualPlacementConfig {
                     label: "Metal".to_string(),
                     draw_priority: 1000,
@@ -242,12 +242,12 @@ mod tests {
     fn default_visual_priorities_keep_pipe_below_bridge_and_walls() {
         let structure_visuals = structure_visuals();
         let cell_visual_layouts = cell_visual_layouts();
-        assert!(structure_visuals.get(crate::world::structures::StructureKind::Pipe).draw_priority
+        assert!(structure_visuals.get(crate::plugins::default_plugin::pipe_structure_kind()).draw_priority
             < structure_visuals
-                .get(crate::world::structures::StructureKind::GasPipeBridge)
+                .get(crate::plugins::default_plugin::gas_pipe_bridge_structure_kind())
                 .draw_priority);
-        assert!(structure_visuals.get(crate::world::structures::StructureKind::GasPipeBridge).draw_priority
-            < cell_visual_layouts.get(crate::world::grid::CellMaterial::Brick).draw_priority);
+        assert!(structure_visuals.get(crate::plugins::default_plugin::gas_pipe_bridge_structure_kind()).draw_priority
+            < cell_visual_layouts.get(crate::plugins::default_plugin::brick_cell_material()).draw_priority);
     }
 
     #[test]
@@ -261,11 +261,11 @@ mod tests {
             Visibility::Hidden
         );
         assert_eq!(
-            pipe_highlight_visibility(true, OverlayMode::Pipes),
+            pipe_highlight_visibility(true, crate::plugins::default_plugin::pipes_overlay_mode()),
             Visibility::Visible
         );
         assert_eq!(
-            pipe_highlight_visibility(false, OverlayMode::Pipes),
+            pipe_highlight_visibility(false, crate::plugins::default_plugin::pipes_overlay_mode()),
             Visibility::Hidden
         );
     }
@@ -298,11 +298,11 @@ mod tests {
             Visibility::Visible
         );
         assert_eq!(
-            vent_world_visibility(true, OverlayMode::Pipes),
+            vent_world_visibility(true, crate::plugins::default_plugin::pipes_overlay_mode()),
             Visibility::Visible
         );
         assert_eq!(
-            vent_world_visibility(false, OverlayMode::Pipes),
+            vent_world_visibility(false, crate::plugins::default_plugin::pipes_overlay_mode()),
             Visibility::Hidden
         );
     }

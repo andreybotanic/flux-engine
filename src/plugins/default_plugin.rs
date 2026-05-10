@@ -21,7 +21,7 @@ use crate::{
         grid::CellMaterial,
         structures::{
             LayerCellSpec, LayerCollisionKind, LayerKind, LayerMarkerKind, StructureDescriptor,
-            StructureKind, StructureLayer, StructureRotation,
+            StructureKind, StructureLayer, StructureRotation, APPEARANCE_LAYER,
         },
     },
 };
@@ -54,6 +54,75 @@ pub const SUBSTANCE_H2_ID: &str = "flux.default.substance.h2";
 pub const SUBSTANCE_O2_ID: &str = "flux.default.substance.o2";
 /// Stable substance id for default carbon dioxide gas.
 pub const SUBSTANCE_CO2_ID: &str = "flux.default.substance.co2";
+
+const LAYER_GAS_PIPE_CONNECTIONS_ID: &str = "flux.default.layer.gas_pipe_connections";
+const MARKER_GAS_PIPE_CONNECTION_BIDIRECTIONAL_ID: &str =
+    "flux.default.marker.gas_pipe_connection_bidirectional";
+
+/// Returns the default plugin boundary cell id wrapper.
+pub const fn boundary_cell_material() -> CellMaterial {
+    CellMaterial::new(CELL_BOUNDARY_ID)
+}
+
+/// Returns the default plugin brick cell id wrapper.
+pub const fn brick_cell_material() -> CellMaterial {
+    CellMaterial::new(CELL_BRICK_ID)
+}
+
+/// Returns the default plugin metal cell id wrapper.
+pub const fn metal_cell_material() -> CellMaterial {
+    CellMaterial::new(CELL_METAL_ID)
+}
+
+/// Returns the default plugin pipe structure id wrapper.
+pub const fn pipe_structure_kind() -> StructureKind {
+    StructureKind::new(ENTITY_PIPE_ID)
+}
+
+/// Returns the default plugin vent structure id wrapper.
+pub const fn vent_structure_kind() -> StructureKind {
+    StructureKind::new(ENTITY_VENT_ID)
+}
+
+/// Returns the default plugin gas source structure id wrapper.
+pub const fn gas_source_structure_kind() -> StructureKind {
+    StructureKind::new(ENTITY_GAS_SOURCE_ID)
+}
+
+/// Returns the default plugin gas sink structure id wrapper.
+pub const fn gas_sink_structure_kind() -> StructureKind {
+    StructureKind::new(ENTITY_GAS_SINK_ID)
+}
+
+/// Returns the default plugin gas pipe bridge structure id wrapper.
+pub const fn gas_pipe_bridge_structure_kind() -> StructureKind {
+    StructureKind::new(ENTITY_GAS_PIPE_BRIDGE_ID)
+}
+
+/// Returns the default plugin pipe overlay mode.
+pub const fn pipes_overlay_mode() -> OverlayMode {
+    OverlayMode::plugin(OVERLAY_PIPES_ID)
+}
+
+/// Returns true when the overlay mode is the default plugin pipe overlay.
+pub fn is_pipes_overlay_mode(mode: OverlayMode) -> bool {
+    matches!(mode, OverlayMode::Plugin(id) if id == OVERLAY_PIPES_ID)
+}
+
+/// Returns the default plugin pipe connection layer id.
+pub const fn gas_pipe_connections_layer() -> LayerKind {
+    LayerKind::new(LAYER_GAS_PIPE_CONNECTIONS_ID)
+}
+
+/// Returns a marker id for one default plugin content item.
+pub const fn content_marker(id: &'static str) -> LayerMarkerKind {
+    LayerMarkerKind::new(id)
+}
+
+/// Returns the marker used by default pipe connection cells.
+pub const fn gas_pipe_connection_bidirectional_marker() -> LayerMarkerKind {
+    LayerMarkerKind::new(MARKER_GAS_PIPE_CONNECTION_BIDIRECTIONAL_ID)
+}
 
 /// Resource snapshot of the built-in default plugin content descriptors.
 #[derive(Resource, Clone, Debug)]
@@ -149,7 +218,7 @@ pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
     vec![
         cell_descriptor_for(
             CELL_BOUNDARY_ID,
-            CellMaterial::Boundary,
+            boundary_cell_material(),
             "boundary.toml",
             "Boundary",
             "sprites/world/tile_boundary.png",
@@ -158,7 +227,7 @@ pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
         ),
         cell_descriptor_for(
             CELL_BRICK_ID,
-            CellMaterial::Brick,
+            brick_cell_material(),
             "brick.toml",
             "Brick",
             "sprites/world/tile_brick.png",
@@ -167,7 +236,7 @@ pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
         ),
         cell_descriptor_for(
             CELL_METAL_ID,
-            CellMaterial::Metal,
+            metal_cell_material(),
             "metal.toml",
             "Metal",
             "sprites/world/tile_metal.png",
@@ -182,7 +251,7 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
     vec![
         structure_descriptor_for(
             ENTITY_PIPE_ID,
-            StructureKind::Pipe,
+            pipe_structure_kind(),
             "pipe.toml",
             "Pipe",
             100,
@@ -196,7 +265,7 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
         ),
         structure_descriptor_for(
             ENTITY_VENT_ID,
-            StructureKind::Vent,
+            vent_structure_kind(),
             "vent.toml",
             "Vent",
             120,
@@ -210,7 +279,7 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
         ),
         structure_descriptor_for(
             ENTITY_GAS_SOURCE_ID,
-            StructureKind::GasSource,
+            gas_source_structure_kind(),
             "gas_source.toml",
             "Gas Source",
             130,
@@ -224,7 +293,7 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
         ),
         structure_descriptor_for(
             ENTITY_GAS_SINK_ID,
-            StructureKind::GasSink,
+            gas_sink_structure_kind(),
             "gas_sink.toml",
             "Gas Sink",
             130,
@@ -238,7 +307,7 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
         ),
         structure_descriptor_for(
             ENTITY_GAS_PIPE_BRIDGE_ID,
-            StructureKind::GasPipeBridge,
+            gas_pipe_bridge_structure_kind(),
             "gas_pipe_bridge.toml",
             "Bridge",
             110,
@@ -258,48 +327,38 @@ pub fn default_overlay_descriptors() -> Vec<OverlayContentDescriptor> {
     vec![
         overlay_descriptor(OVERLAY_MAIN_ID, OverlayMode::Main, "Main", "F1"),
         overlay_descriptor(OVERLAY_GAS_ID, OverlayMode::Gas, "Gas", "F2"),
-        overlay_descriptor(OVERLAY_PIPES_ID, OverlayMode::Pipes, "Pipes", "F3"),
+        overlay_descriptor(OVERLAY_PIPES_ID, pipes_overlay_mode(), "Pipes", "F3"),
     ]
 }
 
 /// Returns the stable content id for a legacy cell material.
 pub fn cell_material_content_id(material: CellMaterial) -> ContentId {
-    content_id(match material {
-        CellMaterial::Boundary => CELL_BOUNDARY_ID,
-        CellMaterial::Brick => CELL_BRICK_ID,
-        CellMaterial::Metal => CELL_METAL_ID,
-    })
+    content_id(material.as_str())
 }
 
 /// Returns the legacy cell material represented by a stable content id.
 pub fn cell_material_from_content_id(id: &ContentId) -> Option<CellMaterial> {
     match id.as_str() {
-        CELL_BOUNDARY_ID => Some(CellMaterial::Boundary),
-        CELL_BRICK_ID => Some(CellMaterial::Brick),
-        CELL_METAL_ID => Some(CellMaterial::Metal),
+        CELL_BOUNDARY_ID => Some(boundary_cell_material()),
+        CELL_BRICK_ID => Some(brick_cell_material()),
+        CELL_METAL_ID => Some(metal_cell_material()),
         _ => None,
     }
 }
 
 /// Returns the stable content id for a legacy structure kind.
 pub fn structure_kind_content_id(kind: StructureKind) -> ContentId {
-    content_id(match kind {
-        StructureKind::Pipe => ENTITY_PIPE_ID,
-        StructureKind::Vent => ENTITY_VENT_ID,
-        StructureKind::GasSource => ENTITY_GAS_SOURCE_ID,
-        StructureKind::GasSink => ENTITY_GAS_SINK_ID,
-        StructureKind::GasPipeBridge => ENTITY_GAS_PIPE_BRIDGE_ID,
-    })
+    content_id(kind.as_str())
 }
 
 /// Returns the legacy structure kind represented by a stable content id.
 pub fn structure_kind_from_content_id(id: &ContentId) -> Option<StructureKind> {
     match id.as_str() {
-        ENTITY_PIPE_ID => Some(StructureKind::Pipe),
-        ENTITY_VENT_ID => Some(StructureKind::Vent),
-        ENTITY_GAS_SOURCE_ID => Some(StructureKind::GasSource),
-        ENTITY_GAS_SINK_ID => Some(StructureKind::GasSink),
-        ENTITY_GAS_PIPE_BRIDGE_ID => Some(StructureKind::GasPipeBridge),
+        ENTITY_PIPE_ID => Some(pipe_structure_kind()),
+        ENTITY_VENT_ID => Some(vent_structure_kind()),
+        ENTITY_GAS_SOURCE_ID => Some(gas_source_structure_kind()),
+        ENTITY_GAS_SINK_ID => Some(gas_sink_structure_kind()),
+        ENTITY_GAS_PIPE_BRIDGE_ID => Some(gas_pipe_bridge_structure_kind()),
         _ => None,
     }
 }
@@ -309,7 +368,7 @@ pub fn overlay_mode_content_id(mode: OverlayMode) -> ContentId {
     content_id(match mode {
         OverlayMode::Main => OVERLAY_MAIN_ID,
         OverlayMode::Gas => OVERLAY_GAS_ID,
-        OverlayMode::Pipes => OVERLAY_PIPES_ID,
+        OverlayMode::Plugin(id) => id,
     })
 }
 
@@ -318,7 +377,7 @@ pub fn overlay_mode_from_content_id(id: &ContentId) -> Option<OverlayMode> {
     match id.as_str() {
         OVERLAY_MAIN_ID => Some(OverlayMode::Main),
         OVERLAY_GAS_ID => Some(OverlayMode::Gas),
-        OVERLAY_PIPES_ID => Some(OverlayMode::Pipes),
+        OVERLAY_PIPES_ID => Some(pipes_overlay_mode()),
         _ => None,
     }
 }
@@ -369,61 +428,67 @@ pub fn structure_layer_descriptor(
 
 /// Returns the label registered for a legacy cell material.
 pub fn cell_label(material: CellMaterial) -> &'static str {
-    match material {
-        CellMaterial::Boundary => "Boundary",
-        CellMaterial::Brick => "Brick",
-        CellMaterial::Metal => "Metal",
+    match material.as_str() {
+        CELL_BOUNDARY_ID => "Boundary",
+        CELL_BRICK_ID => "Brick",
+        CELL_METAL_ID => "Metal",
+        _ => "Cell",
     }
 }
 
 /// Returns the label registered for a legacy structure kind.
 pub fn structure_label(kind: StructureKind) -> &'static str {
-    match kind {
-        StructureKind::Pipe => "Pipe",
-        StructureKind::Vent => "Vent",
-        StructureKind::GasSource => "Gas Source",
-        StructureKind::GasSink => "Gas Sink",
-        StructureKind::GasPipeBridge => "Bridge",
+    match kind.as_str() {
+        ENTITY_PIPE_ID => "Pipe",
+        ENTITY_VENT_ID => "Vent",
+        ENTITY_GAS_SOURCE_ID => "Gas Source",
+        ENTITY_GAS_SINK_ID => "Gas Sink",
+        ENTITY_GAS_PIPE_BRIDGE_ID => "Bridge",
+        _ => "Structure",
     }
 }
 
 /// Returns the sprite path registered for a legacy cell material.
 pub fn cell_sprite_path(material: CellMaterial) -> &'static str {
-    match material {
-        CellMaterial::Boundary => "sprites/world/tile_boundary.png",
-        CellMaterial::Brick => "sprites/world/tile_brick.png",
-        CellMaterial::Metal => "sprites/world/tile_metal.png",
+    match material.as_str() {
+        CELL_BOUNDARY_ID => "sprites/world/tile_boundary.png",
+        CELL_BRICK_ID => "sprites/world/tile_brick.png",
+        CELL_METAL_ID => "sprites/world/tile_metal.png",
+        _ => "sprites/world/tile_brick.png",
     }
 }
 
 /// Returns the silhouette sprite path registered for a legacy cell material.
 pub fn cell_silhouette_path(material: CellMaterial) -> Option<&'static str> {
-    match material {
-        CellMaterial::Boundary => None,
-        CellMaterial::Brick => Some("sprites/world/silhouette_brick.png"),
-        CellMaterial::Metal => Some("sprites/world/silhouette_metal.png"),
+    match material.as_str() {
+        CELL_BOUNDARY_ID => None,
+        CELL_BRICK_ID => Some("sprites/world/silhouette_brick.png"),
+        CELL_METAL_ID => Some("sprites/world/silhouette_metal.png"),
+        _ => None,
     }
 }
 
 /// Returns the primary sprite path registered for a legacy structure kind.
 pub fn structure_sprite_path(kind: StructureKind) -> &'static str {
-    match kind {
-        StructureKind::Pipe => "sprites/world/pipe_mask_00.png",
-        StructureKind::Vent => "sprites/world/tile_vent.png",
-        StructureKind::GasSource => "sprites/world/tile_gas_source.png",
-        StructureKind::GasSink => "sprites/world/tile_gas_sink.png",
-        StructureKind::GasPipeBridge => "sprites/world/bridge.png",
+    match kind.as_str() {
+        ENTITY_PIPE_ID => "sprites/world/pipe_mask_00.png",
+        ENTITY_VENT_ID => "sprites/world/tile_vent.png",
+        ENTITY_GAS_SOURCE_ID => "sprites/world/tile_gas_source.png",
+        ENTITY_GAS_SINK_ID => "sprites/world/tile_gas_sink.png",
+        ENTITY_GAS_PIPE_BRIDGE_ID => "sprites/world/bridge.png",
+        _ => "sprites/world/pipe_mask_00.png",
     }
 }
 
 /// Returns the silhouette sprite path registered for a legacy structure kind.
 pub fn structure_silhouette_path(kind: StructureKind) -> Option<&'static str> {
-    match kind {
-        StructureKind::Pipe => Some("sprites/world/pipe_silhouette_mask_00.png"),
-        StructureKind::Vent => Some("sprites/world/silhouette_vent.png"),
-        StructureKind::GasSource => Some("sprites/world/tile_gas_source.png"),
-        StructureKind::GasSink => Some("sprites/world/tile_gas_sink.png"),
-        StructureKind::GasPipeBridge => Some("sprites/world/bridge_silhouette.png"),
+    match kind.as_str() {
+        ENTITY_PIPE_ID => Some("sprites/world/pipe_silhouette_mask_00.png"),
+        ENTITY_VENT_ID => Some("sprites/world/silhouette_vent.png"),
+        ENTITY_GAS_SOURCE_ID => Some("sprites/world/tile_gas_source.png"),
+        ENTITY_GAS_SINK_ID => Some("sprites/world/tile_gas_sink.png"),
+        ENTITY_GAS_PIPE_BRIDGE_ID => Some("sprites/world/bridge_silhouette.png"),
+        _ => None,
     }
 }
 
@@ -437,6 +502,103 @@ pub fn pipe_mask_sprite_path(mask: u8) -> String {
     format!("sprites/world/pipe_mask_{mask:02}.png")
 }
 
+/// Returns true when the cell kind is the default plugin boundary material.
+pub fn is_boundary_cell_kind(cell: crate::world::grid::CellKind) -> bool {
+    cell == crate::world::grid::CellKind::Solid(boundary_cell_material())
+}
+
+/// Encodes one world cell using the legacy numeric save/runtime code.
+pub fn legacy_cell_kind_code(cell: crate::world::grid::CellKind) -> Option<u8> {
+    match cell {
+        crate::world::grid::CellKind::Empty => Some(0),
+        crate::world::grid::CellKind::Solid(material) if material == boundary_cell_material() => {
+            Some(1)
+        }
+        crate::world::grid::CellKind::Solid(material) if material == brick_cell_material() => {
+            Some(2)
+        }
+        crate::world::grid::CellKind::Solid(material) if material == metal_cell_material() => {
+            Some(3)
+        }
+        crate::world::grid::CellKind::Solid(_) => None,
+    }
+}
+
+/// Decodes one legacy numeric world-cell code.
+pub fn legacy_cell_kind_from_code(code: u8) -> Option<crate::world::grid::CellKind> {
+    match code {
+        0 => Some(crate::world::grid::CellKind::Empty),
+        1 => Some(crate::world::grid::CellKind::Solid(boundary_cell_material())),
+        2 => Some(crate::world::grid::CellKind::Solid(brick_cell_material())),
+        3 => Some(crate::world::grid::CellKind::Solid(metal_cell_material())),
+        _ => None,
+    }
+}
+
+/// Encodes one default plugin structure kind using the legacy numeric save code.
+pub fn legacy_structure_kind_code(kind: StructureKind) -> Option<u8> {
+    match kind.as_str() {
+        ENTITY_PIPE_ID => Some(0),
+        ENTITY_VENT_ID => Some(1),
+        ENTITY_GAS_SOURCE_ID => Some(2),
+        ENTITY_GAS_SINK_ID => Some(3),
+        ENTITY_GAS_PIPE_BRIDGE_ID => Some(4),
+        _ => None,
+    }
+}
+
+/// Decodes one legacy numeric structure code into a default plugin structure kind.
+pub fn legacy_structure_kind_from_code(code: u8) -> Option<StructureKind> {
+    match code {
+        0 => Some(pipe_structure_kind()),
+        1 => Some(vent_structure_kind()),
+        2 => Some(gas_source_structure_kind()),
+        3 => Some(gas_sink_structure_kind()),
+        4 => Some(gas_pipe_bridge_structure_kind()),
+        _ => None,
+    }
+}
+
+/// Returns true when the id is the default pipe content item.
+pub fn is_pipe_structure(kind: StructureKind) -> bool {
+    kind == pipe_structure_kind()
+}
+
+/// Returns true when the id is the default vent content item.
+pub fn is_vent_structure(kind: StructureKind) -> bool {
+    kind == vent_structure_kind()
+}
+
+/// Returns true when the id is the default gas source content item.
+pub fn is_gas_source_structure(kind: StructureKind) -> bool {
+    kind == gas_source_structure_kind()
+}
+
+/// Returns true when the id is the default gas sink content item.
+pub fn is_gas_sink_structure(kind: StructureKind) -> bool {
+    kind == gas_sink_structure_kind()
+}
+
+/// Returns true when the id is the default gas pipe bridge content item.
+pub fn is_gas_pipe_bridge_structure(kind: StructureKind) -> bool {
+    kind == gas_pipe_bridge_structure_kind()
+}
+
+/// Returns true when a structure can be edited by the default source/sink editor.
+pub fn is_editable_gas_structure(kind: StructureKind) -> bool {
+    is_gas_source_structure(kind) || is_gas_sink_structure(kind)
+}
+
+/// Returns true when this structure blocks solid cell placement.
+pub fn blocks_default_solid_placement(kind: StructureKind) -> bool {
+    is_vent_structure(kind) || is_gas_source_structure(kind) || is_gas_sink_structure(kind)
+}
+
+/// Returns the deterministic legacy sort key for default plugin structures.
+pub fn default_structure_sort_key(kind: StructureKind) -> u8 {
+    legacy_structure_kind_code(kind).unwrap_or(u8::MAX)
+}
+
 include!("default_plugin_descriptors_block.rs");
 
 #[cfg(test)]
@@ -446,26 +608,26 @@ mod tests {
     #[test]
     fn default_plugin_content_ids_roundtrip_legacy_enums() {
         for material in [
-            CellMaterial::Boundary,
-            CellMaterial::Brick,
-            CellMaterial::Metal,
+            crate::plugins::default_plugin::boundary_cell_material(),
+            crate::plugins::default_plugin::brick_cell_material(),
+            crate::plugins::default_plugin::metal_cell_material(),
         ] {
             let id = cell_material_content_id(material);
             assert_eq!(cell_material_from_content_id(&id), Some(material));
         }
 
         for kind in [
-            StructureKind::Pipe,
-            StructureKind::Vent,
-            StructureKind::GasSource,
-            StructureKind::GasSink,
-            StructureKind::GasPipeBridge,
+            crate::plugins::default_plugin::pipe_structure_kind(),
+            crate::plugins::default_plugin::vent_structure_kind(),
+            crate::plugins::default_plugin::gas_source_structure_kind(),
+            crate::plugins::default_plugin::gas_sink_structure_kind(),
+            crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
         ] {
             let id = structure_kind_content_id(kind);
             assert_eq!(structure_kind_from_content_id(&id), Some(kind));
         }
 
-        for mode in [OverlayMode::Main, OverlayMode::Gas, OverlayMode::Pipes] {
+        for mode in [OverlayMode::Main, OverlayMode::Gas, pipes_overlay_mode()] {
             let id = overlay_mode_content_id(mode);
             assert_eq!(overlay_mode_from_content_id(&id), Some(mode));
         }
@@ -495,7 +657,9 @@ mod tests {
 
     #[test]
     fn default_plugin_bridge_keeps_legacy_shape_and_rotations() {
-        let descriptor = structure_content_descriptor(StructureKind::GasPipeBridge);
+        let descriptor = structure_content_descriptor(
+            crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+        );
         assert_eq!(
             descriptor.allowed_rotations,
             vec![StructureRotation::Deg0, StructureRotation::Deg90]
@@ -521,10 +685,19 @@ mod tests {
             .iter()
             .map(|descriptor| (descriptor.kind, descriptor.hud.sort_order))
             .collect::<Vec<_>>();
-        assert!(orders.contains(&(StructureKind::Pipe, 10)));
-        assert!(orders.contains(&(StructureKind::GasPipeBridge, 20)));
-        assert!(orders.contains(&(StructureKind::Vent, 30)));
-        assert!(orders.contains(&(StructureKind::GasSource, 40)));
-        assert!(orders.contains(&(StructureKind::GasSink, 50)));
+        assert!(orders.contains(&(crate::plugins::default_plugin::pipe_structure_kind(), 10)));
+        assert!(orders.contains(&(
+            crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+            20
+        )));
+        assert!(orders.contains(&(crate::plugins::default_plugin::vent_structure_kind(), 30)));
+        assert!(orders.contains(&(
+            crate::plugins::default_plugin::gas_source_structure_kind(),
+            40
+        )));
+        assert!(orders.contains(&(
+            crate::plugins::default_plugin::gas_sink_structure_kind(),
+            50
+        )));
     }
 }

@@ -11,11 +11,22 @@ pub enum CellKind {
     Empty,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum CellMaterial {
-    Boundary,
-    Brick,
-    Metal,
+/// Identifies one solid world-cell content item by its stable content id.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CellMaterial {
+    id: &'static str,
+}
+
+impl CellMaterial {
+    /// Builds a cell material id from a registered static content id.
+    pub const fn new(id: &'static str) -> Self {
+        Self { id }
+    }
+
+    /// Returns the stable content id backing this material.
+    pub fn as_str(self) -> &'static str {
+        self.id
+    }
 }
 
 #[derive(Resource, Clone)]
@@ -26,20 +37,24 @@ pub struct WorldGrid {
 
 impl Default for WorldGrid {
     fn default() -> Self {
+        Self::new(crate::plugins::default_plugin::boundary_cell_material())
+    }
+}
+
+impl WorldGrid {
+    /// Builds a world grid and fills its perimeter with the provided boundary material.
+    pub fn new(boundary_material: CellMaterial) -> Self {
         let mut cells = vec![CellKind::Empty; (WORLD_WIDTH * WORLD_HEIGHT) as usize];
         for y in 0..WORLD_HEIGHT {
             for x in 0..WORLD_WIDTH {
                 if is_boundary(x, y) {
                     let index = linear_index(x, y);
-                    cells[index] = CellKind::Solid(CellMaterial::Boundary);
+                    cells[index] = CellKind::Solid(boundary_material);
                 }
             }
         }
         Self { cells }
     }
-}
-
-impl WorldGrid {
     /// Runs `cell` logic.
     pub fn cell(&self, x: u32, y: u32) -> CellKind {
         self.cells[linear_index(x, y)]
@@ -75,7 +90,7 @@ impl WorldGrid {
 
     /// Runs `set_solid` logic.
     pub fn set_solid(&mut self, x: u32, y: u32) -> bool {
-        self.set_solid_with_material(x, y, CellMaterial::Brick)
+        self.set_solid_with_material(x, y, crate::plugins::default_plugin::brick_cell_material())
     }
 
     /// Runs `set_solid_with_material` logic.
@@ -143,22 +158,11 @@ impl WorldGrid {
 }
 
 fn encode_cell_kind(cell: CellKind) -> u8 {
-    match cell {
-        CellKind::Empty => 0,
-        CellKind::Solid(CellMaterial::Boundary) => 1,
-        CellKind::Solid(CellMaterial::Brick) => 2,
-        CellKind::Solid(CellMaterial::Metal) => 3,
-    }
+    crate::plugins::default_plugin::legacy_cell_kind_code(cell).unwrap_or(0)
 }
 
 fn decode_cell_kind(code: u8) -> Option<CellKind> {
-    match code {
-        0 => Some(CellKind::Empty),
-        1 => Some(CellKind::Solid(CellMaterial::Boundary)),
-        2 => Some(CellKind::Solid(CellMaterial::Brick)),
-        3 => Some(CellKind::Solid(CellMaterial::Metal)),
-        _ => None,
-    }
+    crate::plugins::default_plugin::legacy_cell_kind_from_code(code)
 }
 
 fn validate_boundary_cells(cells: &[CellKind]) -> Result<(), String> {
@@ -168,7 +172,7 @@ fn validate_boundary_cells(cells: &[CellKind]) -> Result<(), String> {
                 continue;
             }
             let index = linear_index(x, y);
-            if cells[index] != CellKind::Solid(CellMaterial::Boundary) {
+            if !crate::plugins::default_plugin::is_boundary_cell_kind(cells[index]) {
                 return Err(format!(
                     "Boundary cell ({}, {}) must be Boundary in snapshot",
                     x, y
@@ -238,7 +242,7 @@ mod tests {
         let mut world = WorldGrid::default();
         assert_eq!(
             world.solid_material(0, 0),
-            Some(CellMaterial::Boundary),
+            Some(crate::plugins::default_plugin::boundary_cell_material()),
             "Boundary cell should be initialized as technical boundary material"
         );
         assert!(
@@ -246,12 +250,16 @@ mod tests {
             "Boundary cell must remain non-editable for tools"
         );
         assert!(
-            !world.set_solid_with_material(0, 0, CellMaterial::Metal),
+            !world.set_solid_with_material(
+                0,
+                0,
+                crate::plugins::default_plugin::metal_cell_material()
+            ),
             "Boundary cell material must not be replaced by editor tools"
         );
         assert_eq!(
             world.solid_material(0, 0),
-            Some(CellMaterial::Boundary),
+            Some(crate::plugins::default_plugin::boundary_cell_material()),
             "Boundary material should stay unchanged"
         );
     }
@@ -259,17 +267,39 @@ mod tests {
     #[test]
     fn editable_solid_cells_store_selected_material() {
         let mut world = WorldGrid::default();
-        assert!(world.set_solid_with_material(10, 10, CellMaterial::Metal));
-        assert_eq!(world.solid_material(10, 10), Some(CellMaterial::Metal));
-        assert!(world.set_solid_with_material(10, 10, CellMaterial::Brick));
-        assert_eq!(world.solid_material(10, 10), Some(CellMaterial::Brick));
+        assert!(world.set_solid_with_material(
+            10,
+            10,
+            crate::plugins::default_plugin::metal_cell_material()
+        ));
+        assert_eq!(
+            world.solid_material(10, 10),
+            Some(crate::plugins::default_plugin::metal_cell_material())
+        );
+        assert!(world.set_solid_with_material(
+            10,
+            10,
+            crate::plugins::default_plugin::brick_cell_material()
+        ));
+        assert_eq!(
+            world.solid_material(10, 10),
+            Some(crate::plugins::default_plugin::brick_cell_material())
+        );
     }
 
     #[test]
     fn snapshot_codes_roundtrip_world_cells() {
         let mut world = WorldGrid::default();
-        assert!(world.set_solid_with_material(10, 10, CellMaterial::Brick));
-        assert!(world.set_solid_with_material(11, 10, CellMaterial::Metal));
+        assert!(world.set_solid_with_material(
+            10,
+            10,
+            crate::plugins::default_plugin::brick_cell_material()
+        ));
+        assert!(world.set_solid_with_material(
+            11,
+            10,
+            crate::plugins::default_plugin::metal_cell_material()
+        ));
         let _ = world.set_empty(12, 10);
 
         let codes = world.snapshot_cell_codes();

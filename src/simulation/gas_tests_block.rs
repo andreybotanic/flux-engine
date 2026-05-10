@@ -467,12 +467,12 @@ mod tests {
         let mut world = WorldGrid::default();
         // Inner rectangular wall.
         for x in 20..=80 {
-            let _ = world.set_solid_with_material(x, 20, crate::world::grid::CellMaterial::Brick);
-            let _ = world.set_solid_with_material(x, 80, crate::world::grid::CellMaterial::Brick);
+            let _ = world.set_solid_with_material(x, 20, crate::plugins::default_plugin::brick_cell_material());
+            let _ = world.set_solid_with_material(x, 80, crate::plugins::default_plugin::brick_cell_material());
         }
         for y in 20..=80 {
-            let _ = world.set_solid_with_material(20, y, crate::world::grid::CellMaterial::Brick);
-            let _ = world.set_solid_with_material(80, y, crate::world::grid::CellMaterial::Brick);
+            let _ = world.set_solid_with_material(20, y, crate::plugins::default_plugin::brick_cell_material());
+            let _ = world.set_solid_with_material(80, y, crate::plugins::default_plugin::brick_cell_material());
         }
 
         let mut field = GasField::from_registry(&registry);
@@ -542,7 +542,7 @@ mod tests {
             let _ = world_blocked.set_solid_with_material(
                 50,
                 y,
-                crate::world::grid::CellMaterial::Brick,
+                crate::plugins::default_plugin::brick_cell_material(),
             );
         }
 
@@ -621,22 +621,22 @@ mod tests {
         let _ = world_blocked.set_solid_with_material(
             center_x,
             center_y - 1,
-            crate::world::grid::CellMaterial::Brick,
+            crate::plugins::default_plugin::brick_cell_material(),
         );
         let _ = world_blocked.set_solid_with_material(
             center_x,
             center_y + 1,
-            crate::world::grid::CellMaterial::Brick,
+            crate::plugins::default_plugin::brick_cell_material(),
         );
         let _ = world_blocked.set_solid_with_material(
             center_x - 1,
             center_y,
-            crate::world::grid::CellMaterial::Brick,
+            crate::plugins::default_plugin::brick_cell_material(),
         );
         let _ = world_blocked.set_solid_with_material(
             center_x + 1,
             center_y,
-            crate::world::grid::CellMaterial::Brick,
+            crate::plugins::default_plugin::brick_cell_material(),
         );
 
         let mut field_blocked = GasField::from_registry(&registry);

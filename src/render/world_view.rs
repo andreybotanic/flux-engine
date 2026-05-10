@@ -29,7 +29,7 @@ use crate::{
         CellMaterial, WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH,
     },
     world::structures::{
-        PlacedStructure, PlacedStructureId, PlacedStructureMap, StructureKind, StructureRotation,
+        PlacedStructure, PlacedStructureId, PlacedStructureMap, StructureRotation,
     },
     world::WorldCellChanged,
 };
@@ -237,7 +237,24 @@ pub enum OverlayMode {
     #[default]
     Main,
     Gas,
-    Pipes,
+    Plugin(&'static str),
+}
+
+impl OverlayMode {
+    /// Builds a content-plugin overlay mode from its stable content id.
+    pub const fn plugin(id: &'static str) -> Self {
+        Self::Plugin(id)
+    }
+
+    /// Returns true for the core main world overlay.
+    pub fn is_main(self) -> bool {
+        matches!(self, Self::Main)
+    }
+
+    /// Returns true for the core gas concentration overlay.
+    pub fn is_gas(self) -> bool {
+        matches!(self, Self::Gas)
+    }
 }
 
 #[derive(Component)]

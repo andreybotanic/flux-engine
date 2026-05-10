@@ -462,8 +462,8 @@ mod tests {
         },
         simulation::gas::GasField,
         world::{
-            grid::{CellMaterial, WorldGrid},
-            structures::{PlacedStructureMap, StructureKind, StructureRotation},
+            grid::WorldGrid,
+            structures::{PlacedStructureMap, StructureRotation},
         },
     };
     use bevy::prelude::*;
@@ -513,7 +513,7 @@ mod tests {
     fn structure_hud_config() -> StructureHudConfigMap {
         StructureHudConfigMap::from_entries(vec![
             (
-                StructureKind::Pipe,
+                crate::plugins::default_plugin::pipe_structure_kind(),
                 HudBlockConfig {
                     sort_order: 10,
                     substance_containers: vec![SubstanceContainerConfig {
@@ -526,7 +526,7 @@ mod tests {
                 },
             ),
             (
-                StructureKind::GasPipeBridge,
+                crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
                 HudBlockConfig {
                     sort_order: 20,
                     substance_containers: vec![SubstanceContainerConfig {
@@ -539,21 +539,21 @@ mod tests {
                 },
             ),
             (
-                StructureKind::Vent,
+                crate::plugins::default_plugin::vent_structure_kind(),
                 HudBlockConfig {
                     sort_order: 30,
                     substance_containers: Vec::new(),
                 },
             ),
             (
-                StructureKind::GasSource,
+                crate::plugins::default_plugin::gas_source_structure_kind(),
                 HudBlockConfig {
                     sort_order: 40,
                     substance_containers: Vec::new(),
                 },
             ),
             (
-                StructureKind::GasSink,
+                crate::plugins::default_plugin::gas_sink_structure_kind(),
                 HudBlockConfig {
                     sort_order: 50,
                     substance_containers: Vec::new(),
@@ -565,7 +565,7 @@ mod tests {
     fn structure_visuals() -> StructureVisualConfigMap {
         StructureVisualConfigMap::from_entries(vec![
             (
-                StructureKind::Pipe,
+                crate::plugins::default_plugin::pipe_structure_kind(),
                 VisualPlacementConfig {
                     label: "Pipe".to_string(),
                     draw_priority: 100,
@@ -573,7 +573,7 @@ mod tests {
                 },
             ),
             (
-                StructureKind::GasPipeBridge,
+                crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
                 VisualPlacementConfig {
                     label: "Bridge".to_string(),
                     draw_priority: 110,
@@ -581,7 +581,7 @@ mod tests {
                 },
             ),
             (
-                StructureKind::Vent,
+                crate::plugins::default_plugin::vent_structure_kind(),
                 VisualPlacementConfig {
                     label: "Vent".to_string(),
                     draw_priority: 120,
@@ -589,7 +589,7 @@ mod tests {
                 },
             ),
             (
-                StructureKind::GasSource,
+                crate::plugins::default_plugin::gas_source_structure_kind(),
                 VisualPlacementConfig {
                     label: "Gas Source".to_string(),
                     draw_priority: 130,
@@ -597,7 +597,7 @@ mod tests {
                 },
             ),
             (
-                StructureKind::GasSink,
+                crate::plugins::default_plugin::gas_sink_structure_kind(),
                 VisualPlacementConfig {
                     label: "Gas Sink".to_string(),
                     draw_priority: 130,
@@ -610,7 +610,7 @@ mod tests {
     fn cell_visual_layouts() -> CellVisualPlacementConfigMap {
         CellVisualPlacementConfigMap::from_entries(vec![
             (
-                CellMaterial::Boundary,
+                crate::plugins::default_plugin::boundary_cell_material(),
                 VisualPlacementConfig {
                     label: "Boundary".to_string(),
                     draw_priority: 1000,
@@ -618,7 +618,7 @@ mod tests {
                 },
             ),
             (
-                CellMaterial::Brick,
+                crate::plugins::default_plugin::brick_cell_material(),
                 VisualPlacementConfig {
                     label: "Brick".to_string(),
                     draw_priority: 1000,
@@ -626,7 +626,7 @@ mod tests {
                 },
             ),
             (
-                CellMaterial::Metal,
+                crate::plugins::default_plugin::metal_cell_material(),
                 VisualPlacementConfig {
                     label: "Metal".to_string(),
                     draw_priority: 1000,
@@ -875,7 +875,11 @@ mod tests {
     fn solid_materials_render_their_own_blocks() {
         let registry = registry();
         let mut world = WorldGrid::default();
-        assert!(world.set_solid_with_material(6, 6, CellMaterial::Metal));
+        assert!(world.set_solid_with_material(
+            6,
+            6,
+            crate::plugins::default_plugin::metal_cell_material()
+        ));
 
         let blocks = build_cell_inspector_blocks(
             UVec2::new(6, 6),

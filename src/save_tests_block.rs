@@ -5,7 +5,7 @@ mod tests {
         config::GasDefinition,
         plugins::default_plugin::pipe_runtime::PipeGasField,
         world::{
-            grid::{CellMaterial, WorldGrid},
+            grid::WorldGrid,
             structures::PlacedStructureMap,
         },
     };
@@ -59,8 +59,8 @@ mod tests {
         let root = temp_saves_root("flux_save_roundtrip");
         let registry = test_registry();
         let mut world = WorldGrid::default();
-        assert!(world.set_solid_with_material(10, 10, CellMaterial::Brick));
-        assert!(world.set_solid_with_material(11, 10, CellMaterial::Metal));
+        assert!(world.set_solid_with_material(10, 10, crate::plugins::default_plugin::brick_cell_material()));
+        assert!(world.set_solid_with_material(11, 10, crate::plugins::default_plugin::metal_cell_material()));
 
         let mut gas = GasField::from_registry(&registry);
         let mut structures = PlacedStructureMap::default();

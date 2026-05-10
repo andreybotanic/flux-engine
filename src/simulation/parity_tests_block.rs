@@ -9,12 +9,10 @@ mod tests {
         apply_pipe_network_step, PipeFlowVisualState, PipeFluxField, PipeGasField,
         PipeSimulationConfig,
     };
-    use crate::simulation::{
-        gas::GasField,
-    };
+    use crate::simulation::gas::GasField;
     use crate::simulation::gpu_solver::GpuGasSolver;
     use crate::world::{
-        grid::{is_boundary, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
+        grid::{is_boundary, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
         structures::PlacedStructureMap,
     };
     use bevy::prelude::UVec2;
@@ -187,12 +185,12 @@ mod tests {
             let bottom = top + room_size - 1;
 
             for x in (left - 1)..=(right + 1) {
-                let _ = world.set_solid_with_material(x, top - 1, CellMaterial::Brick);
-                let _ = world.set_solid_with_material(x, bottom + 1, CellMaterial::Brick);
+                let _ = world.set_solid_with_material(x, top - 1, crate::plugins::default_plugin::brick_cell_material());
+                let _ = world.set_solid_with_material(x, bottom + 1, crate::plugins::default_plugin::brick_cell_material());
             }
             for y in (top - 1)..=(bottom + 1) {
-                let _ = world.set_solid_with_material(left - 1, y, CellMaterial::Brick);
-                let _ = world.set_solid_with_material(right + 1, y, CellMaterial::Brick);
+                let _ = world.set_solid_with_material(left - 1, y, crate::plugins::default_plugin::brick_cell_material());
+                let _ = world.set_solid_with_material(right + 1, y, crate::plugins::default_plugin::brick_cell_material());
             }
 
             let mut gpu_field = GasField::from_registry(&registry);

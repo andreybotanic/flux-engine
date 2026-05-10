@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::grid::CellMaterial;
 
     fn make_temp_root(prefix: &str) -> PathBuf {
         let unique = format!(
@@ -309,14 +308,14 @@ color = [0.8, 0.8, 1.0]
             config.gas_registry.stable_id_by_index(0).map(|id| id.as_str()),
             Some("flux.default.substance.h2")
         );
-        assert_eq!(config.structure_visuals.get(StructureKind::Pipe).label, "Pipe");
-        assert_eq!(config.cell_visual_layouts.get(CellMaterial::Brick).label, "Brick");
+        assert_eq!(config.structure_visuals.get(crate::plugins::default_plugin::pipe_structure_kind()).label, "Pipe");
+        assert_eq!(config.cell_visual_layouts.get(crate::plugins::default_plugin::brick_cell_material()).label, "Brick");
         assert_eq!(
-            config.structure_hud.get(StructureKind::GasPipeBridge).sort_order,
+            config.structure_hud.get(crate::plugins::default_plugin::gas_pipe_bridge_structure_kind()).sort_order,
             20
         );
         assert_eq!(
-            config.structure_hud.get(StructureKind::Vent).substance_containers,
+            config.structure_hud.get(crate::plugins::default_plugin::vent_structure_kind()).substance_containers,
             Vec::<SubstanceContainerConfig>::new()
         );
 
