@@ -7,8 +7,8 @@ default-run = "flux_engine"
 [workspace]
 members = [".", "xtask"]
 exclude = [
-    "crates/flux_stage1_sample_plugin",
-    "crates/flux_stage7_sample_content_plugin",
+    "src/plugins/flux_stage1_sample_plugin",
+    "src/plugins/flux_stage7_sample_content_plugin",
 ]
 resolver = "2"
 

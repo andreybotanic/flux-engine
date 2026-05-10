@@ -11,7 +11,7 @@
 - Язык: Rust
 - Движок/фреймворк: Bevy
 - Рендер и вычисления на GPU: wgpu + WGSL
-- Конфигурация проекта: TOML-файлы в `config/`
+- Конфигурация проекта: core TOML-файлы в `config/`, default-plugin TOML-файлы в `src/plugins/default_plugin/config/`
 
 ## Точка входа и запуск
 
@@ -61,7 +61,7 @@
 - На Windows DLL загружается не из исходного архива и не из исходной dev-папки, а из временной generation-копии в `std::env::temp_dir()/FluxEngine/plugin_cache/...`; после ABI-проверки копия удаляется best-effort.
 - Стабильный ABI использует plain C-compatible типы: `FluxUtf8Slice`, `FluxStatus`, `FluxHostApi`, `FluxRegistrar`, `FluxPluginHandle` и четыре обязательные export-функции DLL.
 - Начиная с API version `2`, `FluxRegistrar` поддерживает callback `register_gas_substance`: content-плагин может зарегистрировать газовые вещества во время handshake-сценария `api_version -> create -> register -> destroy`.
-- Для позитивной e2e-проверки stage-1 в репозитории добавлен отдельный sample `cdylib` crate `crates/flux_stage1_sample_plugin`: unit-тесты собирают его, упаковывают в `.fluxplugin` и проверяют, что startup scan принимает рабочий DLL-плагин.
+- Для позитивной e2e-проверки stage-1 в репозитории добавлен отдельный sample `cdylib` crate `src/plugins/flux_stage1_sample_plugin`: unit-тесты собирают его, упаковывают в `.fluxplugin` и проверяют, что startup scan принимает рабочий DLL-плагин.
 - Если внешних plugins нет, игра стартует как раньше, но registry всё равно содержит `flux.default`. Если packaged/dev plugin сломан, приложение продолжает запуск и показывает понятную причину отклонения в `Main Menu`.
 
 ### Default plugin content registry (stage 4)
@@ -70,10 +70,11 @@
 - `src/plugins/content.rs` содержит общий `ContentRegistry`: provider plugins, descriptors для world cells, structures, overlay modes и HUD metadata. `ContentId` валидируется тем же каноническим форматом, что и plugin IDs.
 - Core runtime-типы `CellMaterial`, `StructureKind`, `LayerKind` и `LayerMarkerKind` больше не являются enum-ами с вариантами default content. Это тонкие static-id wrapper-ы, а конкретные IDs для `Boundary`, `Brick`, `Metal`, `Pipe`, `Vent`, `GasSource`, `GasSink` и `GasPipeBridge` выдаёт facade locked default plugin-а.
 - `F1/Main` и `F2/Gas` являются базовыми overlay ядра. Content-specific `F3/Pipes` регистрируется default plugin-ом как plugin overlay и включается через `OverlayMode::Plugin(...)`.
-- `WorldGrid` хранит generic `CellMaterial` ID, `PlacedStructureMap` хранит generic `StructureKind` ID, а default-specific проверки и legacy mapping вынесены за функции `src/plugins/default_plugin.rs`.
+- `WorldGrid` хранит generic `CellMaterial` ID, `PlacedStructureMap` хранит generic `StructureKind` ID, а default-specific проверки и legacy mapping остаются в фасаде `src/plugins/default_plugin/mod.rs`; stable ID/root helpers вынесены в `src/plugins/default_plugin/ids.rs` и re-export-ятся фасадом.
 - Начиная со save schema `6`, save/load пишет stable plugin content IDs для world-клеток, placed structures, pipe containers и substances; legacy numeric adapters default plugin-а остаются только compatibility helper-ами для старых runtime-путей и тестов.
 - Helper-ы `cell_material_descriptor(...)`, `structure_descriptor(...)` и size-helper-ы сохранены как compatibility API, но внутри берут layer/footprint/sprite metadata из default plugin descriptors.
-- Config loader строит visual/HUD maps из default plugin descriptors и затем валидирует существующие TOML-конфиги на совпадение размеров, labels, HUD-блоков и draw priority. Это сохраняет текущие asset paths и порядок HUD-блоков: `Cell`, `Pipe`, `Bridge`, `Vent`, `Gas Source`, `Gas Sink`.
+- Config loader строит visual/HUD maps из default plugin descriptors и затем валидирует TOML-конфиги default plugin-а на совпадение размеров, labels, HUD-блоков и draw priority. Default-owned sprite paths идут через Bevy asset source `flux_default://...`, а порядок HUD-блоков остаётся прежним: `Cell`, `Pipe`, `Bridge`, `Vent`, `Gas Source`, `Gas Sink`.
+- Все tracked assets/config/code built-in default plugin-а находятся внутри `src/plugins/default_plugin/`. Каталог `src/plugins/` остаётся фасадом plugin-системы, но его подпапки считаются in-project plugin roots; новые plugin-папки игнорируются этим репозиторием и должны жить в собственных git-репозиториях.
 - При startup bootstrap и при rebuild после toggle registry создаётся заново с default descriptors; внешний plugin source для `flux.default` не нужен, потому что он built-in, locked и always-on.
 
 ### Plugin-owned substances (stage 5)
@@ -86,20 +87,20 @@
 - `ContentRegistry` хранит substance definitions рядом с descriptors клеток, структур и overlay, поэтому default plugin регистрирует не только world content, но и встроенные вещества.
 - `GasRegistry` оставлен как compatibility wrapper для существующего runtime-кода, но внутри строится из plugin-owned `SubstanceRegistry` и назначает compact indices детерминированно по molecular mass + stable id.
 - Старые short IDs (`h2`, `o2`, `co2`) сохранены как aliases для UI, тестов и backward-compatible load adapter-а; stable id является основным идентификатором для нового сохранения gas chunk-ов.
-- `config/gases/*.toml` больше не считается источником газов ядра. Это optional data-файлы default plugin-а: они могут переопределить/добавить default-plugin gas substances, а при пустой папке базовые `H2/O2/CO2` всё равно берутся из built-in default plugin definitions.
+- `src/plugins/default_plugin/config/gases/*.toml` больше не считается источником газов ядра. Это optional data-файлы default plugin-а: они могут переопределить/добавить default-plugin gas substances, а при пустой папке базовые `H2/O2/CO2` всё равно берутся из built-in default plugin definitions.
 - CPU/GPU free-gas path продолжает работать только с compact indices и массивом molecular masses; WGSL не содержит plugin-specific веток и читает dynamic `molecular_masses` storage buffer.
 - Perf/parity helpers используют default substance registry и динамический список mass-error метрик, поэтому проверочные пути не ограничивают runtime тремя газами.
 
 ### External content plugin build workflow (stage 7)
 
 - Workspace теперь содержит `xtask/` как отдельный crate и cargo alias `.cargo/config.toml`: `cargo xtask ...` разворачивается в `cargo run -p xtask -- ...`.
-- `xtask` ищет plugin projects в `crates/*/package_template/manifest.toml`, читает runtime manifest тем же `PluginManifest`, сортирует проекты по `PluginId` и отклоняет дубли.
+- `xtask` ищет plugin projects в `src/plugins/*/package_template/manifest.toml`, читает runtime manifest тем же `PluginManifest`, сортирует проекты по `PluginId` и отклоняет дубли.
 - Поддерживаются команды:
   - `cargo xtask build-plugin <plugin_id>` собирает plugin DLL, копирует `manifest.toml`, `bin/`, `config/`, `assets/` в `target/plugins/expanded/<plugin_id>/` и валидирует expanded root через runtime loader.
   - `cargo xtask pack-plugin <plugin_id>` выполняет build, пишет `.fluxplugin` в `target/plugins/packages/<plugin_id>.fluxplugin` и валидирует archive через runtime loader.
   - `cargo xtask build-all-plugins` собирает и упаковывает все найденные plugin projects в детерминированном порядке.
 - Упаковщик включает в archive только разрешённые package paths (`manifest.toml`, `bin/`, `config/`, `assets/`) и запрещает служебные/опасные segments вроде `target`, `.git`, editor cache, secrets, `..` и absolute paths.
-- Stage-7 sample content plugin находится в `crates/flux_stage7_sample_content_plugin`: его ABI v2 DLL регистрирует газ `flux.sample_content.substance.neon` с alias `neon`.
+- Stage-7 sample content plugin находится в `src/plugins/flux_stage7_sample_content_plugin`: его ABI v2 DLL регистрирует газ `flux.sample_content.substance.neon` с alias `neon`.
 - Runtime registration сохраняется в `PluginRuntimeRegistration`, затем `LoadedPluginRegistry` передаёт её в `ContentRegistry`. При включении/выключении content-плагина из `Main Menu -> Plugins` rebuild пересоздаёт `ContentRegistry`, `GasRegistry`, world/pipe gas fields, pipe flux state и GPU solver buffers, а gas dropdown-поля обновляются без перезапуска.
 - `GameConfig::load_from_default_location_with_content(...)` и `load_gas_registry_from_default_location(...)` строят `GasRegistry` из default substances плюс substances включённых content-плагинов. Save/load gate использует те же stable substance IDs, поэтому мир с plugin-owned газом требует соответствующий enabled content plugin.
 
@@ -125,10 +126,10 @@
   - `StructureDescriptor`,
   - `LayerCollisionKind`.
 - `StructureDescriptor` теперь также является единым источником правды для размеров объекта в клетках через `size_in_cells()`.
-- Для appearance-метаданных добавлен отдельный конфиг-реестр `config/structures/*.toml`: он хранит базовый `label`, `draw_priority` и `size_in_cells` для всех встроенных стен и структур.
+- Для appearance-метаданных добавлен отдельный конфиг-реестр `src/plugins/default_plugin/config/structures/*.toml`: он хранит базовый `label`, `draw_priority` и `size_in_cells` для всех встроенных стен и структур.
 - HUD-метаданные контейнеров тоже вынесены в конфиги:
-  - `config/cell_types.toml` хранит `world_cell_hud` для свободного газа клетки;
-  - `config/structures/*.toml` хранят верхнеуровневый `label` сущности и `[hud]`-секции только с `sort_order` и списком substance-контейнеров.
+  - `src/plugins/default_plugin/config/cell_types.toml` хранит `world_cell_hud` для свободного газа клетки;
+  - `src/plugins/default_plugin/config/structures/*.toml` хранят верхнеуровневый `label` сущности и `[hud]`-секции только с `sort_order` и списком substance-контейнеров.
 - Модуль `src/config/hud.rs` хранит только типы runtime-конфигов HUD и не содержит встроенных fallback-конфигов для конкретных сущностей.
 - Для визуализации отдельно зафиксирован `sprite size in cells`: в большинстве случаев он совпадает с footprint, но у моста базовый спрайт всегда считается горизонтальным `3x1`, а вертикальный вариант получается только поворотом transform-а без растяжения.
 - В текущем наборе структур это означает:
@@ -406,10 +407,10 @@
 - Для `PanelFrosted` используется единый helper `cover`-layout: sharp fullscreen-изображение и panel-local blur получают одинаковое масштабирование без искажения пропорций, а панель через `Overflow::clip()` показывает только тот участок blur, который реально находится под ней.
 - Для `WorldSnapshot` modal runtime поднимает отдельную offscreen-камеру и делает snapshot текущего мира в `RenderTarget::Image`, затем один раз блюрит получившийся кадр и переиспользует его, пока модалка не закрыта; при новом открытии или изменении размера окна snapshot переснимается.
 - Добавлен отдельный fullscreen-фон для `Main Menu` (`assets/sprites/ui/main_menu_background.png`); он показывается только в режиме `MainMenuMode::Main`.
-- Pipe-спрайты загружаются из отдельных world-ассетов для всех connection-mask вариантов; silhouette-варианты для ghost-preview также хранятся в `assets/sprites/world/`.
+- Pipe-спрайты загружаются из default-plugin asset source `flux_default://world/...` для всех connection-mask вариантов; silhouette-варианты для ghost-preview также хранятся в `src/plugins/default_plugin/assets/world/`.
 - Порядок appearance-рисования стен и структур теперь конфигозависимый: основной world-спрайт получает `z` из общего `draw_priority`, а при равенстве используется детерминированный tie-break (`PlacedStructureId` для структур, координаты клетки для стен).
 - Для моста добавлены отдельные world-ассеты `bridge.png` и `bridge_silhouette.png`; вертикальный вариант получается поворотом того же спрайта.
-- Для `F3` добавлен отдельный pipe-highlight filter layer на `Material2d`/WGSL: поверх обычного pipe-спрайта рисуется отдельный `Mesh2d`, который повторно сэмплирует тот же `pipe_mask_*` и вычисляет яркость highlight в шейдере.
+- Для `F3` добавлен отдельный pipe-highlight filter layer на `Material2d`/WGSL: поверх обычного pipe-спрайта рисуется отдельный `Mesh2d`, который повторно сэмплирует тот же `pipe_mask_*` и вычисляет яркость highlight в shader-е `flux_default://shaders/pipe_highlight_material.wgsl`.
 - Overlay-символ вентиляции для `F3` загружается как отдельный world-ассет `gas_in_out.png`: это жёлтый контурный квадрат с двунаправленной вертикальной стрелкой и чёрным контуром. Обычный world-спрайт вентиляции при этом тоже остаётся видимым под иконкой.
 - В `F3/Pipes` (`OverlayMode::Plugin(...)`, content ID default plugin-а) обычный мир затемняется, а для pipe-layer отрисовываются:
   - сама геометрия труб;
@@ -448,9 +449,11 @@
 ## Конфигурация
 
 Основные группы конфигов:
-- `config/simulation.toml`
-- `config/cell_types.toml`
-- `config/gases/*.toml`
+- `config/simulation.toml` для core/free-gas настроек движка;
+- `src/plugins/default_plugin/config/pipe_runtime.toml` для pipe-runtime default plugin-а;
+- `src/plugins/default_plugin/config/cell_types.toml`;
+- `src/plugins/default_plugin/config/gases/*.toml`;
+- `src/plugins/default_plugin/config/structures/*.toml`.
 
 Назначение: вынести игровые и симуляционные параметры из кода в данные, чтобы расширять набор газов и тюнинговать поведение без изменения исходников.
 

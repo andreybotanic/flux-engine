@@ -13,7 +13,7 @@
 ## Будущие зоны изменений
 
 Ожидаемые зоны кода:
-- `src/plugins/default_plugin.rs`;
+- `src/plugins/default_plugin/mod.rs`;
 - `src/world/grid.rs`;
 - `src/world/structures.rs`;
 - `src/config/mod.rs`;

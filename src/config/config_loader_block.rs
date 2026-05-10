@@ -3,7 +3,6 @@ struct SimulationToml {
     rate: SimulationRateToml,
     simulation: GasSimulationToml,
     solver_tuning: SolverTuningToml,
-    pipe: PipeToml,
     visual: VisualToml,
 }
 

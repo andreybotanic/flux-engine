@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use bevy::{
-    asset::AssetPlugin,
+    asset::{io::AssetSourceBuilder, AssetApp, AssetPlugin},
     prelude::*,
     window::{MonitorSelection, PresentMode, WindowMode},
 };
@@ -12,8 +12,10 @@ use crate::{
     editor::EditorPlugin,
     input::InputPlugin,
     plugins::{
-        default_plugin::pipe_runtime::DefaultPluginRuntimePlugin, DefaultPluginContent,
-        PluginBootstrapConfig,
+        default_plugin::{
+            asset_root, pipe_runtime::DefaultPluginRuntimePlugin, DEFAULT_PLUGIN_ASSET_SOURCE,
+        },
+        DefaultPluginContent, PluginBootstrapConfig,
     },
     render::RenderPlugin,
     simulation::{
@@ -31,14 +33,16 @@ pub fn run() {
     let plugin_bootstrap_config = PluginBootstrapConfig::from_repo_root(repo_root, false);
     let plugin_bootstrap = crate::plugins::bootstrap_plugin_registry(&plugin_bootstrap_config);
     plugin_bootstrap.registry_state.log_to_stderr();
-    let game_config =
-        GameConfig::load_from_default_location_with_content(&plugin_bootstrap.content_registry)
-            .unwrap_or_else(|err| {
-                panic!("Failed to load game config files from ./config: {err}");
-            });
+    let game_config = GameConfig::load_from_default_location_with_content(
+        &plugin_bootstrap.content_registry,
+    )
+    .unwrap_or_else(|err| {
+        panic!("Failed to load game config files from ./config and default plugin config: {err}");
+    });
     let default_plugin_content = DefaultPluginContent::default();
 
     let asset_path = repo_root.join("assets").to_string_lossy().to_string();
+    let default_plugin_asset_path = asset_root(repo_root).to_string_lossy().to_string();
 
     let mut app = App::new();
     app.insert_resource(ClearColor(Color::BLACK))
@@ -99,6 +103,10 @@ pub fn run() {
             backend: requested_backend,
         })
         .insert_resource(world_size)
+        .register_asset_source(
+            DEFAULT_PLUGIN_ASSET_SOURCE,
+            AssetSourceBuilder::platform_default(&default_plugin_asset_path, None),
+        )
         .add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {

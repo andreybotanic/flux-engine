@@ -7,19 +7,15 @@
 ```text
 FluxEngine/
 |-- .cargo/                  # Локальные cargo alias-ы проекта.
-|-- assets/                  # Графические и шейдерные ресурсы приложения.
+|-- assets/                  # Core-графика и шейдерные ресурсы приложения.
 |   |-- fonts/               # UI-шрифты, загружаемые через AssetServer.
-|   |-- shaders/             # WGSL-шейдеры вычислений/рендера.
+|   |-- shaders/             # Core WGSL-шейдеры вычислений.
 |   `-- sprites/             # Спрайты UI и мира.
-|       |-- ui/              # Иконки инструментов и UI-элементы.
-|       `-- world/           # Тайлы мира и фоновые текстуры.
-|-- config/                  # Внешние TOML-конфиги игрового/симуляционного поведения.
+|       |-- ui/              # Core UI-элементы меню/селектов/общих инструментов.
+|       `-- world/           # Core фоновые текстуры мира.
+|-- config/                  # Core TOML-конфиги симуляции/free-gas поведения.
 |   |-- backups/             # Резервные копии конфигов.
-|   |-- gases/               # Конфиги отдельных газов.
-|   `-- structures/          # Конфиги базовых entity-параметров, appearance и HUD-метаданных стен и структур.
-|-- crates/                  # Вспомогательные Rust-crate-ы, не входящие в основную библиотеку игры.
-|   |-- flux_stage1_sample_plugin/   # Минимальный non-content sample DLL-плагин для ABI/e2e-тестов packaged plugins.
-|   `-- flux_stage7_sample_content_plugin/   # Sample content DLL-плагин stage-7, регистрирующий внешний газ.
+|   `-- simulation.toml      # Core runtime-настройки без default-plugin content.
 |-- docs/                    # Проектная документация.
 |   `-- plans/               # Плановые документы будущих крупных изменений.
 |       `-- plugin_system/   # Roadmap и этапные планы перехода на runtime-плагины.
@@ -32,7 +28,10 @@ FluxEngine/
 |   |-- debug/               # Диагностические режимы и метрики.
 |   |-- editor/              # Инструменты редактирования мира, газа и pipe-сети.
 |   |-- input/               # Обработка пользовательского ввода.
-|   |-- plugins/             # Runtime plugin contract/bootstrap, substances, default content registry, default plugin runtime, manifest, ZIP/DLL validation, ABI и startup diagnostics.
+|   |-- plugins/             # Runtime plugin facade плюс in-project plugin-папки.
+|   |   |-- default_plugin/   # Built-in locked `flux.default`: код, configs, assets и pipe-runtime.
+|   |   |-- flux_stage1_sample_plugin/        # Tracked sample non-content DLL-плагин для ABI/e2e-тестов.
+|   |   `-- flux_stage7_sample_content_plugin/ # Tracked sample content DLL-плагин с Neon gas.
 |   |-- render/              # Визуализация мира, pipe-layer и overlay-режимов.
 |   |-- simulation/          # CPU/GPU симуляция свободного газа и parity-инфраструктура.
 |   |-- ui/                  # Общие UI-компоненты и панели.
@@ -48,40 +47,17 @@ FluxEngine/
 
 - `AGENTS.md`: Правила работы агента в этом репозитории.
 - `.cargo/config.toml`: Локальный cargo alias `cargo xtask` для запуска helper-crate-а `xtask`.
+- `.gitignore`: Игнорирует runtime artifacts и новые `src/plugins/*/` in-project plugin-папки; tracked исключения — `default_plugin`, `flux_stage1_sample_plugin`, `flux_stage7_sample_content_plugin`.
 - `assets/fonts/ui_main.ttf`: Основной UI-шрифт с поддержкой кириллицы для всех текстовых элементов интерфейса.
 - `assets/shaders/gas_solver.wgsl`: GPU-шейдер газового шага (WGSL), синхронизированный с CPU-эталоном.
-- `assets/shaders/pipe_highlight_material.wgsl`: WGSL-шейдер `Material2d` для яркой подсветки труб в `F3`.
 - `assets/sprites/ui/main_menu_background.png`: Отдельный fullscreen-фон главного меню.
 - `assets/sprites/ui/select_arrow.png`: UI-спрайт стрелки для выпадающих списков.
-- `assets/sprites/ui/tool_*.png`: UI-спрайты иконок инструментов, включая отдельную иконку моста `tool_bridge.png`.
-- `assets/sprites/world/backdrop_*.png`: Фоновые текстуры мира.
-- `assets/sprites/world/pipe_mask_*.png`: Файловые спрайты труб для всех connection-mask вариантов.
-- `assets/sprites/world/pipe_silhouette_mask_*.png`: Файловые silhouette-спрайты труб для всех connection-mask вариантов.
-- `assets/sprites/world/bridge.png`: Основной world-спрайт газового моста размером `192x64`.
-- `assets/sprites/world/bridge_silhouette.png`: Силуэтный preview-спрайт газового моста размером `192x64`.
-- `assets/sprites/world/silhouette_*.png`: World-силуэты предпросмотра под курсором.
-- `assets/sprites/world/gas_in_out.png`: Базовый жёлтый overlay-спрайт вентиляции для pipe-view `F3`.
-- `assets/sprites/world/gas_in.png`: Зелёный вариант overlay-спрайта вентиляции со стрелкой только внутрь.
-- `assets/sprites/world/gas_out.png`: Белый вариант overlay-спрайта вентиляции со стрелкой только наружу.
-- `assets/sprites/world/tile_*.png`: Спрайты тайлов мира.
-- `assets/sprites/world/`: Не содержит статической fade-маски мира; затемняющая маска генерируется в runtime в `src/render/world_view.rs`.
+- `assets/sprites/ui/tool_build.png`, `tool_erase.png`, `tool_add_gas.png`, `tool_clear_gas.png`: Core UI-спрайты общих инструментов; content-specific tool icons лежат в default plugin assets.
+- `assets/sprites/world/backdrop_noise.png`: Core фоновая текстура мира; default-owned тайлы/структуры лежат в default plugin assets.
 - `Cargo.lock`: Зафиксированные версии зависимостей Cargo.
-- `Cargo.toml`: Манифест Rust-проекта, workspace и зависимости; основной crate и `xtask` входят в workspace, sample plugin crates собираются отдельно через `xtask`.
+- `Cargo.toml`: Манифест Rust-проекта, workspace и зависимости; основной crate и `xtask` входят в workspace, sample plugin crates живут под `src/plugins/*` и собираются отдельно через `xtask`.
 - `config/backups/simulation.toml.pre_tuning_20260503_174021.toml`: Резервная копия конфигурации симуляции для отката/сравнения.
-- `config/cell_types.toml`: Настройки визуала/параметров типов клеток и HUD-конфиг world-клетки для свободного газа.
-- `config/gases/*.toml`: Optional data-конфиги default plugin gas substances; при пустой папке базовые `H2/O2/CO2` берутся из built-in default plugin definitions.
-- `config/structures/*.toml`: Конфиги базовых параметров, appearance и HUD-метаданных встроенных стен и структур (`label`, `draw_priority`, `size_in_cells`, `hud.sort_order` и описания substance-контейнеров).
-- `config/simulation.toml`: Основные параметры симуляции и runtime-настройки, включая секцию `[pipe]` для pipe-runtime default plugin-а.
-- `crates/flux_stage1_sample_plugin/Cargo.toml`: Отдельный `cdylib` crate минимального рабочего non-content sample plugin-а.
-- `crates/flux_stage1_sample_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample DLL, используемый позитивным e2e-тестом.
-- `crates/flux_stage1_sample_plugin/package_template/config/sample.toml`: Минимальный config-файл sample plugin package.
-- `crates/flux_stage1_sample_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample plugin package.
-- `crates/flux_stage1_sample_plugin/src/lib.rs`: Реализация sample DLL-плагина с обязательными ABI export-ами `flux_plugin_*`.
-- `crates/flux_stage7_sample_content_plugin/Cargo.toml`: Отдельный `cdylib` crate sample content plugin-а stage-7, собираемый вне основного workspace.
-- `crates/flux_stage7_sample_content_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample content plugin-а с `content = true`.
-- `crates/flux_stage7_sample_content_plugin/package_template/config/sample.toml`: Минимальный config-файл sample content plugin package.
-- `crates/flux_stage7_sample_content_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample content plugin package.
-- `crates/flux_stage7_sample_content_plugin/src/lib.rs`: ABI v2 sample DLL, регистрирующая внешний газ `flux.sample_content.substance.neon`.
+- `config/simulation.toml`: Core-параметры симуляции/free-gas и визуализации газа; pipe-runtime настройки default plugin-а вынесены отдельно.
 - `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
 - `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
 - `docs/plans/plugin_system/00_roadmap.md`: Общий roadmap будущей миграции FluxEngine на runtime-плагины.
@@ -95,7 +71,7 @@ FluxEngine/
 - `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
 - `src/config/hud.rs`: Публичные типы runtime-конфигов HUD, включая substance-контейнеры и режимы видимости по hover, без встроенных entity-label/fallback-конфигов.
-- `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации TOML-конфигов, включая `config/structures/*.toml` и подключение gas substances из активного `ContentRegistry`.
+- `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации core/default-plugin TOML-конфигов и подключение gas substances из активного `ContentRegistry`.
 - `src/config/config_tests_block.rs`: Тесты загрузки и валидации конфигов.
 - `src/config/mod.rs`: Публичные конфиг-типы, compatibility `GasRegistry` поверх plugin-owned substance registry, runtime-реестры base/visual/layout/HUD-метаданных и входная точка загрузки конфигов.
 - `src/debug/mod.rs`: Debug-режимы, оверлейные метрики и диагностические ресурсы.
@@ -120,8 +96,29 @@ FluxEngine/
 - `src/main.rs`: Точка входа бинаря; запускает приложение.
 - `src/plugins/abi.rs`: C-compatible ABI v2: `FluxUtf8Slice`, `FluxStatus`, host/registrar structs, gas registration callback и export names обязательных DLL-функций.
 - `src/plugins/content.rs`: Content registry runtime-модель: stable `ContentId`, provider plugins, descriptors клеток/структур/overlay, HUD metadata и registered substances.
-- `src/plugins/default_plugin.rs`: Built-in locked `flux.default` content/runtime: stable IDs для cells/structures/plugin overlays/substances, generic ID facade, legacy numeric save adapters, asset/config helpers, default descriptor registration и подключение pipe-runtime модуля.
-- `src/plugins/default_plugin_descriptors_block.rs`: Внутренний блок сборки descriptors default plugin-а: layer/collision rules, footprint, rotations, sprite metadata и HUD blocks.
+- `src/plugins/default_plugin/mod.rs`: Built-in locked `flux.default` content/runtime: default descriptor registration, generic ID facade, legacy numeric save adapters и подключение pipe-runtime модуля.
+- `src/plugins/default_plugin/descriptors_block.rs`: Внутренний блок сборки descriptors default plugin-а: layer/collision rules, footprint, rotations, sprite metadata и HUD blocks.
+- `src/plugins/default_plugin/ids.rs`: Stable IDs `flux.default` для cells/structures/plugin overlays/substances, typed wrapper helpers и asset/config root helpers default plugin-а.
+- `src/plugins/default_plugin/tests.rs`: Unit-тесты фасада default plugin-а: legacy ID roundtrip, полнота registry и порядок HUD-блоков.
+- `src/plugins/default_plugin/assets/ui/tool_*.png`: Content-specific UI-иконки default plugin-а для материалов и структур.
+- `src/plugins/default_plugin/assets/shaders/pipe_highlight_material.wgsl`: Plugin-owned WGSL-шейдер `Material2d` для яркой подсветки труб в `F3/Pipes`.
+- `src/plugins/default_plugin/assets/world/pipe_mask_*.png`: Файловые спрайты труб для всех connection-mask вариантов, загружаемые через `flux_default://world/...`.
+- `src/plugins/default_plugin/assets/world/pipe_silhouette_mask_*.png`: Файловые silhouette-спрайты труб для ghost-preview.
+- `src/plugins/default_plugin/assets/world/bridge*.png`, `gas_*.png`, `silhouette_*.png`, `tile_*.png`: World-спрайты default plugin-а для стен, структур, мостов и pipe overlay.
+- `src/plugins/default_plugin/config/cell_types.toml`: Настройки визуала/параметров default-клеток и HUD-конфиг world-клетки для свободного газа.
+- `src/plugins/default_plugin/config/gases/*.toml`: Optional data-конфиги default plugin gas substances; при пустой папке базовые `H2/O2/CO2` берутся из built-in default plugin definitions.
+- `src/plugins/default_plugin/config/pipe_runtime.toml`: Runtime-настройки pipe pressure/flux/vent solver default plugin-а.
+- `src/plugins/default_plugin/config/structures/*.toml`: Конфиги appearance и HUD-метаданных встроенных стен и структур (`label`, `draw_priority`, `size_in_cells`, `hud.sort_order` и substance-контейнеры).
+- `src/plugins/flux_stage1_sample_plugin/Cargo.toml`: Отдельный `cdylib` crate минимального рабочего non-content sample plugin-а.
+- `src/plugins/flux_stage1_sample_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample DLL, используемый позитивным e2e-тестом.
+- `src/plugins/flux_stage1_sample_plugin/package_template/config/sample.toml`: Минимальный config-файл sample plugin package.
+- `src/plugins/flux_stage1_sample_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample plugin package.
+- `src/plugins/flux_stage1_sample_plugin/src/lib.rs`: Реализация sample DLL-плагина с обязательными ABI export-ами `flux_plugin_*`.
+- `src/plugins/flux_stage7_sample_content_plugin/Cargo.toml`: Отдельный `cdylib` crate sample content plugin-а stage-7.
+- `src/plugins/flux_stage7_sample_content_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample content plugin-а с `content = true`.
+- `src/plugins/flux_stage7_sample_content_plugin/package_template/config/sample.toml`: Минимальный config-файл sample content plugin package.
+- `src/plugins/flux_stage7_sample_content_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample content plugin package.
+- `src/plugins/flux_stage7_sample_content_plugin/src/lib.rs`: ABI v2 sample DLL, регистрирующая внешний газ `flux.sample_content.substance.neon`.
 - `src/plugins/diagnostics.rs`: Startup scan packaged archives, дедупликация `PluginId`, resource с результатами проверки и текст для статуса главного меню.
 - `src/plugins/id.rs`: Типизированные `PluginId`, `PluginVersion`, `PluginApiVersion` и проверка канонического формата ID.
 - `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL, ABI handshake `create/register/destroy` и сбор runtime content registration.

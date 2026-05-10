@@ -301,16 +301,20 @@ pub struct GameConfig {
 impl GameConfig {
     /// Runs `load_from_default_location` logic.
     pub fn load_from_default_location() -> Result<Self, String> {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
-        Self::load_from_root(&root)
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let core_root = repo_root.join("config");
+        let default_plugin_root = crate::plugins::default_plugin::config_root(repo_root);
+        Self::load_from_roots(&core_root, &default_plugin_root)
     }
 
     /// Loads config from the default location and includes enabled plugin content.
     pub fn load_from_default_location_with_content(
         content_registry: &ContentRegistry,
     ) -> Result<Self, String> {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
-        Self::load_from_root_with_content(&root, content_registry)
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let core_root = repo_root.join("config");
+        let default_plugin_root = crate::plugins::default_plugin::config_root(repo_root);
+        Self::load_from_roots_with_content(&core_root, &default_plugin_root, content_registry)
     }
 
     /// Runs `load_from_root` logic.
@@ -324,13 +328,32 @@ impl GameConfig {
         root: &Path,
         content_registry: &ContentRegistry,
     ) -> Result<Self, String> {
-        let simulation = read_toml::<SimulationToml>(&root.join("simulation.toml"))?;
-        let cell_types = read_toml::<CellTypesToml>(&root.join("cell_types.toml"))?;
-        let substances = load_plugin_substances(&root.join("gases"), content_registry)?;
-        let world_cell_hud =
-            load_world_cell_hud_config(&root.join("cell_types.toml"), cell_types.world_cell_hud)?;
+        Self::load_from_roots_with_content(root, root, content_registry)
+    }
+
+    /// Loads config from separate core and default plugin roots.
+    pub fn load_from_roots(core_root: &Path, default_plugin_root: &Path) -> Result<Self, String> {
+        let content_registry = crate::plugins::default_plugin::default_content_registry();
+        Self::load_from_roots_with_content(core_root, default_plugin_root, &content_registry)
+    }
+
+    /// Loads config from separate roots and appends external plugin substances.
+    pub fn load_from_roots_with_content(
+        core_root: &Path,
+        default_plugin_root: &Path,
+        content_registry: &ContentRegistry,
+    ) -> Result<Self, String> {
+        let simulation = read_toml::<SimulationToml>(&core_root.join("simulation.toml"))?;
+        let pipe = read_toml::<PipeToml>(&default_plugin_root.join("pipe_runtime.toml"))?;
+        let cell_types = read_toml::<CellTypesToml>(&default_plugin_root.join("cell_types.toml"))?;
+        let substances =
+            load_plugin_substances(&default_plugin_root.join("gases"), content_registry)?;
+        let world_cell_hud = load_world_cell_hud_config(
+            &default_plugin_root.join("cell_types.toml"),
+            cell_types.world_cell_hud,
+        )?;
         let (structure_visuals, structure_hud, cell_visual_layouts) =
-            load_visual_placement_configs(&root.join("structures"))?;
+            load_visual_placement_configs(&default_plugin_root.join("structures"))?;
 
         let gas_registry = GasRegistry::from_substances(substances)?;
 
@@ -363,15 +386,15 @@ impl GameConfig {
         };
 
         let pipe_simulation = PipeSimulationConfig {
-            cell_volume_ratio: simulation.pipe.cell_volume_ratio,
-            cell_particle_pressure_pa: simulation.pipe.cell_particle_pressure_pa,
-            pipe_flux_gain: simulation.pipe.pipe_flux_gain,
-            pipe_flux_damping: simulation.pipe.pipe_flux_damping,
-            max_pipe_flux_particles_per_tick: simulation.pipe.max_pipe_flux_particles_per_tick,
-            vent_discharge_coefficient: simulation.pipe.vent_discharge_coefficient,
-            max_vent_flux_particles_per_tick: simulation.pipe.max_vent_flux_particles_per_tick,
-            vent_choked_pressure_ratio: simulation.pipe.vent_choked_pressure_ratio,
-            pressure_epsilon_pa: simulation.pipe.pressure_epsilon_pa,
+            cell_volume_ratio: pipe.cell_volume_ratio,
+            cell_particle_pressure_pa: pipe.cell_particle_pressure_pa,
+            pipe_flux_gain: pipe.pipe_flux_gain,
+            pipe_flux_damping: pipe.pipe_flux_damping,
+            max_pipe_flux_particles_per_tick: pipe.max_pipe_flux_particles_per_tick,
+            vent_discharge_coefficient: pipe.vent_discharge_coefficient,
+            max_vent_flux_particles_per_tick: pipe.max_vent_flux_particles_per_tick,
+            vent_choked_pressure_ratio: pipe.vent_choked_pressure_ratio,
+            pressure_epsilon_pa: pipe.pressure_epsilon_pa,
         };
 
         let gas_visual = GasVisualSettings {
@@ -414,7 +437,8 @@ impl GameConfig {
     pub fn load_gas_registry_from_default_location(
         content_registry: &ContentRegistry,
     ) -> Result<GasRegistry, String> {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root = crate::plugins::default_plugin::config_root(repo_root);
         let substances = load_plugin_substances(&root.join("gases"), content_registry)?;
         GasRegistry::from_substances(substances)
     }

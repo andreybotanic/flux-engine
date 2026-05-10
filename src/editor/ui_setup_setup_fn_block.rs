@@ -50,27 +50,31 @@ fn setup_editor_ui(
     let max_color_initial_text = max_color_initial.to_string();
     let icon_set = EditorIconSet {
         build: asset_server.load("sprites/ui/tool_build.png"),
-        gases: asset_server.load(crate::plugins::default_plugin::pipe_mask_sprite_path(10)),
+        gases: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
+            crate::plugins::default_plugin::pipe_structure_kind(),
+        )),
         erase: asset_server.load("sprites/ui/tool_erase.png"),
-        pipe: asset_server.load(crate::plugins::default_plugin::pipe_mask_sprite_path(10)),
-        vent: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+        pipe: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
+            crate::plugins::default_plugin::pipe_structure_kind(),
+        )),
+        vent: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::vent_structure_kind(),
         )),
-        bridge: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+        bridge: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
         )),
         add_gas: asset_server.load("sprites/ui/tool_add_gas.png"),
         clear_gas: asset_server.load("sprites/ui/tool_clear_gas.png"),
-        source: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+        source: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::gas_source_structure_kind(),
         )),
-        sink: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+        sink: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::gas_sink_structure_kind(),
         )),
-        brick: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
+        brick: asset_server.load(crate::plugins::default_plugin::cell_tool_icon_path(
             crate::plugins::default_plugin::brick_cell_material(),
         )),
-        metal: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
+        metal: asset_server.load(crate::plugins::default_plugin::cell_tool_icon_path(
             crate::plugins::default_plugin::metal_cell_material(),
         )),
         brick_silhouette: asset_server.load(

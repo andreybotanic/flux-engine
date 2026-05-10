@@ -1,6 +1,10 @@
 ﻿# Changelog
 
 ## 2026-05-10
+- Упорядочен in-project plugin layout: built-in `flux.default` теперь хранит код, configs и plugin-owned assets внутри `src/plugins/default_plugin`, а новые подпапки `src/plugins/*/` по умолчанию игнорируются как отдельные plugin-репозитории.
+- Sample plugin crates `flux.sample_stage1` и `flux.sample_content` перенесены из `crates/` в `src/plugins/` как tracked test fixtures; `xtask` теперь ищет plugin projects в `src/plugins/*/package_template/manifest.toml`.
+- Default plugin assets загружаются через отдельный Bevy asset source `flux_default://...`, а pipe-runtime настройки вынесены из core `config/simulation.toml` в `src/plugins/default_plugin/config/pipe_runtime.toml`.
+- Pipe-highlight shader для `F3/Pipes` перенесён из core `assets/shaders` в `src/plugins/default_plugin/assets/shaders` и загружается через `flux_default://shaders/...`, потому что сам overlay принадлежит default plugin-у.
 - Реализован stage-7 plugin build workflow: добавлен `xtask` с командами `build-plugin`, `pack-plugin`, `build-all-plugins`, cargo alias `cargo xtask` и безопасная упаковка `.fluxplugin` через runtime validation.
 - ABI runtime-плагинов повышен до version `2`: content-плагины могут регистрировать gas substances через `FluxRegistrar`, а активные plugin-owned газы попадают в `GasRegistry`, dropdown выбора газа и save/load required content.
 - Добавлен sample content plugin `flux.sample_content`, который регистрирует газ Neon, и тесты для сборки/упаковки, registry integration, config loading и save/load gate с plugin-owned газом.
@@ -27,7 +31,7 @@
 - В строке статуса главного меню теперь показывается единая модель состояний плагинов (`enabled`, `disabled`, `missing`, `error`) без поломки текущего `New Game`.
 - Реализован stage-1 runtime plugin contract: новый модуль `src/plugins/` валидирует packaged `.fluxplugin`, проверяет `manifest.toml`, типизированные plugin IDs, безопасный ZIP extraction и Windows DLL ABI handshake без подключения gameplay content.
 - На старте приложения добавлен packaged plugin scan из `plugins/*.fluxplugin`: сломанные плагины мягко отклоняются без panic, а понятная причина показывается в строке статуса главного меню.
-- Добавлен минимальный рабочий sample DLL-плагин `crates/flux_stage1_sample_plugin` и позитивный plugin-contract e2e-тест: он реально собирает `cdylib`, упаковывает `.fluxplugin` и проверяет, что startup scan принимает корректный packaged plugin.
+- Добавлен минимальный рабочий sample DLL-плагин `src/plugins/flux_stage1_sample_plugin` и позитивный plugin-contract e2e-тест: он реально собирает `cdylib`, упаковывает `.fluxplugin` и проверяет, что startup scan принимает корректный packaged plugin.
 - Добавлены плановые документы `docs/plans/plugin_system/` для будущей миграции на runtime-плагины: roadmap, этапные инструкции, hot reload, dev mode, save-gate и сборка плагинов через `xtask`; код приложения на этом шаге не менялся.
 - В каждый этап plugin-system плана добавлена заметка для заказчика с ручной проверкой в игре после завершения этапа.
 - Из plugin-system планов убраны формулировки, которые могли быть прочитаны как запрет писать код при выполнении этапов.
@@ -42,8 +46,8 @@
 
 ## 2026-05-08
 - HUD инспектора клетки переработан в стек отдельных entity-блоков: свободный газ world-клетки показывается отдельно, каждая структура в клетке получила собственный блок, а название текущего overlay (`F1/F2/F3`) из HUD удалено.
-- `label` сущностей перенесён из HUD-секций в базовые конфиги `config/structures/*.toml`; те же label теперь используются и для HUD-блоков solid-материалов (`Boundary`, `Brick`, `Metal`).
-- Отображение газов в HUD стало config-driven и registry-driven: контейнеры задаются в `config/cell_types.toml` и `config/structures/*.toml`, состав смеси берётся только из `GasRegistry`, показывает `Pressure`/`Particles`, скрывает отсутствующие газы и использует dominant-mixture формат с примесями и записью `< 0.1%` для малых долей.
+- `label` сущностей перенесён из HUD-секций в базовые конфиги `src/plugins/default_plugin/config/structures/*.toml`; те же label теперь используются и для HUD-блоков solid-материалов (`Boundary`, `Brick`, `Metal`).
+- Отображение газов в HUD стало config-driven и registry-driven: контейнеры задаются в `src/plugins/default_plugin/config/cell_types.toml` и `src/plugins/default_plugin/config/structures/*.toml`, состав смеси берётся только из `GasRegistry`, показывает `Pressure`/`Particles`, скрывает отсутствующие газы и использует dominant-mixture формат с примесями и записью `< 0.1%` для малых долей.
 - Подсветка курсора усилена внутренней полупрозрачной белой пунктирной рамкой внутри наведённой клетки, а весь HUD получил общую мягкую тень.
 - Уточнена геометрия курсорной рамки: пунктир теперь проходит почти по самой границе клетки, а HUD обновляется через постоянные UI-слоты без переспавна блоков, чтобы убрать запаздывание и мерцание при движении мыши и на работающей симуляции.
 - Полупрозрачность курсорной рамки дополнительно снижена, чтобы она мягче читалась поверх мира и HUD.
@@ -74,7 +78,7 @@
 - В save/load меню добавлена прокрутка списка сохранений колёсиком мыши; для этого вынесен общий `src/ui/scroll_area.rs`, переиспользующий panel-style scrollbar для обычных UI-контейнеров.
 
 ## 2026-05-06
-- Добавлен единый каталог `config/structures/*.toml` для appearance-метаданных стен и структур: размер в клетках и `draw_priority` теперь грузятся из TOML, а основной render-order больше не задаётся специальными условиями в коде.
+- Добавлен единый каталог `src/plugins/default_plugin/config/structures/*.toml` для appearance-метаданных стен и структур: размер в клетках и `draw_priority` теперь грузятся из TOML, а основной render-order больше не задаётся специальными условиями в коде.
 - Исправлен `F3`-рендер pipe-индикаторов при создании и выборе `Gas Source` / `Gas Sink`: одинаковые параметры структуры больше не переустанавливаются каждый кадр, а порядок pipe-render систем зафиксирован явно, поэтому квадраты газа в трубах не пропадают при открытии редактора структуры.
 - Исправлено drag-построение труб: новые pipe-соединения теперь создаются только вдоль фактической линии штриха, поэтому вертикальная труба в зазоре между двумя горизонтальными больше не склеивает их автоматически по бокам.
 - Исправлена вертикальная ориентация pipe-mask спрайтов: render-mask снова использует тот же `up/down` bit-contract, что и файловые `pipe_mask_*` ассеты, поэтому трубы больше не выглядят перевёрнутыми по вертикали.
@@ -116,7 +120,7 @@
 - Исправлен символ вентиляции в `F3`: вместо смешанного прямоугольного паттерна теперь рисуется отдельный жёлтый квадрат с двунаправленной стрелкой на прозрачном фоне.
 - В `F3` трубы дополнительно высветляются отдельным overlay-filter слоем поверх обычных pipe-спрайтов, поэтому pipe-сеть читается значительно светлее без потери формы.
 - Разрешено строить трубы внутри обычных непроницаемых клеток (кроме `boundary`); в обычном мире они теперь рисуются под solid-тайлами, а в `F3` поднимаются поверх них и подсвечиваются почти до белого.
-- Перерисован `assets/sprites/world/silhouette_vent.png`: silhouette вентиляции переведён на контурный вариант с прозрачной заливкой.
+- Перерисован `src/plugins/default_plugin/assets/world/silhouette_vent.png`: silhouette вентиляции переведён на контурный вариант с прозрачной заливкой.
 - Добавлена MVP-подсистема газовых труб: отдельный `PipeGrid`, вентиляции, drag-построение, разрезание соединений ножницами по `X`, pipe-overlay `F3` и визуализация газа/потока внутри труб.
 - Исправлен editor UX для труб: `Gases` перенесены на основную панель инструментов как отдельная кнопка с подпaнелью выбора `Pipe/Vent`; добавлены собственные иконки и силуэты для трубы и вентиляции.
 - Pipe-рендер переведён с runtime-рисования на файловые world-спрайты для всех вариантов соединений; silhouette-ассеты перенесены из `ui` в `world`, а спавн новых pipe/vent-визуалов теперь сразу учитывает текущий overlay `F1/F2/F3`.
@@ -134,7 +138,7 @@
 - Уменьшена плотность светлых вкраплений в `tile_boundary`: тёмный фон снова доминирует визуально (более половины площади тайла).
 - Силуэты строительства `Brick/Metal` перегенерированы на основе реальных тайлов как контурные маски: без внутренней заливки, все линии белые.
 - Исправлен размер ghost-силуэта под курсором: `BlueprintGhost` теперь рисуется в полный размер клетки (`CELL_SIZE`), без отступа.
-- Исправлен ghost-предпросмотр строительства: для `Brick/Metal` под курсором снова используются silhouette-спрайты (`assets/sprites/world/silhouette_brick.png`, `assets/sprites/world/silhouette_metal.png`), а не обычные world-тайлы.
+- Исправлен ghost-предпросмотр строительства: для `Brick/Metal` под курсором снова используются silhouette-спрайты (`src/plugins/default_plugin/assets/world/silhouette_brick.png`, `src/plugins/default_plugin/assets/world/silhouette_metal.png`), а не обычные world-тайлы.
 - Перегенерирован `tile_boundary` в более тёмный стиль: очень тёмная база (`~#202020`) + светлые вкрапления (`~#606060..#A0A0A0`) разных форм (эллипсы, штрихи, «молнии») с бесшовным тайлингом.
 - Скорректирован fade вокруг мира: ширина перехода установлена в `4` клетки, к внешней границе 4-го border-слоя маска полностью непрозрачна (`alpha=1.0`).
 - Перегенерированы бесшовные тайлы материалов мира: `tile_brick` (кирпичная кладка), `tile_metal` (металлические панели), `tile_boundary` (более тёмный тех-материал); устранены видимые швы при тайлинге.
@@ -156,9 +160,9 @@
 - Добавлены 4 внешних визуальных слоя `border` вокруг мира с fade-переходом к черному фону за пределами поля.
 - Перегенерированы спрайты клеток в формате `64x64` и обновлен фон игрового мира (`backdrop_noise`) на более темную версию.
 - HUD инспектора клетки отодвинут от курсора и получил автоперекладывание на противоположную сторону возле границ экрана.
-- В `docs/project_structure.md` для повторяющихся описаний файлов добавлены маски/плейсхолдеры (например, `assets/sprites/ui/silhouette_*.png`, `assets/sprites/ui/tool_*.png`, `config/gases/*.toml`).
+- В `docs/project_structure.md` для повторяющихся описаний файлов добавлены маски/плейсхолдеры (например, default-plugin `assets/world/silhouette_*.png`, `assets/ui/tool_*.png`, `config/gases/*.toml`).
 - Переформатирован `docs/project_structure.md`: сначала идёт ASCII-дерево папок с зонами ответственности, затем отдельный раздел с описанием файлов.
-- Обновлён `docs/project_structure.md`: повторяющиеся описания схлопнуты на уровень папок (например, `assets/sprites/ui/`, `assets/sprites/world/`, `config/gases/`).
+- Обновлён `docs/project_structure.md`: повторяющиеся описания схлопнуты на уровень папок (например, core `assets/sprites/ui/`, core `assets/sprites/world/`, default-plugin `config/gases/`).
 - Добавлен `docs/project_structure.md` с краткой зоной ответственности каждого файла репозитория.
 - В `AGENTS.md` зафиксирован единый формат: описание ролей файлов ведётся в `docs/project_structure.md` и должно обновляться при любых изменениях структуры файлов.
 - Выполнен проход по длинным файлам `src` с декомпозицией на отдельные `*_block.rs` модули там, где это можно сделать без изменения поведения (включая `save`, `simulation`, `render`, `ui`, `config`, `editor`).

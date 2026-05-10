@@ -587,7 +587,8 @@ mod tests {
 
     fn sample_plugin_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("crates")
+            .join("src")
+            .join("plugins")
             .join("flux_stage1_sample_plugin")
     }
 

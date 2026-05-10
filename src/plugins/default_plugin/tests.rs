@@ -1,0 +1,97 @@
+use super::*;
+
+#[test]
+fn default_plugin_content_ids_roundtrip_legacy_enums() {
+    for material in [
+        crate::plugins::default_plugin::boundary_cell_material(),
+        crate::plugins::default_plugin::brick_cell_material(),
+        crate::plugins::default_plugin::metal_cell_material(),
+    ] {
+        let id = cell_material_content_id(material);
+        assert_eq!(cell_material_from_content_id(&id), Some(material));
+    }
+
+    for kind in [
+        crate::plugins::default_plugin::pipe_structure_kind(),
+        crate::plugins::default_plugin::vent_structure_kind(),
+        crate::plugins::default_plugin::gas_source_structure_kind(),
+        crate::plugins::default_plugin::gas_sink_structure_kind(),
+        crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+    ] {
+        let id = structure_kind_content_id(kind);
+        assert_eq!(structure_kind_from_content_id(&id), Some(kind));
+    }
+
+    for mode in [OverlayMode::Main, OverlayMode::Gas, pipes_overlay_mode()] {
+        let id = overlay_mode_content_id(mode);
+        assert_eq!(overlay_mode_from_content_id(&id), Some(mode));
+    }
+}
+
+#[test]
+fn default_plugin_registry_contains_all_builtin_content() {
+    let registry = default_content_registry();
+    assert!(registry
+        .provider_plugins()
+        .contains(&PluginId::default_plugin()));
+    assert_eq!(registry.cells().len(), 3);
+    assert_eq!(registry.structures().len(), 5);
+    assert_eq!(registry.overlays().len(), 3);
+    assert_eq!(registry.substances().len(), 3);
+    assert!(registry
+        .substances()
+        .contains_key(&SubstanceId::parse(SUBSTANCE_H2_ID).expect("h2 id")));
+    assert!(registry
+        .world_cell_hud()
+        .expect("world hud")
+        .block
+        .substance_containers
+        .iter()
+        .any(|container| container.backing == ContainerBacking::WorldCell));
+}
+
+#[test]
+fn default_plugin_bridge_keeps_legacy_shape_and_rotations() {
+    let descriptor = structure_content_descriptor(
+        crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+    );
+    assert_eq!(
+        descriptor.allowed_rotations,
+        vec![StructureRotation::Deg0, StructureRotation::Deg90]
+    );
+    assert_eq!(
+        descriptor
+            .layer_descriptor(StructureRotation::Deg0)
+            .size_in_cells(),
+        UVec2::new(3, 1)
+    );
+    assert_eq!(
+        descriptor
+            .layer_descriptor(StructureRotation::Deg90)
+            .size_in_cells(),
+        UVec2::new(1, 3)
+    );
+}
+
+#[test]
+fn default_plugin_hud_order_matches_legacy_blocks() {
+    let structures = default_structure_descriptors();
+    let orders = structures
+        .iter()
+        .map(|descriptor| (descriptor.kind, descriptor.hud.sort_order))
+        .collect::<Vec<_>>();
+    assert!(orders.contains(&(crate::plugins::default_plugin::pipe_structure_kind(), 10)));
+    assert!(orders.contains(&(
+        crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+        20
+    )));
+    assert!(orders.contains(&(crate::plugins::default_plugin::vent_structure_kind(), 30)));
+    assert!(orders.contains(&(
+        crate::plugins::default_plugin::gas_source_structure_kind(),
+        40
+    )));
+    assert!(orders.contains(&(
+        crate::plugins::default_plugin::gas_sink_structure_kind(),
+        50
+    )));
+}

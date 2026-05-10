@@ -16,7 +16,7 @@
 - новый workspace member `xtask/`;
 - root `Cargo.toml`;
 - `xtask/src/main.rs`;
-- возможная папка `plugins_src/` для исходников плагинов;
+- базовая папка `src/plugins/<plugin_crate>/` для in-project исходников плагинов;
 - build output folders `target/plugins/` или `dist/plugins/`;
 - `docs/technical_overview.md`;
 - `docs/project_structure.md`.
@@ -55,7 +55,7 @@
 7. Команды должны возвращать non-zero exit code при ошибке, чтобы их можно было использовать в CI.
 
 8. Для приёмки этапа нужен минимальный видимый content-плагин:
-   - завести sample crate в `crates/flux_stage7_sample_content_plugin`;
+   - завести sample crate в `src/plugins/flux_stage7_sample_content_plugin`;
    - выставить в manifest `content = true` и текущий `api_version`;
    - через ABI registrar зарегистрировать хотя бы один новый газ;
    - проверить, что после сборки, упаковки и включения плагина газ появляется в игровых dropdown.

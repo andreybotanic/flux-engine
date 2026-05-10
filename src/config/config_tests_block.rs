@@ -37,17 +37,6 @@ buoyancy_gain = 3.2
 buoyancy_alpha = 1.0
 buoyancy_force_cap = 0.30
 
-[pipe]
-cell_volume_ratio = 25.0
-cell_particle_pressure_pa = 1.0
-pipe_flux_gain = 180.0
-pipe_flux_damping = 0.82
-max_pipe_flux_particles_per_tick = 2000.0
-vent_discharge_coefficient = 110.0
-max_vent_flux_particles_per_tick = 1500.0
-vent_choked_pressure_ratio = 0.53
-pressure_epsilon_pa = 0.01
-
 [visual]
 gamma = 1.0
 max_particles_for_max_color = 1000
@@ -58,6 +47,22 @@ f1_alpha = 0.88
 "#,
         )
         .expect("write simulation");
+
+        fs::write(
+            root.join("pipe_runtime.toml"),
+            r#"
+cell_volume_ratio = 25.0
+cell_particle_pressure_pa = 1.0
+pipe_flux_gain = 180.0
+pipe_flux_damping = 0.82
+max_pipe_flux_particles_per_tick = 2000.0
+vent_discharge_coefficient = 110.0
+max_vent_flux_particles_per_tick = 1500.0
+vent_choked_pressure_ratio = 0.53
+pressure_epsilon_pa = 0.01
+"#,
+        )
+        .expect("write pipe runtime");
 
         fs::write(
             root.join("cell_types.toml"),

@@ -47,7 +47,7 @@ impl From<zip::result::ZipError> for XtaskError {
     }
 }
 
-/// One plugin project discovered under `crates/<plugin_crate>/`.
+/// One plugin project discovered under `src/plugins/<plugin_crate>/`.
 #[derive(Clone, Debug)]
 pub struct PluginProject {
     pub plugin_id: PluginId,
@@ -95,16 +95,16 @@ pub fn run_cli(repo_root: &Path, args: &[String]) -> Result<(), XtaskError> {
 
 /// Discovers plugin projects in deterministic `PluginId` order.
 pub fn discover_plugin_projects(repo_root: &Path) -> Result<Vec<PluginProject>, XtaskError> {
-    let crates_root = repo_root.join("crates");
-    if !crates_root.exists() {
+    let projects_root = repo_root.join("src").join("plugins");
+    if !projects_root.exists() {
         return Ok(Vec::new());
     }
 
     let mut projects = Vec::new();
-    for entry in fs::read_dir(&crates_root).map_err(|error| {
+    for entry in fs::read_dir(&projects_root).map_err(|error| {
         XtaskError::new(format!(
-            "failed to read crates root '{}': {}",
-            crates_root.display(),
+            "failed to read in-project plugins root '{}': {}",
+            projects_root.display(),
             error
         ))
     })? {
@@ -262,12 +262,12 @@ fn reject_duplicate_plugin_ids(projects: &[PluginProject]) -> Result<(), XtaskEr
         .into_iter()
         .filter(|(_, projects)| projects.len() > 1)
         .map(|(id, projects)| {
-            let crates = projects
+            let project_names = projects
                 .iter()
                 .map(|project| project.crate_name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{} declared by {}", id, crates)
+            format!("{} declared by {}", id, project_names)
         })
         .collect::<Vec<_>>();
     if duplicates.is_empty() {
@@ -457,12 +457,12 @@ mod tests {
                 .expect("clock")
                 .as_nanos()
         ));
-        fs::create_dir_all(root.join("crates")).expect("create temp repo");
+        fs::create_dir_all(root.join("src/plugins")).expect("create temp repo");
         root
     }
 
     fn write_project_manifest(root: &Path, crate_name: &str, plugin_id: &str) {
-        let project = root.join("crates").join(crate_name);
+        let project = root.join("src/plugins").join(crate_name);
         fs::create_dir_all(project.join("package_template")).expect("create package template");
         fs::write(
             project.join("package_template/manifest.toml"),

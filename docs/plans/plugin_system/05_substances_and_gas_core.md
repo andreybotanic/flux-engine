@@ -32,8 +32,8 @@
 
 Вероятные файлы:
 - `src/plugins/content.rs`;
-- `src/plugins/default_plugin.rs`;
-- `src/plugins/default_plugin_descriptors_block.rs`;
+- `src/plugins/default_plugin/mod.rs`;
+- `src/plugins/default_plugin/descriptors_block.rs`;
 - `src/config/mod.rs`;
 - `src/config/config_loader_block.rs`;
 - `src/simulation/gas.rs`;
@@ -91,7 +91,7 @@
    - `flux.default.substance.h2`;
    - `flux.default.substance.o2`;
    - `flux.default.substance.co2`.
-2. Перенеси текущие данные `H2/O2/CO2` из `config/gases/*.toml` в default plugin registration path.
+2. Перенеси текущие данные `H2/O2/CO2` из `src/plugins/default_plugin/config/gases/*.toml` в default plugin registration path.
 3. Если TOML-файлы пока нужны как source данных, сделай это явно: config loader читает их только для default plugin descriptors, а не как "газы ядра".
 4. Не меняй gameplay-значения:
    - label;

@@ -13,7 +13,8 @@ use bevy::{
     sprite::{AlphaMode2d, Material2d, Material2dPlugin, MeshMaterial2d},
 };
 
-const PIPE_HIGHLIGHT_SHADER_ASSET_PATH: &str = "shaders/pipe_highlight_material.wgsl";
+const PIPE_HIGHLIGHT_SHADER_ASSET_PATH: &str =
+    "flux_default://shaders/pipe_highlight_material.wgsl";
 
 #[derive(Clone, ShaderType, Debug)]
 struct PipeHighlightUniform {
