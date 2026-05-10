@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 
 use bevy::prelude::{IVec2, Resource, UVec2};
 
+pub mod pipe_runtime;
+
 use crate::{
     config::{
         ConfiguredPipeNodeKind, ContainerBacking, HoverVisibility, HudBlockConfig,
@@ -12,7 +14,7 @@ use crate::{
             CellContentDescriptor, ContentId, ContentRegistry, LegacyStorageDescriptor,
             OverlayContentDescriptor, SpriteMetadata, StructureContentDescriptor,
         },
-        PluginId,
+        PluginId, SubstanceDefinition, SubstanceId,
     },
     render::OverlayMode,
     world::{
@@ -46,6 +48,12 @@ pub const OVERLAY_MAIN_ID: &str = "flux.default.overlay.main";
 pub const OVERLAY_GAS_ID: &str = "flux.default.overlay.gas";
 /// Stable content id for the default pipes overlay mode.
 pub const OVERLAY_PIPES_ID: &str = "flux.default.overlay.pipes";
+/// Stable substance id for default hydrogen gas.
+pub const SUBSTANCE_H2_ID: &str = "flux.default.substance.h2";
+/// Stable substance id for default oxygen gas.
+pub const SUBSTANCE_O2_ID: &str = "flux.default.substance.o2";
+/// Stable substance id for default carbon dioxide gas.
+pub const SUBSTANCE_CO2_ID: &str = "flux.default.substance.co2";
 
 /// Resource snapshot of the built-in default plugin content descriptors.
 #[derive(Resource, Clone, Debug)]
@@ -93,6 +101,32 @@ pub fn register_default_content(registry: &mut ContentRegistry) {
     for descriptor in default_overlay_descriptors() {
         registry.register_overlay(descriptor);
     }
+    for definition in default_substance_definitions() {
+        registry.register_substance(definition);
+    }
+}
+
+/// Returns every built-in gas substance definition registered by `flux.default`.
+pub fn default_substance_definitions() -> Vec<SubstanceDefinition> {
+    vec![
+        default_gas_substance(SUBSTANCE_H2_ID, "h2", "Hydrogen", 2.016, [0.82, 0.20, 0.90]),
+        default_gas_substance(SUBSTANCE_O2_ID, "o2", "Oxygen", 31.998, [0.00, 0.86, 0.86]),
+        default_gas_substance(
+            SUBSTANCE_CO2_ID,
+            "co2",
+            "Carbon dioxide",
+            44.009,
+            [0.58, 0.58, 0.58],
+        ),
+    ]
+}
+
+/// Builds the stable default plugin substance id for a legacy short gas alias.
+pub fn default_substance_id_for_alias(alias: &str) -> Result<SubstanceId, String> {
+    if alias.trim().is_empty() || alias.contains('.') {
+        return SubstanceId::parse(alias);
+    }
+    SubstanceId::parse(&format!("flux.default.substance.{alias}"))
 }
 
 /// Returns the default world-cell HUD descriptor.
@@ -446,6 +480,10 @@ mod tests {
         assert_eq!(registry.cells().len(), 3);
         assert_eq!(registry.structures().len(), 5);
         assert_eq!(registry.overlays().len(), 3);
+        assert_eq!(registry.substances().len(), 3);
+        assert!(registry
+            .substances()
+            .contains_key(&SubstanceId::parse(SUBSTANCE_H2_ID).expect("h2 id")));
         assert!(registry
             .world_cell_hud()
             .expect("world hud")

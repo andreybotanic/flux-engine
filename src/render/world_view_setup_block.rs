@@ -680,7 +680,7 @@ fn pipe_overlay_slot_offset(slot: usize, total_slots: usize) -> Vec2 {
 }
 
 fn pipe_overlay_slot_size(
-    config: &crate::simulation::PipeSimulationConfig,
+    config: &crate::plugins::default_plugin::pipe_runtime::PipeSimulationConfig,
     total_particles: u32,
     total_slots: usize,
 ) -> f32 {

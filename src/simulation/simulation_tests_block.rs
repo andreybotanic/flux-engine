@@ -1,12 +1,14 @@
 #[cfg(test)]
 mod tests {
+    use crate::config::{GasDefinition, GasRegistry};
+    use crate::plugins::default_plugin::pipe_runtime::{
+        apply_gas_structures_pre_step, pipe_flow_reset_needed,
+    };
     use crate::simulation::backend::{SimulationBackend, SimulationBackendConfig};
     use crate::simulation::gas::GasField;
-    use crate::config::{GasDefinition, GasRegistry};
     use crate::world::{grid::WorldGrid, structures::PlacedStructureMap};
     use super::{
-        abort_on_gpu_runtime_error, apply_gas_structures_pre_step, effective_target_hz,
-        pipe_flow_reset_needed, SimulationRateConfig, SimulationSpeed,
+        abort_on_gpu_runtime_error, effective_target_hz, SimulationRateConfig, SimulationSpeed,
     };
 
     fn test_registry() -> GasRegistry {

@@ -75,6 +75,24 @@ fn content_id(raw: &str) -> ContentId {
     ContentId::parse(raw).expect("default plugin content id must stay valid")
 }
 
+fn default_gas_substance(
+    raw_id: &str,
+    alias: &str,
+    label: &str,
+    molecular_mass: f32,
+    color: [f32; 3],
+) -> SubstanceDefinition {
+    SubstanceDefinition::gas(
+        SubstanceId::parse(raw_id).expect("default plugin substance id must stay valid"),
+        PluginId::default_plugin(),
+        label,
+        molecular_mass,
+        color,
+        vec![alias.to_string()],
+    )
+    .expect("default plugin substance definition must stay valid")
+}
+
 fn sprite(
     image_path: &str,
     silhouette_path: Option<&str>,
@@ -248,4 +266,3 @@ fn bridge_connection_local_cells(rotation: StructureRotation) -> Vec<IVec2> {
         }
     }
 }
-

@@ -1,8 +1,10 @@
 use crate::{
-    config::{GasDefinition, GasRegistry},
+    config::GasRegistry,
+    plugins::default_plugin::{
+        default_substance_definitions, pipe_runtime::apply_gas_structures_pre_step,
+    },
     simulation::{
-        apply_gas_structures_pre_step, gas::GasField, gpu_solver::GpuGasSolver,
-        GasSimulationConfig, SimulationStep, SolverTuning,
+        gas::GasField, gpu_solver::GpuGasSolver, GasSimulationConfig, SimulationStep, SolverTuning,
     },
     world::{
         grid::{is_boundary, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
@@ -28,7 +30,7 @@ pub struct ParityMetrics {
     pub mean_abs_error: f32,
     pub p95_abs_error: f32,
     pub max_abs_error: f32,
-    pub mass_rel_errors: [f32; 3],
+    pub mass_rel_errors: Vec<f32>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -67,27 +69,7 @@ pub const PARITY_SCENARIOS: [ScenarioSpec; 3] = [
 ];
 
 fn test_registry_three_gases() -> GasRegistry {
-    GasRegistry::new(vec![
-        GasDefinition {
-            id: "h2".to_string(),
-            label: "Hydrogen".to_string(),
-            color: [0.65, 0.85, 1.0],
-            molecular_mass: 2.016,
-        },
-        GasDefinition {
-            id: "o2".to_string(),
-            label: "Oxygen".to_string(),
-            color: [0.6, 0.8, 1.0],
-            molecular_mass: 31.998,
-        },
-        GasDefinition {
-            id: "co2".to_string(),
-            label: "Carbon Dioxide".to_string(),
-            color: [0.9, 0.6, 0.4],
-            molecular_mass: 44.009,
-        },
-    ])
-    .expect("test gas registry")
+    GasRegistry::from_substances(default_substance_definitions()).expect("test gas registry")
 }
 
 fn tuned_config() -> GasSimulationConfig {

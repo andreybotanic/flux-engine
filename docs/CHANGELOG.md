@@ -1,6 +1,11 @@
 ﻿# Changelog
 
 ## 2026-05-10
+- Debug Panel больше не считает mass error отдельно для H2/O2/CO2: диагностический drift теперь агрегируется по сумме всех gas species из текущего registry.
+- Реализован stage-5 substance layer: `H2/O2/CO2` регистрируются default plugin-ом как plugin-owned substances со stable IDs, а `GasRegistry` работает как compatibility wrapper над `SubstanceRegistry`.
+- CPU/GPU free-gas path и perf/parity-инструменты очищены от runtime-ограничения на три газа: compact order и molecular masses берутся из registry, а GPU читает массы через dynamic storage buffer.
+- Уточнён stage-5 план plugin-system: в ядре остаётся только generic физика свободного газа, а pipe pressure / pipe gas logic закреплена за default plugin как content-bound runtime.
+- Дочищен перенос pipe-runtime в `src/plugins/default_plugin/pipe_runtime*`: старые ссылки на `simulation::pipes` заменены на default plugin runtime API, а форматтер давления стабилизирован для release-тестов.
 - Реализован stage-4 перенос встроенного игрового content в locked default plugin `flux.default`: добавлен content registry с stable content IDs, descriptor-ами клеток/структур/overlay/HUD и adapter-слой к текущим runtime enum без изменения save schema.
 - Config/render/editor/HUD теперь получают built-in metadata через descriptors default plugin-а, сохраняя прежние asset paths, визуальные приоритеты, footprint-ы и порядок HUD-блоков.
 - Исправлено read-only отображение плагинов в `Game Menu`: вместо переключателей теперь показываются обычные текстовые состояния `On`/`Off`.
@@ -48,7 +53,7 @@
 - Pipe runtime окончательно переведён на pressure+flux модель без pipe-capacity: `PipeGasField` хранит только частицы по stable node keys, а remembered edge-flow вынесен в runtime-only `PipeFluxField`.
 - `PipeSimulationConfig` очищен от legacy-параметров вместимости/локального transfer-limit и теперь задаёт pressure-конверсию, pipe flux, vent throughput и численную устойчивость новой модели.
 - Внутренний solver труб переписан на semi-implicit component solve с log pressure ratio, remembered edge flux и same-tick правилом `pipe hop first, vent refill after`, чтобы длинные магистрали, dead-end и ветвления работали одной и той же физикой.
-- Общие builders pipe-сценариев вынесены в `src/simulation/pipes/scenarios.rs`, а acceptance/regression тесты новой модели собраны в `src/simulation/pipes/tests.rs`.
+- Общие builders pipe-сценариев вынесены в `src/plugins/default_plugin/pipe_runtime/scenarios.rs`, а acceptance/regression тесты новой модели собраны в `src/plugins/default_plugin/pipe_runtime/tests.rs`.
 - Для самых долгих pipe-сценариев добавлены быстрые `_smoke` версии с коротким tick-budget и ослабленными ожиданиями, чтобы сначала гонять минутный sanity-check, а уже потом полные acceptance-тесты.
 - HUD и `F3` переведены на pressure-first отображение: инспектор клетки показывает частицы и давление для world/pipe, а flow-пакеты меньше `5` частиц больше не рисуются как визуальный шум.
 - В debug-панель добавлено отдельное время расчёта труб (`Pipe ms: last/avg`) поверх общих perf-метрик simulation step.
@@ -56,7 +61,7 @@
 ## 2026-05-07
 - Pipe runtime перепроектирован на pressure-driven solver: `world↔vent` теперь считает давление как `particles / volume`, а объём pipe-сегмента по умолчанию в `25` раз меньше объёма world-клетки.
 - В `config/simulation.toml` добавлена секция `[pipe]` с параметрами pipe-сети (`cell_volume_ratio`, `segment_capacity_particles`, `edge_transfer_per_tick`, `vent_transfer_per_tick`, `pressure_epsilon`).
-- Pipe pre-step вынесен в отдельный модуль `src/simulation/pipes/solver.rs`; `pipes.rs` оставлен фасадом storage/visual API и тестов.
+- Pipe pre-step вынесен в отдельный модуль `src/plugins/default_plugin/pipe_runtime/solver.rs`; `pipes.rs` оставлен фасадом storage/visual API и тестов.
 - Исправлены ключевые сценарии труб: сильный источник теперь заполняет тупиковую линию плотным фронтом, труба умеет дренироваться после падения давления, а single-vent vacuum снова тянет газ не только из первой клетки, а из всей connected component.
 - Добавлены acceptance/regression тесты для длинной магистрали `100k -> vacuum`, dead-end трубы, двухкомнатного выравнивания, П-образной параллельной ветки и star-сети из трёх комнат.
 - Добавлен служебный генератор `src/bin/generate_pipe_scenario_saves.rs`, который создаёт отдельные стартовые save-slots для пяти эталонных pipe-сценариев, чтобы их можно было открыть и проверить вручную в игре.

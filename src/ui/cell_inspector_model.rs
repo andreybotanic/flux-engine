@@ -6,15 +6,13 @@ use crate::{
         HoverVisibility, StructureHudConfigMap, StructureVisualConfigMap, SubstanceContainerConfig,
         SubstanceKind, WorldCellHudConfig,
     },
-    simulation::{
-        gas::GasField,
-        pipes::{
-            pipe_cell_display_blocks_with_transfers,
-            pressure::{format_pressure_pa, pipe_pressure_pa, world_pressure_pa},
-            PipeContainerKind, PipeFlowVisualState, PipeGasField,
-        },
+    plugins::default_plugin::pipe_runtime::{
+        pipe_cell_display_blocks_with_transfers,
+        pressure::{format_pressure_pa, pipe_pressure_pa, world_pressure_pa},
         PipeSimulationConfig,
     },
+    plugins::default_plugin::pipe_runtime::{PipeContainerKind, PipeFlowVisualState, PipeGasField},
+    simulation::gas::GasField,
     world::{
         grid::{CellMaterial, WorldGrid},
         structures::{bridge_center_cell, PlacedStructure, PlacedStructureMap},
@@ -458,13 +456,11 @@ mod tests {
             StructureVisualConfigMap, SubstanceContainerConfig, SubstanceKind,
             VisualPlacementConfig, WorldCellHudConfig,
         },
-        simulation::{
-            gas::GasField,
-            pipes::{
-                PipeFlowVisualState, PipeGasField, PipeTransferRecord, PipeTransferVisualPath,
-            },
-            PipeSimulationConfig,
+        plugins::default_plugin::pipe_runtime::{
+            PipeFlowVisualState, PipeGasField, PipeSimulationConfig, PipeTransferRecord,
+            PipeTransferVisualPath,
         },
+        simulation::gas::GasField,
         world::{
             grid::{CellMaterial, WorldGrid},
             structures::{PlacedStructureMap, StructureKind, StructureRotation},

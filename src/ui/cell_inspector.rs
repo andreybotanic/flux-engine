@@ -8,12 +8,11 @@ use crate::{
     },
     editor::{is_cursor_over_ui, ActiveEditorTool, MainMenuState},
     input::camera::MainCamera,
-    save::WorldLoadState,
-    simulation::{
-        gas::GasField,
-        pipes::{PipeFlowVisualState, PipeGasField},
-        GasSimulationConfig,
+    plugins::default_plugin::pipe_runtime::{
+        PipeFlowVisualState, PipeGasField, PipeSimulationConfig,
     },
+    save::WorldLoadState,
+    simulation::gas::GasField,
     ui::palette,
     ui::panels::PanelManager,
     world::{
@@ -98,7 +97,7 @@ pub(crate) fn update_cell_inspector(
     ),
     gas_state: (
         Res<GasField>,
-        Res<GasSimulationConfig>,
+        Res<PipeSimulationConfig>,
         Res<GasRegistry>,
         Res<WorldCellHudConfig>,
         Res<CellVisualPlacementConfigMap>,
@@ -121,7 +120,7 @@ pub(crate) fn update_cell_inspector(
     let (active_tool, main_menu, world_load_state, debug_mode, panel_manager) = ui_state;
     let (
         gas,
-        config,
+        pipe_config,
         gas_registry,
         world_cell_hud,
         cell_visual_layouts,
@@ -172,7 +171,7 @@ pub(crate) fn update_cell_inspector(
         cell,
         &world,
         &gas,
-        &config.pipe,
+        &pipe_config,
         &gas_registry,
         &world_cell_hud,
         &cell_visual_layouts,

@@ -4,16 +4,134 @@ use bevy::prelude::*;
 
 use crate::{
     config::GasRegistry,
-    simulation::gas::GasField,
+    save::WorldLoadState,
+    simulation::{
+        backend::{SimulationBackend, SimulationBackendConfig},
+        gas::GasField,
+        GpuRuntimeState, SimulationControl, SimulationPerfStats, SimulationSet,
+    },
     world::{
         grid::{WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
-        structures::{bridge_center_cell, PlacedStructureMap, StructureKind, StructureRotation},
+        structures::{
+            bridge_center_cell, PlacedStructureMap, StructureKind, StructureParams,
+            StructureRotation,
+        },
     },
 };
 
 pub mod pressure;
 pub mod scenarios;
 mod solver;
+
+/// Registers the built-in default plugin runtime systems for pipe-owned behavior.
+pub struct DefaultPluginRuntimePlugin;
+
+impl Plugin for DefaultPluginRuntimePlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<PipeSimulationConfig>()
+            .init_resource::<PipeFlowVisualState>()
+            .add_systems(Startup, initialize_pipe_state_from_registry)
+            .add_systems(Update, clear_stale_pipe_flow_on_pause_transition)
+            .add_systems(
+                FixedUpdate,
+                run_default_plugin_pre_gas_step.in_set(SimulationSet::PluginPreStep),
+            );
+    }
+}
+
+fn initialize_pipe_state_from_registry(mut commands: Commands, registry: Res<GasRegistry>) {
+    commands.insert_resource(PipeGasField::from_registry(&registry));
+    commands.insert_resource(PipeFluxField::default());
+}
+
+pub(crate) fn pipe_flow_reset_needed(previous_paused: Option<bool>, current_paused: bool) -> bool {
+    previous_paused
+        .map(|previous| previous != current_paused)
+        .unwrap_or(false)
+}
+
+fn clear_stale_pipe_flow_on_pause_transition(
+    control: Res<SimulationControl>,
+    mut pipe_flow_visuals: ResMut<PipeFlowVisualState>,
+    mut previous_paused: Local<Option<bool>>,
+) {
+    if pipe_flow_reset_needed(*previous_paused, control.paused) {
+        pipe_flow_visuals.transfers.clear();
+    }
+    *previous_paused = Some(control.paused);
+}
+
+fn run_default_plugin_pre_gas_step(
+    control: Res<SimulationControl>,
+    backend: Res<SimulationBackendConfig>,
+    world_load_state: Res<WorldLoadState>,
+    config: Res<PipeSimulationConfig>,
+    structures: Res<PlacedStructureMap>,
+    mut pipe_gas: ResMut<PipeGasField>,
+    mut pipe_flux: ResMut<PipeFluxField>,
+    mut pipe_flow_visuals: ResMut<PipeFlowVisualState>,
+    mut gas: ResMut<GasField>,
+    world: Res<WorldGrid>,
+    mut perf: ResMut<SimulationPerfStats>,
+    mut gpu_state: ResMut<GpuRuntimeState>,
+) {
+    if !world_load_state.has_world || control.paused {
+        return;
+    }
+
+    let pipe_started_at = std::time::Instant::now();
+    let changed_by_pipes = apply_pipe_network_step(
+        &structures,
+        &mut pipe_gas,
+        &mut pipe_flux,
+        &mut gas,
+        &world,
+        &mut pipe_flow_visuals,
+        &config,
+    );
+    let pipe_elapsed_ms = pipe_started_at.elapsed().as_secs_f32() * 1000.0;
+    perf.last_pipe_step_ms = pipe_elapsed_ms;
+    perf.avg_pipe_step_ms = if perf.avg_pipe_step_ms <= f32::EPSILON {
+        pipe_elapsed_ms
+    } else {
+        perf.avg_pipe_step_ms * 0.9 + pipe_elapsed_ms * 0.1
+    };
+
+    let changed_by_structures = apply_gas_structures_pre_step(&structures, &mut gas, &world);
+    if (changed_by_pipes || changed_by_structures) && backend.backend == SimulationBackend::Gpu {
+        gpu_state.mark_needs_full_upload();
+    }
+}
+
+#[derive(Resource, Clone, Copy)]
+/// Stores configuration for the pressure-driven pipe simulation owned by `flux.default`.
+pub struct PipeSimulationConfig {
+    pub cell_volume_ratio: f32,
+    pub cell_particle_pressure_pa: f32,
+    pub pipe_flux_gain: f32,
+    pub pipe_flux_damping: f32,
+    pub max_pipe_flux_particles_per_tick: f32,
+    pub vent_discharge_coefficient: f32,
+    pub max_vent_flux_particles_per_tick: f32,
+    pub vent_choked_pressure_ratio: f32,
+    pub pressure_epsilon_pa: f32,
+}
+
+impl Default for PipeSimulationConfig {
+    fn default() -> Self {
+        Self {
+            cell_volume_ratio: 25.0,
+            cell_particle_pressure_pa: 1.0,
+            pipe_flux_gain: 8_000.0,
+            pipe_flux_damping: 0.993,
+            max_pipe_flux_particles_per_tick: 50_000.0,
+            vent_discharge_coefficient: 7.8,
+            max_vent_flux_particles_per_tick: 200_000.0,
+            vent_choked_pressure_ratio: 0.53,
+            pressure_epsilon_pa: 0.01,
+        }
+    }
+}
 
 /// Identifies which container is rendered inside a world cell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -496,7 +614,7 @@ pub fn apply_pipe_network_step(
     gas: &mut GasField,
     world: &WorldGrid,
     visual_state: &mut PipeFlowVisualState,
-    config: &crate::simulation::PipeSimulationConfig,
+    config: &PipeSimulationConfig,
 ) -> bool {
     solver::apply_pipe_network_step(
         structures,
@@ -507,6 +625,53 @@ pub fn apply_pipe_network_step(
         visual_state,
         config,
     )
+}
+
+/// Applies default plugin gas source/sink structures before the core cell-gas step.
+pub fn apply_gas_structures_pre_step(
+    structures: &PlacedStructureMap,
+    gas: &mut GasField,
+    world: &WorldGrid,
+) -> bool {
+    let mut changed = false;
+    for structure in structures.iter() {
+        match structure.params {
+            StructureParams::GasSource { gas_index, amount }
+                if structure.kind == StructureKind::GasSource =>
+            {
+                if gas.add_particles_no_impulse(
+                    structure.origin.x,
+                    structure.origin.y,
+                    gas_index,
+                    amount,
+                    world,
+                ) > 0
+                {
+                    changed = true;
+                }
+            }
+            StructureParams::GasSink { amount } if structure.kind == StructureKind::GasSink => {
+                if gas.remove_particles_proportional(
+                    structure.origin.x,
+                    structure.origin.y,
+                    amount,
+                    world,
+                ) > 0
+                {
+                    changed = true;
+                }
+            }
+            StructureParams::None
+            | StructureParams::GasSource { .. }
+            | StructureParams::GasSink { .. } => {}
+        }
+    }
+
+    if changed {
+        gas.recompute_total_density_buffer(world);
+    }
+
+    changed
 }
 
 #[derive(Clone, Debug)]

@@ -1,7 +1,7 @@
 use flux_engine::{
     config::GameConfig,
+    plugins::default_plugin::pipe_runtime::scenarios::build_reference_pipe_scenarios,
     save::{create_save, delete_save, list_saves, saves_root_default},
-    simulation::pipes::scenarios::build_reference_pipe_scenarios,
 };
 
 const SCENARIO_PREFIX: &str = "Pipe Scenario ";
@@ -18,8 +18,7 @@ fn main() -> Result<(), String> {
         }
     }
 
-    let scenarios =
-        build_reference_pipe_scenarios(&config.gas_registry, &config.gas_simulation.pipe)?;
+    let scenarios = build_reference_pipe_scenarios(&config.gas_registry, &config.pipe_simulation)?;
     for scenario in scenarios {
         let descriptor = create_save(
             &saves_root,

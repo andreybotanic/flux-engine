@@ -1,183 +1,183 @@
-п»ї# РЎС‚СЂСѓРєС‚СѓСЂР° РїСЂРѕРµРєС‚Р° FluxEngine
+# Структура проекта FluxEngine
 
-Р”РѕРєСѓРјРµРЅС‚ С„РёРєСЃРёСЂСѓРµС‚ Р·РѕРЅСѓ РѕС‚РІРµС‚СЃС‚РІРµРЅРЅРѕСЃС‚Рё РїР°РїРѕРє Рё С„Р°Р№Р»РѕРІ СЂРµРїРѕР·РёС‚РѕСЂРёСЏ. РћР±РЅРѕРІР»СЏР№С‚Рµ РµРіРѕ РїСЂРё РёР·РјРµРЅРµРЅРёРё СЃС‚СЂСѓРєС‚СѓСЂС‹ РїСЂРѕРµРєС‚Р°.
+Документ фиксирует зону ответственности папок и файлов репозитория. Обновляйте его при изменении структуры проекта.
 
-## РџР°РїРєРё (ASCII-РґРµСЂРµРІРѕ)
+## Папки (ASCII-дерево)
 
 ```text
 FluxEngine/
-|-- assets/                  # Р“СЂР°С„РёС‡РµСЃРєРёРµ Рё С€РµР№РґРµСЂРЅС‹Рµ СЂРµСЃСѓСЂСЃС‹ РїСЂРёР»РѕР¶РµРЅРёСЏ.
-|   |-- fonts/               # UI-С€СЂРёС„С‚С‹, Р·Р°РіСЂСѓР¶Р°РµРјС‹Рµ С‡РµСЂРµР· AssetServer.
-|   |-- shaders/             # WGSL-С€РµР№РґРµСЂС‹ РІС‹С‡РёСЃР»РµРЅРёР№/СЂРµРЅРґРµСЂР°.
-|   `-- sprites/             # РЎРїСЂР°Р№С‚С‹ UI Рё РјРёСЂР°.
-|       |-- ui/              # РРєРѕРЅРєРё РёРЅСЃС‚СЂСѓРјРµРЅС‚РѕРІ Рё UI-СЌР»РµРјРµРЅС‚С‹.
-|       `-- world/           # РўР°Р№Р»С‹ РјРёСЂР° Рё С„РѕРЅРѕРІС‹Рµ С‚РµРєСЃС‚СѓСЂС‹.
-|-- config/                  # Р’РЅРµС€РЅРёРµ TOML-РєРѕРЅС„РёРіРё РёРіСЂРѕРІРѕРіРѕ/СЃРёРјСѓР»СЏС†РёРѕРЅРЅРѕРіРѕ РїРѕРІРµРґРµРЅРёСЏ.
-|   |-- backups/             # Р РµР·РµСЂРІРЅС‹Рµ РєРѕРїРёРё РєРѕРЅС„РёРіРѕРІ.
-|   |-- gases/               # РљРѕРЅС„РёРіРё РѕС‚РґРµР»СЊРЅС‹С… РіР°Р·РѕРІ.
-|   `-- structures/          # РљРѕРЅС„РёРіРё Р±Р°Р·РѕРІС‹С… entity-РїР°СЂР°РјРµС‚СЂРѕРІ, appearance Рё HUD-РјРµС‚Р°РґР°РЅРЅС‹С… СЃС‚РµРЅ Рё СЃС‚СЂСѓРєС‚СѓСЂ.
-|-- crates/                  # Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ Rust-crate-С‹, РЅРµ РІС…РѕРґСЏС‰РёРµ РІ РѕСЃРЅРѕРІРЅСѓСЋ Р±РёР±Р»РёРѕС‚РµРєСѓ РёРіСЂС‹.
-|   `-- flux_stage1_sample_plugin/   # РњРёРЅРёРјР°Р»СЊРЅС‹Р№ sample DLL-РїР»Р°РіРёРЅ РґР»СЏ stage-1 ABI Рё e2e-С‚РµСЃС‚РѕРІ packaged plugins.
-|-- docs/                    # РџСЂРѕРµРєС‚РЅР°СЏ РґРѕРєСѓРјРµРЅС‚Р°С†РёСЏ.
-|   `-- plans/               # РџР»Р°РЅРѕРІС‹Рµ РґРѕРєСѓРјРµРЅС‚С‹ Р±СѓРґСѓС‰РёС… РєСЂСѓРїРЅС‹С… РёР·РјРµРЅРµРЅРёР№.
-|       `-- plugin_system/   # Roadmap Рё СЌС‚Р°РїРЅС‹Рµ РїР»Р°РЅС‹ РїРµСЂРµС…РѕРґР° РЅР° runtime-РїР»Р°РіРёРЅС‹.
-|-- plugins/                 # Runtime drop-in РєР°С‚Р°Р»РѕРі packaged plugins (`*.fluxplugin`) СЂСЏРґРѕРј СЃ РёРіСЂРѕР№.
-|-- plugins_dev/             # Runtime dev-РєР°С‚Р°Р»РѕРі expanded plugin-РїР°РїРѕРє `plugins_dev/<plugin_id>/`.
-|-- src/                     # РСЃС…РѕРґРЅС‹Р№ РєРѕРґ Rust.
-|   |-- app/                 # РЎР±РѕСЂРєР° Рё Р·Р°РїСѓСЃРє Bevy-РїСЂРёР»РѕР¶РµРЅРёСЏ.
-|   |-- bin/                 # Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ Р±РёРЅР°СЂРЅРёРєРё (РїРµСЂС„, СѓС‚РёР»РёС‚С‹).
-|   |-- config/              # Р—Р°РіСЂСѓР·РєР°/РІР°Р»РёРґР°С†РёСЏ РєРѕРЅС„РёРіРѕРІ РІ РєРѕРґРµ.
-|   |-- debug/               # Р”РёР°РіРЅРѕСЃС‚РёС‡РµСЃРєРёРµ СЂРµР¶РёРјС‹ Рё РјРµС‚СЂРёРєРё.
-|   |-- editor/              # РРЅСЃС‚СЂСѓРјРµРЅС‚С‹ СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёСЏ РјРёСЂР°, РіР°Р·Р° Рё pipe-СЃРµС‚Рё.
-|   |-- input/               # РћР±СЂР°Р±РѕС‚РєР° РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРѕРіРѕ РІРІРѕРґР°.
-|   |-- plugins/             # Runtime plugin contract/bootstrap, default content registry, manifest, ZIP/DLL validation, ABI Рё startup diagnostics.
-|   |-- render/              # Р’РёР·СѓР°Р»РёР·Р°С†РёСЏ РјРёСЂР°, pipe-layer Рё overlay-СЂРµР¶РёРјРѕРІ.
-|   |-- simulation/          # CPU/GPU СЃРёРјСѓР»СЏС†РёСЏ РіР°Р·Р°, pipe pre-step Рё parity-РёРЅС„СЂР°СЃС‚СЂСѓРєС‚СѓСЂР°.
-|   |   `-- pipes/           # Р’РЅСѓС‚СЂРµРЅРЅРёРµ РјРѕРґСѓР»Рё pressure/fixtures/solver/test-РёРЅС„СЂР°СЃС‚СЂСѓРєС‚СѓСЂС‹ С‚СЂСѓР±.
-|   |-- ui/                  # РћР±С‰РёРµ UI-РєРѕРјРїРѕРЅРµРЅС‚С‹ Рё РїР°РЅРµР»Рё.
-|   `-- world/               # РљР»РµС‚РѕС‡РЅС‹Р№ РјРёСЂ Рё unified structures.
-|-- AGENTS.md                # РџСЂР°РІРёР»Р° СЂР°Р±РѕС‚С‹ Р°РіРµРЅС‚Р°.
-|-- Cargo.toml               # РњР°РЅРёС„РµСЃС‚ РїСЂРѕРµРєС‚Р°.
-|-- Cargo.lock               # Lock-С„Р°Р№Р» Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№.
-`-- tmp_size.rs              # Р›РѕРєР°Р»СЊРЅС‹Р№ РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Р№ С‡РµСЂРЅРѕРІРѕР№ С„Р°Р№Р».
+|-- assets/                  # Графические и шейдерные ресурсы приложения.
+|   |-- fonts/               # UI-шрифты, загружаемые через AssetServer.
+|   |-- shaders/             # WGSL-шейдеры вычислений/рендера.
+|   `-- sprites/             # Спрайты UI и мира.
+|       |-- ui/              # Иконки инструментов и UI-элементы.
+|       `-- world/           # Тайлы мира и фоновые текстуры.
+|-- config/                  # Внешние TOML-конфиги игрового/симуляционного поведения.
+|   |-- backups/             # Резервные копии конфигов.
+|   |-- gases/               # Конфиги отдельных газов.
+|   `-- structures/          # Конфиги базовых entity-параметров, appearance и HUD-метаданных стен и структур.
+|-- crates/                  # Вспомогательные Rust-crate-ы, не входящие в основную библиотеку игры.
+|   `-- flux_stage1_sample_plugin/   # Минимальный sample DLL-плагин для stage-1 ABI и e2e-тестов packaged plugins.
+|-- docs/                    # Проектная документация.
+|   `-- plans/               # Плановые документы будущих крупных изменений.
+|       `-- plugin_system/   # Roadmap и этапные планы перехода на runtime-плагины.
+|-- plugins/                 # Runtime drop-in каталог packaged plugins (`*.fluxplugin`) рядом с игрой.
+|-- plugins_dev/             # Runtime dev-каталог expanded plugin-папок `plugins_dev/<plugin_id>/`.
+|-- src/                     # Исходный код Rust.
+|   |-- app/                 # Сборка и запуск Bevy-приложения.
+|   |-- bin/                 # Вспомогательные бинарники (перф, утилиты).
+|   |-- config/              # Загрузка/валидация конфигов в коде.
+|   |-- debug/               # Диагностические режимы и метрики.
+|   |-- editor/              # Инструменты редактирования мира, газа и pipe-сети.
+|   |-- input/               # Обработка пользовательского ввода.
+|   |-- plugins/             # Runtime plugin contract/bootstrap, substances, default content registry, default plugin runtime, manifest, ZIP/DLL validation, ABI и startup diagnostics.
+|   |-- render/              # Визуализация мира, pipe-layer и overlay-режимов.
+|   |-- simulation/          # CPU/GPU симуляция свободного газа и parity-инфраструктура.
+|   |-- ui/                  # Общие UI-компоненты и панели.
+|   `-- world/               # Клеточный мир и unified structures.
+|-- AGENTS.md                # Правила работы агента.
+|-- Cargo.toml               # Манифест проекта.
+|-- Cargo.lock               # Lock-файл зависимостей.
+`-- tmp_size.rs              # Локальный вспомогательный черновой файл.
 ```
 
-## Р¤Р°Р№Р»С‹
+## Файлы
 
-- `AGENTS.md`: РџСЂР°РІРёР»Р° СЂР°Р±РѕС‚С‹ Р°РіРµРЅС‚Р° РІ СЌС‚РѕРј СЂРµРїРѕР·РёС‚РѕСЂРёРё.
-- `assets/fonts/ui_main.ttf`: РћСЃРЅРѕРІРЅРѕР№ UI-С€СЂРёС„С‚ СЃ РїРѕРґРґРµСЂР¶РєРѕР№ РєРёСЂРёР»Р»РёС†С‹ РґР»СЏ РІСЃРµС… С‚РµРєСЃС‚РѕРІС‹С… СЌР»РµРјРµРЅС‚РѕРІ РёРЅС‚РµСЂС„РµР№СЃР°.
-- `assets/shaders/gas_solver.wgsl`: GPU-С€РµР№РґРµСЂ РіР°Р·РѕРІРѕРіРѕ С€Р°РіР° (WGSL), СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅРЅС‹Р№ СЃ CPU-СЌС‚Р°Р»РѕРЅРѕРј.
-- `assets/shaders/pipe_highlight_material.wgsl`: WGSL-С€РµР№РґРµСЂ `Material2d` РґР»СЏ СЏСЂРєРѕР№ РїРѕРґСЃРІРµС‚РєРё С‚СЂСѓР± РІ `F3`.
-- `assets/sprites/ui/main_menu_background.png`: РћС‚РґРµР»СЊРЅС‹Р№ fullscreen-С„РѕРЅ РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ.
-- `assets/sprites/ui/select_arrow.png`: UI-СЃРїСЂР°Р№С‚ СЃС‚СЂРµР»РєРё РґР»СЏ РІС‹РїР°РґР°СЋС‰РёС… СЃРїРёСЃРєРѕРІ.
-- `assets/sprites/ui/tool_*.png`: UI-СЃРїСЂР°Р№С‚С‹ РёРєРѕРЅРѕРє РёРЅСЃС‚СЂСѓРјРµРЅС‚РѕРІ, РІРєР»СЋС‡Р°СЏ РѕС‚РґРµР»СЊРЅСѓСЋ РёРєРѕРЅРєСѓ РјРѕСЃС‚Р° `tool_bridge.png`.
-- `assets/sprites/world/backdrop_*.png`: Р¤РѕРЅРѕРІС‹Рµ С‚РµРєСЃС‚СѓСЂС‹ РјРёСЂР°.
-- `assets/sprites/world/pipe_mask_*.png`: Р¤Р°Р№Р»РѕРІС‹Рµ СЃРїСЂР°Р№С‚С‹ С‚СЂСѓР± РґР»СЏ РІСЃРµС… connection-mask РІР°СЂРёР°РЅС‚РѕРІ.
-- `assets/sprites/world/pipe_silhouette_mask_*.png`: Р¤Р°Р№Р»РѕРІС‹Рµ silhouette-СЃРїСЂР°Р№С‚С‹ С‚СЂСѓР± РґР»СЏ РІСЃРµС… connection-mask РІР°СЂРёР°РЅС‚РѕРІ.
-- `assets/sprites/world/bridge.png`: РћСЃРЅРѕРІРЅРѕР№ world-СЃРїСЂР°Р№С‚ РіР°Р·РѕРІРѕРіРѕ РјРѕСЃС‚Р° СЂР°Р·РјРµСЂРѕРј `192x64`.
-- `assets/sprites/world/bridge_silhouette.png`: РЎРёР»СѓСЌС‚РЅС‹Р№ preview-СЃРїСЂР°Р№С‚ РіР°Р·РѕРІРѕРіРѕ РјРѕСЃС‚Р° СЂР°Р·РјРµСЂРѕРј `192x64`.
-- `assets/sprites/world/silhouette_*.png`: World-СЃРёР»СѓСЌС‚С‹ РїСЂРµРґРїСЂРѕСЃРјРѕС‚СЂР° РїРѕРґ РєСѓСЂСЃРѕСЂРѕРј.
-- `assets/sprites/world/gas_in_out.png`: Р‘Р°Р·РѕРІС‹Р№ Р¶С‘Р»С‚С‹Р№ overlay-СЃРїСЂР°Р№С‚ РІРµРЅС‚РёР»СЏС†РёРё РґР»СЏ pipe-view `F3`.
-- `assets/sprites/world/gas_in.png`: Р—РµР»С‘РЅС‹Р№ РІР°СЂРёР°РЅС‚ overlay-СЃРїСЂР°Р№С‚Р° РІРµРЅС‚РёР»СЏС†РёРё СЃРѕ СЃС‚СЂРµР»РєРѕР№ С‚РѕР»СЊРєРѕ РІРЅСѓС‚СЂСЊ.
-- `assets/sprites/world/gas_out.png`: Р‘РµР»С‹Р№ РІР°СЂРёР°РЅС‚ overlay-СЃРїСЂР°Р№С‚Р° РІРµРЅС‚РёР»СЏС†РёРё СЃРѕ СЃС‚СЂРµР»РєРѕР№ С‚РѕР»СЊРєРѕ РЅР°СЂСѓР¶Сѓ.
-- `assets/sprites/world/tile_*.png`: РЎРїСЂР°Р№С‚С‹ С‚Р°Р№Р»РѕРІ РјРёСЂР°.
-- `assets/sprites/world/`: РќРµ СЃРѕРґРµСЂР¶РёС‚ СЃС‚Р°С‚РёС‡РµСЃРєРѕР№ fade-РјР°СЃРєРё РјРёСЂР°; Р·Р°С‚РµРјРЅСЏСЋС‰Р°СЏ РјР°СЃРєР° РіРµРЅРµСЂРёСЂСѓРµС‚СЃСЏ РІ runtime РІ `src/render/world_view.rs`.
-- `Cargo.lock`: Р—Р°С„РёРєСЃРёСЂРѕРІР°РЅРЅС‹Рµ РІРµСЂСЃРёРё Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№ Cargo.
-- `Cargo.toml`: РњР°РЅРёС„РµСЃС‚ Rust-РїСЂРѕРµРєС‚Р° Рё Р·Р°РІРёСЃРёРјРѕСЃС‚Рё.
-- `config/backups/simulation.toml.pre_tuning_20260503_174021.toml`: Р РµР·РµСЂРІРЅР°СЏ РєРѕРїРёСЏ РєРѕРЅС„РёРіСѓСЂР°С†РёРё СЃРёРјСѓР»СЏС†РёРё РґР»СЏ РѕС‚РєР°С‚Р°/СЃСЂР°РІРЅРµРЅРёСЏ.
-- `config/cell_types.toml`: РќР°СЃС‚СЂРѕР№РєРё РІРёР·СѓР°Р»Р°/РїР°СЂР°РјРµС‚СЂРѕРІ С‚РёРїРѕРІ РєР»РµС‚РѕРє Рё HUD-РєРѕРЅС„РёРі world-РєР»РµС‚РєРё РґР»СЏ СЃРІРѕР±РѕРґРЅРѕРіРѕ РіР°Р·Р°.
-- `config/gases/*.toml`: РљРѕРЅС„РёРіРё РѕС‚РґРµР»СЊРЅС‹С… РіР°Р·РѕРІ (С„РёР·РёС‡РµСЃРєРёРµ Рё РІРёР·СѓР°Р»СЊРЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹).
-- `config/structures/*.toml`: РљРѕРЅС„РёРіРё Р±Р°Р·РѕРІС‹С… РїР°СЂР°РјРµС‚СЂРѕРІ, appearance Рё HUD-РјРµС‚Р°РґР°РЅРЅС‹С… РІСЃС‚СЂРѕРµРЅРЅС‹С… СЃС‚РµРЅ Рё СЃС‚СЂСѓРєС‚СѓСЂ (`label`, `draw_priority`, `size_in_cells`, `hud.sort_order` Рё РѕРїРёСЃР°РЅРёСЏ substance-РєРѕРЅС‚РµР№РЅРµСЂРѕРІ).
-- `config/simulation.toml`: РћСЃРЅРѕРІРЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹ СЃРёРјСѓР»СЏС†РёРё Рё runtime-РЅР°СЃС‚СЂРѕР№РєРё, РІРєР»СЋС‡Р°СЏ СЃРµРєС†РёСЋ `[pipe]` РґР»СЏ pressure-driven С‚СЂСѓР±.
-- `crates/flux_stage1_sample_plugin/Cargo.toml`: РћС‚РґРµР»СЊРЅС‹Р№ `cdylib` crate РјРёРЅРёРјР°Р»СЊРЅРѕРіРѕ СЂР°Р±РѕС‡РµРіРѕ stage-1 sample plugin-Р°.
-- `crates/flux_stage1_sample_plugin/package_template/manifest.toml`: РЁР°Р±Р»РѕРЅ packaged plugin manifest РґР»СЏ sample DLL, РёСЃРїРѕР»СЊР·СѓРµРјС‹Р№ РїРѕР·РёС‚РёРІРЅС‹Рј e2e-С‚РµСЃС‚РѕРј.
-- `crates/flux_stage1_sample_plugin/package_template/config/sample.toml`: РњРёРЅРёРјР°Р»СЊРЅС‹Р№ config-С„Р°Р№Р» sample plugin package.
-- `crates/flux_stage1_sample_plugin/package_template/assets/placeholder.txt`: РњРёРЅРёРјР°Р»СЊРЅС‹Р№ asset-С„Р°Р№Р» sample plugin package.
-- `crates/flux_stage1_sample_plugin/src/lib.rs`: Р РµР°Р»РёР·Р°С†РёСЏ sample DLL-РїР»Р°РіРёРЅР° СЃ РѕР±СЏР·Р°С‚РµР»СЊРЅС‹РјРё ABI export-Р°РјРё `flux_plugin_*`.
-- `docs/CHANGELOG.md`: РљСЂР°С‚РєР°СЏ РёСЃС‚РѕСЂРёСЏ РІР°Р¶РЅС‹С… РёР·РјРµРЅРµРЅРёР№ РїСЂРѕРµРєС‚Р°.
-- `docs/game_overview.md`: РћРїРёСЃР°РЅРёРµ РёРіСЂРѕРІРѕРіРѕ РїСЂРѕС†РµСЃСЃР° Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРёС… РјРµС…Р°РЅРёРє MVP.
-- `docs/plans/plugin_system/00_roadmap.md`: РћР±С‰РёР№ roadmap Р±СѓРґСѓС‰РµР№ РјРёРіСЂР°С†РёРё FluxEngine РЅР° runtime-РїР»Р°РіРёРЅС‹.
-- `docs/plans/plugin_system/*.md`: Р”РµС‚Р°Р»СЊРЅС‹Рµ РёРЅСЃС‚СЂСѓРєС†РёРё РїРѕ СЌС‚Р°РїР°Рј СЂРµР°Р»РёР·Р°С†РёРё plugin-system РјРёРіСЂР°С†РёРё.
-- `docs/project_structure.md`: РљР°СЂС‚Р° СЃС‚СЂСѓРєС‚СѓСЂС‹ РїСЂРѕРµРєС‚Р°: РґРµСЂРµРІРѕ РїР°РїРѕРє + Р·РѕРЅС‹ РѕС‚РІРµС‚СЃС‚РІРµРЅРЅРѕСЃС‚Рё С„Р°Р№Р»РѕРІ.
-- `docs/technical_overview.md`: РўРµС…РЅРёС‡РµСЃРєР°СЏ Р°СЂС…РёС‚РµРєС‚СѓСЂР°, РїРѕРґСЃРёСЃС‚РµРјС‹ Рё РёРЅР¶РµРЅРµСЂРЅС‹Рµ РѕРіСЂР°РЅРёС‡РµРЅРёСЏ.
-- `plugin_state.toml`: Р›РѕРєР°Р»СЊРЅС‹Р№ runtime-С„Р°Р№Р» РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРёС… РЅР°СЃС‚СЂРѕРµРє plugin enable-state; С…СЂР°РЅРёС‚СЃСЏ РІ РєРѕСЂРЅРµ РїСЂРѕРµРєС‚Р° Рё РёРіРЅРѕСЂРёСЂСѓРµС‚СЃСЏ С‡РµСЂРµР· `.gitignore`.
-- `plugins/.gitkeep`: Р¤РёРєСЃРёСЂСѓРµС‚ РїСѓСЃС‚РѕР№ runtime-РєР°С‚Р°Р»РѕРі РґР»СЏ packaged plugins; СЂРµР°Р»СЊРЅС‹Рµ `.fluxplugin` РёРіРЅРѕСЂРёСЂСѓСЋС‚СЃСЏ С‡РµСЂРµР· `.gitignore`.
-- `plugins_dev/.gitkeep`: Р¤РёРєСЃРёСЂСѓРµС‚ РїСѓСЃС‚РѕР№ runtime-РєР°С‚Р°Р»РѕРі expanded dev plugins; СЂРµР°Р»СЊРЅС‹Рµ РїР°РїРєРё РїР»Р°РіРёРЅРѕРІ РёРіРЅРѕСЂРёСЂСѓСЋС‚СЃСЏ С‡РµСЂРµР· `.gitignore`.
-- `src/app/mod.rs`: РЎР±РѕСЂРєР° Bevy-РїСЂРёР»РѕР¶РµРЅРёСЏ, plugin bootstrap/config resource, backend-РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ Рё Р·Р°РїСѓСЃРє.
-- `src/bin/generate_pipe_scenario_saves.rs`: Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Р№ Р±РёРЅР°СЂРЅРёРє, РєРѕС‚РѕСЂС‹Р№ РїРµСЂРµСЃРѕР·РґР°С‘С‚ СЃС‚Р°СЂС‚РѕРІС‹Рµ save-slots РґР»СЏ РїСЏС‚Рё СЌС‚Р°Р»РѕРЅРЅС‹С… pipe-СЃС†РµРЅР°СЂРёРµРІ С‡РµСЂРµР· С€С‚Р°С‚РЅС‹Р№ save API.
-- `src/bin/gas_perf.rs`: РџР°Р№РїР»Р°Р№РЅ РїРµСЂС„-Р±РµРЅС‡РјР°СЂРєР° РіР°Р·Р° (CPU/GPU), parity-gate Рё РѕС‚С‡С‘С‚С‹.
-- `src/config/hud.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ С‚РёРїС‹ runtime-РєРѕРЅС„РёРіРѕРІ HUD, РІРєР»СЋС‡Р°СЏ substance-РєРѕРЅС‚РµР№РЅРµСЂС‹ Рё СЂРµР¶РёРјС‹ РІРёРґРёРјРѕСЃС‚Рё РїРѕ hover, Р±РµР· РІСЃС‚СЂРѕРµРЅРЅС‹С… entity-label/fallback-РєРѕРЅС„РёРіРѕРІ.
-- `src/config/config_loader_block.rs`: Р’РЅСѓС‚СЂРµРЅРЅСЏСЏ Р»РѕРіРёРєР° С‡С‚РµРЅРёСЏ/РІР°Р»РёРґР°С†РёРё TOML-РєРѕРЅС„РёРіРѕРІ, РІРєР»СЋС‡Р°СЏ `config/structures/*.toml`.
-- `src/config/config_tests_block.rs`: РўРµСЃС‚С‹ Р·Р°РіСЂСѓР·РєРё Рё РІР°Р»РёРґР°С†РёРё РєРѕРЅС„РёРіРѕРІ.
-- `src/config/mod.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ РєРѕРЅС„РёРі-С‚РёРїС‹, runtime-СЂРµРµСЃС‚СЂС‹ base/visual/layout/HUD-РјРµС‚Р°РґР°РЅРЅС‹С… Рё РІС…РѕРґРЅР°СЏ С‚РѕС‡РєР° Р·Р°РіСЂСѓР·РєРё РєРѕРЅС„РёРіРѕРІ.
-- `src/debug/mod.rs`: Debug-СЂРµР¶РёРјС‹, РѕРІРµСЂР»РµР№РЅС‹Рµ РјРµС‚СЂРёРєРё Рё РґРёР°РіРЅРѕСЃС‚РёС‡РµСЃРєРёРµ СЂРµСЃСѓСЂСЃС‹.
-- `src/editor/editor_ui_block.rs`: Runtime-РѕР±СЂР°Р±РѕС‚РєР° editor UI: tooltip, state sync, РїР°РЅРµР»Рё.
-- `src/editor/input_block.rs`: РњС‹С€СЊ/РєРёСЃС‚СЊ/РІС‹РґРµР»РµРЅРёРµ Рё РїСЂРёРјРµРЅРµРЅРёРµ РёРЅСЃС‚СЂСѓРјРµРЅС‚РѕРІ Рє РјРёСЂСѓ, unified pipe/structure-СЃРµС‚Рё Рё РјРѕСЃС‚Сѓ.
-- `src/editor/main_menu_actions_block.rs`: РћР±СЂР°Р±РѕС‚С‡РёРєРё РґРµР№СЃС‚РІРёР№ РјРµРЅСЋ: save/load/new/exit/plugins/confirm, РѕС‡РµСЂРµРґСЊ preview-capture Рё post-save follow-up СЃС†РµРЅР°СЂРёРё.
-- `src/editor/main_menu_block.rs`: РљРѕРјРїРѕР·РёС†РёСЏ Р»РѕРіРёРєРё main menu (escape/actions/ui refresh).
-- `src/editor/main_menu_escape_block.rs`: РћР±СЂР°Р±РѕС‚РєР° Esc Рё РїРµСЂРµС…РѕРґРѕРІ СЃРѕСЃС‚РѕСЏРЅРёР№ РјРµРЅСЋ/РёРЅСЃС‚СЂСѓРјРµРЅС‚РѕРІ, РІРєР»СЋС‡Р°СЏ РІРѕР·РІСЂР°С‚ РёР· `Plugins` Рє root screen.
-- `src/editor/main_menu_plugins_block.rs`: РЎР±РѕСЂРєР° Рё in-place СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ СЃРїРёСЃРєР° runtime-РїР»Р°РіРёРЅРѕРІ РґР»СЏ СЌРєСЂР°РЅР° `Plugins`, РїСЂР°РІРёР»Р° РґРѕСЃС‚СѓРїРЅРѕСЃС‚Рё toggle Рё safe registry rebuild РїРѕСЃР»Рµ РёР·РјРµРЅРµРЅРёСЏ `EnabledPluginSet`.
-- `src/editor/main_menu_save_list_block.rs`: РћР±С‰Р°СЏ РѕС‚РїСЂР°РІРєР° action-РёРІРµРЅС‚РѕРІ РєРЅРѕРїРѕРє РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ, СЃР±РѕСЂРєР° РєР°СЂС‚РѕС‡РµРє save/load, Р·Р°РіСЂСѓР·РєР° preview PNG РІ UI Рё hit-test Р»РѕРіРёРєР° primary-click РїРѕ РІСЃРµР№ РєР°СЂС‚РѕС‡РєРµ.
-- `src/editor/main_menu_ui_block.rs`: РћР±РЅРѕРІР»РµРЅРёРµ СЃРѕСЃС‚РѕСЏРЅРёСЏ Рё РІРёРґРёРјРѕСЃС‚Рё СЌР»РµРјРµРЅС‚РѕРІ РјРµРЅСЋ, РІРєР»СЋС‡Р°СЏ СЌРєСЂР°РЅС‹ save/load/confirm/plugins.
-- `src/editor/mod.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ editor-С‚РёРїС‹/СЂРµСЃСѓСЂСЃС‹ Рё С‚РѕС‡РєР° СЃР±РѕСЂРєРё editor-СЃРёСЃС‚РµРј, РІРєР»СЋС‡Р°СЏ `Pipe/Vent/Bridge` Рё СЃРѕСЃС‚РѕСЏРЅРёРµ РїРѕРІРѕСЂРѕС‚Р° РјРѕСЃС‚Р°.
-- `src/editor/overlay_setup_block.rs`: РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РІРёР·СѓР°Р»СЊРЅС‹С… editor-РѕРІРµСЂР»РµРµРІ.
-- `src/editor/ui_setup_block.rs`: РЎР±РѕСЂРєР° editor-UI: РїР°РЅРµР»Рё, РєРЅРѕРїРєРё, РїРѕР»СЏ Рё РїСЂРёРІСЏР·РєР° РІРёРґР¶РµС‚РѕРІ.
-- `src/editor/ui_setup_debug_panels_block.rs`: РџРѕСЃС‚СЂРѕРµРЅРёРµ debug-РїР°РЅРµР»РµР№ Рё СЃС‚СЂРѕРє РїР°СЂР°РјРµС‚СЂРѕРІ.
-- `src/editor/ui_setup_menu_button_factory_block.rs`: Р¤Р°Р±СЂРёРєР° РєРЅРѕРїРѕРє РјРѕРґР°Р»СЊРЅРѕРіРѕ РјРµРЅСЋ.
-- `src/editor/ui_setup_setup_fn_block.rs`: РћСЃРЅРѕРІРЅР°СЏ С„СѓРЅРєС†РёСЏ РїРµСЂРІРёС‡РЅРѕР№ СЃР±РѕСЂРєРё editor-UI, РІРєР»СЋС‡Р°СЏ РєРЅРѕРїРєСѓ `Gases`, РїРѕРґРїaРЅРµР»СЊ РІС‹Р±РѕСЂР° `Pipe/Vent/Bridge` Рё РєРѕРЅС‚РµР№РЅРµСЂС‹ СЌРєСЂР°РЅРѕРІ РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ.
-- `src/editor/ui_setup_structure_buttons_block.rs`: Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ С„Р°Р±СЂРёРєРё РєРЅРѕРїРѕРє РёРЅСЃС‚СЂСѓРјРµРЅС‚РѕРІ/РјР°С‚РµСЂРёР°Р»РѕРІ.
-- `src/input/camera.rs`: РЈРїСЂР°РІР»РµРЅРёРµ РєР°РјРµСЂРѕР№, Р·СѓРј/РїР°РЅ Рё С‚РµСЃС‚С‹ РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё СЏРєРѕСЂСЏ.
-- `src/input/mod.rs`: РџР»Р°РіРёРЅ РїРѕРґСЃРёСЃС‚РµРјС‹ РІРІРѕРґР° Рё wiring СЃРёСЃС‚РµРј РІРІРѕРґР°.
-- `src/lib.rs`: РљРѕСЂРЅРµРІРѕР№ РјРѕРґСѓР»СЊ Р±РёР±Р»РёРѕС‚РµРєРё Рё СЌРєСЃРїРѕСЂС‚ РїРѕРґСЃРёСЃС‚РµРј, РІРєР»СЋС‡Р°СЏ РЅРѕРІС‹Р№ `plugins`.
-- `src/main.rs`: РўРѕС‡РєР° РІС…РѕРґР° Р±РёРЅР°СЂСЏ; Р·Р°РїСѓСЃРєР°РµС‚ РїСЂРёР»РѕР¶РµРЅРёРµ.
-- `src/plugins/abi.rs`: C-compatible ABI stage-1: `FluxUtf8Slice`, `FluxStatus`, host/registrar structs Рё export names РѕР±СЏР·Р°С‚РµР»СЊРЅС‹С… DLL-С„СѓРЅРєС†РёР№.
-- `src/plugins/content.rs`: Content registry runtime-РјРѕРґРµР»СЊ: stable `ContentId`, provider plugins, descriptors РєР»РµС‚РѕРє/СЃС‚СЂСѓРєС‚СѓСЂ/overlay Рё HUD metadata.
-- `src/plugins/default_plugin.rs`: Built-in locked `flux.default` content: stable IDs, legacy enum adapters, asset/config helpers Рё default descriptor registration.
-- `src/plugins/default_plugin_descriptors_block.rs`: Р’РЅСѓС‚СЂРµРЅРЅРёР№ Р±Р»РѕРє СЃР±РѕСЂРєРё descriptors default plugin-Р°: layer/collision rules, footprint, rotations, sprite metadata Рё HUD blocks.
-- `src/plugins/diagnostics.rs`: Startup scan packaged archives, РґРµРґСѓРїР»РёРєР°С†РёСЏ `PluginId`, resource СЃ СЂРµР·СѓР»СЊС‚Р°С‚Р°РјРё РїСЂРѕРІРµСЂРєРё Рё С‚РµРєСЃС‚ РґР»СЏ СЃС‚Р°С‚СѓСЃР° РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ.
-- `src/plugins/id.rs`: РўРёРїРёР·РёСЂРѕРІР°РЅРЅС‹Рµ `PluginId`, `PluginVersion`, `PluginApiVersion` Рё РїСЂРѕРІРµСЂРєР° РєР°РЅРѕРЅРёС‡РµСЃРєРѕРіРѕ С„РѕСЂРјР°С‚Р° ID.
-- `src/plugins/loader.rs`: Р§С‚РµРЅРёРµ packaged/dev plugin-РєР°РЅРґРёРґР°С‚РѕРІ, cache-РєРѕРїРёРё runtime-root, Р·Р°РіСЂСѓР·РєР° DLL Рё ABI handshake `create/register/destroy`.
-- `src/plugins/manifest.rs`: РџР°СЂСЃРёРЅРі Рё РІР°Р»РёРґР°С†РёСЏ `manifest.toml` РІ runtime-СЃС‚СЂСѓРєС‚СѓСЂСѓ `PluginManifest`.
-- `src/plugins/mod.rs`: РўРѕС‡РєР° СЃР±РѕСЂРєРё plugin-РїРѕРґСЃРёСЃС‚РµРјС‹ Рё РµС‘ РїСѓР±Р»РёС‡РЅС‹Р№ re-export API.
-- `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` Рё rebuild-helper РґР»СЏ menu toggle; content registry СЃРѕР·РґР°С‘С‚СЃСЏ С‡РµСЂРµР· `src/plugins/content.rs` Рё default descriptors.
-- `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics Рё resolve plugin layout РІРЅСѓС‚СЂРё plugin root.
-- `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses Рё aggregate `PluginRegistryState`.
-- `src/render/mod.rs`: РџР»Р°РіРёРЅ СЂРµРЅРґРµСЂР° Рё РїРѕСЂСЏРґРѕРє render-СЃРёСЃС‚РµРј, РІРєР»СЋС‡Р°СЏ pipe visuals.
-- `src/render/pipe_highlight_material.rs`: РљР°СЃС‚РѕРјРЅС‹Р№ `Material2d` Рё helper-Р»РѕРіРёРєР° РґР»СЏ shader-РїРѕРґСЃРІРµС‚РєРё С‚СЂСѓР± РІ `F3`.
-- `src/render/save_preview.rs`: Offscreen preview pipeline РґР»СЏ save-slots: РѕС‚РґРµР»СЊРЅР°СЏ РєР°РјРµСЂР°, settle-frame РІ РєР°РЅРѕРЅРёС‡РµСЃРєРѕРј `F1`, screenshot capture, PNG-Р·Р°РїРёСЃСЊ Рё РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёРµ UI/overlay СЃРѕСЃС‚РѕСЏРЅРёСЏ РїРѕСЃР»Рµ РєР°РґСЂР°.
-- `src/render/world_view.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ render-СЃРёСЃС‚РµРјС‹ world view, config-driven appearance z-order Рё layer-based pipe/bridge visuals.
-- `src/render/world_view_cursor_highlight_block.rs`: Helper РѕС‚СЂРёСЃРѕРІРєРё РІРЅСѓС‚СЂРµРЅРЅРµР№ Р±РµР»РѕР№ РїСѓРЅРєС‚РёСЂРЅРѕР№ СЂР°РјРєРё РІРЅСѓС‚СЂРё РЅР°РІРµРґС‘РЅРЅРѕР№ РєР»РµС‚РєРё.
-- `src/render/world_view_overlay_block.rs`: Р›РѕРіРёРєР° overlay-СЂРµР¶РёРјРѕРІ `F1/F2/F3`, РєСѓСЂСЃРѕСЂРЅРѕР№ СЃРµС‚РєРё, multi-container pipe gas-square sizing, flow-packet Р°РЅРёРјР°С†РёРё Рё С„РёР»СЊС‚СЂР°С†РёРё РІРёР·СѓР°Р»СЊРЅРѕРіРѕ С€СѓРјР° РґР»СЏ РїР°РєРµС‚РѕРІ `< 5` С‡Р°СЃС‚РёС†.
-- `src/render/world_view_setup_block.rs`: РџРѕСЃС‚СЂРѕРµРЅРёРµ СЃСѓС‰РЅРѕСЃС‚РµР№ РјРёСЂР°/СЃР»РѕС‘РІ, config-driven z-order СЃС‚РµРЅ/СЃС‚СЂСѓРєС‚СѓСЂ Рё СЃРїР°РІРЅ РІРёР·СѓР°Р»РѕРІ РёР· `PlacedStructureMap`.
-- `src/render/world_view_tests_block.rs`: РўРµСЃС‚С‹ РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅРѕР№ РјР°С‚РµРјР°С‚РёРєРё СЂРµРЅРґРµСЂР°.
-- `src/save.rs`: РџСѓР±Р»РёС‡РЅС‹Р№ save/load API, С‚РёРїС‹ СЃРѕСЃС‚РѕСЏРЅРёСЏ РјРµРЅСЋ/СЃРµСЃСЃРёРё, plugin menu screen state Рё queue/event РєРѕРЅС‚СЂР°РєС‚С‹ preview-capture.
-- `src/save_api_block.rs`: РћРїРµСЂР°С†РёРё РІРµСЂС…РЅРµРіРѕ СѓСЂРѕРІРЅСЏ: list/create/overwrite/load snapshot Рё canonical preview-path РґР»СЏ slot-Р°.
-- `src/save_gas_io_block.rs`: Р§С‚РµРЅРёРµ/Р·Р°РїРёСЃСЊ chunk-РѕРІ РјРёСЂР°, РіР°Р·Р°, unified placed-structures Рё node-based pipe-gas С„РѕСЂРјР°С‚Р° С‚РµРєСѓС‰РµР№ save-СЃС…РµРјС‹.
-- `src/save_meta_io_block.rs`: РњРµС‚Р°РґР°РЅРЅС‹Рµ СЃРµР№РІР°, РІР°Р»РёРґР°С†РёСЏ РµРґРёРЅСЃС‚РІРµРЅРЅРѕР№ РїРѕРґРґРµСЂР¶РёРІР°РµРјРѕР№ save-СЃС…РµРјС‹ Рё preview-chunk `png_v1`.
-- `src/save_tests_block.rs`: РўРµСЃС‚С‹ СЃРѕС…СЂР°РЅРµРЅРёСЏ/Р·Р°РіСЂСѓР·РєРё Рё РІР°Р»РёРґР°С†РёРё С„РѕСЂРјР°С‚Р°.
-- `src/simulation/backend.rs`: РљРѕРЅС„РёРі backend Рё РїР°СЂР°РјРµС‚СЂС‹ СЂР°Р·РјРµСЂР° РјРёСЂР° РґР»СЏ СЃРёРјСѓР»СЏС†РёРё.
-- `src/simulation/discrete_step.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ РєРѕРЅС‚СЂР°РєС‚С‹ РґРёСЃРєСЂРµС‚РЅРѕРіРѕ CPU-С€Р°РіР° РіР°Р·Р°.
-- `src/simulation/discrete_step_helpers_block.rs`: Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ С„СѓРЅРєС†РёРё РґРёСЃРєСЂРµС‚РЅРѕРіРѕ С€Р°РіР° (kernel/RNG/СѓС‚РёР»РёС‚С‹).
-- `src/simulation/discrete_step_step_block.rs`: РћСЃРЅРѕРІРЅРѕР№ Р°Р»РіРѕСЂРёС‚Рј РґРёСЃРєСЂРµС‚РЅРѕРіРѕ С€Р°РіР° CPU СЃРёРјСѓР»СЏС†РёРё.
-- `src/simulation/gas.rs`: РџСѓР±Р»РёС‡РЅР°СЏ РјРѕРґРµР»СЊ GasField Рё СЃРІСЏР·РєР° CPU/GPU СЃРѕСЃС‚РѕСЏРЅРёСЏ.
-- `src/simulation/gas_core_block.rs`: РћСЃРЅРѕРІРЅР°СЏ Р»РѕРіРёРєР° РѕРїРµСЂР°С†РёР№ GasField РІ runtime.
-- `src/simulation/gas_test_support_block.rs`: Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ test-only С„СѓРЅРєС†РёРё РґР»СЏ buoyancy/reachability.
-- `src/simulation/gas_tests_block.rs`: РќР°Р±РѕСЂ С‚РµСЃС‚РѕРІ GasField/РїРѕРІРµРґРµРЅРёСЏ СЃРёРјСѓР»СЏС†РёРё Рё СЂРµРіСЂРµСЃСЃРёР№.
-- `src/simulation/gpu_solver.rs`: РџСѓР±Р»РёС‡РЅС‹Р№ РёРЅС‚РµСЂС„РµР№СЃ GPU solver Рё РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ СЂРµСЃСѓСЂСЃРѕРІ wgpu.
-- `src/simulation/gpu_solver_helpers_block.rs`: Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ С„СѓРЅРєС†РёРё Р±СѓС„РµСЂРѕРІ, bind-РіСЂСѓРїРї Рё dispatch.
-- `src/simulation/gpu_solver_impl_core_block.rs`: Core-РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ/Р·Р°РіСЂСѓР·РєР° СЃРѕСЃС‚РѕСЏРЅРёСЏ GPU solver.
-- `src/simulation/gpu_solver_impl_exec_block.rs`: РСЃРїРѕР»РЅРµРЅРёРµ С€Р°РіР° GPU, readback Рё РіРµРЅРµСЂР°С†РёСЏ РїР°СЂР°РјРµС‚СЂРѕРІ.
-- `src/simulation/mod.rs`: РџР»Р°РіРёРЅ СЃРёРјСѓР»СЏС†РёРё, СЂРµСЃСѓСЂСЃС‹ СЃРѕСЃС‚РѕСЏРЅРёСЏ Рё orchestration С‚РёРєР°, РІРєР»СЋС‡Р°СЏ pipe pre-step Рё perf-РјРµС‚СЂРёРєРё РґР»СЏ РѕС‚РґРµР»СЊРЅРѕРіРѕ РІСЂРµРјРµРЅРё СЂР°СЃС‡С‘С‚Р° С‚СЂСѓР±.
-- `src/simulation/parity.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ parity API Рё СЃС†РµРЅР°СЂРёРё СЃСЂР°РІРЅРµРЅРёСЏ CPU/GPU.
-- `src/simulation/parity_runtime_block.rs`: Runtime parity-РјРµС‚СЂРёРєРё, РїСЂРѕРіРѕРЅС‹ СЃС†РµРЅР°СЂРёРµРІ Рё gate-РѕС†РµРЅРєР°.
-- `src/simulation/parity_tests_block.rs`: РўРµСЃС‚С‹ parity-РїРѕСЂРѕРіРѕРІ, smoke Рё GPU-СЂРµРіСЂРµСЃСЃРёР№.
-- `src/simulation/pipes.rs`: Node-based `PipeGasField`, runtime-only `PipeFluxField`, РїСѓР±Р»РёС‡РЅС‹Р№ С„Р°СЃР°Рґ pipe runtime/visual API Рё wiring С‚РµСЃС‚РѕРІ pipe-СЃРµС‚Рё.
-- `src/simulation/pipes/pressure.rs`: Helper-С‹ РїРµСЂРµРІРѕРґР° `particles -> pressure` Рё С„РѕСЂРјР°С‚РёСЂРѕРІР°РЅРёСЏ РґР°РІР»РµРЅРёСЏ РґР»СЏ HUD/pipe-СЂРµРЅРґРµСЂР°.
-- `src/simulation/pipes/scenarios.rs`: РћР±С‰РёР№ builder РїСЏС‚Рё РєР°РЅРѕРЅРёС‡РµСЃРєРёС… pipe-СЃС†РµРЅР°СЂРёРµРІ РґР»СЏ save-СѓС‚РёР»РёС‚С‹ Рё acceptance-С‚РµСЃС‚РѕРІ.
-- `src/simulation/pipes/solver.rs`: Р’РЅСѓС‚СЂРµРЅРЅРёР№ semi-implicit pressure+flux solver pipe-СЃРµС‚Рё: component solve, worldв†”vent budgets, mass-bounded transfers Рё Р·Р°РїРёСЃСЊ `PipeFlowVisualState`.
-- `src/simulation/pipes/tests.rs`: Acceptance/regression С‚РµСЃС‚С‹ РЅРѕРІРѕР№ pipe-РјРѕРґРµР»Рё, РІРєР»СЋС‡Р°СЏ Р±С‹СЃС‚СЂС‹Рµ `_smoke` РїСЂРѕРІРµСЂРєРё РґР»СЏ СЃР°РјС‹С… РґРѕР»РіРёС… СЃС†РµРЅР°СЂРёРµРІ Рё РїРѕР»РЅС‹Рµ РєР°РЅРѕРЅРёС‡РµСЃРєРёРµ scenario 1..5.
-- `src/simulation/runtime_tick_block.rs`: Runtime-С€Р°РіРё СЃРёРјСѓР»СЏС†РёРё, GPU/CPU РїРѕРґС€Р°РіРё Рё perf-РјРµС‚СЂРёРєРё, РІРєР»СЋС‡Р°СЏ РѕС‚РґРµР»СЊРЅС‹Р№ Р·Р°РјРµСЂ РІСЂРµРјРµРЅРё pipe pre-step.
-- `src/simulation/simulation_tests_block.rs`: РўРµСЃС‚С‹ РєРѕРЅС„РёРіСѓСЂР°С†РёРё С‚РёРєР° Рё СЃС‚СЂСѓРєС‚СѓСЂРЅС‹С… pre-step РїСЂР°РІРёР».
-- `src/ui/cell_inspector.rs`: Runtime-СЃР±РѕСЂРєР° Рё РїРѕР·РёС†РёРѕРЅРёСЂРѕРІР°РЅРёРµ HUD РёРЅСЃРїРµРєС‚РѕСЂР° РєР»РµС‚РєРё РєР°Рє СЃС‚РµРєР° РѕС‚РґРµР»СЊРЅС‹С… entity-Р±Р»РѕРєРѕРІ СЃ РѕР±С‰РµР№ С‚РµРЅСЊСЋ.
-- `src/ui/cell_inspector_model.rs`: РњРѕРґРµР»СЊ РґР°РЅРЅС‹С… Рё formatter HUD РёРЅСЃРїРµРєС‚РѕСЂР° РєР»РµС‚РєРё, РІРєР»СЋС‡Р°СЏ config-driven РєРѕРЅС‚РµР№РЅРµСЂС‹, solid-РјР°С‚РµСЂРёР°Р»С‹ РєР°Рє РѕС‚РґРµР»СЊРЅС‹Рµ Р±Р»РѕРєРё Рё registry-driven РѕС‚РѕР±СЂР°Р¶РµРЅРёРµ СЃРѕСЃС‚Р°РІР° РіР°Р·Р°.
-- `src/ui/input_field.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ С‚РёРїС‹ text-input Рё С‚РѕС‡РєР° СЃР±РѕСЂРєРё input-СЃРёСЃС‚РµРј.
-- `src/ui/input_field_helpers_block.rs`: Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅР°СЏ РіРµРѕРјРµС‚СЂРёСЏ РєСѓСЂСЃРѕСЂР° С‚РµРєСЃС‚Р° Рё С‚РѕС‡РЅС‹Р№ hit-test/РєР°СЂРµС‚РєР° С‡РµСЂРµР· `ComputedTextBlock`.
-- `src/ui/input_field_systems_block.rs`: РЎРёСЃС‚РµРјС‹ focus/keyboard/render/caret РґР»СЏ С‚РµРєСЃС‚РѕРІС‹С… РїРѕР»РµР№.
-- `src/ui/modal.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ С‚РёРїС‹ reusable modal backdrop subsystem, helper-С‹ СЃРїР°РІРЅР° backdrop-СЃР»РѕС‘РІ Рё wiring `ModalPlugin`.
-- `src/ui/modal_capture_block.rs`: Snapshot/capture runtime РґР»СЏ modal backdrop-РѕРІ: offscreen-РєР°РјРµСЂР°, resize target-Р°, blur world-snapshot Рё cache lifecycle.
-- `src/ui/modal_runtime_block.rs`: Р’С‹Р±РѕСЂ topmost РјРѕРґР°Р»РєРё, cover-layout backdrop-РёР·РѕР±СЂР°Р¶РµРЅРёР№ Рё РїРµСЂРµРєР»СЋС‡РµРЅРёРµ СЂРµР¶РёРјРѕРІ `PanelFrosted` / `FullscreenBlur`.
-- `src/ui/modal_tests_block.rs`: Unit-С‚РµСЃС‚С‹ modal helper-РѕРІ, cover-layout Рё РїСЂР°РІРёР» refresh/capture РґР»СЏ world-snapshot backdrop.
-- `src/ui/mod.rs`: UI-РїР»Р°РіРёРЅ, wiring РѕР±С‰РёС… UI-СЃРёСЃС‚РµРј Рё exports РїРµСЂРµРёСЃРїРѕР»СЊР·СѓРµРјС‹С… UI-РєРѕРјРїРѕРЅРµРЅС‚РѕРІ.
-- `src/ui/palette.rs`: Р•РґРёРЅР°СЏ РїР°Р»РёС‚СЂР° С†РІРµС‚РѕРІ UI (РїР°РЅРµР»Рё, РјРµРЅСЋ, С‚РµРєСЃС‚, input/select, tooltip, HUD Рё С‚РµРЅРё HUD).
-- `src/ui/panels.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ С‚РёРїС‹ panel-СЃРёСЃС‚РµРјС‹ Рё РєРѕРјРїРѕР·РёС†РёСЏ Р±Р»РѕРєРѕРІ РїР°РЅРµР»Рё.
-- `src/ui/panels_manager_block.rs`: РЎРѕСЃС‚РѕСЏРЅРёРµ Рё API PanelManager, hit-rect Рё СѓРїСЂР°РІР»РµРЅРёРµ РїР°РЅРµР»СЏРјРё.
-- `src/ui/panels_runtime_block.rs`: Runtime-СЃРёСЃС‚РµРјС‹ РїР°РЅРµР»Рё: layout, СЃРѕСЃС‚РѕСЏРЅРёРµ viewport-РѕРІ Рё СЃРѕР±С‹С‚РёСЏ Р·Р°РіРѕР»РѕРІРєР°; input scroll РґРµР»РµРіРёСЂРѕРІР°РЅ РѕР±С‰РµРјСѓ `scroll_area`.
-- `src/ui/panels_tests_block.rs`: РўРµСЃС‚С‹ layout/scroll/stack-РїРѕРІРµРґРµРЅРёСЏ РїР°РЅРµР»РµР№.
-- `src/ui/scroll_area.rs`: РћР±С‰РёР№ scroll-area runtime РґР»СЏ modal/panel viewport-РѕРІ: wheel input, drag thumb, click on track, visibility scrollbar Рё РїСЂРёРѕСЂРёС‚РµС‚ РіСЂСѓРїРї РІРІРѕРґР°.
-- `src/ui/select_field.rs`: Dropdown/select-РєРѕРјРїРѕРЅРµРЅС‚ РґР»СЏ UI-РїР°РЅРµР»РµР№ Рё РµРіРѕ С‚РµСЃС‚С‹.
-- `src/ui/sim_controls.rs`: UI-РєРѕРЅС‚СЂРѕР»С‹ СЃРёРјСѓР»СЏС†РёРё (pause/speed/hotkeys).
-- `src/ui/toggle_switch.rs`: РџРµСЂРµРёСЃРїРѕР»СЊР·СѓРµРјС‹Р№ РґРІСѓС…РїРѕР·РёС†РёРѕРЅРЅС‹Р№ toggle-switch UI-РєРѕРјРїРѕРЅРµРЅС‚ РґР»СЏ РІРєР»СЋС‡РµРЅРёСЏ/РІС‹РєР»СЋС‡РµРЅРёСЏ РЅР°СЃС‚СЂРѕРµРє.
-- `src/world/grid.rs`: РљР»РµС‚РѕС‡РЅР°СЏ СЃРµС‚РєР° РјРёСЂР°, РјР°С‚РµСЂРёР°Р»С‹, РєРѕРѕСЂРґРёРЅР°С‚РЅС‹Рµ СѓС‚РёР»РёС‚С‹ Рё С‚РµСЃС‚С‹.
-- `src/world/mod.rs`: РџР»Р°РіРёРЅ РјРёСЂР° Рё СЃРѕР±С‹С‚РёСЏ РёР·РјРµРЅРµРЅРёР№ РєР»РµС‚РѕРє.
-- `src/world/structures.rs`: Unified layer/descriptor-РјРѕРґРµР»СЊ СЃС‚СЂСѓРєС‚СѓСЂ, `PlacedStructureMap`, rotation, bridge-footprint Рё pipe-cut state.
-- `tmp_size.rs`: Р’СЂРµРјРµРЅРЅС‹Р№ Р»РѕРєР°Р»СЊРЅС‹Р№ РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Р№ Rust-С„Р°Р№Р» РґР»СЏ СЂСѓС‡РЅС‹С… РїСЂРѕРІРµСЂРѕРє/С‡РµСЂРЅРѕРІС‹С… СЌРєСЃРїРµСЂРёРјРµРЅС‚РѕРІ.
+- `AGENTS.md`: Правила работы агента в этом репозитории.
+- `assets/fonts/ui_main.ttf`: Основной UI-шрифт с поддержкой кириллицы для всех текстовых элементов интерфейса.
+- `assets/shaders/gas_solver.wgsl`: GPU-шейдер газового шага (WGSL), синхронизированный с CPU-эталоном.
+- `assets/shaders/pipe_highlight_material.wgsl`: WGSL-шейдер `Material2d` для яркой подсветки труб в `F3`.
+- `assets/sprites/ui/main_menu_background.png`: Отдельный fullscreen-фон главного меню.
+- `assets/sprites/ui/select_arrow.png`: UI-спрайт стрелки для выпадающих списков.
+- `assets/sprites/ui/tool_*.png`: UI-спрайты иконок инструментов, включая отдельную иконку моста `tool_bridge.png`.
+- `assets/sprites/world/backdrop_*.png`: Фоновые текстуры мира.
+- `assets/sprites/world/pipe_mask_*.png`: Файловые спрайты труб для всех connection-mask вариантов.
+- `assets/sprites/world/pipe_silhouette_mask_*.png`: Файловые silhouette-спрайты труб для всех connection-mask вариантов.
+- `assets/sprites/world/bridge.png`: Основной world-спрайт газового моста размером `192x64`.
+- `assets/sprites/world/bridge_silhouette.png`: Силуэтный preview-спрайт газового моста размером `192x64`.
+- `assets/sprites/world/silhouette_*.png`: World-силуэты предпросмотра под курсором.
+- `assets/sprites/world/gas_in_out.png`: Базовый жёлтый overlay-спрайт вентиляции для pipe-view `F3`.
+- `assets/sprites/world/gas_in.png`: Зелёный вариант overlay-спрайта вентиляции со стрелкой только внутрь.
+- `assets/sprites/world/gas_out.png`: Белый вариант overlay-спрайта вентиляции со стрелкой только наружу.
+- `assets/sprites/world/tile_*.png`: Спрайты тайлов мира.
+- `assets/sprites/world/`: Не содержит статической fade-маски мира; затемняющая маска генерируется в runtime в `src/render/world_view.rs`.
+- `Cargo.lock`: Зафиксированные версии зависимостей Cargo.
+- `Cargo.toml`: Манифест Rust-проекта и зависимости.
+- `config/backups/simulation.toml.pre_tuning_20260503_174021.toml`: Резервная копия конфигурации симуляции для отката/сравнения.
+- `config/cell_types.toml`: Настройки визуала/параметров типов клеток и HUD-конфиг world-клетки для свободного газа.
+- `config/gases/*.toml`: Optional data-конфиги default plugin gas substances; при пустой папке базовые `H2/O2/CO2` берутся из built-in default plugin definitions.
+- `config/structures/*.toml`: Конфиги базовых параметров, appearance и HUD-метаданных встроенных стен и структур (`label`, `draw_priority`, `size_in_cells`, `hud.sort_order` и описания substance-контейнеров).
+- `config/simulation.toml`: Основные параметры симуляции и runtime-настройки, включая секцию `[pipe]` для pipe-runtime default plugin-а.
+- `crates/flux_stage1_sample_plugin/Cargo.toml`: Отдельный `cdylib` crate минимального рабочего stage-1 sample plugin-а.
+- `crates/flux_stage1_sample_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample DLL, используемый позитивным e2e-тестом.
+- `crates/flux_stage1_sample_plugin/package_template/config/sample.toml`: Минимальный config-файл sample plugin package.
+- `crates/flux_stage1_sample_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample plugin package.
+- `crates/flux_stage1_sample_plugin/src/lib.rs`: Реализация sample DLL-плагина с обязательными ABI export-ами `flux_plugin_*`.
+- `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
+- `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
+- `docs/plans/plugin_system/00_roadmap.md`: Общий roadmap будущей миграции FluxEngine на runtime-плагины.
+- `docs/plans/plugin_system/*.md`: Детальные инструкции по этапам реализации plugin-system миграции.
+- `docs/project_structure.md`: Карта структуры проекта: дерево папок + зоны ответственности файлов.
+- `docs/technical_overview.md`: Техническая архитектура, подсистемы и инженерные ограничения.
+- `plugin_state.toml`: Локальный runtime-файл пользовательских настроек plugin enable-state; хранится в корне проекта и игнорируется через `.gitignore`.
+- `plugins/.gitkeep`: Фиксирует пустой runtime-каталог для packaged plugins; реальные `.fluxplugin` игнорируются через `.gitignore`.
+- `plugins_dev/.gitkeep`: Фиксирует пустой runtime-каталог expanded dev plugins; реальные папки плагинов игнорируются через `.gitignore`.
+- `src/app/mod.rs`: Сборка Bevy-приложения, plugin bootstrap/config resource, backend-инициализация и запуск.
+- `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
+- `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
+- `src/config/hud.rs`: Публичные типы runtime-конфигов HUD, включая substance-контейнеры и режимы видимости по hover, без встроенных entity-label/fallback-конфигов.
+- `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации TOML-конфигов, включая `config/structures/*.toml`.
+- `src/config/config_tests_block.rs`: Тесты загрузки и валидации конфигов.
+- `src/config/mod.rs`: Публичные конфиг-типы, compatibility `GasRegistry` поверх plugin-owned substance registry, runtime-реестры base/visual/layout/HUD-метаданных и входная точка загрузки конфигов.
+- `src/debug/mod.rs`: Debug-режимы, оверлейные метрики и диагностические ресурсы.
+- `src/editor/editor_ui_block.rs`: Runtime-обработка editor UI: tooltip, state sync, панели.
+- `src/editor/input_block.rs`: Мышь/кисть/выделение и применение инструментов к миру, unified pipe/structure-сети и мосту.
+- `src/editor/main_menu_actions_block.rs`: Обработчики действий меню: save/load/new/exit/plugins/confirm, очередь preview-capture и post-save follow-up сценарии.
+- `src/editor/main_menu_block.rs`: Композиция логики main menu (escape/actions/ui refresh).
+- `src/editor/main_menu_escape_block.rs`: Обработка Esc и переходов состояний меню/инструментов, включая возврат из `Plugins` к root screen.
+- `src/editor/main_menu_plugins_block.rs`: Сборка и in-place синхронизация списка runtime-плагинов для экрана `Plugins`, правила доступности toggle и safe registry rebuild после изменения `EnabledPluginSet`.
+- `src/editor/main_menu_save_list_block.rs`: Общая отправка action-ивентов кнопок главного меню, сборка карточек save/load, загрузка preview PNG в UI и hit-test логика primary-click по всей карточке.
+- `src/editor/main_menu_ui_block.rs`: Обновление состояния и видимости элементов меню, включая экраны save/load/confirm/plugins.
+- `src/editor/mod.rs`: Публичные editor-типы/ресурсы и точка сборки editor-систем, включая `Pipe/Vent/Bridge` и состояние поворота моста.
+- `src/editor/overlay_setup_block.rs`: Инициализация визуальных editor-оверлеев.
+- `src/editor/ui_setup_block.rs`: Сборка editor-UI: панели, кнопки, поля и привязка виджетов.
+- `src/editor/ui_setup_debug_panels_block.rs`: Построение debug-панелей и строк параметров.
+- `src/editor/ui_setup_menu_button_factory_block.rs`: Фабрика кнопок модального меню.
+- `src/editor/ui_setup_setup_fn_block.rs`: Основная функция первичной сборки editor-UI, включая кнопку `Gases`, подпaнель выбора `Pipe/Vent/Bridge` и контейнеры экранов главного меню.
+- `src/editor/ui_setup_structure_buttons_block.rs`: Вспомогательные фабрики кнопок инструментов/материалов.
+- `src/input/camera.rs`: Управление камерой, зум/пан и тесты корректности якоря.
+- `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
+- `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем, включая новый `plugins`.
+- `src/main.rs`: Точка входа бинаря; запускает приложение.
+- `src/plugins/abi.rs`: C-compatible ABI stage-1: `FluxUtf8Slice`, `FluxStatus`, host/registrar structs и export names обязательных DLL-функций.
+- `src/plugins/content.rs`: Content registry runtime-модель: stable `ContentId`, provider plugins, descriptors клеток/структур/overlay, HUD metadata и registered substances.
+- `src/plugins/default_plugin.rs`: Built-in locked `flux.default` content/runtime: stable IDs для cells/structures/overlays/substances, legacy enum adapters, asset/config helpers, default descriptor registration и подключение pipe-runtime модуля.
+- `src/plugins/default_plugin_descriptors_block.rs`: Внутренний блок сборки descriptors default plugin-а: layer/collision rules, footprint, rotations, sprite metadata и HUD blocks.
+- `src/plugins/diagnostics.rs`: Startup scan packaged archives, дедупликация `PluginId`, resource с результатами проверки и текст для статуса главного меню.
+- `src/plugins/id.rs`: Типизированные `PluginId`, `PluginVersion`, `PluginApiVersion` и проверка канонического формата ID.
+- `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL и ABI handshake `create/register/destroy`.
+- `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
+- `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API.
+- `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` и rebuild-helper для menu toggle; content registry создаётся через `src/plugins/content.rs` и default descriptors.
+- `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics и resolve plugin layout внутри plugin root.
+- `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses и aggregate `PluginRegistryState`.
+- `src/plugins/substances.rs`: Generic plugin-owned substance contract: `SubstanceId`, `SubstanceDefinition`, `SubstanceFlags` и deterministic `SubstanceRegistry` для compact runtime indices.
+- `src/render/mod.rs`: Плагин рендера и порядок render-систем, включая pipe visuals.
+- `src/render/pipe_highlight_material.rs`: Кастомный `Material2d` и helper-логика для shader-подсветки труб в `F3`.
+- `src/render/save_preview.rs`: Offscreen preview pipeline для save-slots: отдельная камера, settle-frame в каноническом `F1`, screenshot capture, PNG-запись и восстановление UI/overlay состояния после кадра.
+- `src/render/world_view.rs`: Публичные render-системы world view, config-driven appearance z-order и layer-based pipe/bridge visuals.
+- `src/render/world_view_cursor_highlight_block.rs`: Helper отрисовки внутренней белой пунктирной рамки внутри наведённой клетки.
+- `src/render/world_view_overlay_block.rs`: Логика overlay-режимов `F1/F2/F3`, курсорной сетки, multi-container pipe gas-square sizing, flow-packet анимации и фильтрации визуального шума для пакетов `< 5` частиц.
+- `src/render/world_view_setup_block.rs`: Построение сущностей мира/слоёв, config-driven z-order стен/структур и спавн визуалов из `PlacedStructureMap`.
+- `src/render/world_view_tests_block.rs`: Тесты вспомогательной математики рендера.
+- `src/save.rs`: Публичный save/load API, типы состояния меню/сессии, plugin menu screen state и queue/event контракты preview-capture.
+- `src/save_api_block.rs`: Операции верхнего уровня: list/create/overwrite/load snapshot и canonical preview-path для slot-а.
+- `src/save_gas_io_block.rs`: Чтение/запись chunk-ов мира, газа, unified placed-structures и node-based pipe-gas формата текущей save-схемы; gas chunks мапятся между saved stable substance IDs/legacy aliases и текущими compact indices.
+- `src/save_meta_io_block.rs`: Метаданные сейва, валидация единственной поддерживаемой save-схемы и preview-chunk `png_v1`.
+- `src/save_tests_block.rs`: Тесты сохранения/загрузки и валидации формата.
+- `src/simulation/backend.rs`: Конфиг backend и параметры размера мира для симуляции.
+- `src/simulation/discrete_step.rs`: Публичные контракты дискретного CPU-шага газа.
+- `src/simulation/discrete_step_helpers_block.rs`: Вспомогательные функции дискретного шага (kernel/RNG/утилиты).
+- `src/simulation/discrete_step_step_block.rs`: Основной алгоритм дискретного шага CPU симуляции.
+- `src/simulation/gas.rs`: Публичная модель GasField и связка CPU/GPU состояния.
+- `src/simulation/gas_core_block.rs`: Основная логика операций GasField в runtime.
+- `src/simulation/gas_test_support_block.rs`: Вспомогательные test-only функции для buoyancy/reachability.
+- `src/simulation/gas_tests_block.rs`: Набор тестов GasField/поведения симуляции и регрессий.
+- `src/simulation/gpu_solver.rs`: Публичный интерфейс GPU solver и инициализация ресурсов wgpu.
+- `src/simulation/gpu_solver_helpers_block.rs`: Вспомогательные функции буферов, bind-групп и dispatch.
+- `src/simulation/gpu_solver_impl_core_block.rs`: Core-инициализация/загрузка состояния GPU solver.
+- `src/simulation/gpu_solver_impl_exec_block.rs`: Исполнение шага GPU, readback и генерация параметров.
+- `src/simulation/mod.rs`: Плагин core-симуляции свободного газа, ресурсы состояния, schedule sets, CPU/GPU backend orchestration и общие perf-метрики.
+- `src/simulation/parity.rs`: Публичные parity API и сценарии сравнения CPU/GPU.
+- `src/simulation/parity_runtime_block.rs`: Runtime parity-метрики, прогоны сценариев и gate-оценка.
+- `src/simulation/parity_tests_block.rs`: Тесты parity-порогов, smoke и GPU-регрессий.
+- `src/plugins/default_plugin/pipe_runtime.rs`: Node-based `PipeGasField`, runtime-only `PipeFluxField`, публичный фасад pipe runtime/visual API и wiring тестов pipe-сети.
+- `src/plugins/default_plugin/pipe_runtime/pressure.rs`: Helper-ы перевода `particles -> pressure` и форматирования давления для HUD/pipe-рендера.
+- `src/plugins/default_plugin/pipe_runtime/scenarios.rs`: Общий builder пяти канонических pipe-сценариев для save-утилиты и acceptance-тестов.
+- `src/plugins/default_plugin/pipe_runtime/solver.rs`: Внутренний semi-implicit pressure+flux solver pipe-сети: component solve, world-vent budgets, mass-bounded transfers и запись `PipeFlowVisualState`.
+- `src/plugins/default_plugin/pipe_runtime/tests.rs`: Acceptance/regression тесты новой pipe-модели, включая быстрые `_smoke` проверки для самых долгих сценариев и полные канонические scenario 1..5.
+- `src/simulation/runtime_tick_block.rs`: Runtime-шаги core-симуляции свободного газа, GPU/CPU подшаги и perf-метрики; pipe pre-step выполняется default plugin runtime-ом до этого шага.
+- `src/simulation/simulation_tests_block.rs`: Тесты конфигурации тика и структурных pre-step правил.
+- `src/ui/cell_inspector.rs`: Runtime-сборка и позиционирование HUD инспектора клетки как стека отдельных entity-блоков с общей тенью.
+- `src/ui/cell_inspector_model.rs`: Модель данных и formatter HUD инспектора клетки, включая config-driven контейнеры, solid-материалы как отдельные блоки и registry-driven отображение состава газа.
+- `src/ui/input_field.rs`: Публичные типы text-input и точка сборки input-систем.
+- `src/ui/input_field_helpers_block.rs`: Вспомогательная геометрия курсора текста и точный hit-test/каретка через `ComputedTextBlock`.
+- `src/ui/input_field_systems_block.rs`: Системы focus/keyboard/render/caret для текстовых полей.
+- `src/ui/modal.rs`: Публичные типы reusable modal backdrop subsystem, helper-ы спавна backdrop-слоёв и wiring `ModalPlugin`.
+- `src/ui/modal_capture_block.rs`: Snapshot/capture runtime для modal backdrop-ов: offscreen-камера, resize target-а, blur world-snapshot и cache lifecycle.
+- `src/ui/modal_runtime_block.rs`: Выбор topmost модалки, cover-layout backdrop-изображений и переключение режимов `PanelFrosted` / `FullscreenBlur`.
+- `src/ui/modal_tests_block.rs`: Unit-тесты modal helper-ов, cover-layout и правил refresh/capture для world-snapshot backdrop.
+- `src/ui/mod.rs`: UI-плагин, wiring общих UI-систем и exports переиспользуемых UI-компонентов.
+- `src/ui/palette.rs`: Единая палитра цветов UI (панели, меню, текст, input/select, tooltip, HUD и тени HUD).
+- `src/ui/panels.rs`: Публичные типы panel-системы и композиция блоков панели.
+- `src/ui/panels_manager_block.rs`: Состояние и API PanelManager, hit-rect и управление панелями.
+- `src/ui/panels_runtime_block.rs`: Runtime-системы панели: layout, состояние viewport-ов и события заголовка; input scroll делегирован общему `scroll_area`.
+- `src/ui/panels_tests_block.rs`: Тесты layout/scroll/stack-поведения панелей.
+- `src/ui/scroll_area.rs`: Общий scroll-area runtime для modal/panel viewport-ов: wheel input, drag thumb, click on track, visibility scrollbar и приоритет групп ввода.
+- `src/ui/select_field.rs`: Dropdown/select-компонент для UI-панелей и его тесты.
+- `src/ui/sim_controls.rs`: UI-контролы симуляции (pause/speed/hotkeys).
+- `src/ui/toggle_switch.rs`: Переиспользуемый двухпозиционный toggle-switch UI-компонент для включения/выключения настроек.
+- `src/world/grid.rs`: Клеточная сетка мира, материалы, координатные утилиты и тесты.
+- `src/world/mod.rs`: Плагин мира и события изменений клеток.
+- `src/world/structures.rs`: Unified layer/descriptor-модель структур, `PlacedStructureMap`, rotation, bridge-footprint и pipe-cut state.
+- `tmp_size.rs`: Временный локальный вспомогательный Rust-файл для ручных проверок/черновых экспериментов.

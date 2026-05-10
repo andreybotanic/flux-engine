@@ -118,7 +118,16 @@ fn read_toml<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
         .map_err(|err| format!("Failed to parse config '{}': {}", path.display(), err))
 }
 
-fn load_gas_files(gases_root: &Path) -> Result<Vec<GasDefinition>, String> {
+fn load_default_plugin_substances(gases_root: &Path) -> Result<Vec<SubstanceDefinition>, String> {
+    let mut by_id = crate::plugins::default_plugin::default_substance_definitions()
+        .into_iter()
+        .map(|definition| (definition.id.clone(), definition))
+        .collect::<std::collections::BTreeMap<_, _>>();
+
+    if !gases_root.exists() {
+        return Ok(by_id.into_values().collect());
+    }
+
     let mut files: Vec<PathBuf> = fs::read_dir(gases_root)
         .map_err(|err| {
             format!(
@@ -138,14 +147,7 @@ fn load_gas_files(gases_root: &Path) -> Result<Vec<GasDefinition>, String> {
 
     files.sort();
 
-    if files.is_empty() {
-        return Err(format!(
-            "Gas config directory '{}' contains no .toml files",
-            gases_root.display()
-        ));
-    }
-
-    let mut gases = Vec::with_capacity(files.len());
+    let mut seen_config_ids = std::collections::BTreeSet::new();
     for path in files {
         let file = read_toml::<GasToml>(&path)?;
 
@@ -172,15 +174,47 @@ fn load_gas_files(gases_root: &Path) -> Result<Vec<GasDefinition>, String> {
             }
         }
 
-        gases.push(GasDefinition {
-            id: file.id,
-            label: file.label,
-            molecular_mass: file.molecular_mass,
-            color: file.color,
-        });
+        let substance_id = crate::plugins::default_plugin::default_substance_id_for_alias(&file.id)
+            .map_err(|err| {
+                format!(
+                    "Gas config '{}' has invalid default plugin substance id '{}': {}",
+                    path.display(),
+                    file.id,
+                    err
+                )
+            })?;
+        if !substance_id
+            .as_str()
+            .starts_with(crate::plugins::DEFAULT_PLUGIN_ID_VALUE)
+        {
+            return Err(format!(
+                "Gas config '{}' must describe a flux.default substance, got '{}'",
+                path.display(),
+                substance_id
+            ));
+        }
+        if !seen_config_ids.insert(substance_id.clone()) {
+            return Err(format!("Duplicate gas id '{}'", file.id));
+        }
+
+        let alias = file
+            .id
+            .rsplit('.')
+            .next()
+            .unwrap_or(file.id.as_str())
+            .to_string();
+        let definition = SubstanceDefinition::gas(
+            substance_id.clone(),
+            crate::plugins::PluginId::default_plugin(),
+            file.label,
+            file.molecular_mass,
+            file.color,
+            vec![alias],
+        )?;
+        by_id.insert(substance_id, definition);
     }
 
-    Ok(gases)
+    Ok(by_id.into_values().collect())
 }
 
 fn load_visual_placement_configs(

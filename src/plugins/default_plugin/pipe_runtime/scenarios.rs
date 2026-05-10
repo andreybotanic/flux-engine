@@ -1,13 +1,13 @@
 use crate::{
     config::GasRegistry,
-    simulation::{gas::GasField, PipeSimulationConfig},
+    simulation::gas::GasField,
     world::{
         grid::{CellMaterial, WorldGrid},
         structures::PlacedStructureMap,
     },
 };
 
-use super::PipeGasField;
+use super::{PipeGasField, PipeSimulationConfig};
 
 /// Stores one reusable pipe scenario snapshot before saving or testing.
 pub struct PipeScenarioSlot {

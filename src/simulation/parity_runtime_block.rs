@@ -5,7 +5,7 @@ pub fn compare_cpu_gpu_fields(
     world: &WorldGrid,
     radius: u32,
 ) -> ParityMetrics {
-    let gas_count = cpu.gas_count().min(gpu.gas_count()).min(3);
+    let gas_count = cpu.gas_count().min(gpu.gas_count());
     let mut errors = Vec::new();
     for y in 1..WORLD_HEIGHT - 1 {
         for x in 1..WORLD_WIDTH - 1 {
@@ -32,7 +32,7 @@ pub fn compare_cpu_gpu_fields(
 
     let cpu_totals = cpu.species_totals_u64(world);
     let gpu_totals = gpu.species_totals_u64(world);
-    let mut mass_rel_errors = [0.0f32; 3];
+    let mut mass_rel_errors = vec![0.0f32; gas_count];
     for gas_index in 0..gas_count {
         let a = cpu_totals[gas_index] as f64;
         let b = gpu_totals[gas_index] as f64;
@@ -140,21 +140,9 @@ pub fn run_cpu_cpu_parity_scenario(
 
     for _ in 0..steps {
         let _ = apply_gas_structures_pre_step(&structures, &mut cpu_a, &world);
-        super::do_one_substep(
-            &mut block_sync_a,
-            &mut cpu_a,
-            &world,
-            &config,
-            &mut step_a,
-        );
+        super::do_one_substep(&mut block_sync_a, &mut cpu_a, &world, &config, &mut step_a);
         let _ = apply_gas_structures_pre_step(&structures, &mut cpu_b, &world);
-        super::do_one_substep(
-            &mut block_sync_b,
-            &mut cpu_b,
-            &world,
-            &config,
-            &mut step_b,
-        );
+        super::do_one_substep(&mut block_sync_b, &mut cpu_b, &world, &config, &mut step_b);
     }
 
     Ok(compare_cpu_gpu_fields(&cpu_a, &cpu_b, &world, radius))
@@ -225,13 +213,16 @@ pub fn run_cpu_only_calibration(
     }
 
     let mut all_errors = Vec::new();
-    let mut mass_errors = [0.0f32; 3];
+    let mut mass_errors: Vec<f32> = Vec::new();
     for i in 0..states.len() {
         for j in i + 1..states.len() {
             let metrics = compare_cpu_gpu_fields(&states[i], &states[j], &world, radius);
             all_errors.push(metrics.mean_abs_error);
             all_errors.push(metrics.p95_abs_error);
             all_errors.push(metrics.max_abs_error);
+            if mass_errors.len() < metrics.mass_rel_errors.len() {
+                mass_errors.resize(metrics.mass_rel_errors.len(), 0.0);
+            }
             for (k, v) in metrics.mass_rel_errors.iter().enumerate() {
                 mass_errors[k] = mass_errors[k].max(*v);
             }
@@ -251,4 +242,3 @@ pub fn run_cpu_only_calibration(
         mass_rel_errors: mass_errors,
     })
 }
-

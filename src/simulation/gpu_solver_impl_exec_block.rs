@@ -99,7 +99,7 @@ impl GpuGasSolver {
         })
     }
 
-/// Runs `readback_state` logic.
+    /// Runs `readback_state` logic.
     pub fn readback_state(&self) -> Result<GpuSolverHostState, String> {
         let species_size = (self.cells * self.gas_count as usize * size_of::<u32>()) as u64;
         let total_density_size = (self.cells * size_of::<f32>()) as u64;
@@ -171,7 +171,7 @@ impl GpuGasSolver {
         })
     }
 
-/// Runs `from_cpu_state` logic.
+    /// Runs `from_cpu_state` logic.
     pub fn from_cpu_state(world: &WorldGrid, gas: &GasField) -> Result<(Self, f32), String> {
         let width = crate::world::grid::WORLD_WIDTH;
         let height = crate::world::grid::WORLD_HEIGHT;
@@ -181,7 +181,7 @@ impl GpuGasSolver {
         Ok((solver, upload_ms))
     }
 
-/// Runs `params_from_config` logic.
+    /// Runs `params_from_config` logic.
     pub fn params_from_config(
         config: &super::GasSimulationConfig,
         width: u32,
@@ -189,27 +189,16 @@ impl GpuGasSolver {
         step: u64,
         gas: &GasField,
     ) -> ParamsPod {
-        let m0 = gas.molecular_mass(0);
-        let m1 = gas.molecular_mass(1);
-        let m2 = gas.molecular_mass(2);
-        Self::params_from_raw(
-            config,
-            width,
-            height,
-            step,
-            gas.gas_count() as u32,
-            [m0, m1, m2],
-        )
+        Self::params_from_raw(config, width, height, step, gas.gas_count() as u32)
     }
 
-/// Runs `params_from_raw` logic.
+    /// Runs `params_from_raw` logic.
     pub fn params_from_raw(
         config: &super::GasSimulationConfig,
         width: u32,
         height: u32,
         step: u64,
         gas_count: u32,
-        molecular_masses: [f32; 3],
     ) -> ParamsPod {
         ParamsPod {
             width,
@@ -240,16 +229,15 @@ impl GpuGasSolver {
             _pad6: 0,
             mass_fix_error_threshold: config.mass_fix_error_threshold,
             mass_fix_min_residual: config.mass_fix_min_residual,
-            molecular_mass_h2: molecular_masses[0],
-            molecular_mass_o2: molecular_masses[1],
-            molecular_mass_co2: molecular_masses[2],
+            _pad7: 0.0,
             _pad8: 0.0,
+            _pad9: 0.0,
+            _pad10: 0.0,
         }
     }
 
-/// Runs `current_dimensions` logic.
+    /// Runs `current_dimensions` logic.
     pub fn current_dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
     }
 }
-

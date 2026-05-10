@@ -7,7 +7,7 @@ use bevy::prelude::Resource;
 
 use crate::{
     config::{HudBlockConfig, VisualPlacementConfig, WorldCellHudConfig},
-    plugins::PluginId,
+    plugins::{PluginId, SubstanceDefinition, SubstanceId},
     render::OverlayMode,
     world::{
         grid::CellMaterial,
@@ -109,6 +109,7 @@ pub struct ContentRegistry {
     cells: BTreeMap<ContentId, CellContentDescriptor>,
     structures: BTreeMap<ContentId, StructureContentDescriptor>,
     overlays: BTreeMap<ContentId, OverlayContentDescriptor>,
+    substances: BTreeMap<SubstanceId, SubstanceDefinition>,
     world_cell_hud: Option<WorldCellHudConfig>,
 }
 
@@ -131,6 +132,11 @@ impl ContentRegistry {
     /// Registers one overlay mode descriptor.
     pub fn register_overlay(&mut self, descriptor: OverlayContentDescriptor) {
         self.overlays.insert(descriptor.id.clone(), descriptor);
+    }
+
+    /// Registers one substance definition.
+    pub fn register_substance(&mut self, definition: SubstanceDefinition) {
+        self.substances.insert(definition.id.clone(), definition);
     }
 
     /// Stores the default world-cell HUD descriptor.
@@ -156,6 +162,11 @@ impl ContentRegistry {
     /// Returns every registered overlay descriptor by stable content id.
     pub fn overlays(&self) -> &BTreeMap<ContentId, OverlayContentDescriptor> {
         &self.overlays
+    }
+
+    /// Returns every registered substance definition by stable substance id.
+    pub fn substances(&self) -> &BTreeMap<SubstanceId, SubstanceDefinition> {
+        &self.substances
     }
 
     /// Returns the configured world-cell HUD descriptor.

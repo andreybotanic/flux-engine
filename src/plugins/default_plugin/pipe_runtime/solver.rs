@@ -1,6 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 
-use crate::simulation::PipeSimulationConfig;
+use super::PipeSimulationConfig;
 
 use super::{
     pressure::{pipe_pressure_pa, world_pressure_pa},

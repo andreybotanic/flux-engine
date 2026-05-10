@@ -160,14 +160,19 @@ color = [0.3, 0.3, 0.3]
     }
 
     #[test]
-    fn config_loader_rejects_empty_gas_list() {
+    fn config_loader_uses_default_plugin_substances_when_gas_dir_is_empty() {
         let root = make_temp_root("flux_cfg_empty");
         write_minimal_configs(&root);
-        let err = match GameConfig::load_from_root(&root) {
-            Ok(_) => panic!("must fail on empty gases"),
-            Err(err) => err,
-        };
-        assert!(err.contains("contains no .toml files"));
+        let config = GameConfig::load_from_root(&root).expect("default substances should load");
+        assert_eq!(config.gas_registry.count(), 3);
+        assert_eq!(
+            config.gas_registry.stable_ids(),
+            vec![
+                "flux.default.substance.h2",
+                "flux.default.substance.o2",
+                "flux.default.substance.co2"
+            ]
+        );
         let _ = fs::remove_dir_all(root);
     }
 
@@ -223,6 +228,15 @@ color = [1.2, 0.0, 0.0]
             .map(|g| g.id.as_str())
             .collect::<Vec<_>>();
         assert_eq!(ids, vec!["h2", "o2", "co2"]);
+        assert_eq!(
+            registry.stable_ids(),
+            vec![
+                "flux.default.substance.h2",
+                "flux.default.substance.o2",
+                "flux.default.substance.co2"
+            ]
+        );
+        assert_eq!(registry.index_of("flux.default.substance.h2"), Some(0));
     }
 
     #[test]
@@ -291,6 +305,10 @@ color = [0.8, 0.8, 1.0]
 
         let config = GameConfig::load_from_root(&root).expect("config should load");
         assert_eq!(config.world_cell_hud.label, "Cell");
+        assert_eq!(
+            config.gas_registry.stable_id_by_index(0).map(|id| id.as_str()),
+            Some("flux.default.substance.h2")
+        );
         assert_eq!(config.structure_visuals.get(StructureKind::Pipe).label, "Pipe");
         assert_eq!(config.cell_visual_layouts.get(CellMaterial::Brick).label, "Brick");
         assert_eq!(

@@ -6,17 +6,23 @@ use std::{
 };
 
 use bevy::prelude::Vec2;
-use flux_engine::simulation::{
-    backend::SimulationBackend,
-    discrete_step::{step_discrete_in_place, DiscreteStepParams},
-    gpu_solver::{GpuGasSolver, GpuSolverHostState},
-    parity::run_full_parity_gate,
-    GasSimulationConfig, SolverTuning,
+use flux_engine::{
+    config::GasRegistry,
+    plugins::default_plugin::default_substance_definitions,
+    simulation::{
+        backend::SimulationBackend,
+        discrete_step::{step_discrete_in_place, DiscreteStepParams},
+        gpu_solver::{GpuGasSolver, GpuSolverHostState},
+        parity::run_full_parity_gate,
+        GasSimulationConfig, SolverTuning,
+    },
 };
 
-const PERF_GAS_COUNT: usize = 3;
-const MOLECULAR_MASSES: [f32; 3] = [2.016, 31.998, 44.009];
 const PERF_SCENARIO_PROFILE: &str = "app_like_sparse";
+
+fn perf_registry() -> Result<GasRegistry, String> {
+    GasRegistry::from_substances(default_substance_definitions())
+}
 
 #[derive(Clone, Debug)]
 struct PerfSample {
@@ -37,6 +43,8 @@ struct DiscretePerfState {
     width: u32,
     height: u32,
     step: u64,
+    gas_count: usize,
+    molecular_masses: Vec<f32>,
     read: Vec<u32>,
     write: Vec<u32>,
     total_density: Vec<f32>,
@@ -45,14 +53,18 @@ struct DiscretePerfState {
 }
 
 impl DiscretePerfState {
-    fn seeded(width: u32, height: u32) -> Self {
+    fn seeded(width: u32, height: u32, registry: &GasRegistry) -> Self {
         let cells = (width * height) as usize;
+        let molecular_masses = registry.molecular_masses();
+        let gas_count = molecular_masses.len();
         let mut state = Self {
             width,
             height,
             step: 0,
-            read: vec![0; cells * PERF_GAS_COUNT],
-            write: vec![0; cells * PERF_GAS_COUNT],
+            gas_count,
+            molecular_masses,
+            read: vec![0; cells * gas_count],
+            write: vec![0; cells * gas_count],
             total_density: vec![0.0; cells],
             velocity: vec![Vec2::ZERO; cells],
             solid_mask: vec![0; cells],
@@ -77,13 +89,13 @@ impl DiscretePerfState {
                     continue;
                 }
                 let checker = (x + y) % 4;
-                if checker <= 1 {
+                if state.gas_count > 0 && checker <= 1 {
                     state.set_cell_species(x, y, 0, 180 + ((x * 7 + y * 13) % 40));
                 }
-                if checker == 1 || checker == 2 {
+                if state.gas_count > 1 && (checker == 1 || checker == 2) {
                     state.set_cell_species(x, y, 1, 90 + ((x * 11 + y * 5) % 25));
                 }
-                if checker == 2 || checker == 3 {
+                if state.gas_count > 2 && (checker == 2 || checker == 3) {
                     state.set_cell_species(x, y, 2, 45 + ((x * 3 + y * 17) % 20));
                 }
             }
@@ -99,7 +111,7 @@ impl DiscretePerfState {
     }
 
     fn species_offset(&self, x: u32, y: u32, gas_index: usize) -> usize {
-        self.idx(x, y) * PERF_GAS_COUNT + gas_index
+        self.idx(x, y) * self.gas_count + gas_index
     }
 
     fn is_boundary(&self, x: u32, y: u32) -> bool {
@@ -125,8 +137,8 @@ impl DiscretePerfState {
                     self.velocity[idx] = Vec2::ZERO;
                     continue;
                 }
-                let base = idx * PERF_GAS_COUNT;
-                self.total_density[idx] = self.read[base..base + PERF_GAS_COUNT]
+                let base = idx * self.gas_count;
+                self.total_density[idx] = self.read[base..base + self.gas_count]
                     .iter()
                     .map(|v| *v as f32)
                     .sum();
@@ -137,16 +149,14 @@ impl DiscretePerfState {
 
     fn to_gpu_host_state(&self) -> GpuSolverHostState {
         let cells = (self.width * self.height) as usize;
-        let mut species = Vec::with_capacity(cells * PERF_GAS_COUNT);
+        let mut species = Vec::with_capacity(cells * self.gas_count);
         for idx in 0..cells {
-            let base = idx * PERF_GAS_COUNT;
-            species.push(self.read[base]);
-            species.push(self.read[base + 1]);
-            species.push(self.read[base + 2]);
+            let base = idx * self.gas_count;
+            species.extend_from_slice(&self.read[base..base + self.gas_count]);
         }
         GpuSolverHostState {
-            gas_count: PERF_GAS_COUNT as u32,
-            molecular_masses: MOLECULAR_MASSES.to_vec(),
+            gas_count: self.gas_count as u32,
+            molecular_masses: self.molecular_masses.clone(),
             species,
             total_density: self.total_density.clone(),
             velocity: self.velocity.iter().map(|v| [v.x, v.y]).collect(),
@@ -161,8 +171,8 @@ impl DiscretePerfState {
         step_discrete_in_place(DiscreteStepParams {
             width: self.width,
             height: self.height,
-            gas_count: PERF_GAS_COUNT,
-            molecular_masses: &MOLECULAR_MASSES,
+            gas_count: self.gas_count,
+            molecular_masses: &self.molecular_masses,
             read: &mut self.read,
             write: &mut self.write,
             total_density: &mut self.total_density,
@@ -229,12 +239,13 @@ fn run_cpu(
     measure_steps: u32,
     repeats: u32,
     config: &GasSimulationConfig,
+    registry: &GasRegistry,
     run_started_at_utc: &str,
 ) -> Vec<PerfSample> {
     let mut out = Vec::new();
 
     for run in 0..repeats {
-        let mut state = DiscretePerfState::seeded(width, height);
+        let mut state = DiscretePerfState::seeded(width, height, registry);
         for _ in 0..warmup {
             state.do_one_substep(config);
         }
@@ -271,6 +282,7 @@ fn run_gpu_mode(
     measure_steps: u32,
     repeats: u32,
     config: &GasSimulationConfig,
+    registry: &GasRegistry,
     mode_name: &'static str,
     run_started_at_utc: &str,
 ) -> (Vec<PerfSample>, String) {
@@ -278,9 +290,9 @@ fn run_gpu_mode(
     let mut adapter_text = String::new();
 
     for run in 0..repeats {
-        let mut state = DiscretePerfState::seeded(width, height);
+        let mut state = DiscretePerfState::seeded(width, height, registry);
         let mut solver =
-            match GpuGasSolver::new_with_gas_count(width, height, PERF_GAS_COUNT as u32) {
+            match GpuGasSolver::new_with_gas_count(width, height, state.gas_count as u32) {
                 Ok(solver) => solver,
                 Err(err) => {
                     eprintln!("GPU is unavailable for {width}x{height} ({mode_name}): {err}");
@@ -307,8 +319,7 @@ fn run_gpu_mode(
                 width,
                 height,
                 state.step,
-                PERF_GAS_COUNT as u32,
-                MOLECULAR_MASSES,
+                state.gas_count as u32,
             );
             let _ = solver.step(params);
             state.step = state.step.saturating_add(1);
@@ -324,8 +335,7 @@ fn run_gpu_mode(
                 width,
                 height,
                 state.step,
-                PERF_GAS_COUNT as u32,
-                MOLECULAR_MASSES,
+                state.gas_count as u32,
             );
             let timings = match solver.step(params) {
                 Ok(t) => t,
@@ -545,6 +555,7 @@ fn main() -> Result<(), String> {
         solver_tuning: SolverTuning::default(),
         ..GasSimulationConfig::default()
     };
+    let registry = perf_registry()?;
 
     if !skip_parity_gate {
         println!("Running parity gate before performance benchmark (2 scenarios x 5000 steps)...");
@@ -579,6 +590,7 @@ fn main() -> Result<(), String> {
                 pf_measure,
                 1,
                 &config,
+                &registry,
                 &run_started_at_utc,
             );
             let cpu_step = cpu_pf
@@ -595,6 +607,7 @@ fn main() -> Result<(), String> {
                 pf_measure,
                 1,
                 &config,
+                &registry,
                 "runtime_transfer",
                 &run_started_at_utc,
             );
@@ -699,6 +712,7 @@ Use --allow-slow to run anyway after investigation."
             measure_steps,
             repeats,
             &config,
+            &registry,
             &run_started_at_utc,
         ));
 
@@ -709,6 +723,7 @@ Use --allow-slow to run anyway after investigation."
             measure_steps,
             repeats,
             &config,
+            &registry,
             "runtime_transfer",
             &run_started_at_utc,
         );

@@ -348,7 +348,7 @@ fn map_saved_gas_snapshot_to_registry(
 fn write_pipe_gas_chunk(
     path: &Path,
     gas_ids: &[String],
-    snapshot: &crate::simulation::pipes::PipeGasSnapshot,
+    snapshot: &crate::plugins::default_plugin::pipe_runtime::PipeGasSnapshot,
 ) -> Result<(), SaveError> {
     if snapshot.gas_count != gas_ids.len() {
         return Err(SaveError::Validation(format!(
@@ -395,7 +395,7 @@ fn write_pipe_gas_chunk(
 fn read_pipe_gas_chunk(
     path: &Path,
     gas_registry: &GasRegistry,
-) -> Result<crate::simulation::pipes::PipeGasSnapshot, SaveError> {
+) -> Result<crate::plugins::default_plugin::pipe_runtime::PipeGasSnapshot, SaveError> {
     let bytes = fs::read(path)
         .map_err(|err| SaveError::Io(format!("Failed to read '{}': {}", path.display(), err)))?;
     let mut cursor = Cursor::new(bytes.as_slice());
@@ -481,7 +481,7 @@ fn read_pipe_gas_chunk(
 fn map_saved_pipe_gas_snapshot_to_registry(
     saved: &SavedPipeGasChunk,
     gas_registry: &GasRegistry,
-) -> Result<crate::simulation::pipes::PipeGasSnapshot, SaveError> {
+) -> Result<crate::plugins::default_plugin::pipe_runtime::PipeGasSnapshot, SaveError> {
     let mut seen = HashSet::new();
     for gas_id in &saved.gas_ids {
         if !seen.insert(gas_id.clone()) {
@@ -517,7 +517,7 @@ fn map_saved_pipe_gas_snapshot_to_registry(
         });
     }
 
-    Ok(crate::simulation::pipes::PipeGasSnapshot {
+    Ok(crate::plugins::default_plugin::pipe_runtime::PipeGasSnapshot {
         gas_count: current_gas_count,
         nodes: mapped_nodes,
     })

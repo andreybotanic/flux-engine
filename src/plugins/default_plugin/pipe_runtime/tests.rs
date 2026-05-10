@@ -1,15 +1,14 @@
 use super::{
-    apply_pipe_network_step, bridge_port_cells, pipe_cell_display_blocks_with_transfers,
+    apply_gas_structures_pre_step, apply_pipe_network_step, bridge_port_cells,
+    pipe_cell_display_blocks_with_transfers,
     pressure::{pipe_pressure_pa, world_pressure_pa},
     scenarios::build_reference_pipe_scenarios,
     PipeCellDisplayBlock, PipeContainerKind, PipeFlowVisualState, PipeFluxField, PipeGasField,
+    PipeSimulationConfig,
 };
 use crate::{
     config::{GasDefinition, GasRegistry},
-    simulation::{
-        apply_gas_structures_pre_step, do_one_substep, BlockSyncState, GasSimulationConfig,
-        PipeSimulationConfig, SimulationStep,
-    },
+    simulation::{do_one_substep, BlockSyncState, GasSimulationConfig, SimulationStep},
     world::{
         grid::WorldGrid,
         structures::{PlacedStructureMap, StructureRotation},
@@ -46,7 +45,7 @@ fn simulation_config() -> GasSimulationConfig {
 }
 
 fn pipe_config() -> PipeSimulationConfig {
-    simulation_config().pipe
+    PipeSimulationConfig::default()
 }
 
 fn relative_diff(a: f32, b: f32) -> f32 {
@@ -134,13 +133,14 @@ struct ScenarioHarness {
     pipe_flux: PipeFluxField,
     visuals: PipeFlowVisualState,
     config: GasSimulationConfig,
+    pipe_config: PipeSimulationConfig,
     block_sync: BlockSyncState,
     step: SimulationStep,
 }
 
 impl ScenarioHarness {
     fn from_slot(
-        slot: crate::simulation::pipes::scenarios::PipeScenarioSlot,
+        slot: crate::plugins::default_plugin::pipe_runtime::scenarios::PipeScenarioSlot,
         config: GasSimulationConfig,
     ) -> Self {
         Self {
@@ -151,6 +151,7 @@ impl ScenarioHarness {
             pipe_flux: PipeFluxField::default(),
             visuals: PipeFlowVisualState::default(),
             config,
+            pipe_config: pipe_config(),
             block_sync: BlockSyncState,
             step: SimulationStep(0),
         }
@@ -164,7 +165,7 @@ impl ScenarioHarness {
             &mut self.gas,
             &self.world,
             &mut self.visuals,
-            &self.config.pipe,
+            &self.pipe_config,
         );
         let _ = apply_gas_structures_pre_step(&self.structures, &mut self.gas, &self.world);
         do_one_substep(
@@ -190,7 +191,9 @@ impl ScenarioHarness {
     }
 }
 
-fn scenario_slot(index: usize) -> crate::simulation::pipes::scenarios::PipeScenarioSlot {
+fn scenario_slot(
+    index: usize,
+) -> crate::plugins::default_plugin::pipe_runtime::scenarios::PipeScenarioSlot {
     build_reference_pipe_scenarios(&registry(), &pipe_config())
         .expect("scenario build")
         .into_iter()
@@ -331,11 +334,11 @@ fn scenario_one_long_pipe_reaches_dense_front_and_low_gradient() {
     let source_cell = UVec2::new(23, 51);
     let mut first_reach_tick = vec![None; segment_cells.len()];
     let stop_tick = harness.run_until(700, |state, tick| {
-        let source_pressure = world_pressure_at(&state.gas, &state.config.pipe, source_cell);
+        let source_pressure = world_pressure_at(&state.gas, &state.pipe_config, source_cell);
         for (index, cell) in segment_cells.iter().copied().enumerate() {
             let pressure = pipe_pressure_at(
                 &state.pipe_gas,
-                &state.config.pipe,
+                &state.pipe_config,
                 PipeContainerKind::Pipe,
                 cell,
             );
@@ -350,13 +353,13 @@ fn scenario_one_long_pipe_reaches_dense_front_and_low_gradient() {
         .map(|x| {
             pipe_pressure_at(
                 &harness.pipe_gas,
-                &harness.config.pipe,
+                &harness.pipe_config,
                 PipeContainerKind::Pipe,
                 UVec2::new(x, 51),
             )
         })
         .collect::<Vec<_>>();
-    let final_source_pressure = world_pressure_at(&harness.gas, &harness.config.pipe, source_cell);
+    let final_source_pressure = world_pressure_at(&harness.gas, &harness.pipe_config, source_cell);
 
     assert!(
         first_reach_tick.iter().all(Option::is_some),
@@ -368,7 +371,7 @@ fn scenario_one_long_pipe_reaches_dense_front_and_low_gradient() {
     for cell in &segment_cells {
         let pressure = pipe_pressure_at(
             &harness.pipe_gas,
-            &harness.config.pipe,
+            &harness.pipe_config,
             PipeContainerKind::Pipe,
             *cell,
         );
@@ -404,13 +407,13 @@ fn scenario_two_equalizes_two_rooms_and_pipe() {
     let config = simulation_config();
     let mut harness = ScenarioHarness::from_slot(scenario_slot(1), config);
     let ticks = harness.run_until(20_000, |state, _| {
-        let left = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 58);
-        let right = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 58);
+        let left = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 7, 44, 23, 58);
+        let right = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 79, 44, 95, 58);
         pressures_match_within(left, right, 0.03)
     });
 
-    let left = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 58);
-    let right = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 58);
+    let left = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 7, 44, 23, 58);
+    let right = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 79, 44, 95, 58);
     assert!(
         pressures_match_within(left, right, 0.03),
         "scenario 2 room pressures did not converge after {ticks} ticks: left={left}, right={right}"
@@ -420,7 +423,7 @@ fn scenario_two_equalizes_two_rooms_and_pipe() {
     for x in 23..=79 {
         let pressure = pipe_pressure_at(
             &harness.pipe_gas,
-            &harness.config.pipe,
+            &harness.pipe_config,
             PipeContainerKind::Pipe,
             UVec2::new(x, 51),
         );
@@ -436,27 +439,27 @@ fn scenario_two_equalizes_two_rooms_and_pipe_smoke() {
     let config = simulation_config();
     let mut harness = ScenarioHarness::from_slot(scenario_slot(1), config);
     let left_initial =
-        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 58);
+        mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 7, 44, 23, 58);
     let right_initial =
-        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 58);
+        mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 79, 44, 95, 58);
     let initial_diff = (left_initial - right_initial).abs();
     let ticks = harness.run_until(1_200, |state, _| {
-        let left = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 58);
-        let right = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 58);
+        let left = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 7, 44, 23, 58);
+        let right = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 79, 44, 95, 58);
         let center = pipe_pressure_at(
             &state.pipe_gas,
-            &state.config.pipe,
+            &state.pipe_config,
             PipeContainerKind::Pipe,
             UVec2::new(51, 51),
         );
         (left - right).abs() <= initial_diff * 0.95 && center >= right_initial
     });
 
-    let left = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 58);
-    let right = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 58);
+    let left = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 7, 44, 23, 58);
+    let right = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 79, 44, 95, 58);
     let center = pipe_pressure_at(
         &harness.pipe_gas,
-        &harness.config.pipe,
+        &harness.pipe_config,
         PipeContainerKind::Pipe,
         UVec2::new(51, 51),
     );
@@ -482,13 +485,13 @@ fn scenario_three_equalizes_and_uses_both_parallel_routes() {
             has_transfer_between(&state.visuals, UVec2::new(50, 53), UVec2::new(51, 53));
         branch_route_seen |=
             has_transfer_between(&state.visuals, UVec2::new(50, 49), UVec2::new(51, 49));
-        let left = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 62);
-        let right = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 62);
+        let left = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 7, 44, 23, 62);
+        let right = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 79, 44, 95, 62);
         direct_route_seen && branch_route_seen && pressures_match_within(left, right, 0.03)
     });
 
-    let left = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 62);
-    let right = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 62);
+    let left = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 7, 44, 23, 62);
+    let right = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 79, 44, 95, 62);
     assert!(direct_route_seen, "expected flow through the direct branch");
     assert!(
         branch_route_seen,
@@ -505,9 +508,9 @@ fn scenario_three_equalizes_and_uses_both_parallel_routes_smoke() {
     let config = simulation_config();
     let mut harness = ScenarioHarness::from_slot(scenario_slot(2), config);
     let left_initial =
-        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 62);
+        mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 7, 44, 23, 62);
     let right_initial =
-        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 62);
+        mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 79, 44, 95, 62);
     let initial_diff = (left_initial - right_initial).abs();
     let mut direct_route_seen = false;
     let mut branch_route_seen = false;
@@ -516,13 +519,13 @@ fn scenario_three_equalizes_and_uses_both_parallel_routes_smoke() {
             has_transfer_between(&state.visuals, UVec2::new(50, 53), UVec2::new(51, 53));
         branch_route_seen |=
             has_transfer_between(&state.visuals, UVec2::new(50, 49), UVec2::new(51, 49));
-        let left = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 62);
-        let right = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 62);
+        let left = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 7, 44, 23, 62);
+        let right = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 79, 44, 95, 62);
         direct_route_seen && branch_route_seen && (left - right).abs() <= initial_diff * 0.95
     });
 
-    let left = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 62);
-    let right = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 62);
+    let left = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 7, 44, 23, 62);
+    let right = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 79, 44, 95, 62);
     let final_diff = (left - right).abs();
     assert!(
         direct_route_seen,
@@ -544,22 +547,22 @@ fn scenario_four_dead_end_pipe_fills_almost_to_source_pressure() {
     let mut harness = ScenarioHarness::from_slot(scenario_slot(3), config);
     let source_cell = UVec2::new(27, 51);
     let stop_tick = harness.run_until(700, |state, _| {
-        let source_pressure = world_pressure_at(&state.gas, &state.config.pipe, source_cell);
+        let source_pressure = world_pressure_at(&state.gas, &state.pipe_config, source_cell);
         (27..=85).all(|x| {
             pipe_pressure_at(
                 &state.pipe_gas,
-                &state.config.pipe,
+                &state.pipe_config,
                 PipeContainerKind::Pipe,
                 UVec2::new(x, 51),
             ) >= source_pressure * 0.95
         })
     });
 
-    let source_pressure = world_pressure_at(&harness.gas, &harness.config.pipe, source_cell);
+    let source_pressure = world_pressure_at(&harness.gas, &harness.pipe_config, source_cell);
     for x in 27..=85 {
         let pressure = pipe_pressure_at(
             &harness.pipe_gas,
-            &harness.config.pipe,
+            &harness.pipe_config,
             PipeContainerKind::Pipe,
             UVec2::new(x, 51),
         );
@@ -575,9 +578,9 @@ fn scenario_five_star_equalizes_three_rooms_and_all_rays_flow_smoke() {
     let config = simulation_config();
     let mut harness = ScenarioHarness::from_slot(scenario_slot(4), config);
     let initial_pressures = [
-        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 44, 7, 58, 23),
-        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 58),
-        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 58),
+        mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 44, 7, 58, 23),
+        mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 7, 44, 23, 58),
+        mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 79, 44, 95, 58),
     ];
     let initial_spread = pressure_spread(&initial_pressures);
     let mut top_seen = false;
@@ -588,9 +591,9 @@ fn scenario_five_star_equalizes_three_rooms_and_all_rays_flow_smoke() {
         left_seen |= has_transfer_between(&state.visuals, UVec2::new(30, 51), UVec2::new(31, 51));
         right_seen |= has_transfer_between(&state.visuals, UVec2::new(71, 51), UVec2::new(72, 51));
         let current_pressures = [
-            mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 44, 7, 58, 23),
-            mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 58),
-            mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 58),
+            mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 44, 7, 58, 23),
+            mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 7, 44, 23, 58),
+            mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 79, 44, 95, 58),
         ];
         top_seen
             && left_seen
@@ -599,9 +602,9 @@ fn scenario_five_star_equalizes_three_rooms_and_all_rays_flow_smoke() {
     });
 
     let final_pressures = [
-        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 44, 7, 58, 23),
-        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 58),
-        mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 58),
+        mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 44, 7, 58, 23),
+        mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 7, 44, 23, 58),
+        mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 79, 44, 95, 58),
     ];
     let final_spread = pressure_spread(&final_pressures);
     assert!(
@@ -633,9 +636,9 @@ fn scenario_five_star_equalizes_three_rooms_and_all_rays_flow() {
         top_seen |= has_transfer_between(&state.visuals, UVec2::new(51, 30), UVec2::new(51, 31));
         left_seen |= has_transfer_between(&state.visuals, UVec2::new(30, 51), UVec2::new(31, 51));
         right_seen |= has_transfer_between(&state.visuals, UVec2::new(71, 51), UVec2::new(72, 51));
-        let top = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 44, 7, 58, 23);
-        let left = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 7, 44, 23, 58);
-        let right = mean_world_pressure_in_rect(&state.gas, &state.config.pipe, 79, 44, 95, 58);
+        let top = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 44, 7, 58, 23);
+        let left = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 7, 44, 23, 58);
+        let right = mean_world_pressure_in_rect(&state.gas, &state.pipe_config, 79, 44, 95, 58);
         top_seen
             && left_seen
             && right_seen
@@ -643,12 +646,12 @@ fn scenario_five_star_equalizes_three_rooms_and_all_rays_flow() {
             && pressures_match_within(left, right, 0.03)
     });
 
-    let top = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 44, 7, 58, 23);
-    let left = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 7, 44, 23, 58);
-    let right = mean_world_pressure_in_rect(&harness.gas, &harness.config.pipe, 79, 44, 95, 58);
+    let top = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 44, 7, 58, 23);
+    let left = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 7, 44, 23, 58);
+    let right = mean_world_pressure_in_rect(&harness.gas, &harness.pipe_config, 79, 44, 95, 58);
     let center = pipe_pressure_at(
         &harness.pipe_gas,
-        &harness.config.pipe,
+        &harness.pipe_config,
         PipeContainerKind::Pipe,
         UVec2::new(51, 51),
     );

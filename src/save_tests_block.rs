@@ -3,7 +3,7 @@ mod tests {
     use super::*;
     use crate::{
         config::GasDefinition,
-        simulation::pipes::PipeGasField,
+        plugins::default_plugin::pipe_runtime::PipeGasField,
         world::{
             grid::{CellMaterial, WorldGrid},
             structures::PlacedStructureMap,
@@ -88,6 +88,13 @@ mod tests {
             123,
         )
         .expect("create save");
+        let gas_path = root.join(&descriptor.id).join(GAS_STATE_FILE);
+        let bytes = fs::read(&gas_path).expect("read gas chunk");
+        let first_id_len = u16::from_le_bytes([bytes[30], bytes[31]]) as usize;
+        let first_id =
+            std::str::from_utf8(&bytes[32..32 + first_id_len]).expect("first gas id utf8");
+        assert_eq!(first_id, "flux.default.substance.h2");
+
         let loaded = load_save(&root, &descriptor.id, &registry).expect("load save");
         assert_eq!(loaded.state.simulation_step, 123);
         assert_eq!(

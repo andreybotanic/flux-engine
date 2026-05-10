@@ -1,4 +1,4 @@
-use crate::simulation::PipeSimulationConfig;
+use super::PipeSimulationConfig;
 
 /// Converts world-cell particles into total pressure in pascals.
 pub fn world_pressure_pa(config: &PipeSimulationConfig, world_particles: u32) -> f32 {
@@ -30,7 +30,7 @@ pub fn format_pressure_pa(pressure_pa: f32) -> String {
         }
     }
     let scaled = clamped / selected.1;
-    if scaled >= 100.0 || (scaled - scaled.round()).abs() <= 0.05 {
+    if scaled >= 999.5 || (scaled - scaled.round()).abs() <= 0.05 {
         format!("{scaled:.0}{}", selected.0)
     } else {
         format!("{scaled:.1}{}", selected.0)
@@ -39,8 +39,8 @@ pub fn format_pressure_pa(pressure_pa: f32) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::PipeSimulationConfig;
     use super::{format_pressure_pa, pipe_pressure_pa, world_pressure_pa};
-    use crate::simulation::PipeSimulationConfig;
 
     #[test]
     fn default_pressure_conversions_match_design() {

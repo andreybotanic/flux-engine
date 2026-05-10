@@ -13,12 +13,15 @@ use crate::{
     config::{CellTypeVisualConfig, GasMainViewVisualConfig, GasRegistry},
     editor::StructureEditState,
     input::camera::MainCamera,
+    plugins::default_plugin::pipe_runtime::{
+        pipe_cell_display_blocks_with_transfers, PipeFlowVisualState, PipeGasField,
+        PipeSimulationConfig,
+    },
     render::pipe_highlight_material::PipeHighlightRenderAssets,
     save::WorldLoadState,
     simulation::{
         gas::{GasField, HYDROGEN_GPU_STORAGE_MAX_PARTICLES},
-        pipes::{pipe_cell_display_blocks_with_transfers, PipeFlowVisualState, PipeGasField},
-        GasSimulationConfig, SimulationStep,
+        SimulationStep,
     },
     ui::panels::PanelManager,
     world::grid::{

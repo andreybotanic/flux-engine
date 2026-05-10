@@ -68,7 +68,7 @@ pub fn create_save(
     world: &WorldGrid,
     gas: &GasField,
     structures: &PlacedStructureMap,
-    pipe_gas: &crate::simulation::pipes::PipeGasField,
+    pipe_gas: &crate::plugins::default_plugin::pipe_runtime::PipeGasField,
     gas_registry: &GasRegistry,
     simulation_step: u64,
 ) -> Result<SaveDescriptor, SaveError> {
@@ -116,7 +116,7 @@ pub fn overwrite_save(
     world: &WorldGrid,
     gas: &GasField,
     structures: &PlacedStructureMap,
-    pipe_gas: &crate::simulation::pipes::PipeGasField,
+    pipe_gas: &crate::plugins::default_plugin::pipe_runtime::PipeGasField,
     gas_registry: &GasRegistry,
     simulation_step: u64,
 ) -> Result<SaveDescriptor, SaveError> {
@@ -221,7 +221,7 @@ pub fn new_game_snapshot(gas_registry: &GasRegistry) -> RuntimeWorldState {
     let world = WorldGrid::default();
     let gas = GasField::from_registry(gas_registry);
     let structures = PlacedStructureMap::default();
-    let pipe_gas = crate::simulation::pipes::PipeGasField::from_registry(gas_registry);
+    let pipe_gas = crate::plugins::default_plugin::pipe_runtime::PipeGasField::from_registry(gas_registry);
     let mut pipe_gas = pipe_gas;
     pipe_gas.sync_to_structures(&structures);
     RuntimeWorldState {

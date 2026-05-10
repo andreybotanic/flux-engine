@@ -72,10 +72,10 @@ pub struct ParamsPod {
 
     mass_fix_error_threshold: f32,
     mass_fix_min_residual: f32,
-    molecular_mass_h2: f32,
-    molecular_mass_o2: f32,
-    molecular_mass_co2: f32,
+    _pad7: f32,
     _pad8: f32,
+    _pad9: f32,
+    _pad10: f32,
 }
 
 #[derive(Clone)]

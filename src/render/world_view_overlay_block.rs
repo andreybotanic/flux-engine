@@ -478,7 +478,7 @@ pub(crate) fn sync_pipe_overlay_visuals(
     structures: Res<PlacedStructureMap>,
     pipe_gas: Res<PipeGasField>,
     flow_state: Res<PipeFlowVisualState>,
-    simulation_config: Res<GasSimulationConfig>,
+    pipe_config: Res<PipeSimulationConfig>,
     gas_registry: Res<GasRegistry>,
     visual_settings: Res<GasVisualSettings>,
     main_view_settings: Res<GasMainViewVisualConfig>,
@@ -570,7 +570,7 @@ pub(crate) fn sync_pipe_overlay_visuals(
                 );
                 let rgb = (mix_rgb * visual).clamp(Vec3::ZERO, Vec3::ONE);
                 let outer_size =
-                    pipe_overlay_slot_size(&simulation_config.pipe, block.total_particles, total_slots);
+                    pipe_overlay_slot_size(&pipe_config, block.total_particles, total_slots);
                 let inner_size = pipe_square_inner_size(outer_size);
                 let offset = pipe_overlay_block_offset(
                     slot,
@@ -640,7 +640,7 @@ fn pipe_overlay_block_visible(total_particles: u32) -> bool {
 fn pipe_overlay_block_offset(
     slot: usize,
     total_slots: usize,
-    kind: crate::simulation::pipes::PipeContainerKind,
+    kind: crate::plugins::default_plugin::pipe_runtime::PipeContainerKind,
     structures: &PlacedStructureMap,
     cell: UVec2,
 ) -> Vec2 {
@@ -649,9 +649,9 @@ fn pipe_overlay_block_offset(
     };
     let bridge_offset = bridge_bend_direction(rotation) * (CELL_SIZE * 0.18);
     match kind {
-        crate::simulation::pipes::PipeContainerKind::BridgePipe => bridge_offset,
-        crate::simulation::pipes::PipeContainerKind::Pipe if total_slots > 1 => -bridge_offset,
-        crate::simulation::pipes::PipeContainerKind::Pipe => Vec2::ZERO,
+        crate::plugins::default_plugin::pipe_runtime::PipeContainerKind::BridgePipe => bridge_offset,
+        crate::plugins::default_plugin::pipe_runtime::PipeContainerKind::Pipe if total_slots > 1 => -bridge_offset,
+        crate::plugins::default_plugin::pipe_runtime::PipeContainerKind::Pipe => Vec2::ZERO,
     }
 }
 
@@ -674,7 +674,7 @@ pub(crate) fn sync_pipe_flow_packets(
     structures: Res<PlacedStructureMap>,
     flow_state: Res<PipeFlowVisualState>,
     control: Res<crate::simulation::SimulationControl>,
-    simulation_config: Res<GasSimulationConfig>,
+    pipe_config: Res<PipeSimulationConfig>,
     gas_registry: Res<GasRegistry>,
     time: Res<Time>,
     mut pipe_entities: ResMut<PipeEntities>,
@@ -713,9 +713,9 @@ pub(crate) fn sync_pipe_flow_packets(
         } else {
             weighted_rgb / total.max(1.0)
         };
-        let packet_visual = pipe_flow_packet_visual(&simulation_config.pipe, transfer.total_amount);
+        let packet_visual = pipe_flow_packet_visual(&pipe_config, transfer.total_amount);
         let rgb = (mix_rgb * packet_visual.intensity).clamp(Vec3::ZERO, Vec3::ONE);
-        let outer_size = pipe_flow_square_size(&simulation_config.pipe, transfer.total_amount);
+        let outer_size = pipe_flow_square_size(&pipe_config, transfer.total_amount);
         let inner_size = pipe_square_inner_size(outer_size);
         let border_entity = commands
             .spawn((
@@ -757,7 +757,7 @@ fn pipe_flow_packets_enabled(
 const BRIDGE_PACKET_ARC_OFFSET_CELLS: f32 = 0.45;
 
 fn flow_packet_position(
-    transfer: &crate::simulation::pipes::PipeTransferRecord,
+    transfer: &crate::plugins::default_plugin::pipe_runtime::PipeTransferRecord,
     t: f32,
 ) -> Vec2 {
     bridge_packet_position(transfer, t).unwrap_or_else(|| {
@@ -774,10 +774,10 @@ fn straight_packet_position(from: Vec2, to: Vec2, t: f32) -> Vec2 {
 }
 
 fn bridge_packet_position(
-    transfer: &crate::simulation::pipes::PipeTransferRecord,
+    transfer: &crate::plugins::default_plugin::pipe_runtime::PipeTransferRecord,
     t: f32,
 ) -> Option<Vec2> {
-    let crate::simulation::pipes::PipeTransferVisualPath::BridgeArc {
+    let crate::plugins::default_plugin::pipe_runtime::PipeTransferVisualPath::BridgeArc {
         bridge_origin,
         bridge_rotation,
     } = transfer.visual_path
@@ -801,7 +801,7 @@ fn bridge_packet_position(
 }
 
 fn bridge_curve_progress_for_transfer(
-    transfer: &crate::simulation::pipes::PipeTransferRecord,
+    transfer: &crate::plugins::default_plugin::pipe_runtime::PipeTransferRecord,
     center_cell: UVec2,
     first_port: UVec2,
     second_port: UVec2,
@@ -852,12 +852,12 @@ fn bridge_port_world_cells(origin: UVec2, rotation: StructureRotation) -> [UVec2
     }
 }
 
-fn pipe_gas_square_size(config: &crate::simulation::PipeSimulationConfig, total_particles: u32) -> f32 {
+fn pipe_gas_square_size(config: &PipeSimulationConfig, total_particles: u32) -> f32 {
     scaled_pipe_square_size(config, total_particles, 0.22, 0.63)
 }
 
 fn pipe_flow_square_size(
-    config: &crate::simulation::PipeSimulationConfig,
+    config: &PipeSimulationConfig,
     moved_particles: u32,
 ) -> f32 {
     scaled_pipe_square_size(config, moved_particles, 0.21, 0.504)
@@ -869,7 +869,7 @@ struct PipeFlowPacketVisualParams {
 }
 
 fn pipe_flow_packet_visual(
-    config: &crate::simulation::PipeSimulationConfig,
+    config: &PipeSimulationConfig,
     moved_particles: u32,
 ) -> PipeFlowPacketVisualParams {
     let eased = pipe_pressure_visual_ratio(config, moved_particles);
@@ -884,7 +884,7 @@ fn pipe_flow_packet_visible(moved_particles: u32) -> bool {
 }
 
 fn scaled_pipe_square_size(
-    config: &crate::simulation::PipeSimulationConfig,
+    config: &PipeSimulationConfig,
     particles: u32,
     min_fraction: f32,
     max_fraction: f32,
@@ -897,14 +897,14 @@ fn scaled_pipe_square_size(
 }
 
 fn pipe_pressure_visual_ratio(
-    config: &crate::simulation::PipeSimulationConfig,
+    config: &PipeSimulationConfig,
     particles: u32,
 ) -> f32 {
     if particles == 0 {
         return 0.0;
     }
-    let pressure = crate::simulation::pipes::pressure::pipe_pressure_pa(config, particles);
-    let reference = crate::simulation::pipes::pressure::pipe_pressure_pa(config, 1_000).max(1.0);
+    let pressure = crate::plugins::default_plugin::pipe_runtime::pressure::pipe_pressure_pa(config, particles);
+    let reference = crate::plugins::default_plugin::pipe_runtime::pressure::pipe_pressure_pa(config, 1_000).max(1.0);
     ((pressure / (pressure + reference)).clamp(0.0, 1.0)).sqrt()
 }
 

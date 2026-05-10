@@ -46,9 +46,11 @@ pub struct GasField {
 
 impl Default for GasField {
     fn default() -> Self {
-        let gases = vec!["h2", "o2", "co2"];
-        let masses = vec![2.016, 31.998, 44.009];
-        Self::new_with_masses(&gases, &masses)
+        let registry = GasRegistry::from_substances(
+            crate::plugins::default_plugin::default_substance_definitions(),
+        )
+        .expect("default plugin substances must stay valid");
+        Self::from_registry(&registry)
     }
 }
 

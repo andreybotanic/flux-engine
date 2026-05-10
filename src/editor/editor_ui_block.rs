@@ -361,9 +361,11 @@ fn refresh_editor_ui(
         gas_tool_panel_visible,
         &mut ui.panel_open_order,
     );
-    let editing_structure = structure_edit
-        .selected_cell
-        .and_then(|cell| structures.editable_structure_at(cell.x, cell.y).map(|s| (cell, s.params)));
+    let editing_structure = structure_edit.selected_cell.and_then(|cell| {
+        structures
+            .editable_structure_at(cell.x, cell.y)
+            .map(|s| (cell, s.params))
+    });
     let structure_panel_visible =
         world_load_state.has_world && debug_mode.active && editing_structure.is_some();
     ui.panel_manager.set_visible(
@@ -428,13 +430,11 @@ fn refresh_editor_ui(
             "Impulse vectors: Off"
         };
         metrics_text.0 = format!(
-            "{} | Anisotropy: {:.4} | Radial waves: {:.4} | Mass err H2/O2/CO2: {:.4} / {:.4} / {:.4}",
+            "{} | Anisotropy: {:.4} | Radial waves: {:.4} | Mass err: {:.4}",
             vectors_mode,
             debug_metrics.anisotropy_score,
             debug_metrics.radial_wave_score,
-            debug_metrics.mass_error_h2,
-            debug_metrics.mass_error_o2,
-            debug_metrics.mass_error_co2
+            debug_metrics.mass_error
         );
     }
 
@@ -465,7 +465,6 @@ fn refresh_editor_ui(
         let mut mode_text = ui.text_set_primary.p4();
         mode_text.0 = structure_mode;
     }
-
 }
 
 #[derive(SystemParam)]
@@ -488,12 +487,8 @@ struct RefreshEditorUiSystemParams<'w, 's> {
         ),
     >,
     buoyancy_cap_input: Single<'w, &'static TextInputField, With<BuoyancyForceCapInputField>>,
-    button_query: Query<
-        'w,
-        's,
-        (&'static EditorUiAction, &'static mut BackgroundColor),
-        With<Button>,
-    >,
+    button_query:
+        Query<'w, 's, (&'static EditorUiAction, &'static mut BackgroundColor), With<Button>>,
     panel_manager: ResMut<'w, PanelManager>,
     panel_open_order: ResMut<'w, PanelOpenOrder>,
     visibility_set: ParamSet<
@@ -527,4 +522,3 @@ struct RefreshEditorUiSystemParams<'w, 's> {
         ),
     >,
 }
-

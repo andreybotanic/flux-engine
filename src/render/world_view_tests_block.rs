@@ -17,12 +17,10 @@ mod tests {
         CellVisualPlacementConfigMap, GasDefinition, GasRegistry, StructureVisualConfigMap,
         VisualPlacementConfig,
     };
-    use crate::simulation::pipes::{
+    use crate::plugins::default_plugin::pipe_runtime::{
         pipe_cell_display_total_particles_with_transfers, PipeContainerKind, PipeFlowVisualState,
-        PipeGasField,
-        PipeTransferRecord, PipeTransferVisualPath,
+        PipeGasField, PipeSimulationConfig, PipeTransferRecord, PipeTransferVisualPath,
     };
-    use crate::simulation::PipeSimulationConfig;
     use bevy::prelude::Visibility;
     use bevy::math::{UVec2, Vec2, Vec3};
     use crate::world::{

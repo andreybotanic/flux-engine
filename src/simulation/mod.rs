@@ -3,7 +3,6 @@ pub mod discrete_step;
 pub mod gas;
 pub mod gpu_solver;
 pub mod parity;
-pub mod pipes;
 
 use std::time::{Duration, Instant};
 
@@ -13,16 +12,8 @@ use self::{
     backend::{SimulationBackend, SimulationBackendConfig, WorldSizeConfig},
     gas::GasField,
     gpu_solver::{GpuGasSolver, GpuStepTimings},
-    pipes::PipeFlowVisualState,
 };
-use crate::{
-    config::GasRegistry,
-    save::WorldLoadState,
-    world::{
-        grid::WorldGrid,
-        structures::{PlacedStructureMap, StructureKind, StructureParams},
-    },
-};
+use crate::{config::GasRegistry, save::WorldLoadState, world::grid::WorldGrid};
 
 #[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
 /// Stores `SimulationStep` state.
@@ -108,36 +99,6 @@ impl Default for SolverTuning {
     }
 }
 
-#[derive(Clone, Copy)]
-/// Stores configuration for the pressure-driven pipe simulation.
-pub struct PipeSimulationConfig {
-    pub cell_volume_ratio: f32,
-    pub cell_particle_pressure_pa: f32,
-    pub pipe_flux_gain: f32,
-    pub pipe_flux_damping: f32,
-    pub max_pipe_flux_particles_per_tick: f32,
-    pub vent_discharge_coefficient: f32,
-    pub max_vent_flux_particles_per_tick: f32,
-    pub vent_choked_pressure_ratio: f32,
-    pub pressure_epsilon_pa: f32,
-}
-
-impl Default for PipeSimulationConfig {
-    fn default() -> Self {
-        Self {
-            cell_volume_ratio: 25.0,
-            cell_particle_pressure_pa: 1.0,
-            pipe_flux_gain: 8_000.0,
-            pipe_flux_damping: 0.993,
-            max_pipe_flux_particles_per_tick: 50_000.0,
-            vent_discharge_coefficient: 7.8,
-            max_vent_flux_particles_per_tick: 200_000.0,
-            vent_choked_pressure_ratio: 0.53,
-            pressure_epsilon_pa: 0.01,
-        }
-    }
-}
-
 #[derive(Resource, Clone, Copy)]
 /// Stores `GasSimulationConfig` state.
 pub struct GasSimulationConfig {
@@ -149,7 +110,6 @@ pub struct GasSimulationConfig {
     pub mass_fix_min_residual: f32,
     pub thermal_motion_scale: f32,
     pub solver_tuning: SolverTuning,
-    pub pipe: PipeSimulationConfig,
 }
 
 impl Default for GasSimulationConfig {
@@ -163,9 +123,15 @@ impl Default for GasSimulationConfig {
             mass_fix_min_residual: 1e-5,
             thermal_motion_scale: 0.08,
             solver_tuning: SolverTuning::default(),
-            pipe: PipeSimulationConfig::default(),
         }
     }
+}
+
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone, Copy)]
+/// FixedUpdate extension points used by plugin-owned simulation behavior.
+pub enum SimulationSet {
+    PluginPreStep,
+    CellGasStep,
 }
 
 #[derive(Resource, Clone, Copy)]
@@ -236,6 +202,13 @@ pub struct GpuRuntimeState {
 
 const GPU_RUNTIME_READBACK_INTERVAL: u32 = 1;
 
+impl GpuRuntimeState {
+    /// Marks GPU state dirty so the next cell-gas GPU step uploads CPU state first.
+    pub fn mark_needs_full_upload(&mut self) {
+        self.needs_full_upload = true;
+    }
+}
+
 impl Default for SimulationControl {
     fn default() -> Self {
         Self {
@@ -259,13 +232,18 @@ impl Plugin for GasSimulationPlugin {
             .init_resource::<SimulationPerfStats>()
             .init_resource::<BlockSyncState>()
             .init_resource::<GpuRuntimeState>()
-            .init_resource::<PipeFlowVisualState>()
             .add_systems(Startup, initialize_gas_state_from_registry)
             .add_systems(Update, apply_fixed_rate_config)
             .add_systems(Update, mark_gpu_state_dirty)
             .add_systems(Update, mark_gpu_state_dirty_from_gas_edits)
-            .add_systems(Update, clear_stale_pipe_flow_on_pause_transition)
-            .add_systems(FixedUpdate, run_simulation_tick);
+            .configure_sets(
+                FixedUpdate,
+                SimulationSet::PluginPreStep.before(SimulationSet::CellGasStep),
+            )
+            .add_systems(
+                FixedUpdate,
+                run_simulation_tick.in_set(SimulationSet::CellGasStep),
+            );
     }
 }
 

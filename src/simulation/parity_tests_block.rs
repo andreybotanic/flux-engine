@@ -5,9 +5,12 @@ mod tests {
         run_cpu_only_calibration, ParityThresholds, PARITY_SCENARIOS, PARITY_STEPS,
         PARITY_THRESHOLDS,
     };
+    use crate::plugins::default_plugin::pipe_runtime::{
+        apply_pipe_network_step, PipeFlowVisualState, PipeFluxField, PipeGasField,
+        PipeSimulationConfig,
+    };
     use crate::simulation::{
         gas::GasField,
-        pipes::{apply_pipe_network_step, PipeFlowVisualState, PipeFluxField, PipeGasField},
     };
     use crate::simulation::gpu_solver::GpuGasSolver;
     use crate::world::{
@@ -68,6 +71,7 @@ mod tests {
 
         let registry = super::test_registry_three_gases();
         let config = super::tuned_config();
+        let pipe_config = PipeSimulationConfig::default();
         let world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
         for cell in [
@@ -110,7 +114,7 @@ mod tests {
                 &mut cpu_field,
                 &world,
                 &mut cpu_visuals,
-                &config.pipe,
+                &pipe_config,
             );
             crate::simulation::do_one_substep(
                 &mut block_sync,
@@ -127,7 +131,7 @@ mod tests {
                 &mut gpu_field,
                 &world,
                 &mut gpu_visuals,
-                &config.pipe,
+                &pipe_config,
             );
             if changed {
                 let _ = solver

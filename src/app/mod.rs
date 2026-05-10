@@ -11,7 +11,10 @@ use crate::{
     debug::DebugPlugin,
     editor::EditorPlugin,
     input::InputPlugin,
-    plugins::{DefaultPluginContent, PluginBootstrapConfig},
+    plugins::{
+        default_plugin::pipe_runtime::DefaultPluginRuntimePlugin, DefaultPluginContent,
+        PluginBootstrapConfig,
+    },
     render::RenderPlugin,
     simulation::{
         backend::{SimulationBackend, SimulationBackendConfig, WorldSizeConfig},
@@ -77,6 +80,7 @@ pub fn run() {
         .insert_resource(game_config.gas_simulation)
         .insert_resource(game_config.gas_visual)
         .insert_resource(game_config.gas_main_visual)
+        .insert_resource(game_config.pipe_simulation)
         .insert_resource(game_config.cell_visuals)
         .insert_resource(game_config.world_cell_hud)
         .insert_resource(game_config.structure_hud)
@@ -114,6 +118,7 @@ pub fn run() {
         .add_plugins((
             WorldPlugin,
             GasSimulationPlugin,
+            DefaultPluginRuntimePlugin,
             RenderPlugin,
             InputPlugin,
             UiPlugin,

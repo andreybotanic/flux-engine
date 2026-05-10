@@ -1,13 +1,14 @@
 use bevy::prelude::*;
 
 use crate::{
-    config::GasRegistry,
     input::camera::MainCamera,
+    plugins::default_plugin::pipe_runtime::{
+        apply_gas_structures_pre_step, apply_pipe_network_step, PipeFlowVisualState, PipeFluxField,
+        PipeGasField, PipeSimulationConfig,
+    },
     simulation::{
-        apply_gas_structures_pre_step, do_one_substep,
-        gas::GasField,
-        pipes::{apply_pipe_network_step, PipeFlowVisualState, PipeFluxField, PipeGasField},
-        BlockSyncState, GasSimulationConfig, SimulationControl, SimulationStep,
+        do_one_substep, gas::GasField, BlockSyncState, GasSimulationConfig, SimulationControl,
+        SimulationStep,
     },
     world::{
         grid::{cell_center, is_boundary, WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH},
@@ -40,9 +41,7 @@ impl Default for DebugOverlaySettings {
 pub struct DebugGasMetrics {
     pub anisotropy_score: f32,
     pub radial_wave_score: f32,
-    pub mass_error_h2: f32,
-    pub mass_error_o2: f32,
-    pub mass_error_co2: f32,
+    pub mass_error: f32,
 }
 
 #[derive(Resource, Default, Clone)]
@@ -95,6 +94,7 @@ fn handle_debug_keys(
     mut debug_mode: ResMut<DebugMode>,
     mut control: ResMut<SimulationControl>,
     config: Res<GasSimulationConfig>,
+    pipe_config: Res<PipeSimulationConfig>,
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
     structures: Res<PlacedStructureMap>,
@@ -123,7 +123,7 @@ fn handle_debug_keys(
             &mut gas,
             &world,
             &mut pipe_flow_visuals,
-            &config.pipe,
+            &pipe_config,
         );
         let _ = apply_gas_structures_pre_step(&structures, &mut gas, &world);
         do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);
@@ -132,7 +132,6 @@ fn handle_debug_keys(
 
 fn update_debug_metrics(
     gas: Res<GasField>,
-    gas_registry: Res<GasRegistry>,
     world: Res<WorldGrid>,
     step: Res<SimulationStep>,
     mut metrics: ResMut<DebugGasMetrics>,
@@ -215,9 +214,6 @@ fn update_debug_metrics(
     };
 
     let totals = gas.species_totals(&world);
-    let h2_index = gas_registry.index_of("h2");
-    let o2_index = gas_registry.index_of("o2");
-    let co2_index = gas_registry.index_of("co2");
 
     let external_gas_edit_without_step =
         baseline.initialized && gas.is_changed() && step.0 == baseline.last_step;
@@ -226,26 +222,15 @@ fn update_debug_metrics(
         baseline.species = totals.clone();
     }
 
-    metrics.mass_error_h2 = if let Some(idx) = h2_index {
-        let base = baseline.species.get(idx).copied().unwrap_or(0.0);
-        mass_error_value(base, totals[idx])
-    } else {
-        0.0
-    };
-    metrics.mass_error_o2 = if let Some(idx) = o2_index {
-        let base = baseline.species.get(idx).copied().unwrap_or(0.0);
-        mass_error_value(base, totals[idx])
-    } else {
-        0.0
-    };
-    metrics.mass_error_co2 = if let Some(idx) = co2_index {
-        let base = baseline.species.get(idx).copied().unwrap_or(0.0);
-        mass_error_value(base, totals[idx])
-    } else {
-        0.0
-    };
+    metrics.mass_error = mass_error_for_all_species(&baseline.species, &totals);
 
     baseline.last_step = step.0;
+}
+
+fn mass_error_for_all_species(baseline: &[f32], current: &[f32]) -> f32 {
+    let base_total = baseline.iter().copied().sum::<f32>();
+    let current_total = current.iter().copied().sum::<f32>();
+    mass_error_value(base_total, current_total)
 }
 
 fn mass_error_value(base: f32, current: f32) -> f32 {
@@ -333,7 +318,7 @@ fn draw_debug_overlays(
 
 #[cfg(test)]
 mod tests {
-    use super::mass_error_value;
+    use super::{mass_error_for_all_species, mass_error_value};
 
     #[test]
     fn mass_error_is_relative_for_non_zero_baseline() {
@@ -351,5 +336,11 @@ mod tests {
     fn mass_error_is_absolute_for_tiny_baseline() {
         let err = mass_error_value(1e-5, 1.8);
         assert!((err - (1.8 - 1e-5)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn mass_error_combines_all_species() {
+        let err = mass_error_for_all_species(&[100.0, 50.0, 25.0], &[100.0, 60.0, 25.0]);
+        assert!((err - (10.0 / 175.0)).abs() < 1e-6);
     }
 }

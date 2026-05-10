@@ -8,8 +8,6 @@ fn initialize_gas_state_from_registry(
     registry: Res<GasRegistry>,
 ) {
     commands.insert_resource(GasField::from_registry(&registry));
-    commands.insert_resource(crate::simulation::pipes::PipeGasField::from_registry(&registry));
-    commands.insert_resource(crate::simulation::pipes::PipeFluxField::default());
 }
 
 fn apply_fixed_rate_config(
@@ -51,23 +49,6 @@ fn mark_gpu_state_dirty_from_gas_edits(
     }
 }
 
-fn pipe_flow_reset_needed(previous_paused: Option<bool>, current_paused: bool) -> bool {
-    previous_paused
-        .map(|previous| previous != current_paused)
-        .unwrap_or(false)
-}
-
-fn clear_stale_pipe_flow_on_pause_transition(
-    control: Res<SimulationControl>,
-    mut pipe_flow_visuals: ResMut<crate::simulation::pipes::PipeFlowVisualState>,
-    mut previous_paused: Local<Option<bool>>,
-) {
-    if pipe_flow_reset_needed(*previous_paused, control.paused) {
-        pipe_flow_visuals.transfers.clear();
-    }
-    *previous_paused = Some(control.paused);
-}
-
 fn run_simulation_tick(
     mut control: ResMut<SimulationControl>,
     backend: Res<SimulationBackendConfig>,
@@ -76,10 +57,6 @@ fn run_simulation_tick(
     config: Res<GasSimulationConfig>,
     mut block_state: ResMut<BlockSyncState>,
     mut gas: ResMut<GasField>,
-    structures: Res<PlacedStructureMap>,
-    mut pipe_gas: ResMut<crate::simulation::pipes::PipeGasField>,
-    mut pipe_flux: ResMut<crate::simulation::pipes::PipeFluxField>,
-    mut pipe_flow_visuals: ResMut<crate::simulation::pipes::PipeFlowVisualState>,
     world: Res<WorldGrid>,
     mut step: ResMut<SimulationStep>,
     mut perf: ResMut<SimulationPerfStats>,
@@ -94,28 +71,6 @@ fn run_simulation_tick(
 
     if control.paused {
         return;
-    }
-
-    let pipe_started_at = Instant::now();
-    let changed_by_pipes = crate::simulation::pipes::apply_pipe_network_step(
-        &structures,
-        &mut pipe_gas,
-        &mut pipe_flux,
-        &mut gas,
-        &world,
-        &mut pipe_flow_visuals,
-        &config.pipe,
-    );
-    let pipe_elapsed_ms = pipe_started_at.elapsed().as_secs_f32() * 1000.0;
-    perf.last_pipe_step_ms = pipe_elapsed_ms;
-    perf.avg_pipe_step_ms = if perf.avg_pipe_step_ms <= f32::EPSILON {
-        pipe_elapsed_ms
-    } else {
-        perf.avg_pipe_step_ms * 0.9 + pipe_elapsed_ms * 0.1
-    };
-    let changed_by_structures = apply_gas_structures_pre_step(&structures, &mut gas, &world);
-    if (changed_by_pipes || changed_by_structures) && backend.backend == SimulationBackend::Gpu {
-        gpu_state.needs_full_upload = true;
     }
 
     let started_at = Instant::now();
@@ -158,50 +113,6 @@ fn run_simulation_tick(
         perf.window_steps = 0;
         perf.window_started_at = Instant::now();
     }
-}
-
-pub(crate) fn apply_gas_structures_pre_step(
-    structures: &PlacedStructureMap,
-    gas: &mut GasField,
-    world: &WorldGrid,
-) -> bool {
-    let mut changed = false;
-    for structure in structures.iter() {
-        match structure.params {
-            StructureParams::GasSource { gas_index, amount }
-                if structure.kind == StructureKind::GasSource =>
-            {
-                if gas.add_particles_no_impulse(
-                    structure.origin.x,
-                    structure.origin.y,
-                    gas_index,
-                    amount,
-                    world,
-                ) > 0
-                {
-                    changed = true;
-                }
-            }
-            StructureParams::GasSink { amount } if structure.kind == StructureKind::GasSink => {
-                if gas.remove_particles_proportional(
-                    structure.origin.x,
-                    structure.origin.y,
-                    amount,
-                    world,
-                ) > 0
-                {
-                    changed = true;
-                }
-            }
-            StructureParams::None | StructureParams::GasSource { .. } | StructureParams::GasSink { .. } => {}
-        }
-    }
-
-    if changed {
-        gas.recompute_total_density_buffer(world);
-    }
-
-    changed
 }
 
 fn do_one_substep_gpu(

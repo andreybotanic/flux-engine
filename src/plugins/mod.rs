@@ -8,6 +8,7 @@ pub mod manifest;
 pub mod registry;
 pub mod source;
 pub mod state;
+pub mod substances;
 
 pub use self::content::{
     CellContentDescriptor, ContentId, ContentRegistry, LegacyStorageDescriptor,
@@ -37,3 +38,4 @@ pub use self::state::{
     EnabledPluginSet, PluginRegistryEntry, PluginRegistryState, PluginRuntimeStatus,
     PluginStateLoadResult, PLUGIN_STATE_SCHEMA_VERSION,
 };
+pub use self::substances::{SubstanceDefinition, SubstanceFlags, SubstanceId, SubstanceRegistry};

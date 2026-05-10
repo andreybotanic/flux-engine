@@ -73,9 +73,7 @@ fn spawn_debug_panel_content(
     ));
 
     parent.spawn((
-        Text::new(
-            "Anisotropy: 0.0000 | Radial waves: 0.0000 | Mass err H2/O2/CO2: 0.0000 / 0.0000 / 0.0000",
-        ),
+        Text::new("Anisotropy: 0.0000 | Radial waves: 0.0000 | Mass err: 0.0000"),
         TextFont::from_font_size(13.0),
         TextColor(DEBUG_PANEL_TEXT_COLOR),
         WaveMetricsLabel,
@@ -304,4 +302,3 @@ fn spawn_debug_u32_row<M: Component>(
             });
         });
 }
-

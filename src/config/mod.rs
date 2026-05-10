@@ -10,8 +10,12 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 use crate::{
+    plugins::{
+        default_plugin::{default_substance_id_for_alias, pipe_runtime::PipeSimulationConfig},
+        SubstanceDefinition, SubstanceId, SubstanceRegistry,
+    },
     render::GasVisualSettings,
-    simulation::{GasSimulationConfig, PipeSimulationConfig, SimulationRateConfig, SolverTuning},
+    simulation::{GasSimulationConfig, SimulationRateConfig, SolverTuning},
     world::{grid::CellMaterial, structures::StructureKind},
 };
 
@@ -23,54 +27,120 @@ pub use self::hud::{
 #[derive(Resource, Clone, Debug)]
 /// Stores `GasRegistry` state.
 pub struct GasRegistry {
+    substances: SubstanceRegistry,
     gases: Vec<GasDefinition>,
+    stable_ids: Vec<SubstanceId>,
     by_id: HashMap<String, usize>,
 }
 
 impl GasRegistry {
-    /// Runs `new` logic.
-    pub fn new(mut gases: Vec<GasDefinition>) -> Result<Self, String> {
+    /// Builds a compatibility registry from legacy gas definitions.
+    pub fn new(gases: Vec<GasDefinition>) -> Result<Self, String> {
+        let mut substances = Vec::with_capacity(gases.len());
+        for gas in gases {
+            let substance_id = default_substance_id_for_alias(&gas.id)?;
+            substances.push(SubstanceDefinition::gas(
+                substance_id,
+                crate::plugins::PluginId::default_plugin(),
+                gas.label,
+                gas.molecular_mass,
+                gas.color,
+                vec![gas.id],
+            )?);
+        }
+        Self::from_substances(substances)
+    }
+
+    /// Builds a gas registry from plugin-owned substance definitions.
+    pub fn from_substances(substances: Vec<SubstanceDefinition>) -> Result<Self, String> {
+        let substances = SubstanceRegistry::new(substances)?;
+        Self::from_substance_registry(substances)
+    }
+
+    /// Builds a gas registry from an already validated substance registry.
+    pub fn from_substance_registry(substances: SubstanceRegistry) -> Result<Self, String> {
+        let gas_substances = substances
+            .all()
+            .iter()
+            .filter(|definition| definition.flags.gas)
+            .collect::<Vec<_>>();
+        let gases = gas_substances
+            .iter()
+            .map(|definition| GasDefinition {
+                id: definition
+                    .aliases
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| definition.id.leaf().to_string()),
+                label: definition.label.clone(),
+                molecular_mass: definition.molecular_mass,
+                color: definition.color,
+            })
+            .collect::<Vec<_>>();
+
         if gases.is_empty() {
-            return Err("Gas registry is empty. Add at least one gas config file.".to_string());
+            return Err("Gas registry is empty. Register at least one gas substance.".to_string());
         }
 
-        gases.sort_by(|a, b| {
-            a.molecular_mass
-                .total_cmp(&b.molecular_mass)
-                .then_with(|| a.id.cmp(&b.id))
-        });
-
+        let stable_ids = gas_substances
+            .iter()
+            .map(|definition| definition.id.clone())
+            .collect::<Vec<_>>();
         let mut by_id = HashMap::new();
-        for (idx, gas) in gases.iter().enumerate() {
-            if by_id.insert(gas.id.clone(), idx).is_some() {
-                return Err(format!("Duplicate gas id '{}'", gas.id));
+        for (idx, definition) in gas_substances.into_iter().enumerate() {
+            by_id.insert(definition.id.as_str().to_string(), idx);
+            for alias in &definition.aliases {
+                by_id.insert(alias.clone(), idx);
             }
         }
 
-        Ok(Self { gases, by_id })
+        Ok(Self {
+            substances,
+            gases,
+            stable_ids,
+            by_id,
+        })
     }
 
-    /// Runs `all` logic.
+    /// Returns all gas definitions in compact runtime order.
     pub fn all(&self) -> &[GasDefinition] {
         &self.gases
     }
 
-    /// Runs `count` logic.
+    /// Returns the number of gas-capable substances.
     pub fn count(&self) -> usize {
         self.gases.len()
     }
 
-    /// Runs `get` logic.
+    /// Returns one gas definition by compact runtime index.
     pub fn get(&self, index: usize) -> Option<&GasDefinition> {
         self.gases.get(index)
     }
 
-    /// Runs `index_of` logic.
+    /// Returns the compact runtime index for a stable substance id or legacy alias.
     pub fn index_of(&self, id: &str) -> Option<usize> {
         self.by_id.get(id).copied()
     }
 
-    /// Runs `molecular_masses` logic.
+    /// Returns the stable substance id for one compact runtime index.
+    pub fn stable_id_by_index(&self, index: usize) -> Option<&SubstanceId> {
+        self.stable_ids.get(index)
+    }
+
+    /// Returns stable substance ids in compact runtime order.
+    pub fn stable_ids(&self) -> Vec<String> {
+        (0..self.count())
+            .filter_map(|index| self.stable_id_by_index(index))
+            .map(|id| id.as_str().to_string())
+            .collect()
+    }
+
+    /// Returns the underlying plugin-owned substance registry.
+    pub fn substances(&self) -> &SubstanceRegistry {
+        &self.substances
+    }
+
+    /// Returns molecular masses in compact runtime order.
     pub fn molecular_masses(&self) -> Vec<f32> {
         self.gases.iter().map(|gas| gas.molecular_mass).collect()
     }
@@ -216,6 +286,7 @@ pub struct GameConfig {
     pub gas_simulation: GasSimulationConfig,
     pub gas_visual: GasVisualSettings,
     pub gas_main_visual: GasMainViewVisualConfig,
+    pub pipe_simulation: PipeSimulationConfig,
     pub cell_visuals: CellTypeVisualConfig,
     pub world_cell_hud: WorldCellHudConfig,
     pub structure_hud: StructureHudConfigMap,
@@ -234,13 +305,13 @@ impl GameConfig {
     pub fn load_from_root(root: &Path) -> Result<Self, String> {
         let simulation = read_toml::<SimulationToml>(&root.join("simulation.toml"))?;
         let cell_types = read_toml::<CellTypesToml>(&root.join("cell_types.toml"))?;
-        let gases = load_gas_files(&root.join("gases"))?;
+        let substances = load_default_plugin_substances(&root.join("gases"))?;
         let world_cell_hud =
             load_world_cell_hud_config(&root.join("cell_types.toml"), cell_types.world_cell_hud)?;
         let (structure_visuals, structure_hud, cell_visual_layouts) =
             load_visual_placement_configs(&root.join("structures"))?;
 
-        let gas_registry = GasRegistry::new(gases)?;
+        let gas_registry = GasRegistry::from_substances(substances)?;
 
         let simulation_rate = SimulationRateConfig {
             target_hz: simulation.rate.target_hz,
@@ -268,17 +339,18 @@ impl GameConfig {
                 buoyancy_alpha: simulation.solver_tuning.buoyancy_alpha,
                 buoyancy_force_cap: simulation.solver_tuning.buoyancy_force_cap,
             },
-            pipe: PipeSimulationConfig {
-                cell_volume_ratio: simulation.pipe.cell_volume_ratio,
-                cell_particle_pressure_pa: simulation.pipe.cell_particle_pressure_pa,
-                pipe_flux_gain: simulation.pipe.pipe_flux_gain,
-                pipe_flux_damping: simulation.pipe.pipe_flux_damping,
-                max_pipe_flux_particles_per_tick: simulation.pipe.max_pipe_flux_particles_per_tick,
-                vent_discharge_coefficient: simulation.pipe.vent_discharge_coefficient,
-                max_vent_flux_particles_per_tick: simulation.pipe.max_vent_flux_particles_per_tick,
-                vent_choked_pressure_ratio: simulation.pipe.vent_choked_pressure_ratio,
-                pressure_epsilon_pa: simulation.pipe.pressure_epsilon_pa,
-            },
+        };
+
+        let pipe_simulation = PipeSimulationConfig {
+            cell_volume_ratio: simulation.pipe.cell_volume_ratio,
+            cell_particle_pressure_pa: simulation.pipe.cell_particle_pressure_pa,
+            pipe_flux_gain: simulation.pipe.pipe_flux_gain,
+            pipe_flux_damping: simulation.pipe.pipe_flux_damping,
+            max_pipe_flux_particles_per_tick: simulation.pipe.max_pipe_flux_particles_per_tick,
+            vent_discharge_coefficient: simulation.pipe.vent_discharge_coefficient,
+            max_vent_flux_particles_per_tick: simulation.pipe.max_vent_flux_particles_per_tick,
+            vent_choked_pressure_ratio: simulation.pipe.vent_choked_pressure_ratio,
+            pressure_epsilon_pa: simulation.pipe.pressure_epsilon_pa,
         };
 
         let gas_visual = GasVisualSettings {
@@ -308,6 +380,7 @@ impl GameConfig {
             gas_simulation,
             gas_visual,
             gas_main_visual,
+            pipe_simulation,
             cell_visuals,
             world_cell_hud,
             structure_hud,

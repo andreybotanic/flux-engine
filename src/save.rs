@@ -12,13 +12,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::GasRegistry,
+    plugins::default_plugin::pipe_runtime::{
+        PipeContainerKind, PipeFluxField, PipeGasField, PipeGasSnapshot, PipeNodeGasSnapshotEntry,
+        PipeNodeKey,
+    },
     render::OverlayMode,
     simulation::{
         gas::{GasField, GasFieldSnapshot},
-        pipes::{
-            PipeContainerKind, PipeFluxField, PipeGasField, PipeGasSnapshot,
-            PipeNodeGasSnapshotEntry, PipeNodeKey,
-        },
         SimulationStep,
     },
     world::{

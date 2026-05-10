@@ -112,7 +112,7 @@ fn write_slot(
     world: &WorldGrid,
     gas: &GasField,
     structures: &PlacedStructureMap,
-    pipe_gas: &crate::simulation::pipes::PipeGasField,
+    pipe_gas: &crate::plugins::default_plugin::pipe_runtime::PipeGasField,
     gas_registry: &GasRegistry,
     simulation_step: u64,
     allow_overwrite: bool,
@@ -168,11 +168,7 @@ fn write_slot(
     let gas_snapshot = gas.snapshot_state();
     let structures_snapshot = structures.snapshot_state();
     let pipe_gas_snapshot = pipe_gas.snapshot_state();
-    let gas_ids = gas_registry
-        .all()
-        .iter()
-        .map(|definition| definition.id.clone())
-        .collect::<Vec<_>>();
+    let gas_ids = gas_registry.stable_ids();
     if gas_ids.len() != gas_snapshot.gas_count {
         return Err(SaveError::Validation(format!(
             "Gas registry count ({}) does not match gas snapshot count ({})",
