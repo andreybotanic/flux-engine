@@ -16,9 +16,12 @@ FluxEngine/
 |   |-- backups/             # Резервные копии конфигов.
 |   |-- gases/               # Конфиги отдельных газов.
 |   `-- structures/          # Конфиги базовых entity-параметров, appearance и HUD-метаданных стен и структур.
+|-- crates/                  # Вспомогательные Rust-crate-ы, не входящие в основную библиотеку игры.
+|   `-- flux_stage1_sample_plugin/   # Минимальный sample DLL-плагин для stage-1 ABI и e2e-тестов packaged plugins.
 |-- docs/                    # Проектная документация.
 |   `-- plans/               # Плановые документы будущих крупных изменений.
 |       `-- plugin_system/   # Roadmap и этапные планы перехода на runtime-плагины.
+|-- plugins/                 # Runtime drop-in каталог packaged plugins (`*.fluxplugin`) рядом с игрой.
 |-- src/                     # Исходный код Rust.
 |   |-- app/                 # Сборка и запуск Bevy-приложения.
 |   |-- bin/                 # Вспомогательные бинарники (перф, утилиты).
@@ -26,6 +29,7 @@ FluxEngine/
 |   |-- debug/               # Диагностические режимы и метрики.
 |   |-- editor/              # Инструменты редактирования мира, газа и pipe-сети.
 |   |-- input/               # Обработка пользовательского ввода.
+|   |-- plugins/             # Stage-1 runtime plugin contract: manifest, ZIP/DLL validation, ABI и startup diagnostics.
 |   |-- render/              # Визуализация мира, pipe-layer и overlay-режимов.
 |   |-- simulation/          # CPU/GPU симуляция газа, pipe pre-step и parity-инфраструктура.
 |   |   `-- pipes/           # Внутренние модули pressure/fixtures/solver/test-инфраструктуры труб.
@@ -64,13 +68,19 @@ FluxEngine/
 - `config/gases/*.toml`: Конфиги отдельных газов (физические и визуальные параметры).
 - `config/structures/*.toml`: Конфиги базовых параметров, appearance и HUD-метаданных встроенных стен и структур (`label`, `draw_priority`, `size_in_cells`, `hud.sort_order` и описания substance-контейнеров).
 - `config/simulation.toml`: Основные параметры симуляции и runtime-настройки, включая секцию `[pipe]` для pressure-driven труб.
+- `crates/flux_stage1_sample_plugin/Cargo.toml`: Отдельный `cdylib` crate минимального рабочего stage-1 sample plugin-а.
+- `crates/flux_stage1_sample_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample DLL, используемый позитивным e2e-тестом.
+- `crates/flux_stage1_sample_plugin/package_template/config/sample.toml`: Минимальный config-файл sample plugin package.
+- `crates/flux_stage1_sample_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample plugin package.
+- `crates/flux_stage1_sample_plugin/src/lib.rs`: Реализация sample DLL-плагина с обязательными ABI export-ами `flux_plugin_*`.
 - `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
 - `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
 - `docs/plans/plugin_system/00_roadmap.md`: Общий roadmap будущей миграции FluxEngine на runtime-плагины.
 - `docs/plans/plugin_system/*.md`: Детальные инструкции по этапам реализации plugin-system миграции.
 - `docs/project_structure.md`: Карта структуры проекта: дерево папок + зоны ответственности файлов.
 - `docs/technical_overview.md`: Техническая архитектура, подсистемы и инженерные ограничения.
-- `src/app/mod.rs`: Сборка Bevy-приложения, плагины, backend-инициализация и запуск.
+- `plugins/.gitkeep`: Фиксирует пустой runtime-каталог для packaged plugins; реальные `.fluxplugin` игнорируются через `.gitignore`.
+- `src/app/mod.rs`: Сборка Bevy-приложения, startup scan packaged plugins, backend-инициализация и запуск.
 - `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
 - `src/config/hud.rs`: Публичные типы runtime-конфигов HUD, включая substance-контейнеры и режимы видимости по hover, без встроенных entity-label/fallback-конфигов.
@@ -94,8 +104,15 @@ FluxEngine/
 - `src/editor/ui_setup_structure_buttons_block.rs`: Вспомогательные фабрики кнопок инструментов/материалов.
 - `src/input/camera.rs`: Управление камерой, зум/пан и тесты корректности якоря.
 - `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
-- `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем.
+- `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем, включая новый `plugins`.
 - `src/main.rs`: Точка входа бинаря; запускает приложение.
+- `src/plugins/abi.rs`: C-compatible ABI stage-1: `FluxUtf8Slice`, `FluxStatus`, host/registrar structs и export names обязательных DLL-функций.
+- `src/plugins/diagnostics.rs`: Startup scan packaged archives, дедупликация `PluginId`, resource с результатами проверки и текст для статуса главного меню.
+- `src/plugins/id.rs`: Типизированные `PluginId`, `PluginVersion`, `PluginApiVersion` и проверка канонического формата ID.
+- `src/plugins/loader.rs`: Чтение packaged `.fluxplugin`, безопасный extraction в cache-копию, загрузка DLL и ABI handshake `create/register/destroy`.
+- `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
+- `src/plugins/mod.rs`: Точка сборки plugin-contract подсистемы и её публичный re-export API.
+- `src/plugins/source.rs`: Описание packaged/dev source-типов, проверка относительных путей и resolve plugin layout внутри plugin root.
 - `src/render/mod.rs`: Плагин рендера и порядок render-систем, включая pipe visuals.
 - `src/render/pipe_highlight_material.rs`: Кастомный `Material2d` и helper-логика для shader-подсветки труб в `F3`.
 - `src/render/save_preview.rs`: Offscreen preview pipeline для save-slots: отдельная камера, settle-frame в каноническом `F1`, screenshot capture, PNG-запись и восстановление UI/overlay состояния после кадра.

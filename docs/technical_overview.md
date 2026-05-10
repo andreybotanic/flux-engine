@@ -17,7 +17,8 @@
 
 - Приложение запускается через `src/main.rs`, который вызывает `flux_engine::app::run()`.
 - Основная сборка приложения находится в `src/app/mod.rs`.
-- На старте загружаются конфиги игры, создаются ресурсы Bevy, выбирается backend симуляции (`CPU`/`GPU`), подключаются плагины подсистем.
+- На старте загружаются конфиги игры, выполняется stage-1 scan внешних packaged plugin archives из `plugins/*.fluxplugin`, создаются ресурсы Bevy, выбирается backend симуляции (`CPU`/`GPU`), подключаются плагины подсистем.
+- Ошибки stage-1 plugin contract не валят приложение: они сохраняются в отдельный runtime-ресурс и выводятся в строку статуса главного меню.
 
 ## Подсистемы (по модулям)
 
@@ -30,6 +31,7 @@
 - `debug`: отладочные режимы и диагностические инструменты.
 - `save`: сохранение/загрузка мира.
 - `config`: загрузка и валидация конфигурации игры.
+- `plugins`: stage-1 runtime plugin contract, packaged archive validation, Windows DLL handshake и startup diagnostics.
 
 ### Организация крупных модулей и документирование API
 
@@ -37,6 +39,18 @@
 - `editor` разделён на несколько файлов внутри `src/editor/` (UI-setup, overlay setup, main-menu logic, runtime UI refresh/actions, input/selection logic), а `mod.rs` выступает точкой сборки.
 - Для публичного API действует обязательный `Rustdoc`-минимум: `///` перед каждым `pub struct` и `pub fn` с кратким описанием назначения.
 - Дополнительно декомпозированы крупные модули `save`, `simulation`, `render`, `ui`, `config` на отдельные `*_block.rs` части через `include!`, чтобы сократить размер основных файлов и упростить локальную навигацию по подсистемам.
+
+### Runtime plugin contract (stage 1)
+
+- В `src/plugins/` реализован только контрактный слой будущей plugin-системы; registry/state, экран `Plugins`, save-gate, `xtask` и default plugin пока не входят в этот этап.
+- Поддерживается только packaged source: архивы `plugins/*.fluxplugin`, которые считаются ZIP-пакетами с `manifest.toml` в корне и относительными путями к `bin/...dll`, `config/` и `assets/`.
+- Manifest валидируется отдельно от runtime: проверяются `PluginId`, semver `version`, точное совпадение `api_version` с версией движка и безопасность относительных путей.
+- Перед extraction перечисляются все ZIP entries и запрещаются `..`, absolute roots, `.`-сегменты и Windows drive-prefix; это исключает выход за пределы plugin root.
+- На Windows DLL загружается не из исходного архива и не из исходной папки, а из временной generation-копии в `std::env::temp_dir()/FluxEngine/plugin_cache/...`; после ABI-проверки копия удаляется best-effort.
+- Стабильный stage-1 ABI ограничен plain C-compatible типами: `FluxUtf8Slice`, `FluxStatus`, `FluxHostApi`, `FluxRegistrar`, `FluxPluginHandle` и четырьмя обязательными export-функциями DLL.
+- ABI-валидация ограничивается handshake-сценарием `api_version -> create -> register -> destroy`; gameplay content через этот слой на текущем этапе ещё не подключается.
+- Для позитивной e2e-проверки stage-1 в репозитории добавлен отдельный sample `cdylib` crate `crates/flux_stage1_sample_plugin`: unit-тесты собирают его, упаковывают в `.fluxplugin` и проверяют, что startup scan принимает рабочий DLL-плагин.
+- Если packaged plugins нет, игра стартует как раньше. Если packaged plugin сломан, приложение продолжает запуск и показывает понятную причину отклонения в `Main Menu`.
 
 ## Симуляция газа: текущее состояние MVP
 

@@ -1,6 +1,9 @@
 ﻿# Changelog
 
 ## 2026-05-10
+- Реализован stage-1 runtime plugin contract: новый модуль `src/plugins/` валидирует packaged `.fluxplugin`, проверяет `manifest.toml`, типизированные plugin IDs, безопасный ZIP extraction и Windows DLL ABI handshake без подключения gameplay content.
+- На старте приложения добавлен packaged plugin scan из `plugins/*.fluxplugin`: сломанные плагины мягко отклоняются без panic, а понятная причина показывается в строке статуса главного меню.
+- Добавлен минимальный рабочий sample DLL-плагин `crates/flux_stage1_sample_plugin` и позитивный plugin-contract e2e-тест: он реально собирает `cdylib`, упаковывает `.fluxplugin` и проверяет, что startup scan принимает корректный packaged plugin.
 - Добавлены плановые документы `docs/plans/plugin_system/` для будущей миграции на runtime-плагины: roadmap, этапные инструкции, hot reload, dev mode, save-gate и сборка плагинов через `xtask`; код приложения на этом шаге не менялся.
 - В каждый этап plugin-system плана добавлена заметка для заказчика с ручной проверкой в игре после завершения этапа.
 - Из plugin-system планов убраны формулировки, которые могли быть прочитаны как запрет писать код при выполнении этапов.

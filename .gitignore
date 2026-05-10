@@ -20,3 +20,5 @@ reports/
 saves/
 tmp/
 config/backups/
+plugins/*.fluxplugin
+plugins/*.zip

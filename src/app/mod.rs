@@ -11,7 +11,9 @@ use crate::{
     debug::DebugPlugin,
     editor::EditorPlugin,
     input::InputPlugin,
+    plugins::scan_packaged_plugin_contracts,
     render::RenderPlugin,
+    save::MainMenuUiState,
     simulation::{
         backend::{SimulationBackend, SimulationBackendConfig, WorldSizeConfig},
         gpu_solver::GpuGasSolver,
@@ -26,6 +28,9 @@ pub fn run() {
     let game_config = GameConfig::load_from_default_location().unwrap_or_else(|err| {
         panic!("Failed to load game config files from ./config: {err}");
     });
+    let plugins_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("plugins");
+    let plugin_diagnostics = scan_packaged_plugin_contracts(&plugins_root);
+    plugin_diagnostics.log_to_stderr();
 
     let asset_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("assets")
@@ -35,6 +40,12 @@ pub fn run() {
     let mut app = App::new();
     app.insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Time::<Fixed>::from_hz(30.0));
+    if let Some(status_text) = plugin_diagnostics.main_menu_status_text() {
+        app.insert_resource(MainMenuUiState {
+            status_text,
+            ..Default::default()
+        });
+    }
 
     let args: Vec<String> = std::env::args().collect();
     let env_backend = std::env::var("FLUX_SIM_BACKEND").ok();
@@ -84,6 +95,7 @@ pub fn run() {
             backend: requested_backend,
         })
         .insert_resource(world_size)
+        .insert_resource(plugin_diagnostics)
         .add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {

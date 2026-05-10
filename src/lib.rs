@@ -3,6 +3,7 @@ pub mod config;
 pub mod debug;
 pub mod editor;
 pub mod input;
+pub mod plugins;
 pub mod render;
 pub mod save;
 pub mod simulation;
