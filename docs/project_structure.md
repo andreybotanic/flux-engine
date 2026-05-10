@@ -30,7 +30,7 @@ FluxEngine/
 |   |-- debug/               # Диагностические режимы и метрики.
 |   |-- editor/              # Инструменты редактирования мира, газа и pipe-сети.
 |   |-- input/               # Обработка пользовательского ввода.
-|   |-- plugins/             # Stage-1 runtime plugin contract: manifest, ZIP/DLL validation, ABI и startup diagnostics.
+|   |-- plugins/             # Runtime plugin contract/bootstrap, default content registry, manifest, ZIP/DLL validation, ABI и startup diagnostics.
 |   |-- render/              # Визуализация мира, pipe-layer и overlay-режимов.
 |   |-- simulation/          # CPU/GPU симуляция газа, pipe pre-step и parity-инфраструктура.
 |   |   `-- pipes/           # Внутренние модули pressure/fixtures/solver/test-инфраструктуры труб.
@@ -111,12 +111,15 @@ FluxEngine/
 - `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем, включая новый `plugins`.
 - `src/main.rs`: Точка входа бинаря; запускает приложение.
 - `src/plugins/abi.rs`: C-compatible ABI stage-1: `FluxUtf8Slice`, `FluxStatus`, host/registrar structs и export names обязательных DLL-функций.
+- `src/plugins/content.rs`: Content registry runtime-модель: stable `ContentId`, provider plugins, descriptors клеток/структур/overlay и HUD metadata.
+- `src/plugins/default_plugin.rs`: Built-in locked `flux.default` content: stable IDs, legacy enum adapters, asset/config helpers и default descriptor registration.
+- `src/plugins/default_plugin_descriptors_block.rs`: Внутренний блок сборки descriptors default plugin-а: layer/collision rules, footprint, rotations, sprite metadata и HUD blocks.
 - `src/plugins/diagnostics.rs`: Startup scan packaged archives, дедупликация `PluginId`, resource с результатами проверки и текст для статуса главного меню.
 - `src/plugins/id.rs`: Типизированные `PluginId`, `PluginVersion`, `PluginApiVersion` и проверка канонического формата ID.
 - `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL и ABI handshake `create/register/destroy`.
 - `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
 - `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API.
-- `src/plugins/registry.rs`: Stage-2 bootstrap runtime registry/state, default plugin, source priority, `LoadedPluginRegistry`, `ContentRegistry` и rebuild-helper для menu toggle.
+- `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` и rebuild-helper для menu toggle; content registry создаётся через `src/plugins/content.rs` и default descriptors.
 - `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics и resolve plugin layout внутри plugin root.
 - `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses и aggregate `PluginRegistryState`.
 - `src/render/mod.rs`: Плагин рендера и порядок render-систем, включая pipe visuals.

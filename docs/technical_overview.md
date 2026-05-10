@@ -40,9 +40,9 @@
 - Для публичного API действует обязательный `Rustdoc`-минимум: `///` перед каждым `pub struct` и `pub fn` с кратким описанием назначения.
 - Дополнительно декомпозированы крупные модули `save`, `simulation`, `render`, `ui`, `config` на отдельные `*_block.rs` части через `include!`, чтобы сократить размер основных файлов и упростить локальную навигацию по подсистемам.
 
-### Runtime plugin bootstrap и menu UI (stages 1-3)
+### Runtime plugin bootstrap, menu UI и default content (stages 1-4)
 
-- В `src/plugins/` stage-1 контрактный слой расширен stage-2 bootstrap-слоем: приложение теперь поднимает `PluginSourceRegistry`, `LoadedPluginRegistry`, `EnabledPluginSet`, `ContentRegistry` и aggregate `PluginRegistryState`.
+- В `src/plugins/` stage-1 контрактный слой расширен bootstrap/default-content слоями: приложение поднимает `PluginSourceRegistry`, `LoadedPluginRegistry`, `EnabledPluginSet`, `ContentRegistry`, `DefaultPluginContent` и aggregate `PluginRegistryState`.
 - Поддерживаются два физических источника plugin-пакетов:
   - packaged archives `plugins/*.fluxplugin`;
   - expanded dev directories `plugins_dev/<plugin_id>/`.
@@ -60,9 +60,20 @@
 - Перед extraction перечисляются все ZIP entries и запрещаются `..`, absolute roots, `.`-сегменты и Windows drive-prefix; это исключает выход за пределы plugin root.
 - На Windows DLL загружается не из исходного архива и не из исходной dev-папки, а из временной generation-копии в `std::env::temp_dir()/FluxEngine/plugin_cache/...`; после ABI-проверки копия удаляется best-effort.
 - Стабильный stage-1 ABI ограничен plain C-compatible типами: `FluxUtf8Slice`, `FluxStatus`, `FluxHostApi`, `FluxRegistrar`, `FluxPluginHandle` и четырьмя обязательными export-функциями DLL.
-- ABI-валидация ограничивается handshake-сценарием `api_version -> create -> register -> destroy`; gameplay content через DLL на текущем этапе ещё не подключается, а `ContentRegistry` пока хранит только список plugin-провайдеров.
+- ABI-валидация ограничивается handshake-сценарием `api_version -> create -> register -> destroy`; gameplay content через внешние DLL на текущем этапе ещё не подключается, а встроенный игровой content регистрируется через locked `flux.default`.
 - Для позитивной e2e-проверки stage-1 в репозитории добавлен отдельный sample `cdylib` crate `crates/flux_stage1_sample_plugin`: unit-тесты собирают его, упаковывают в `.fluxplugin` и проверяют, что startup scan принимает рабочий DLL-плагин.
 - Если внешних plugins нет, игра стартует как раньше, но registry всё равно содержит `flux.default`. Если packaged/dev plugin сломан, приложение продолжает запуск и показывает понятную причину отклонения в `Main Menu`.
+
+### Default plugin content registry (stage 4)
+
+- Built-in content теперь описан как content default plugin-а `flux.default`, без изменения игрового поведения и без удаления legacy runtime enum-ов.
+- `src/plugins/content.rs` содержит общий `ContentRegistry`: provider plugins, descriptors для world cells, structures, overlay modes и HUD metadata. `ContentId` валидируется тем же каноническим форматом, что и plugin IDs.
+- `src/plugins/default_plugin.rs` и `src/plugins/default_plugin_descriptors_block.rs` регистрируют stable IDs для `Boundary`, `Brick`, `Metal`, `Pipe`, `Vent`, `GasSource`, `GasSink`, `GasPipeBridge` и overlay-режимов `F1/F2/F3`.
+- Adapter-функции `CellMaterial <-> ContentId`, `StructureKind <-> ContentId` и `OverlayMode <-> ContentId` связывают текущий runtime storage со stable content IDs. `WorldGrid` всё ещё хранит `CellMaterial`, `PlacedStructureMap` хранит `StructureKind`, а overlay input продолжает работать через `OverlayMode`.
+- Save/load schema на этом этапе остаётся enum/code-based: stable content IDs не записываются в save-файлы и не участвуют в load gate до отдельного этапа миграции save schema.
+- Старые helper-ы `cell_material_descriptor(...)`, `structure_descriptor(...)` и size-helper-ы сохранены как публичный API, но внутри берут layer/footprint/sprite metadata из default plugin descriptors.
+- Config loader строит legacy visual/HUD maps из default plugin descriptors и затем валидирует существующие TOML-конфиги на совпадение размеров, labels, HUD-блоков и draw priority. Это сохраняет текущие asset paths и порядок HUD-блоков: `Cell`, `Pipe`, `Bridge`, `Vent`, `Gas Source`, `Gas Sink`.
+- При startup bootstrap и при rebuild после toggle registry создаётся заново с default descriptors; внешний plugin source для `flux.default` не нужен, потому что он built-in, locked и always-on.
 
 ## Симуляция газа: текущее состояние MVP
 

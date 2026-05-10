@@ -54,24 +54,67 @@ fn setup_editor_ui(
     let max_color_initial_text = max_color_initial.to_string();
     let icon_set = EditorIconSet {
         build: asset_server.load("sprites/ui/tool_build.png"),
-        gases: asset_server.load("sprites/world/pipe_mask_10.png"),
+        gases: asset_server.load(crate::plugins::default_plugin::pipe_mask_sprite_path(10)),
         erase: asset_server.load("sprites/ui/tool_erase.png"),
-        pipe: asset_server.load("sprites/world/pipe_mask_10.png"),
-        vent: asset_server.load("sprites/world/tile_vent.png"),
-        bridge: asset_server.load("sprites/ui/tool_bridge.png"),
+        pipe: asset_server.load(crate::plugins::default_plugin::pipe_mask_sprite_path(10)),
+        vent: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+            crate::world::structures::StructureKind::Vent,
+        )),
+        bridge: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+            crate::world::structures::StructureKind::GasPipeBridge,
+        )),
         add_gas: asset_server.load("sprites/ui/tool_add_gas.png"),
         clear_gas: asset_server.load("sprites/ui/tool_clear_gas.png"),
-        source: asset_server.load("sprites/world/tile_gas_source.png"),
-        sink: asset_server.load("sprites/world/tile_gas_sink.png"),
-        brick: asset_server.load("sprites/world/tile_brick.png"),
-        metal: asset_server.load("sprites/world/tile_metal.png"),
-        brick_silhouette: asset_server.load("sprites/world/silhouette_brick.png"),
-        metal_silhouette: asset_server.load("sprites/world/silhouette_metal.png"),
-        pipe_silhouette: asset_server.load("sprites/world/pipe_silhouette_mask_00.png"),
-        vent_silhouette: asset_server.load("sprites/world/silhouette_vent.png"),
-        bridge_silhouette: asset_server.load("sprites/world/bridge_silhouette.png"),
-        source_silhouette: asset_server.load("sprites/world/tile_gas_source.png"),
-        sink_silhouette: asset_server.load("sprites/world/tile_gas_sink.png"),
+        source: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+            crate::world::structures::StructureKind::GasSource,
+        )),
+        sink: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+            crate::world::structures::StructureKind::GasSink,
+        )),
+        brick: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
+            CellMaterial::Brick,
+        )),
+        metal: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
+            CellMaterial::Metal,
+        )),
+        brick_silhouette: asset_server.load(
+            crate::plugins::default_plugin::cell_silhouette_path(CellMaterial::Brick)
+                .expect("brick silhouette is registered"),
+        ),
+        metal_silhouette: asset_server.load(
+            crate::plugins::default_plugin::cell_silhouette_path(CellMaterial::Metal)
+                .expect("metal silhouette is registered"),
+        ),
+        pipe_silhouette: asset_server.load(
+            crate::plugins::default_plugin::structure_silhouette_path(
+                crate::world::structures::StructureKind::Pipe,
+            )
+            .expect("pipe silhouette is registered"),
+        ),
+        vent_silhouette: asset_server.load(
+            crate::plugins::default_plugin::structure_silhouette_path(
+                crate::world::structures::StructureKind::Vent,
+            )
+            .expect("vent silhouette is registered"),
+        ),
+        bridge_silhouette: asset_server.load(
+            crate::plugins::default_plugin::structure_silhouette_path(
+                crate::world::structures::StructureKind::GasPipeBridge,
+            )
+            .expect("bridge silhouette is registered"),
+        ),
+        source_silhouette: asset_server.load(
+            crate::plugins::default_plugin::structure_silhouette_path(
+                crate::world::structures::StructureKind::GasSource,
+            )
+            .expect("source silhouette is registered"),
+        ),
+        sink_silhouette: asset_server.load(
+            crate::plugins::default_plugin::structure_silhouette_path(
+                crate::world::structures::StructureKind::GasSink,
+            )
+            .expect("sink silhouette is registered"),
+        ),
         select_arrow: asset_server.load("sprites/ui/select_arrow.png"),
         main_menu_background: asset_server.load("sprites/ui/main_menu_background.png"),
     };
@@ -144,9 +187,30 @@ fn setup_editor_ui(
             GasesTypePanelRoot,
         ))
         .with_children(|parent| {
-            spawn_pipe_tool_button(parent, "Pipe", PipeToolKind::Pipe, icon_set.pipe.clone());
-            spawn_pipe_tool_button(parent, "Vent", PipeToolKind::Vent, icon_set.vent.clone());
-            spawn_pipe_tool_button(parent, "Bridge", PipeToolKind::Bridge, icon_set.bridge.clone());
+            spawn_pipe_tool_button(
+                parent,
+                crate::plugins::default_plugin::structure_label(
+                    crate::world::structures::StructureKind::Pipe,
+                ),
+                PipeToolKind::Pipe,
+                icon_set.pipe.clone(),
+            );
+            spawn_pipe_tool_button(
+                parent,
+                crate::plugins::default_plugin::structure_label(
+                    crate::world::structures::StructureKind::Vent,
+                ),
+                PipeToolKind::Vent,
+                icon_set.vent.clone(),
+            );
+            spawn_pipe_tool_button(
+                parent,
+                crate::plugins::default_plugin::structure_label(
+                    crate::world::structures::StructureKind::GasPipeBridge,
+                ),
+                PipeToolKind::Bridge,
+                icon_set.bridge.clone(),
+            );
         });
 
     commands
@@ -169,13 +233,13 @@ fn setup_editor_ui(
         .with_children(|parent| {
             spawn_cell_material_button(
                 parent,
-                "Brick",
+                crate::plugins::default_plugin::cell_label(CellMaterial::Brick),
                 CellMaterial::Brick,
                 icon_set.brick.clone(),
             );
             spawn_cell_material_button(
                 parent,
-                "Metal",
+                crate::plugins::default_plugin::cell_label(CellMaterial::Metal),
                 CellMaterial::Metal,
                 icon_set.metal.clone(),
             );
@@ -213,13 +277,17 @@ fn setup_editor_ui(
             );
             spawn_tool_button(
                 parent,
-                "Create Gas Source",
+                crate::plugins::default_plugin::structure_label(
+                    crate::world::structures::StructureKind::GasSource,
+                ),
                 EditorTool::CreateGasSource,
                 icon_set.source.clone(),
             );
             spawn_tool_button(
                 parent,
-                "Create Gas Sink",
+                crate::plugins::default_plugin::structure_label(
+                    crate::world::structures::StructureKind::GasSink,
+                ),
                 EditorTool::CreateGasSink,
                 icon_set.sink.clone(),
             );

@@ -6,6 +6,8 @@ use std::{
 use bevy::prelude::Resource;
 
 use crate::plugins::{
+    content::ContentRegistry,
+    default_plugin::default_content_registry,
     source::{
         discover_plugin_sources, DiscoveredPluginSource, PluginSourceDiscovery, PluginSourceKind,
         RejectedPluginSource,
@@ -86,19 +88,6 @@ impl LoadedPluginRegistry {
     /// Returns the loaded plugin metadata in deterministic order.
     pub fn entries(&self) -> &[LoadedPluginMetadata] {
         &self.loaded_plugins
-    }
-}
-
-/// Minimal placeholder registry of plugins that provide gameplay content.
-#[derive(Resource, Clone, Debug, Default)]
-pub struct ContentRegistry {
-    provider_plugins: BTreeSet<PluginId>,
-}
-
-impl ContentRegistry {
-    /// Returns the registered content-provider plugin ids.
-    pub fn provider_plugins(&self) -> &BTreeSet<PluginId> {
-        &self.provider_plugins
     }
 }
 
@@ -240,8 +229,7 @@ fn build_runtime_registries(
     }
 
     let mut loaded_plugins = vec![default_loaded_plugin()];
-    let mut content_providers = BTreeSet::new();
-    content_providers.insert(default_plugin_id.clone());
+    let mut content_registry = default_content_registry();
     let mut entries = vec![default_registry_entry()];
 
     let mut plugin_ids = BTreeSet::new();
@@ -290,7 +278,7 @@ fn build_runtime_registries(
 
         if let Some(loaded) = loaded_plugin {
             if loaded.content {
-                content_providers.insert(loaded.plugin_id.clone());
+                content_registry.register_provider_plugin(loaded.plugin_id.clone());
             }
             loaded_plugins.push(loaded);
         }
@@ -307,9 +295,7 @@ fn build_runtime_registries(
 
     (
         LoadedPluginRegistry { loaded_plugins },
-        ContentRegistry {
-            provider_plugins: content_providers,
-        },
+        content_registry,
         registry_state,
     )
 }

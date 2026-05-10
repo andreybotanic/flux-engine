@@ -785,16 +785,7 @@ impl PlacedStructureMap {
 
 /// Builds a descriptor for one world cell material.
 pub fn cell_material_descriptor(material: CellMaterial) -> StructureDescriptor {
-    StructureDescriptor {
-        layers: vec![StructureLayer {
-            kind: LayerKind::Appearance,
-            cells: vec![LayerCellSpec {
-                local_cell: IVec2::ZERO,
-                marker_kind: LayerMarkerKind::Solid(material),
-                collision: LayerCollisionKind::Special,
-            }],
-        }],
-    }
+    crate::plugins::default_plugin::cell_layer_descriptor(material)
 }
 
 /// Returns the base sprite size for a world material in world cells.
@@ -802,7 +793,10 @@ pub fn cell_material_sprite_size_in_cells(
     material: CellMaterial,
     cell_visual_layouts: &CellVisualPlacementConfigMap,
 ) -> UVec2 {
-    cell_visual_layouts.get(material).size_in_cells
+    let _ = cell_visual_layouts;
+    crate::plugins::default_plugin::cell_content_descriptor(material)
+        .visual
+        .size_in_cells
 }
 
 /// Builds a descriptor for one placeable structure kind/rotation pair.
@@ -810,88 +804,7 @@ pub fn structure_descriptor(
     kind: StructureKind,
     rotation: StructureRotation,
 ) -> StructureDescriptor {
-    match kind {
-        StructureKind::Pipe => StructureDescriptor {
-            layers: vec![StructureLayer {
-                kind: LayerKind::Appearance,
-                cells: vec![LayerCellSpec {
-                    local_cell: IVec2::ZERO,
-                    marker_kind: LayerMarkerKind::Pipe,
-                    collision: LayerCollisionKind::RenderOnly,
-                }],
-            }],
-        },
-        StructureKind::Vent => StructureDescriptor {
-            layers: vec![
-                StructureLayer {
-                    kind: LayerKind::Appearance,
-                    cells: vec![LayerCellSpec {
-                        local_cell: IVec2::ZERO,
-                        marker_kind: LayerMarkerKind::Vent,
-                        collision: LayerCollisionKind::Special,
-                    }],
-                },
-                StructureLayer {
-                    kind: LayerKind::GasPipeConnections,
-                    cells: vec![LayerCellSpec {
-                        local_cell: IVec2::ZERO,
-                        marker_kind: LayerMarkerKind::GasPipeConnectionBidirectional,
-                        collision: LayerCollisionKind::Special,
-                    }],
-                },
-            ],
-        },
-        StructureKind::GasSource => StructureDescriptor {
-            layers: vec![StructureLayer {
-                kind: LayerKind::Appearance,
-                cells: vec![LayerCellSpec {
-                    local_cell: IVec2::ZERO,
-                    marker_kind: LayerMarkerKind::GasSource,
-                    collision: LayerCollisionKind::Special,
-                }],
-            }],
-        },
-        StructureKind::GasSink => StructureDescriptor {
-            layers: vec![StructureLayer {
-                kind: LayerKind::Appearance,
-                cells: vec![LayerCellSpec {
-                    local_cell: IVec2::ZERO,
-                    marker_kind: LayerMarkerKind::GasSink,
-                    collision: LayerCollisionKind::Special,
-                }],
-            }],
-        },
-        StructureKind::GasPipeBridge => {
-            let bridge_cells = bridge_local_cells(rotation);
-            let connection_cells = bridge_connection_local_cells(rotation);
-            StructureDescriptor {
-                layers: vec![
-                    StructureLayer {
-                        kind: LayerKind::Appearance,
-                        cells: bridge_cells
-                            .into_iter()
-                            .map(|local_cell| LayerCellSpec {
-                                local_cell,
-                                marker_kind: LayerMarkerKind::GasPipeBridge,
-                                collision: LayerCollisionKind::RenderOnly,
-                            })
-                            .collect(),
-                    },
-                    StructureLayer {
-                        kind: LayerKind::GasPipeConnections,
-                        cells: connection_cells
-                            .into_iter()
-                            .map(|local_cell| LayerCellSpec {
-                                local_cell,
-                                marker_kind: LayerMarkerKind::GasPipeConnectionBidirectional,
-                                collision: LayerCollisionKind::Special,
-                            })
-                            .collect(),
-                    },
-                ],
-            }
-        }
-    }
+    crate::plugins::default_plugin::structure_layer_descriptor(kind, rotation)
 }
 
 /// Returns the base sprite size for a structure in world cells.
@@ -900,12 +813,16 @@ pub fn structure_sprite_size_in_cells(
     rotation: StructureRotation,
     structure_visuals: &StructureVisualConfigMap,
 ) -> UVec2 {
+    let _ = structure_visuals;
+    let base_size = crate::plugins::default_plugin::structure_content_descriptor(kind)
+        .visual
+        .size_in_cells;
     match kind {
         StructureKind::GasPipeBridge => {
             let _ = rotation;
-            structure_visuals.get(kind).size_in_cells
+            base_size
         }
-        _ => rotated_size_in_cells(structure_visuals.get(kind).size_in_cells, rotation),
+        _ => rotated_size_in_cells(base_size, rotation),
     }
 }
 
@@ -915,7 +832,11 @@ pub fn structure_footprint_size_in_cells(
     rotation: StructureRotation,
     structure_visuals: &StructureVisualConfigMap,
 ) -> UVec2 {
-    rotated_size_in_cells(structure_visuals.get(kind).size_in_cells, rotation)
+    let _ = structure_visuals;
+    let base_size = crate::plugins::default_plugin::structure_content_descriptor(kind)
+        .visual
+        .size_in_cells;
+    rotated_size_in_cells(base_size, rotation)
 }
 
 fn rotated_size_in_cells(size_in_cells: UVec2, rotation: StructureRotation) -> UVec2 {

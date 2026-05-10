@@ -1,5 +1,8 @@
 fn setup_editor_overlays(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let brick_silhouette = asset_server.load("sprites/world/silhouette_brick.png");
+    let brick_silhouette = asset_server.load(
+        crate::plugins::default_plugin::cell_silhouette_path(CellMaterial::Brick)
+            .expect("brick silhouette is registered"),
+    );
     commands.spawn((
         Sprite {
             image: brick_silhouette,

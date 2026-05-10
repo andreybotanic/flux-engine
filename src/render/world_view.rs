@@ -229,7 +229,7 @@ pub(crate) fn preview_world_extent() -> Vec2 {
     world_dimensions() + Vec2::splat(CELL_SIZE * WORLD_FADE_WIDTH_CELLS * 2.0)
 }
 
-#[derive(Resource, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum OverlayMode {
     #[default]
     Main,

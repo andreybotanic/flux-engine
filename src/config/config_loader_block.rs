@@ -193,42 +193,20 @@ fn load_visual_placement_configs(
     ),
     String,
 > {
-    let structure_entries = vec![
-        (
-            StructureKind::Pipe,
-            load_structure_visual_config_entry(structures_root, "pipe.toml")?,
-        ),
-        (
-            StructureKind::Vent,
-            load_structure_visual_config_entry(structures_root, "vent.toml")?,
-        ),
-        (
-            StructureKind::GasSource,
-            load_structure_visual_config_entry(structures_root, "gas_source.toml")?,
-        ),
-        (
-            StructureKind::GasSink,
-            load_structure_visual_config_entry(structures_root, "gas_sink.toml")?,
-        ),
-        (
-            StructureKind::GasPipeBridge,
-            load_structure_visual_config_entry(structures_root, "gas_pipe_bridge.toml")?,
-        ),
-    ];
-    let cell_entries = vec![
-        (
-            CellMaterial::Boundary,
-            load_cell_visual_placement_entry(structures_root, "boundary.toml")?,
-        ),
-        (
-            CellMaterial::Brick,
-            load_cell_visual_placement_entry(structures_root, "brick.toml")?,
-        ),
-        (
-            CellMaterial::Metal,
-            load_cell_visual_placement_entry(structures_root, "metal.toml")?,
-        ),
-    ];
+    let structure_entries = crate::plugins::default_plugin::default_structure_descriptors()
+        .into_iter()
+        .map(|descriptor| {
+            load_structure_visual_config_entry(structures_root, descriptor.config_file_name)
+                .map(|config| (descriptor.kind, config))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let cell_entries = crate::plugins::default_plugin::default_cell_descriptors()
+        .into_iter()
+        .map(|descriptor| {
+            load_cell_visual_placement_entry(structures_root, descriptor.config_file_name)
+                .map(|config| (descriptor.material, config))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
     for (kind, (visual_config, hud_config)) in &structure_entries {
         validate_structure_visual_placement(*kind, visual_config)?;
@@ -338,8 +316,12 @@ fn validate_structure_visual_placement(
         StructureKind::Pipe
         | StructureKind::Vent
         | StructureKind::GasSource
-        | StructureKind::GasSink => UVec2::ONE,
-        StructureKind::GasPipeBridge => UVec2::new(3, 1),
+        | StructureKind::GasSink
+        | StructureKind::GasPipeBridge => {
+            crate::plugins::default_plugin::structure_content_descriptor(kind)
+                .visual
+                .size_in_cells
+        }
     };
     if config.size_in_cells != expected {
         return Err(format!(
@@ -364,10 +346,15 @@ fn validate_cell_visual_placement(
             material
         ));
     }
-    if config.size_in_cells != UVec2::ONE {
+    let expected = crate::plugins::default_plugin::cell_content_descriptor(material)
+        .visual
+        .size_in_cells;
+    if config.size_in_cells != expected {
         return Err(format!(
-            "Cell visual config for {:?} must use size_in_cells [1, 1], got [{}, {}]",
+            "Cell visual config for {:?} must use size_in_cells [{}, {}], got [{}, {}]",
             material,
+            expected.x,
+            expected.y,
             config.size_in_cells.x,
             config.size_in_cells.y
         ));

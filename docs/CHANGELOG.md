@@ -1,6 +1,8 @@
 ﻿# Changelog
 
 ## 2026-05-10
+- Реализован stage-4 перенос встроенного игрового content в locked default plugin `flux.default`: добавлен content registry с stable content IDs, descriptor-ами клеток/структур/overlay/HUD и adapter-слой к текущим runtime enum без изменения save schema.
+- Config/render/editor/HUD теперь получают built-in metadata через descriptors default plugin-а, сохраняя прежние asset paths, визуальные приоритеты, footprint-ы и порядок HUD-блоков.
 - Исправлено read-only отображение плагинов в `Game Menu`: вместо переключателей теперь показываются обычные текстовые состояния `On`/`Off`.
 - Исправлен UX экрана `Plugins`: после успешного переключения больше не показывается служебная надпись `plugin ... enabled/disabled`.
 - Исправлено мерцание списка `Plugins` при обычном переключении: строки обновляются на месте, без пересоздания списка и сброса прокрутки.

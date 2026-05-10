@@ -17,10 +17,13 @@ pub fn setup_world_view(
 ) {
     let show_world = world_load_state.has_world;
     let pipe_masks = (0u8..=0b1111)
-        .map(|mask| asset_server.load(format!("sprites/world/pipe_mask_{mask:02}.png")))
+        .map(|mask| asset_server.load(crate::plugins::default_plugin::pipe_mask_sprite_path(mask)))
         .collect::<Vec<_>>();
-    let vent_world = asset_server.load("sprites/world/tile_vent.png");
-    let vent_overlay = asset_server.load("sprites/world/gas_in_out.png");
+    let vent_world = asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+        StructureKind::Vent,
+    ));
+    let vent_overlay =
+        asset_server.load(crate::plugins::default_plugin::pipe_connection_overlay_sprite_path());
     let pipe_highlight = crate::render::pipe_highlight_material::PipeHighlightRenderAssets {
         quad: meshes.add(bevy::math::primitives::Rectangle::new(CELL_SIZE, CELL_SIZE)),
         materials: pipe_masks
@@ -35,12 +38,24 @@ pub fn setup_world_view(
     };
     let visuals = WorldVisualAssets {
         backdrop_noise: asset_server.load("sprites/world/backdrop_noise.png"),
-        brick: asset_server.load("sprites/world/tile_brick.png"),
-        metal: asset_server.load("sprites/world/tile_metal.png"),
-        boundary: asset_server.load("sprites/world/tile_boundary.png"),
-        source: asset_server.load("sprites/world/tile_gas_source.png"),
-        sink: asset_server.load("sprites/world/tile_gas_sink.png"),
-        bridge: asset_server.load("sprites/world/bridge.png"),
+        brick: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
+            CellMaterial::Brick,
+        )),
+        metal: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
+            CellMaterial::Metal,
+        )),
+        boundary: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
+            CellMaterial::Boundary,
+        )),
+        source: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+            StructureKind::GasSource,
+        )),
+        sink: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+            StructureKind::GasSink,
+        )),
+        bridge: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+            StructureKind::GasPipeBridge,
+        )),
         pipe_masks,
         vent_world,
         vent_overlay,

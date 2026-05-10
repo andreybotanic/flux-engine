@@ -11,7 +11,7 @@ use crate::{
     debug::DebugPlugin,
     editor::EditorPlugin,
     input::InputPlugin,
-    plugins::PluginBootstrapConfig,
+    plugins::{DefaultPluginContent, PluginBootstrapConfig},
     render::RenderPlugin,
     simulation::{
         backend::{SimulationBackend, SimulationBackendConfig, WorldSizeConfig},
@@ -31,6 +31,7 @@ pub fn run() {
     let plugin_bootstrap_config = PluginBootstrapConfig::from_repo_root(repo_root, false);
     let plugin_bootstrap = crate::plugins::bootstrap_plugin_registry(&plugin_bootstrap_config);
     plugin_bootstrap.registry_state.log_to_stderr();
+    let default_plugin_content = DefaultPluginContent::default();
 
     let asset_path = repo_root.join("assets").to_string_lossy().to_string();
 
@@ -85,6 +86,7 @@ pub fn run() {
         .insert_resource(plugin_bootstrap.loaded_registry)
         .insert_resource(plugin_bootstrap.enabled_set)
         .insert_resource(plugin_bootstrap.content_registry)
+        .insert_resource(default_plugin_content)
         .insert_resource(plugin_bootstrap.registry_state)
         .insert_resource(plugin_bootstrap_config)
         .insert_resource(SimulationBackendConfig {
