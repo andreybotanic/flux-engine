@@ -450,6 +450,12 @@ fn setup_editor_ui(
                                 );
                                 spawn_main_menu_action_button(
                                     actions,
+                                    "Plugins",
+                                    MainMenuButtonAction::OpenPluginsScreen,
+                                    220.0,
+                                );
+                                spawn_main_menu_action_button(
+                                    actions,
                                     "Exit To Main",
                                     MainMenuButtonAction::ExitToMainMenu,
                                     220.0,
@@ -553,6 +559,27 @@ fn setup_editor_ui(
                                     ..default()
                                 },
                                 MainMenuLoadActions,
+                            ))
+                            .with_children(|actions| {
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Back",
+                                    MainMenuButtonAction::BackToRoot,
+                                    140.0,
+                                );
+                            });
+
+                        panel
+                            .spawn((
+                                Node {
+                                    display: Display::None,
+                                    flex_direction: FlexDirection::Row,
+                                    width: Val::Percent(100.0),
+                                    justify_content: JustifyContent::Center,
+                                    column_gap: Val::Px(8.0),
+                                    ..default()
+                                },
+                                MainMenuPluginsActions,
                             ))
                             .with_children(|actions| {
                                 spawn_main_menu_action_button(
@@ -686,6 +713,54 @@ fn setup_editor_ui(
                                             ..default()
                                         },
                                         MainMenuSaveListContent,
+                                    ));
+                                })
+                                .id();
+                            spawn_scroll_area_scrollbar(list_root, viewport);
+                        });
+
+                        panel.spawn((
+                            Node {
+                                display: Display::None,
+                                position_type: PositionType::Relative,
+                                flex_direction: FlexDirection::Column,
+                                width: Val::Percent(100.0),
+                                flex_grow: 1.0,
+                                min_height: Val::Px(0.0),
+                                ..default()
+                            },
+                            MainMenuPluginsListRoot,
+                        ))
+                        .with_children(|list_root| {
+                            let viewport = list_root
+                                .spawn((
+                                    Node {
+                                        width: Val::Percent(100.0),
+                                        height: Val::Percent(100.0),
+                                        display: Display::Flex,
+                                        flex_direction: FlexDirection::Column,
+                                        align_items: AlignItems::Stretch,
+                                        padding: UiRect::right(Val::Px(10.0)),
+                                        overflow: Overflow::scroll_y(),
+                                        min_height: Val::Px(0.0),
+                                        ..default()
+                                    },
+                                    bevy::ui::ScrollPosition::default(),
+                                    bevy::ui::RelativeCursorPosition::default(),
+                                    ScrollAreaViewport::modal(110),
+                                    MainMenuPluginsListViewport,
+                                ))
+                                .with_children(|viewport| {
+                                    viewport.spawn((
+                                        Node {
+                                            width: Val::Percent(100.0),
+                                            display: Display::Flex,
+                                            flex_direction: FlexDirection::Column,
+                                            align_items: AlignItems::Stretch,
+                                            row_gap: Val::Px(10.0),
+                                            ..default()
+                                        },
+                                        MainMenuPluginsListContent,
                                     ));
                                 })
                                 .id();

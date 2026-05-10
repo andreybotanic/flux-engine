@@ -7,6 +7,7 @@ pub mod panels;
 pub mod scroll_area;
 pub mod select_field;
 pub mod sim_controls;
+pub mod toggle_switch;
 
 use bevy::prelude::*;
 
@@ -20,6 +21,7 @@ use self::sim_controls::{
     handle_sim_control_buttons, handle_sim_control_keyboard, refresh_sim_control_ui,
     refresh_sim_control_visibility, setup_sim_control_ui,
 };
+use self::toggle_switch::ToggleSwitchPlugin;
 
 #[derive(Resource, Clone)]
 /// Stores `UiFont` state.
@@ -64,6 +66,7 @@ impl Plugin for UiPlugin {
             PanelPlugin,
             ScrollAreaPlugin,
             SelectFieldPlugin,
+            ToggleSwitchPlugin,
         ))
         .add_systems(
             Startup,

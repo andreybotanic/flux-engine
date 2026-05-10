@@ -16,19 +16,29 @@ fn emit_main_menu_button_actions(
             &MainMenuActionButton,
             &mut BackgroundColor,
             Option<&MainMenuButtonPalette>,
+            Option<&crate::ui::toggle_switch::ToggleSwitchRoot>,
         ),
         (Changed<Interaction>, With<Button>),
     >,
     mut action_requests: EventWriter<MainMenuActionRequest>,
 ) {
-    for (interaction, action_button, mut background, palette) in &mut interactions {
+    for (interaction, action_button, mut background, palette, toggle_root) in &mut interactions {
         let idle = palette.map(|value| value.idle).unwrap_or(MODAL_BUTTON_BG);
         let hover = palette.map(|value| value.hover).unwrap_or(MODAL_BUTTON_HOVER);
-        background.0 = match *interaction {
-            Interaction::Pressed | Interaction::Hovered => hover,
-            Interaction::None => idle,
+        let active = match (&action_button.0, toggle_root) {
+            (MainMenuButtonAction::TogglePlugin(_), Some(root)) => root.interactive,
+            (MainMenuButtonAction::TogglePlugin(_), None) => false,
+            _ => true,
         };
-        if *interaction == Interaction::Pressed {
+        background.0 = if active {
+            match *interaction {
+                Interaction::Pressed | Interaction::Hovered => hover,
+                Interaction::None => idle,
+            }
+        } else {
+            idle
+        };
+        if active && *interaction == Interaction::Pressed {
             action_requests.write(MainMenuActionRequest(action_button.0.clone()));
         }
     }

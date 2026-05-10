@@ -15,7 +15,7 @@ use crate::plugins::{
 };
 
 /// Startup configuration used by the stage-2 plugin bootstrap.
-#[derive(Clone, Debug)]
+#[derive(Resource, Clone, Debug)]
 pub struct PluginBootstrapConfig {
     pub packaged_plugins_root: PathBuf,
     pub dev_plugins_root: PathBuf,
@@ -150,6 +150,27 @@ pub fn bootstrap_plugin_registry(config: &PluginBootstrapConfig) -> PluginBootst
         source_registry,
         loaded_registry,
         enabled_set: enabled_state,
+        content_registry,
+        registry_state,
+    }
+}
+
+/// Rebuilds plugin registries from an already edited enabled set.
+pub fn rebuild_plugin_registry_from_enabled_set(
+    config: &PluginBootstrapConfig,
+    mut enabled_set: EnabledPluginSet,
+) -> PluginBootstrapOutput {
+    enabled_set.enforce_default_plugin();
+    let discovery =
+        discover_plugin_sources(&config.packaged_plugins_root, &config.dev_plugins_root);
+    let source_registry = build_source_registry(&discovery);
+    let (loaded_registry, content_registry, registry_state) =
+        build_runtime_registries(&discovery, enabled_set.clone(), Vec::new(), config.dev_mode);
+
+    PluginBootstrapOutput {
+        source_registry,
+        loaded_registry,
+        enabled_set,
         content_registry,
         registry_state,
     }

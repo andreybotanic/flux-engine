@@ -11,10 +11,15 @@ fn clear_active_tool_state(
 
 fn escape_action(
     menu_mode: MainMenuMode,
+    menu_screen: MainMenuScreen,
     has_selected_tool: bool,
     has_structure_editor: bool,
     has_world: bool,
 ) -> EscAction {
+    if menu_screen == MainMenuScreen::Plugins {
+        return EscAction::BackToRoot;
+    }
+
     match menu_mode {
         MainMenuMode::Main => EscAction::Ignore,
         MainMenuMode::InGame => EscAction::CloseMenuKeepPaused,
@@ -65,10 +70,14 @@ fn handle_escape_and_main_menu(
 
     match escape_action(
         menu_ui.mode,
+        menu_ui.screen,
         active_tool.selected.is_some(),
         structure_edit.selected_cell.is_some(),
         world_load_state.has_world,
     ) {
+        EscAction::BackToRoot => {
+            return_main_menu_to_root(&mut menu_ui);
+        }
         EscAction::CloseMenuKeepPaused => {
             menu_ui.mode = MainMenuMode::Hidden;
             menu_ui.screen = MainMenuScreen::Root;

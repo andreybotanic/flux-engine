@@ -17,6 +17,14 @@ fn handle_main_menu_actions(
         ResMut<SaveSessionState>,
         ResMut<WorldLoadState>,
     ),
+    plugin_resources: (
+        Res<PluginBootstrapConfig>,
+        ResMut<PluginSourceRegistry>,
+        ResMut<LoadedPluginRegistry>,
+        ResMut<EnabledPluginSet>,
+        ResMut<ContentRegistry>,
+        ResMut<PluginRegistryState>,
+    ),
     save_name_input: Single<&TextInputField, With<MainMenuSaveNameInputField>>,
     mut world_changed: EventWriter<WorldCellChanged>,
     mut exit_writer: EventWriter<AppExit>,
@@ -42,6 +50,14 @@ fn handle_main_menu_actions(
         mut save_session,
         mut world_load_state,
     ) = world_state;
+    let (
+        plugin_config,
+        mut plugin_source_registry,
+        mut loaded_plugin_registry,
+        mut enabled_plugins,
+        mut content_registry,
+        mut plugin_registry_state,
+    ) = plugin_resources;
     if !main_menu.open {
         return;
     }
@@ -103,6 +119,9 @@ fn handle_main_menu_actions(
                     }
                 }
             }
+            MainMenuButtonAction::OpenPluginsScreen => {
+                open_plugins_screen(&mut menu_ui);
+            }
             MainMenuButtonAction::OpenSaveScreen => {
                 if !world_load_state.has_world {
                     menu_ui.status_text =
@@ -158,11 +177,7 @@ fn handle_main_menu_actions(
                 }
             }
             MainMenuButtonAction::BackToRoot => {
-                menu_ui.screen = MainMenuScreen::Root;
-                menu_ui.confirm_state = None;
-                menu_ui.confirm_text.clear();
-                menu_ui.post_save_action = None;
-                menu_ui.status_text.clear();
+                return_main_menu_to_root(&mut menu_ui);
             }
             MainMenuButtonAction::CreateNewSave => {
                 if !world_load_state.has_world {
@@ -216,6 +231,19 @@ fn handle_main_menu_actions(
             }
             MainMenuButtonAction::SelectDelete(save_id) => {
                 open_delete_confirmation(&mut menu_ui, save_id);
+            }
+            MainMenuButtonAction::TogglePlugin(plugin_id) => {
+                handle_plugin_toggle(
+                    plugin_id,
+                    &mut menu_ui,
+                    &world_load_state,
+                    &plugin_config,
+                    &mut plugin_source_registry,
+                    &mut loaded_plugin_registry,
+                    &mut enabled_plugins,
+                    &mut content_registry,
+                    &mut plugin_registry_state,
+                );
             }
             MainMenuButtonAction::SelectLoad(save_id) => {
                 match load_save(&saves_root, &save_id, &gas_registry) {

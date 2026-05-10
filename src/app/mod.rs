@@ -13,7 +13,6 @@ use crate::{
     input::InputPlugin,
     plugins::PluginBootstrapConfig,
     render::RenderPlugin,
-    save::MainMenuUiState,
     simulation::{
         backend::{SimulationBackend, SimulationBackendConfig, WorldSizeConfig},
         gpu_solver::GpuGasSolver,
@@ -29,9 +28,8 @@ pub fn run() {
     let game_config = GameConfig::load_from_default_location().unwrap_or_else(|err| {
         panic!("Failed to load game config files from ./config: {err}");
     });
-    let plugin_bootstrap = crate::plugins::bootstrap_plugin_registry(
-        &PluginBootstrapConfig::from_repo_root(repo_root, false),
-    );
+    let plugin_bootstrap_config = PluginBootstrapConfig::from_repo_root(repo_root, false);
+    let plugin_bootstrap = crate::plugins::bootstrap_plugin_registry(&plugin_bootstrap_config);
     plugin_bootstrap.registry_state.log_to_stderr();
 
     let asset_path = repo_root.join("assets").to_string_lossy().to_string();
@@ -39,13 +37,6 @@ pub fn run() {
     let mut app = App::new();
     app.insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Time::<Fixed>::from_hz(30.0));
-    if let Some(status_text) = plugin_bootstrap.registry_state.main_menu_status_text() {
-        app.insert_resource(MainMenuUiState {
-            status_text,
-            ..Default::default()
-        });
-    }
-
     let args: Vec<String> = std::env::args().collect();
     let env_backend = std::env::var("FLUX_SIM_BACKEND").ok();
     let mut world_size = WorldSizeConfig::default();
@@ -95,6 +86,7 @@ pub fn run() {
         .insert_resource(plugin_bootstrap.enabled_set)
         .insert_resource(plugin_bootstrap.content_registry)
         .insert_resource(plugin_bootstrap.registry_state)
+        .insert_resource(plugin_bootstrap_config)
         .insert_resource(SimulationBackendConfig {
             backend: requested_backend,
         })

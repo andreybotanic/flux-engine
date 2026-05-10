@@ -90,6 +90,7 @@ impl Default for WorldLoadState {
 pub enum MainMenuScreen {
     #[default]
     Root,
+    Plugins,
     Save,
     Load,
     Confirm,
@@ -128,7 +129,9 @@ pub struct MainMenuUiState {
     pub status_text: String,
     pub saves: Vec<SaveDescriptor>,
     pub list_item_entities: Vec<Entity>,
+    pub plugin_item_entities: Vec<Entity>,
     pub needs_save_list_refresh: bool,
+    pub needs_plugin_list_refresh: bool,
 }
 
 impl Default for MainMenuUiState {
@@ -143,7 +146,9 @@ impl Default for MainMenuUiState {
             status_text: String::new(),
             saves: Vec::new(),
             list_item_entities: Vec::new(),
+            plugin_item_entities: Vec::new(),
             needs_save_list_refresh: false,
+            needs_plugin_list_refresh: false,
         }
     }
 }

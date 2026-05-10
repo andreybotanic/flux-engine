@@ -16,8 +16,9 @@ pub use self::id::{
 };
 pub use self::manifest::PluginManifest;
 pub use self::registry::{
-    bootstrap_plugin_registry, ContentRegistry, LoadedPluginMetadata, LoadedPluginRegistry,
-    PluginBootstrapConfig, PluginBootstrapOutput, PluginSourceRecord, PluginSourceRegistry,
+    bootstrap_plugin_registry, rebuild_plugin_registry_from_enabled_set, ContentRegistry,
+    LoadedPluginMetadata, LoadedPluginRegistry, PluginBootstrapConfig, PluginBootstrapOutput,
+    PluginSourceRecord, PluginSourceRegistry,
 };
 pub use self::source::{
     discover_dev_plugin_sources, discover_packaged_plugin_sources, discover_plugin_sources,

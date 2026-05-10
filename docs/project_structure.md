@@ -83,7 +83,7 @@ FluxEngine/
 - `plugin_state.toml`: Локальный runtime-файл пользовательских настроек plugin enable-state; хранится в корне проекта и игнорируется через `.gitignore`.
 - `plugins/.gitkeep`: Фиксирует пустой runtime-каталог для packaged plugins; реальные `.fluxplugin` игнорируются через `.gitignore`.
 - `plugins_dev/.gitkeep`: Фиксирует пустой runtime-каталог expanded dev plugins; реальные папки плагинов игнорируются через `.gitignore`.
-- `src/app/mod.rs`: Сборка Bevy-приложения, stage-2 plugin bootstrap, backend-инициализация и запуск.
+- `src/app/mod.rs`: Сборка Bevy-приложения, plugin bootstrap/config resource, backend-инициализация и запуск.
 - `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
 - `src/config/hud.rs`: Публичные типы runtime-конфигов HUD, включая substance-контейнеры и режимы видимости по hover, без встроенных entity-label/fallback-конфигов.
@@ -93,17 +93,18 @@ FluxEngine/
 - `src/debug/mod.rs`: Debug-режимы, оверлейные метрики и диагностические ресурсы.
 - `src/editor/editor_ui_block.rs`: Runtime-обработка editor UI: tooltip, state sync, панели.
 - `src/editor/input_block.rs`: Мышь/кисть/выделение и применение инструментов к миру, unified pipe/structure-сети и мосту.
-- `src/editor/main_menu_actions_block.rs`: Обработчики действий меню: save/load/new/exit/confirm, очередь preview-capture и post-save follow-up сценарии.
+- `src/editor/main_menu_actions_block.rs`: Обработчики действий меню: save/load/new/exit/plugins/confirm, очередь preview-capture и post-save follow-up сценарии.
 - `src/editor/main_menu_block.rs`: Композиция логики main menu (escape/actions/ui refresh).
-- `src/editor/main_menu_escape_block.rs`: Обработка Esc и переходов состояний меню/инструментов.
-- `src/editor/main_menu_save_list_block.rs`: Сборка карточек save/load, загрузка preview PNG в UI и hit-test логика primary-click по всей карточке.
-- `src/editor/main_menu_ui_block.rs`: Обновление состояния и видимости элементов меню.
+- `src/editor/main_menu_escape_block.rs`: Обработка Esc и переходов состояний меню/инструментов, включая возврат из `Plugins` к root screen.
+- `src/editor/main_menu_plugins_block.rs`: Сборка и in-place синхронизация списка runtime-плагинов для экрана `Plugins`, правила доступности toggle и safe registry rebuild после изменения `EnabledPluginSet`.
+- `src/editor/main_menu_save_list_block.rs`: Общая отправка action-ивентов кнопок главного меню, сборка карточек save/load, загрузка preview PNG в UI и hit-test логика primary-click по всей карточке.
+- `src/editor/main_menu_ui_block.rs`: Обновление состояния и видимости элементов меню, включая экраны save/load/confirm/plugins.
 - `src/editor/mod.rs`: Публичные editor-типы/ресурсы и точка сборки editor-систем, включая `Pipe/Vent/Bridge` и состояние поворота моста.
 - `src/editor/overlay_setup_block.rs`: Инициализация визуальных editor-оверлеев.
 - `src/editor/ui_setup_block.rs`: Сборка editor-UI: панели, кнопки, поля и привязка виджетов.
 - `src/editor/ui_setup_debug_panels_block.rs`: Построение debug-панелей и строк параметров.
 - `src/editor/ui_setup_menu_button_factory_block.rs`: Фабрика кнопок модального меню.
-- `src/editor/ui_setup_setup_fn_block.rs`: Основная функция первичной сборки editor-UI, включая кнопку `Gases` и подпaнель выбора `Pipe/Vent/Bridge`.
+- `src/editor/ui_setup_setup_fn_block.rs`: Основная функция первичной сборки editor-UI, включая кнопку `Gases`, подпaнель выбора `Pipe/Vent/Bridge` и контейнеры экранов главного меню.
 - `src/editor/ui_setup_structure_buttons_block.rs`: Вспомогательные фабрики кнопок инструментов/материалов.
 - `src/input/camera.rs`: Управление камерой, зум/пан и тесты корректности якоря.
 - `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
@@ -115,7 +116,7 @@ FluxEngine/
 - `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL и ABI handshake `create/register/destroy`.
 - `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
 - `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API.
-- `src/plugins/registry.rs`: Stage-2 bootstrap runtime registry/state, default plugin, source priority, `LoadedPluginRegistry` и `ContentRegistry`.
+- `src/plugins/registry.rs`: Stage-2 bootstrap runtime registry/state, default plugin, source priority, `LoadedPluginRegistry`, `ContentRegistry` и rebuild-helper для menu toggle.
 - `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics и resolve plugin layout внутри plugin root.
 - `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses и aggregate `PluginRegistryState`.
 - `src/render/mod.rs`: Плагин рендера и порядок render-систем, включая pipe visuals.
@@ -126,7 +127,7 @@ FluxEngine/
 - `src/render/world_view_overlay_block.rs`: Логика overlay-режимов `F1/F2/F3`, курсорной сетки, multi-container pipe gas-square sizing, flow-packet анимации и фильтрации визуального шума для пакетов `< 5` частиц.
 - `src/render/world_view_setup_block.rs`: Построение сущностей мира/слоёв, config-driven z-order стен/структур и спавн визуалов из `PlacedStructureMap`.
 - `src/render/world_view_tests_block.rs`: Тесты вспомогательной математики рендера.
-- `src/save.rs`: Публичный save/load API, типы состояния меню/сессии и queue/event контракты preview-capture.
+- `src/save.rs`: Публичный save/load API, типы состояния меню/сессии, plugin menu screen state и queue/event контракты preview-capture.
 - `src/save_api_block.rs`: Операции верхнего уровня: list/create/overwrite/load snapshot и canonical preview-path для slot-а.
 - `src/save_gas_io_block.rs`: Чтение/запись chunk-ов мира, газа, unified placed-structures и node-based pipe-gas формата текущей save-схемы.
 - `src/save_meta_io_block.rs`: Метаданные сейва, валидация единственной поддерживаемой save-схемы и preview-chunk `png_v1`.
@@ -163,7 +164,7 @@ FluxEngine/
 - `src/ui/modal_capture_block.rs`: Snapshot/capture runtime для modal backdrop-ов: offscreen-камера, resize target-а, blur world-snapshot и cache lifecycle.
 - `src/ui/modal_runtime_block.rs`: Выбор topmost модалки, cover-layout backdrop-изображений и переключение режимов `PanelFrosted` / `FullscreenBlur`.
 - `src/ui/modal_tests_block.rs`: Unit-тесты modal helper-ов, cover-layout и правил refresh/capture для world-snapshot backdrop.
-- `src/ui/mod.rs`: UI-плагин и wiring общих UI-систем.
+- `src/ui/mod.rs`: UI-плагин, wiring общих UI-систем и exports переиспользуемых UI-компонентов.
 - `src/ui/palette.rs`: Единая палитра цветов UI (панели, меню, текст, input/select, tooltip, HUD и тени HUD).
 - `src/ui/panels.rs`: Публичные типы panel-системы и композиция блоков панели.
 - `src/ui/panels_manager_block.rs`: Состояние и API PanelManager, hit-rect и управление панелями.
@@ -172,6 +173,7 @@ FluxEngine/
 - `src/ui/scroll_area.rs`: Общий scroll-area runtime для modal/panel viewport-ов: wheel input, drag thumb, click on track, visibility scrollbar и приоритет групп ввода.
 - `src/ui/select_field.rs`: Dropdown/select-компонент для UI-панелей и его тесты.
 - `src/ui/sim_controls.rs`: UI-контролы симуляции (pause/speed/hotkeys).
+- `src/ui/toggle_switch.rs`: Переиспользуемый двухпозиционный toggle-switch UI-компонент для включения/выключения настроек.
 - `src/world/grid.rs`: Клеточная сетка мира, материалы, координатные утилиты и тесты.
 - `src/world/mod.rs`: Плагин мира и события изменений клеток.
 - `src/world/structures.rs`: Unified layer/descriptor-модель структур, `PlacedStructureMap`, rotation, bridge-footprint и pipe-cut state.

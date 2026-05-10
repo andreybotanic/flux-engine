@@ -4,6 +4,7 @@ use crate::{
     config::GasRegistry,
     debug::{DebugGasMetrics, DebugMode, DebugOverlaySettings},
     input::camera::MainCamera,
+    plugins::PluginId,
     render::{GasVisualSettings, OverlayMode},
     save::{
         apply_loaded_world_preset, create_save, delete_save, emit_full_world_changed, list_saves,
@@ -333,6 +334,18 @@ struct MainMenuStatusText;
 struct MainMenuRootActions;
 
 #[derive(Component)]
+struct MainMenuPluginsActions;
+
+#[derive(Component)]
+struct MainMenuPluginsListRoot;
+
+#[derive(Component)]
+struct MainMenuPluginsListViewport;
+
+#[derive(Component)]
+struct MainMenuPluginsListContent;
+
+#[derive(Component)]
 struct MainMenuSaveActions;
 
 #[derive(Component)]
@@ -382,6 +395,17 @@ struct MainMenuSaveCard {
 #[derive(Component)]
 struct MainMenuSaveCardDeleteButton;
 
+#[derive(Component, Clone)]
+struct MainMenuPluginStatusText {
+    plugin_id: Option<PluginId>,
+    source_name: String,
+}
+
+#[derive(Component, Clone)]
+struct MainMenuPluginToggle {
+    plugin_id: PluginId,
+}
+
 #[derive(Event, Clone)]
 struct MainMenuActionRequest(MainMenuButtonAction);
 
@@ -389,6 +413,7 @@ struct MainMenuActionRequest(MainMenuButtonAction);
 enum MainMenuButtonAction {
     Continue,
     NewGame,
+    OpenPluginsScreen,
     OpenSaveScreen,
     OpenLoadScreen,
     ExitToMainMenu,
@@ -398,6 +423,7 @@ enum MainMenuButtonAction {
     SelectOverwrite(String),
     SelectLoad(String),
     SelectDelete(String),
+    TogglePlugin(PluginId),
     ConfirmPrimary,
     ConfirmSecondary,
     ConfirmCancel,
@@ -447,6 +473,7 @@ struct EditorIconSet {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum EscAction {
+    BackToRoot,
     CloseMenuKeepPaused,
     CloseStructureEditor,
     ClearSelectedTool,
@@ -484,6 +511,7 @@ impl Plugin for EditorPlugin {
                     emit_main_menu_button_actions,
                     update_main_menu_save_card_interactions,
                     handle_main_menu_actions,
+                    sync_main_menu_plugin_rows,
                     handle_save_preview_capture_finished,
                     refresh_main_menu_ui,
                 )
@@ -534,7 +562,13 @@ mod tests {
     #[test]
     fn escape_closes_in_game_menu_when_open() {
         assert_eq!(
-            escape_action(MainMenuMode::InGame, true, false, true),
+            escape_action(
+                MainMenuMode::InGame,
+                MainMenuScreen::Root,
+                true,
+                false,
+                true
+            ),
             EscAction::CloseMenuKeepPaused,
             "Esc should close in-game menu first even if a tool is selected"
         );
@@ -543,7 +577,13 @@ mod tests {
     #[test]
     fn escape_does_not_close_main_menu() {
         assert_eq!(
-            escape_action(MainMenuMode::Main, false, false, false),
+            escape_action(
+                MainMenuMode::Main,
+                MainMenuScreen::Root,
+                false,
+                false,
+                false
+            ),
             EscAction::Ignore,
             "Esc must not close main menu"
         );
@@ -552,7 +592,13 @@ mod tests {
     #[test]
     fn escape_clears_selected_tool_before_opening_menu() {
         assert_eq!(
-            escape_action(MainMenuMode::Hidden, true, false, true),
+            escape_action(
+                MainMenuMode::Hidden,
+                MainMenuScreen::Root,
+                true,
+                false,
+                true
+            ),
             EscAction::ClearSelectedTool,
             "Esc should clear selected tool before opening menu"
         );
@@ -561,7 +607,13 @@ mod tests {
     #[test]
     fn escape_opens_main_menu_and_pauses_when_no_tool_selected() {
         assert_eq!(
-            escape_action(MainMenuMode::Hidden, false, false, true),
+            escape_action(
+                MainMenuMode::Hidden,
+                MainMenuScreen::Root,
+                false,
+                false,
+                true
+            ),
             EscAction::OpenMenuAndPause,
             "Esc should open in-game menu and pause when no tool is selected"
         );
@@ -570,7 +622,13 @@ mod tests {
     #[test]
     fn escape_ignores_hidden_mode_when_world_not_loaded() {
         assert_eq!(
-            escape_action(MainMenuMode::Hidden, false, false, false),
+            escape_action(
+                MainMenuMode::Hidden,
+                MainMenuScreen::Root,
+                false,
+                false,
+                false
+            ),
             EscAction::Ignore,
             "Esc should do nothing when no world is loaded"
         );
@@ -579,9 +637,30 @@ mod tests {
     #[test]
     fn escape_closes_structure_editor_before_menu_actions() {
         assert_eq!(
-            escape_action(MainMenuMode::Hidden, false, true, true),
+            escape_action(
+                MainMenuMode::Hidden,
+                MainMenuScreen::Root,
+                false,
+                true,
+                true
+            ),
             EscAction::CloseStructureEditor,
             "Esc must close structure editor first"
+        );
+    }
+
+    #[test]
+    fn escape_returns_plugins_screen_to_root() {
+        assert_eq!(
+            escape_action(
+                MainMenuMode::Main,
+                MainMenuScreen::Plugins,
+                false,
+                false,
+                false
+            ),
+            EscAction::BackToRoot,
+            "Esc should leave the Plugins screen open at the root menu"
         );
     }
 

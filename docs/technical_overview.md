@@ -17,8 +17,8 @@
 
 - Приложение запускается через `src/main.rs`, который вызывает `flux_engine::app::run()`.
 - Основная сборка приложения находится в `src/app/mod.rs`.
-- На старте загружаются конфиги игры, выполняется stage-2 bootstrap plugin-системы из `plugins/`, `plugins_dev/` и `plugin_state.toml`, создаются ресурсы Bevy, выбирается backend симуляции (`CPU`/`GPU`), подключаются плагины подсистем.
-- Ошибки contract/discovery/state bootstrap не валят приложение: они сохраняются в runtime-ресурс plugin registry и выводятся в строку статуса главного меню.
+- На старте загружаются конфиги игры, выполняется bootstrap plugin-системы из `plugins/`, `plugins_dev/` и `plugin_state.toml`, создаются ресурсы Bevy, выбирается backend симуляции (`CPU`/`GPU`), подключаются плагины подсистем.
+- Ошибки contract/discovery/state bootstrap не валят приложение: они сохраняются в runtime-ресурс plugin registry, видны на экране `Plugins` и выводятся в startup-логи.
 
 ## Подсистемы (по модулям)
 
@@ -40,7 +40,7 @@
 - Для публичного API действует обязательный `Rustdoc`-минимум: `///` перед каждым `pub struct` и `pub fn` с кратким описанием назначения.
 - Дополнительно декомпозированы крупные модули `save`, `simulation`, `render`, `ui`, `config` на отдельные `*_block.rs` части через `include!`, чтобы сократить размер основных файлов и упростить локальную навигацию по подсистемам.
 
-### Runtime plugin bootstrap (stages 1-2)
+### Runtime plugin bootstrap и menu UI (stages 1-3)
 
 - В `src/plugins/` stage-1 контрактный слой расширен stage-2 bootstrap-слоем: приложение теперь поднимает `PluginSourceRegistry`, `LoadedPluginRegistry`, `EnabledPluginSet`, `ContentRegistry` и aggregate `PluginRegistryState`.
 - Поддерживаются два физических источника plugin-пакетов:
@@ -48,7 +48,13 @@
   - expanded dev directories `plugins_dev/<plugin_id>/`.
 - Пользовательские настройки включения хранятся отдельно от сейвов в `plugin_state.toml` в корне репозитория. Отсутствующий файл означает "включён только default plugin".
 - Synthetic default plugin `flux.default` существует всегда как built-in registry item: он принудительно `enabled`, `locked` и считается content-provider даже без внешних пакетов.
-- `PluginRegistryState` формирует короткую строку статуса для главного меню (`enabled/disabled/missing/error`) и одновременно держит подробные log-friendly сообщения по каждому plugin entry.
+- `PluginRegistryState` держит данные для экрана `Plugins` и подробные log-friendly сообщения по каждому plugin entry; root `Main Menu` не показывает список плагинов.
+- `PluginBootstrapConfig` хранится как Bevy resource: экран `Plugins` использует тот же runtime root/config, что и startup bootstrap, чтобы безопасно перестраивать registry после toggle.
+- В `Main Menu` есть экран `Plugins`: он читает `PluginRegistryState` и `EnabledPluginSet`, показывает display name, id, version, source kind, status, content-флаг, короткую ошибку для missing/error записей и использует стандартный `ui::toggle_switch` для включения/выключения.
+- Переключатели плагинов активны только в `MainMenuMode::Main`, пока `WorldLoadState.has_world == false`; из `Game Menu` экран `Plugins` остаётся read-only и вместо `toggle_switch` рисует обычную текстовую метку фактического состояния `On`/`Off`.
+- Toggle записывает новый `EnabledPluginSet` в `plugin_state.toml`, затем вызывает `rebuild_plugin_registry_from_enabled_set(...)` и атомарно заменяет `PluginSourceRegistry`, `LoadedPluginRegistry`, `EnabledPluginSet`, `ContentRegistry` и `PluginRegistryState` без изменения world runtime state.
+- Успешный toggle не пишет служебный статус в `MainMenuUiState.status_text`; строки экрана `Plugins` синхронизируются на месте, а полный rebuild списка выполняется только если после registry rebuild изменился набор plugin entries.
+- `flux.default` всегда показывается как `On / Locked`; broken/missing plugin нельзя включить, но если он уже был enabled в config, UI разрешает выключить его, чтобы очистить состояние.
 - На этапе 2 long-lived DLL handles не сохраняются: `LoadedPluginRegistry` хранит только metadata успешно bootstrap-нутых enabled plugins, подготовленных к будущей регистрации контента.
 - Manifest валидируется отдельно от runtime: проверяются `PluginId`, semver `version`, точное совпадение `api_version` с версией движка и безопасность относительных путей.
 - Перед extraction перечисляются все ZIP entries и запрещаются `..`, absolute roots, `.`-сегменты и Windows drive-prefix; это исключает выход за пределы plugin root.

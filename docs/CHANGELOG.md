@@ -1,6 +1,14 @@
 ﻿# Changelog
 
 ## 2026-05-10
+- Исправлено read-only отображение плагинов в `Game Menu`: вместо переключателей теперь показываются обычные текстовые состояния `On`/`Off`.
+- Исправлен UX экрана `Plugins`: после успешного переключения больше не показывается служебная надпись `plugin ... enabled/disabled`.
+- Исправлено мерцание списка `Plugins` при обычном переключении: строки обновляются на месте, без пересоздания списка и сброса прокрутки.
+- Переключение плагинов на экране `Plugins` переведено с обычной кнопки на новый переиспользуемый UI-компонент `toggle_switch`.
+- Root `Main Menu` больше не показывает строку со списком и статусами плагинов: эта информация теперь находится только внутри экрана `Plugins`.
+- Реализован stage-3 экран `Plugins` в `Main Menu`: список runtime-плагинов показывает display name/id/version/source/status/content и ошибки missing/error записей.
+- До загрузки мира доступные плагины теперь можно включать и выключать через UI; `flux.default` отображается как `On / Locked` и не отключается, а после загрузки мира переключатели становятся read-only.
+- Toggle плагина сохраняет `plugin_state.toml` и безопасно перестраивает runtime registry resources без изменения world-state.
 - Реализован stage-2 bootstrap системы runtime-плагинов: добавлены `PluginSourceRegistry`, `LoadedPluginRegistry`, `EnabledPluginSet`, `ContentRegistry` и aggregate `PluginRegistryState`.
 - На старте приложение теперь читает `plugin_state.toml`, поддерживает discovery packaged archives из `plugins/` и expanded dev plugins из `plugins_dev/`, а также всегда поднимает built-in default plugin `flux.default`.
 - В строке статуса главного меню теперь показывается единая модель состояний плагинов (`enabled`, `disabled`, `missing`, `error`) без поломки текущего `New Game`.
