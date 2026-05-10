@@ -1,5 +1,11 @@
 ﻿# Changelog
 
+## 2026-05-10
+- Добавлены плановые документы `docs/plans/plugin_system/` для будущей миграции на runtime-плагины: roadmap, этапные инструкции, hot reload, dev mode, save-gate и сборка плагинов через `xtask`; код приложения на этом шаге не менялся.
+- В каждый этап plugin-system плана добавлена заметка для заказчика с ручной проверкой в игре после завершения этапа.
+- Из plugin-system планов убраны формулировки, которые могли быть прочитаны как запрет писать код при выполнении этапов.
+- В `docs/game_overview.md` добавлена будущая пользовательская механика экрана `Plugins` в `Main Menu` без пометки её как уже реализованной.
+
 ## 2026-05-09
 - Главное меню переведено на reusable modal backdrop runtime: `Main Menu` теперь использует `PanelFrosted` с чётким fullscreen-фоном и blur только внутри панели, а `Game Menu` и его подэкраны используют `FullscreenBlur` с размытием всего мира.
 - Добавлена новая UI-подсистема `src/ui/modal*.rs` с двумя переиспользуемыми режимами модалок (`PanelFrosted` и `FullscreenBlur`), cover-layout для backdrop-изображений и snapshot-based blur для fullscreen меню поверх мира.

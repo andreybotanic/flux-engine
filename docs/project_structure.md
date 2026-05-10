@@ -17,6 +17,8 @@ FluxEngine/
 |   |-- gases/               # Конфиги отдельных газов.
 |   `-- structures/          # Конфиги базовых entity-параметров, appearance и HUD-метаданных стен и структур.
 |-- docs/                    # Проектная документация.
+|   `-- plans/               # Плановые документы будущих крупных изменений.
+|       `-- plugin_system/   # Roadmap и этапные планы перехода на runtime-плагины.
 |-- src/                     # Исходный код Rust.
 |   |-- app/                 # Сборка и запуск Bevy-приложения.
 |   |-- bin/                 # Вспомогательные бинарники (перф, утилиты).
@@ -64,6 +66,8 @@ FluxEngine/
 - `config/simulation.toml`: Основные параметры симуляции и runtime-настройки, включая секцию `[pipe]` для pressure-driven труб.
 - `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
 - `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
+- `docs/plans/plugin_system/00_roadmap.md`: Общий roadmap будущей миграции FluxEngine на runtime-плагины.
+- `docs/plans/plugin_system/*.md`: Детальные инструкции по этапам реализации plugin-system миграции.
 - `docs/project_structure.md`: Карта структуры проекта: дерево папок + зоны ответственности файлов.
 - `docs/technical_overview.md`: Техническая архитектура, подсистемы и инженерные ограничения.
 - `src/app/mod.rs`: Сборка Bevy-приложения, плагины, backend-инициализация и запуск.
