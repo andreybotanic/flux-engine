@@ -71,7 +71,7 @@
 - Core runtime-типы `CellMaterial`, `StructureKind`, `LayerKind` и `LayerMarkerKind` больше не являются enum-ами с вариантами default content. Это тонкие static-id wrapper-ы, а конкретные IDs для `Boundary`, `Brick`, `Metal`, `Pipe`, `Vent`, `GasSource`, `GasSink` и `GasPipeBridge` выдаёт facade locked default plugin-а.
 - `F1/Main` и `F2/Gas` являются базовыми overlay ядра. Content-specific `F3/Pipes` регистрируется default plugin-ом как plugin overlay и включается через `OverlayMode::Plugin(...)`.
 - `WorldGrid` хранит generic `CellMaterial` ID, `PlacedStructureMap` хранит generic `StructureKind` ID, а default-specific проверки и legacy mapping вынесены за функции `src/plugins/default_plugin.rs`.
-- Save/load schema на этом этапе остаётся numeric/code-based: stable content IDs не записываются в save-файлы, schema version не меняется и load gate не добавляется. Текущие numeric codes сохранены через legacy adapter default plugin-а.
+- Начиная со save schema `6`, save/load пишет stable plugin content IDs для world-клеток, placed structures, pipe containers и substances; legacy numeric adapters default plugin-а остаются только compatibility helper-ами для старых runtime-путей и тестов.
 - Helper-ы `cell_material_descriptor(...)`, `structure_descriptor(...)` и size-helper-ы сохранены как compatibility API, но внутри берут layer/footprint/sprite metadata из default plugin descriptors.
 - Config loader строит visual/HUD maps из default plugin descriptors и затем валидирует существующие TOML-конфиги на совпадение размеров, labels, HUD-блоков и draw priority. Это сохраняет текущие asset paths и порядок HUD-блоков: `Cell`, `Pipe`, `Bridge`, `Vent`, `Gas Source`, `Gas Sink`.
 - При startup bootstrap и при rebuild после toggle registry создаётся заново с default descriptors; внешний plugin source для `flux.default` не нужен, потому что он built-in, locked и always-on.
@@ -272,15 +272,20 @@
 
 ### Сохранения
 
-- Версия схемы сохранения повышена до `5`.
+- Версия схемы сохранения повышена до `6`.
 - Primary storage для структур теперь один: `placed_structures.bin` (`PlacedStructureSnapshot`).
 - В runtime snapshot теперь входят:
   - `PlacedStructureSnapshot`;
   - `PipeGasSnapshot` в node-based формате;
   - обычный `GasFieldSnapshot`;
   - snapshot world-клеток.
+- `world_cells.bin` использует binary v2: таблицу stable cell content IDs и per-cell индексы; `Empty` не считается required content.
+- `placed_structures.bin` использует binary v2: stable entity content ID для каждой структуры, а `GasSource` params хранят stable `SubstanceId` вместо compact runtime index.
+- `pipe_gas.bin` использует binary v2: pipe node kind хранится как stable pipe-container content ID (`flux.default.entity.pipe` или `flux.default.entity.gas_pipe_bridge`), а gas species продолжают мапиться через stable substance IDs.
+- `meta.toml` содержит `required_content` с реально использованными `cell/entity/substance/pipe_container` IDs и диагностический `enabled_plugins_at_save`; просто включённые non-content/UI-плагины не блокируют загрузку.
+- Перед чтением data chunks `load_save(...)` выполняет load gate: каждый required ID должен быть зарегистрирован активным enabled content-provider plugin-ом, иначе возвращается понятная ошибка `Missing plugin: ...` или `Missing content: ...` без изменения runtime world state.
 - В save-meta добавлен отдельный preview-chunk `preview_png` (`preview.png`, формат `png_v1`); `SaveDescriptor` теперь хранит optional `preview_path`.
-- `load_save(...)` принимает только текущую schema `5`; старые версии сейвов больше не конвертируются и считаются несовместимыми.
+- `load_save(...)` принимает только текущую schema `6`; старые версии сейвов больше не конвертируются и считаются несовместимыми.
 - После `create_save(...)` и `overwrite_save(...)` сначала коммитятся data-chunk-и слота, а затем отдельно ставится в очередь offscreen-capture preview; это позволяет не откатывать сам слот, если превью не удалось записать.
 - Перед фактическим screenshot-capture preview-pipeline выдерживает один полный кадр в принудительном `OverlayMode::Main`, чтобы offscreen PNG гарантированно снимался в каноническом `F1`, а не в остаточном `F2/F3`.
 - Каноническое preview строится отдельной offscreen-камерой `RenderTarget::Image` размером `512x512` в `F1`-режиме, без UI, с фиксированным охватом всего мира вместе с внешней fade-рамкой.

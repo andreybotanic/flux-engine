@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt, fs,
     io::{Cursor, Read},
     path::{Path, PathBuf},
@@ -12,9 +12,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::GasRegistry,
-    plugins::default_plugin::pipe_runtime::{
-        PipeContainerKind, PipeFluxField, PipeGasField, PipeGasSnapshot, PipeNodeGasSnapshotEntry,
-        PipeNodeKey,
+    plugins::{
+        default_plugin::pipe_runtime::{
+            PipeContainerKind, PipeFluxField, PipeGasField, PipeGasSnapshot,
+            PipeNodeGasSnapshotEntry, PipeNodeKey,
+        },
+        ContentId, ContentRegistry, EnabledPluginSet, PluginId, SubstanceId,
     },
     render::OverlayMode,
     simulation::{
@@ -22,7 +25,7 @@ use crate::{
         SimulationStep,
     },
     world::{
-        grid::{WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
+        grid::{CellKind, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
         structures::{
             PlacedStructureMap, PlacedStructureSnapshot, PlacedStructureSnapshotEntry,
             StructureParams, StructureRotation,
@@ -31,15 +34,15 @@ use crate::{
     },
 };
 
-const SCHEMA_VERSION: u32 = 5;
+const SCHEMA_VERSION: u32 = 6;
 const WORLD_CELLS_MAGIC: &[u8; 4] = b"FXWC";
 const GAS_STATE_MAGIC: &[u8; 4] = b"FXGS";
 const PLACED_STRUCTURES_MAGIC: &[u8; 4] = b"FXPS";
 const PIPE_GAS_MAGIC: &[u8; 4] = b"FXPG";
-const WORLD_CELLS_VERSION: u16 = 1;
+const WORLD_CELLS_VERSION: u16 = 2;
 const GAS_STATE_VERSION: u16 = 2;
-const PIPE_GAS_VERSION: u16 = 1;
-const PLACED_STRUCTURES_VERSION: u16 = 1;
+const PIPE_GAS_VERSION: u16 = 2;
+const PLACED_STRUCTURES_VERSION: u16 = 2;
 const CHUNK_WORLD_CELLS_ID: &str = "world_cells";
 const CHUNK_GAS_STATE_ID: &str = "gas_state";
 const CHUNK_PIPE_GAS_ID: &str = "pipe_gas";
@@ -196,7 +199,7 @@ pub struct SavePreviewCaptureFinished {
 #[derive(Clone, Debug)]
 /// Stores `RuntimeWorldState` state.
 pub struct RuntimeWorldState {
-    pub world_cell_codes: Vec<u8>,
+    pub world_cells: Vec<CellKind>,
     pub gas_snapshot: GasFieldSnapshot,
     pub placed_structures_snapshot: PlacedStructureSnapshot,
     pub pipe_gas_snapshot: PipeGasSnapshot,
@@ -239,7 +242,7 @@ pub fn restore_runtime_world_state(
     pipe_flux: &mut PipeFluxField,
     step: &mut SimulationStep,
 ) -> Result<(), String> {
-    world.restore_from_cell_codes(&state.world_cell_codes)?;
+    world.restore_cells(&state.world_cells)?;
     structures.restore_state(&state.placed_structures_snapshot, world)?;
     gas.restore_state(&state.gas_snapshot)?;
     pipe_gas.restore_state(&state.pipe_gas_snapshot, structures)?;
@@ -274,5 +277,7 @@ pub fn apply_loaded_world_preset(
 
 include!("save_api_block.rs");
 include!("save_meta_io_block.rs");
+include!("save_content_gate_block.rs");
 include!("save_gas_io_block.rs");
+include!("save_pipe_gas_io_block.rs");
 include!("save_tests_block.rs");

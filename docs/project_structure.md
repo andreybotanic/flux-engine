@@ -132,9 +132,13 @@ FluxEngine/
 - `src/render/world_view_tests_block.rs`: Тесты вспомогательной математики рендера.
 - `src/save.rs`: Публичный save/load API, типы состояния меню/сессии, plugin menu screen state и queue/event контракты preview-capture.
 - `src/save_api_block.rs`: Операции верхнего уровня: list/create/overwrite/load snapshot и canonical preview-path для slot-а.
-- `src/save_gas_io_block.rs`: Чтение/запись chunk-ов мира, газа, unified placed-structures и node-based pipe-gas формата текущей save-схемы; structure chunks сохраняют прежние numeric codes через legacy adapter default plugin-а, gas chunks мапятся между saved stable substance IDs/legacy aliases и текущими compact indices.
-- `src/save_meta_io_block.rs`: Метаданные сейва, валидация единственной поддерживаемой save-схемы и preview-chunk `png_v1`.
-- `src/save_tests_block.rs`: Тесты сохранения/загрузки и валидации формата.
+- `src/save_content_gate_block.rs`: Сбор required plugin content IDs для save-meta и load-gate проверка доступности content перед чтением world chunks.
+- `src/save_content_gate_tests_block.rs`: Тесты required-content meta и load-gate сценариев plugin-compatible save schema.
+- `src/save_format_tests_block.rs`: Тесты отказа старых/битых save schema и mapping edge cases для gas chunks.
+- `src/save_gas_io_block.rs`: Чтение/запись chunk-ов мира, газа, unified placed-structures и node-based pipe-gas формата save schema `6`; world/structure/pipe chunks хранят stable content IDs, gas chunks мапятся между saved stable substance IDs/legacy aliases и текущими compact indices.
+- `src/save_meta_io_block.rs`: Метаданные сейва, required content, диагностический список enabled plugins, валидация единственной поддерживаемой save-схемы и preview-chunk `png_v1`.
+- `src/save_pipe_gas_io_block.rs`: Чтение/запись node-based pipe-gas chunk v2 со stable pipe-container content IDs и mapping saved substance IDs в текущий compact registry.
+- `src/save_tests_block.rs`: Основные тесты сохранения/загрузки, roundtrip, preview meta и shared helpers для save test blocks.
 - `src/simulation/backend.rs`: Конфиг backend и параметры размера мира для симуляции.
 - `src/simulation/discrete_step.rs`: Публичные контракты дискретного CPU-шага газа.
 - `src/simulation/discrete_step_helpers_block.rs`: Вспомогательные функции дискретного шага (kernel/RNG/утилиты).

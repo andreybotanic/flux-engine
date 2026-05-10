@@ -155,6 +155,8 @@ fn read_gas_chunk(path: &Path) -> Result<SavedGasChunk, SaveError> {
 fn write_placed_structures_chunk(
     path: &Path,
     snapshot: &PlacedStructureSnapshot,
+    gas_registry: &GasRegistry,
+    content_registry: &ContentRegistry,
 ) -> Result<(), SaveError> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(PLACED_STRUCTURES_MAGIC);
@@ -162,14 +164,15 @@ fn write_placed_structures_chunk(
     bytes.extend_from_slice(&(snapshot.entries.len() as u32).to_le_bytes());
     bytes.extend_from_slice(&(snapshot.pipe_cuts.len() as u32).to_le_bytes());
     for entry in &snapshot.entries {
-        bytes.push(crate::plugins::default_plugin::legacy_structure_kind_code(entry.kind).ok_or_else(
-            || {
+        let descriptor = content_registry
+            .structure_by_kind(entry.kind)
+            .ok_or_else(|| {
                 SaveError::Validation(format!(
                     "Cannot write unknown placed structure content id '{}'",
                     entry.kind.as_str()
                 ))
-            },
-        )?);
+            })?;
+        write_string_to_bytes(&mut bytes, descriptor.id.as_str())?;
         bytes.extend_from_slice(&entry.origin.x.to_le_bytes());
         bytes.extend_from_slice(&entry.origin.y.to_le_bytes());
         bytes.push(match entry.rotation {
@@ -181,17 +184,20 @@ fn write_placed_structures_chunk(
         match entry.params {
             StructureParams::None => {
                 bytes.push(0);
-                bytes.extend_from_slice(&0u32.to_le_bytes());
-                bytes.extend_from_slice(&0u32.to_le_bytes());
             }
             StructureParams::GasSource { gas_index, amount } => {
                 bytes.push(1);
-                bytes.extend_from_slice(&(gas_index as u32).to_le_bytes());
+                let substance_id = gas_registry.stable_id_by_index(gas_index).ok_or_else(|| {
+                    SaveError::Validation(format!(
+                        "Cannot write gas source with unknown compact gas index {}",
+                        gas_index
+                    ))
+                })?;
+                write_string_to_bytes(&mut bytes, substance_id.as_str())?;
                 bytes.extend_from_slice(&amount.to_le_bytes());
             }
             StructureParams::GasSink { amount } => {
                 bytes.push(2);
-                bytes.extend_from_slice(&0u32.to_le_bytes());
                 bytes.extend_from_slice(&amount.to_le_bytes());
             }
         }
@@ -206,7 +212,11 @@ fn write_placed_structures_chunk(
         .map_err(|err| SaveError::Io(format!("Failed to write '{}': {}", path.display(), err)))
 }
 
-fn read_placed_structures_chunk(path: &Path) -> Result<PlacedStructureSnapshot, SaveError> {
+fn read_placed_structures_chunk(
+    path: &Path,
+    content_registry: &ContentRegistry,
+    gas_registry: &GasRegistry,
+) -> Result<PlacedStructureSnapshot, SaveError> {
     let bytes = fs::read(path)
         .map_err(|err| SaveError::Io(format!("Failed to read '{}': {}", path.display(), err)))?;
     let mut cursor = Cursor::new(bytes.as_slice());
@@ -230,15 +240,20 @@ fn read_placed_structures_chunk(path: &Path) -> Result<PlacedStructureSnapshot, 
     let cut_count = read_u32(&mut cursor)? as usize;
     let mut entries = Vec::with_capacity(entry_count);
     for _ in 0..entry_count {
-        let raw_kind = read_exact_array::<1>(&mut cursor)?[0];
-        let kind = crate::plugins::default_plugin::legacy_structure_kind_from_code(raw_kind)
-            .ok_or_else(|| {
-                SaveError::Validation(format!(
-                    "Unknown placed structure kind {} in '{}'",
-                    raw_kind,
-                    path.display()
-                ))
-            })?;
+        let raw_kind = read_string_from_cursor(&mut cursor, path, "placed structure content id")?;
+        let content_id = ContentId::parse(&raw_kind).map_err(|err| {
+            SaveError::Validation(format!(
+                "Placed structures chunk '{}' contains invalid content id '{}': {}",
+                path.display(),
+                raw_kind,
+                err
+            ))
+        })?;
+        let kind = content_registry
+            .structures()
+            .get(&content_id)
+            .ok_or_else(|| SaveError::Validation(format!("Missing content: {}", content_id)))?
+            .kind;
         let origin = UVec2::new(read_u32(&mut cursor)?, read_u32(&mut cursor)?);
         let rotation = match read_exact_array::<1>(&mut cursor)?[0] {
             0 => StructureRotation::Deg0,
@@ -254,21 +269,23 @@ fn read_placed_structures_chunk(path: &Path) -> Result<PlacedStructureSnapshot, 
             }
         };
         let params = match read_exact_array::<1>(&mut cursor)?[0] {
-            0 => {
-                let _ = read_u32(&mut cursor)?;
-                let _ = read_u32(&mut cursor)?;
-                StructureParams::None
-            }
+            0 => StructureParams::None,
             1 => StructureParams::GasSource {
-                gas_index: read_u32(&mut cursor)? as usize,
+                gas_index: {
+                    let raw_substance =
+                        read_string_from_cursor(&mut cursor, path, "gas source substance id")?;
+                    gas_registry.index_of(&raw_substance).ok_or_else(|| {
+                        SaveError::Validation(format!(
+                            "Placed structures chunk references unknown gas source substance id '{}'",
+                            raw_substance
+                        ))
+                    })?
+                },
                 amount: read_u32(&mut cursor)?,
             },
-            2 => {
-                let _ = read_u32(&mut cursor)?;
-                StructureParams::GasSink {
-                    amount: read_u32(&mut cursor)?,
-                }
-            }
+            2 => StructureParams::GasSink {
+                amount: read_u32(&mut cursor)?,
+            },
             value => {
                 return Err(SaveError::Validation(format!(
                     "Unknown placed structure params {} in '{}'",
@@ -299,7 +316,7 @@ fn map_saved_gas_snapshot_to_registry(
     gas_registry: &GasRegistry,
 ) -> Result<GasFieldSnapshot, SaveError> {
     let mut seen = HashSet::new();
-    for gas_id in &saved.gas_ids {
+    for (saved_idx, gas_id) in saved.gas_ids.iter().enumerate() {
         if !seen.insert(gas_id.clone()) {
             return Err(SaveError::Validation(format!(
                 "Gas chunk contains duplicate gas id '{}'",
@@ -307,10 +324,18 @@ fn map_saved_gas_snapshot_to_registry(
             )));
         }
         if gas_registry.index_of(gas_id).is_none() {
-            return Err(SaveError::Validation(format!(
-                "Gas chunk references unknown gas id '{}'",
-                gas_id
-            )));
+            let has_particles = saved
+                .species
+                .iter()
+                .skip(saved_idx)
+                .step_by(saved.gas_ids.len())
+                .any(|value| *value > 0);
+            if has_particles {
+                return Err(SaveError::Validation(format!(
+                    "Gas chunk references unknown gas id '{}'",
+                    gas_id
+                )));
+            }
         }
     }
 
@@ -318,9 +343,9 @@ fn map_saved_gas_snapshot_to_registry(
     let cells = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
     let mut mapped_species = vec![0u32; cells * current_gas_count];
     for (saved_idx, gas_id) in saved.gas_ids.iter().enumerate() {
-        let current_idx = gas_registry.index_of(gas_id).ok_or_else(|| {
-            SaveError::Validation(format!("Gas chunk references unknown gas id '{}'", gas_id))
-        })?;
+        let Some(current_idx) = gas_registry.index_of(gas_id) else {
+            continue;
+        };
         for cell in 0..cells {
             let saved_value = saved.species[cell * saved.gas_ids.len() + saved_idx];
             let mapped_index = cell * current_gas_count + current_idx;
@@ -341,181 +366,38 @@ fn map_saved_gas_snapshot_to_registry(
     })
 }
 
-fn write_pipe_gas_chunk(
-    path: &Path,
-    gas_ids: &[String],
-    snapshot: &crate::plugins::default_plugin::pipe_runtime::PipeGasSnapshot,
-) -> Result<(), SaveError> {
-    if snapshot.gas_count != gas_ids.len() {
-        return Err(SaveError::Validation(format!(
-            "Pipe gas id count mismatch while writing chunk: ids={}, snapshot={}",
-            gas_ids.len(),
-            snapshot.gas_count
-        )));
-    }
-
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(PIPE_GAS_MAGIC);
-    bytes.extend_from_slice(&PIPE_GAS_VERSION.to_le_bytes());
-    bytes.extend_from_slice(&WORLD_WIDTH.to_le_bytes());
-    bytes.extend_from_slice(&WORLD_HEIGHT.to_le_bytes());
-    bytes.extend_from_slice(&(gas_ids.len() as u32).to_le_bytes());
-    bytes.extend_from_slice(&(snapshot.nodes.len() as u32).to_le_bytes());
-    for gas_id in gas_ids {
-        let id_bytes = gas_id.as_bytes();
-        let id_len = u16::try_from(id_bytes.len()).map_err(|_| {
-            SaveError::Validation(format!(
-                "Gas id '{}' is too long for pipe gas chunk format",
-                gas_id
-            ))
-        })?;
-        bytes.extend_from_slice(&id_len.to_le_bytes());
-        bytes.extend_from_slice(id_bytes);
-    }
-    for node in &snapshot.nodes {
-        bytes.push(match node.key.kind {
-            PipeContainerKind::Pipe => 0,
-            PipeContainerKind::BridgePipe => 1,
-        });
-        bytes.extend_from_slice(&node.key.anchor.x.to_le_bytes());
-        bytes.extend_from_slice(&node.key.anchor.y.to_le_bytes());
-        for value in &node.species {
-            bytes.extend_from_slice(&value.to_le_bytes());
-        }
-    }
-
-    fs::write(path, bytes)
-        .map_err(|err| SaveError::Io(format!("Failed to write '{}': {}", path.display(), err)))
+fn write_string_to_bytes(bytes: &mut Vec<u8>, value: &str) -> Result<(), SaveError> {
+    let value_bytes = value.as_bytes();
+    let len = u16::try_from(value_bytes.len()).map_err(|_| {
+        SaveError::Validation(format!("String '{}' is too long for save chunk format", value))
+    })?;
+    bytes.extend_from_slice(&len.to_le_bytes());
+    bytes.extend_from_slice(value_bytes);
+    Ok(())
 }
 
-fn read_pipe_gas_chunk(
+fn read_string_from_cursor(
+    cursor: &mut Cursor<&[u8]>,
     path: &Path,
-    gas_registry: &GasRegistry,
-) -> Result<crate::plugins::default_plugin::pipe_runtime::PipeGasSnapshot, SaveError> {
-    let bytes = fs::read(path)
-        .map_err(|err| SaveError::Io(format!("Failed to read '{}': {}", path.display(), err)))?;
-    let mut cursor = Cursor::new(bytes.as_slice());
-    let magic = read_exact_array::<4>(&mut cursor)?;
-    if &magic != PIPE_GAS_MAGIC {
-        return Err(SaveError::Validation(format!(
-            "Invalid pipe gas chunk magic in '{}'",
-            path.display()
-        )));
-    }
-    let version = read_u16(&mut cursor)?;
-    if version != PIPE_GAS_VERSION {
-        return Err(SaveError::Validation(format!(
-            "Unsupported pipe gas chunk version {} in '{}'",
-            version,
-            path.display()
-        )));
-    }
-    let width = read_u32(&mut cursor)?;
-    let height = read_u32(&mut cursor)?;
-    let gas_count = read_u32(&mut cursor)? as usize;
-    let node_count = read_u32(&mut cursor)? as usize;
-    if width != WORLD_WIDTH || height != WORLD_HEIGHT {
-        return Err(SaveError::Validation(format!(
-            "Pipe gas chunk dimensions mismatch in '{}': got {}x{}, expected {}x{}",
+    label: &str,
+) -> Result<String, SaveError> {
+    let id_len = read_u16(cursor)? as usize;
+    let mut id_bytes = vec![0u8; id_len];
+    cursor.read_exact(&mut id_bytes).map_err(|err| {
+        SaveError::Parse(format!(
+            "Failed to read {} from '{}': {}",
+            label,
             path.display(),
-            width,
-            height,
-            WORLD_WIDTH,
-            WORLD_HEIGHT,
-        )));
-    }
-
-    let mut gas_ids = Vec::with_capacity(gas_count);
-    for _ in 0..gas_count {
-        let id_len = read_u16(&mut cursor)? as usize;
-        let mut id_bytes = vec![0u8; id_len];
-        cursor.read_exact(&mut id_bytes).map_err(|err| {
-            SaveError::Parse(format!(
-                "Failed to read pipe gas id from '{}' : {}",
-                path.display(),
-                err
-            ))
-        })?;
-        let id = String::from_utf8(id_bytes).map_err(|err| {
-            SaveError::Parse(format!(
-                "Pipe gas chunk '{}' contains invalid UTF-8 in gas id: {}",
-                path.display(),
-                err
-            ))
-        })?;
-        gas_ids.push(id);
-    }
-
-    let mut nodes = Vec::with_capacity(node_count);
-    for _ in 0..node_count {
-        let kind = match read_exact_array::<1>(&mut cursor)?[0] {
-            0 => PipeContainerKind::Pipe,
-            1 => PipeContainerKind::BridgePipe,
-            value => {
-                return Err(SaveError::Validation(format!(
-                    "Unknown pipe node kind {} in '{}'",
-                    value,
-                    path.display()
-                )))
-            }
-        };
-        let anchor = UVec2::new(read_u32(&mut cursor)?, read_u32(&mut cursor)?);
-        let mut species = Vec::with_capacity(gas_count);
-        for _ in 0..gas_count {
-            species.push(read_u32(&mut cursor)?);
-        }
-        nodes.push((kind, anchor, species));
-    }
-
-    let mapped = map_saved_pipe_gas_snapshot_to_registry(
-        &SavedPipeGasChunk { gas_ids, nodes },
-        gas_registry,
-    )?;
-    Ok(mapped)
-}
-
-fn map_saved_pipe_gas_snapshot_to_registry(
-    saved: &SavedPipeGasChunk,
-    gas_registry: &GasRegistry,
-) -> Result<crate::plugins::default_plugin::pipe_runtime::PipeGasSnapshot, SaveError> {
-    let mut seen = HashSet::new();
-    for gas_id in &saved.gas_ids {
-        if !seen.insert(gas_id.clone()) {
-            return Err(SaveError::Validation(format!(
-                "Pipe gas chunk contains duplicate gas id '{}'",
-                gas_id
-            )));
-        }
-        if gas_registry.index_of(gas_id).is_none() {
-            return Err(SaveError::Validation(format!(
-                "Pipe gas chunk references unknown gas id '{}'",
-                gas_id
-            )));
-        }
-    }
-
-    let current_gas_count = gas_registry.count();
-    let mut mapped_nodes = Vec::with_capacity(saved.nodes.len());
-    for (kind, anchor, species) in &saved.nodes {
-        let mut mapped_species = vec![0u32; current_gas_count];
-        for (saved_idx, gas_id) in saved.gas_ids.iter().enumerate() {
-            let current_idx = gas_registry.index_of(gas_id).ok_or_else(|| {
-                SaveError::Validation(format!("Pipe gas chunk references unknown gas id '{}'", gas_id))
-            })?;
-            mapped_species[current_idx] = species.get(saved_idx).copied().unwrap_or(0);
-        }
-        mapped_nodes.push(PipeNodeGasSnapshotEntry {
-            key: PipeNodeKey {
-                kind: *kind,
-                anchor: *anchor,
-            },
-            species: mapped_species,
-        });
-    }
-
-    Ok(crate::plugins::default_plugin::pipe_runtime::PipeGasSnapshot {
-        gas_count: current_gas_count,
-        nodes: mapped_nodes,
+            err
+        ))
+    })?;
+    String::from_utf8(id_bytes).map_err(|err| {
+        SaveError::Parse(format!(
+            "Save chunk '{}' contains invalid UTF-8 in {}: {}",
+            path.display(),
+            label,
+            err
+        ))
     })
 }
 

@@ -194,6 +194,8 @@ fn handle_main_menu_actions(
                     &structures,
                     &pipe_gas,
                     &gas_registry,
+                    &content_registry,
+                    &enabled_plugins,
                     step.0,
                 ) {
                     Ok(descriptor) => {
@@ -246,7 +248,7 @@ fn handle_main_menu_actions(
                 );
             }
             MainMenuButtonAction::SelectLoad(save_id) => {
-                match load_save(&saves_root, &save_id, &gas_registry) {
+                match load_save(&saves_root, &save_id, &gas_registry, &content_registry) {
                     Ok(loaded) => {
                         match apply_runtime_world_state(
                             loaded.state,
@@ -308,6 +310,8 @@ fn handle_main_menu_actions(
                             &structures,
                             &pipe_gas,
                             &gas_registry,
+                            &content_registry,
+                            &enabled_plugins,
                             step.0,
                         ) {
                             Ok(descriptor) => {

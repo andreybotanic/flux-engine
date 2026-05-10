@@ -5,6 +5,13 @@ struct SaveChunkMetaToml {
     format: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct SaveRequiredContentItemToml {
+    kind: String,
+    id: String,
+    plugin_id: String,
+}
+
 #[derive(Serialize, Deserialize)]
 struct SaveMetaToml {
     schema_version: u32,
@@ -14,6 +21,10 @@ struct SaveMetaToml {
     updated_at_unix_ms: i64,
     world_width: u32,
     world_height: u32,
+    #[serde(default)]
+    required_content: Vec<SaveRequiredContentItemToml>,
+    #[serde(default)]
+    enabled_plugins_at_save: Vec<String>,
     chunks: Vec<SaveChunkMetaToml>,
 }
 
@@ -114,6 +125,8 @@ fn write_slot(
     structures: &PlacedStructureMap,
     pipe_gas: &crate::plugins::default_plugin::pipe_runtime::PipeGasField,
     gas_registry: &GasRegistry,
+    content_registry: &ContentRegistry,
+    enabled_plugins: &EnabledPluginSet,
     simulation_step: u64,
     allow_overwrite: bool,
 ) -> Result<(), SaveError> {
@@ -129,7 +142,7 @@ fn write_slot(
         SaveChunkMetaToml {
             id: CHUNK_WORLD_CELLS_ID.to_string(),
             file: WORLD_CELLS_FILE.to_string(),
-            format: "binary_v1".to_string(),
+            format: "binary_v2".to_string(),
         },
         SaveChunkMetaToml {
             id: CHUNK_GAS_STATE_ID.to_string(),
@@ -139,12 +152,12 @@ fn write_slot(
         SaveChunkMetaToml {
             id: CHUNK_PLACED_STRUCTURES_ID.to_string(),
             file: PLACED_STRUCTURES_FILE.to_string(),
-            format: "binary_v1".to_string(),
+            format: "binary_v2".to_string(),
         },
         SaveChunkMetaToml {
             id: CHUNK_PIPE_GAS_ID.to_string(),
             file: PIPE_GAS_FILE.to_string(),
-            format: "binary_v1".to_string(),
+            format: "binary_v2".to_string(),
         },
         SaveChunkMetaToml {
             id: CHUNK_PREVIEW_PNG_ID.to_string(),
@@ -153,18 +166,7 @@ fn write_slot(
         },
     ];
 
-    let meta = SaveMetaToml {
-        schema_version: SCHEMA_VERSION,
-        save_id: descriptor.id.clone(),
-        display_name: descriptor.display_name.clone(),
-        created_at_unix_ms: descriptor.created_at_unix_ms,
-        updated_at_unix_ms: descriptor.updated_at_unix_ms,
-        world_width: WORLD_WIDTH,
-        world_height: WORLD_HEIGHT,
-        chunks: chunk_meta,
-    };
-
-    let world_codes = world.snapshot_cell_codes();
+    let world_cells = world.snapshot_cells();
     let gas_snapshot = gas.snapshot_state();
     let structures_snapshot = structures.snapshot_state();
     let pipe_gas_snapshot = pipe_gas.snapshot_state();
@@ -176,6 +178,31 @@ fn write_slot(
             gas_snapshot.gas_count
         )));
     }
+    let required_content = collect_required_content(
+        &world_cells,
+        &gas_snapshot,
+        &structures_snapshot,
+        &pipe_gas_snapshot,
+        gas_registry,
+        content_registry,
+    )?;
+    let enabled_plugins_at_save = enabled_plugins
+        .iter()
+        .map(|plugin_id| plugin_id.as_str().to_string())
+        .collect::<Vec<_>>();
+
+    let meta = SaveMetaToml {
+        schema_version: SCHEMA_VERSION,
+        save_id: descriptor.id.clone(),
+        display_name: descriptor.display_name.clone(),
+        created_at_unix_ms: descriptor.created_at_unix_ms,
+        updated_at_unix_ms: descriptor.updated_at_unix_ms,
+        world_width: WORLD_WIDTH,
+        world_height: WORLD_HEIGHT,
+        required_content,
+        enabled_plugins_at_save,
+        chunks: chunk_meta,
+    };
 
     let tmp_dir = root.join(format!(
         ".tmp_{}_{}_{}",
@@ -202,7 +229,7 @@ fn write_slot(
 
     let result = (|| -> Result<(), SaveError> {
         write_meta(&tmp_dir.join(META_FILE), &meta)?;
-        write_world_cells_chunk(&tmp_dir.join(WORLD_CELLS_FILE), &world_codes)?;
+        write_world_cells_chunk(&tmp_dir.join(WORLD_CELLS_FILE), &world_cells, content_registry)?;
         write_gas_chunk(
             &tmp_dir.join(GAS_STATE_FILE),
             simulation_step,
@@ -212,11 +239,14 @@ fn write_slot(
         write_placed_structures_chunk(
             &tmp_dir.join(PLACED_STRUCTURES_FILE),
             &structures_snapshot,
+            gas_registry,
+            content_registry,
         )?;
         write_pipe_gas_chunk(
             &tmp_dir.join(PIPE_GAS_FILE),
             &gas_ids,
             &pipe_gas_snapshot,
+            content_registry,
         )?;
         Ok(())
     })();
@@ -310,29 +340,81 @@ fn write_meta(path: &Path, meta: &SaveMetaToml) -> Result<(), SaveError> {
     })
 }
 
-fn write_world_cells_chunk(path: &Path, codes: &[u8]) -> Result<(), SaveError> {
+fn write_world_cells_chunk(
+    path: &Path,
+    cells: &[CellKind],
+    content_registry: &ContentRegistry,
+) -> Result<(), SaveError> {
     let expected = (WORLD_WIDTH * WORLD_HEIGHT) as usize;
-    if codes.len() != expected {
+    if cells.len() != expected {
         return Err(SaveError::Validation(format!(
-            "World cell code length mismatch while writing: got {}, expected {}",
-            codes.len(),
+            "World cell snapshot length mismatch while writing: got {}, expected {}",
+            cells.len(),
             expected
         )));
     }
 
-    let mut bytes = Vec::with_capacity(4 + 2 + 4 + 4 + 4 + codes.len());
+    let mut ids = BTreeSet::<ContentId>::new();
+    for cell in cells {
+        let CellKind::Solid(material) = cell else {
+            continue;
+        };
+        let descriptor = content_registry.cell_by_material(*material).ok_or_else(|| {
+            SaveError::Validation(format!(
+                "Cannot write unknown world cell content id '{}'",
+                material.as_str()
+            ))
+        })?;
+        ids.insert(descriptor.id.clone());
+    }
+    let id_to_index = ids
+        .iter()
+        .enumerate()
+        .map(|(index, id)| {
+            let index = u16::try_from(index + 1).map_err(|_| {
+                SaveError::Validation("World cell content table is too large".to_string())
+            })?;
+            Ok((id.clone(), index))
+        })
+        .collect::<Result<BTreeMap<_, _>, SaveError>>()?;
+    let mut encoded_cells = Vec::with_capacity(cells.len());
+    for cell in cells {
+        let CellKind::Solid(material) = cell else {
+            encoded_cells.push(0u16);
+            continue;
+        };
+        let descriptor = content_registry
+            .cell_by_material(*material)
+            .expect("cell descriptor was validated above");
+        encoded_cells.push(
+            *id_to_index
+                .get(&descriptor.id)
+                .expect("cell id has assigned save table index"),
+        );
+    }
+
+    let mut bytes = Vec::new();
     bytes.extend_from_slice(WORLD_CELLS_MAGIC);
     bytes.extend_from_slice(&WORLD_CELLS_VERSION.to_le_bytes());
     bytes.extend_from_slice(&WORLD_WIDTH.to_le_bytes());
     bytes.extend_from_slice(&WORLD_HEIGHT.to_le_bytes());
-    bytes.extend_from_slice(&(codes.len() as u32).to_le_bytes());
-    bytes.extend_from_slice(codes);
+    bytes.extend_from_slice(&(ids.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(&(encoded_cells.len() as u32).to_le_bytes());
+    for id in ids.iter() {
+        write_string_to_bytes(&mut bytes, id.as_str())?;
+    }
+    for index in encoded_cells {
+        bytes.extend_from_slice(&index.to_le_bytes());
+    }
 
     fs::write(path, bytes)
         .map_err(|err| SaveError::Io(format!("Failed to write '{}': {}", path.display(), err)))
 }
 
-fn read_world_cells_chunk(path: &Path) -> Result<Vec<u8>, SaveError> {
+fn read_world_cells_chunk(
+    path: &Path,
+    content_registry: &ContentRegistry,
+) -> Result<Vec<CellKind>, SaveError> {
     let bytes = fs::read(path)
         .map_err(|err| SaveError::Io(format!("Failed to read '{}': {}", path.display(), err)))?;
     let mut cursor = Cursor::new(bytes.as_slice());
@@ -353,6 +435,7 @@ fn read_world_cells_chunk(path: &Path) -> Result<Vec<u8>, SaveError> {
     }
     let width = read_u32(&mut cursor)?;
     let height = read_u32(&mut cursor)?;
+    let table_count = read_u32(&mut cursor)? as usize;
     let count = read_u32(&mut cursor)? as usize;
     if width != WORLD_WIDTH || height != WORLD_HEIGHT {
         return Err(SaveError::Validation(format!(
@@ -373,14 +456,41 @@ fn read_world_cells_chunk(path: &Path) -> Result<Vec<u8>, SaveError> {
             expected
         )));
     }
-    let mut codes = vec![0u8; count];
-    cursor.read_exact(&mut codes).map_err(|err| {
-        SaveError::Parse(format!(
-            "Failed to read world chunk payload '{}': {}",
-            path.display(),
-            err
-        ))
-    })?;
-    Ok(codes)
+
+    let mut table = Vec::with_capacity(table_count);
+    for _ in 0..table_count {
+        let raw_id = read_string_from_cursor(&mut cursor, path, "world cell content id")?;
+        let id = ContentId::parse(&raw_id).map_err(|err| {
+            SaveError::Validation(format!(
+                "World chunk '{}' contains invalid cell content id '{}': {}",
+                path.display(),
+                raw_id,
+                err
+            ))
+        })?;
+        let descriptor = content_registry.cells().get(&id).ok_or_else(|| {
+            SaveError::Validation(format!("Missing content: {}", id.as_str()))
+        })?;
+        table.push(descriptor.material);
+    }
+
+    let mut cells = Vec::with_capacity(count);
+    for index in 0..count {
+        let raw = read_u16(&mut cursor)?;
+        if raw == 0 {
+            cells.push(CellKind::Empty);
+            continue;
+        }
+        let material = table.get((raw - 1) as usize).copied().ok_or_else(|| {
+            SaveError::Validation(format!(
+                "World chunk '{}' references unknown cell table index {} at cell {}",
+                path.display(),
+                raw,
+                index
+            ))
+        })?;
+        cells.push(CellKind::Solid(material));
+    }
+    Ok(cells)
 }
 

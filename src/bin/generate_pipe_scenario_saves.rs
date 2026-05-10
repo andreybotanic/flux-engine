@@ -1,6 +1,11 @@
 use flux_engine::{
     config::GameConfig,
-    plugins::default_plugin::pipe_runtime::scenarios::build_reference_pipe_scenarios,
+    plugins::{
+        default_plugin::{
+            default_content_registry, pipe_runtime::scenarios::build_reference_pipe_scenarios,
+        },
+        EnabledPluginSet,
+    },
     save::{create_save, delete_save, list_saves, saves_root_default},
 };
 
@@ -8,6 +13,9 @@ const SCENARIO_PREFIX: &str = "Pipe Scenario ";
 
 fn main() -> Result<(), String> {
     let config = GameConfig::load_from_default_location()?;
+    let content_registry = default_content_registry();
+    let mut enabled_plugins = EnabledPluginSet::default();
+    enabled_plugins.enforce_default_plugin();
     let saves_root = saves_root_default();
 
     if saves_root.exists() {
@@ -28,6 +36,8 @@ fn main() -> Result<(), String> {
             &scenario.structures,
             &scenario.pipe_gas,
             &config.gas_registry,
+            &content_registry,
+            &enabled_plugins,
             0,
         )
         .map_err(|err| err.to_string())?;

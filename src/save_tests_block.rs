@@ -3,7 +3,16 @@ mod tests {
     use super::*;
     use crate::{
         config::GasDefinition,
-        plugins::default_plugin::pipe_runtime::PipeGasField,
+        plugins::{
+            default_plugin::{
+                default_content_registry,
+                pipe_runtime::PipeGasField,
+                CELL_BRICK_ID, CELL_BOUNDARY_ID, CELL_METAL_ID, ENTITY_GAS_SOURCE_ID,
+                ENTITY_GAS_SINK_ID, ENTITY_PIPE_ID, ENTITY_VENT_ID, SUBSTANCE_H2_ID,
+                SUBSTANCE_O2_ID,
+            },
+            EnabledPluginSet, PluginId,
+        },
         world::{
             grid::WorldGrid,
             structures::PlacedStructureMap,
@@ -54,6 +63,95 @@ mod tests {
         image.save(path).expect("write preview png");
     }
 
+    fn test_content_registry() -> ContentRegistry {
+        default_content_registry()
+    }
+
+    fn default_enabled_plugins() -> EnabledPluginSet {
+        let mut enabled = EnabledPluginSet::default();
+        enabled.enforce_default_plugin();
+        enabled
+    }
+
+    fn create_save(
+        root: &Path,
+        display_name: &str,
+        world: &WorldGrid,
+        gas: &GasField,
+        structures: &PlacedStructureMap,
+        pipe_gas: &PipeGasField,
+        gas_registry: &GasRegistry,
+        simulation_step: u64,
+    ) -> Result<SaveDescriptor, SaveError> {
+        let content_registry = test_content_registry();
+        let enabled_plugins = default_enabled_plugins();
+        super::create_save(
+            root,
+            display_name,
+            world,
+            gas,
+            structures,
+            pipe_gas,
+            gas_registry,
+            &content_registry,
+            &enabled_plugins,
+            simulation_step,
+        )
+    }
+
+    fn overwrite_save(
+        root: &Path,
+        save_id: &str,
+        world: &WorldGrid,
+        gas: &GasField,
+        structures: &PlacedStructureMap,
+        pipe_gas: &PipeGasField,
+        gas_registry: &GasRegistry,
+        simulation_step: u64,
+    ) -> Result<SaveDescriptor, SaveError> {
+        let content_registry = test_content_registry();
+        let enabled_plugins = default_enabled_plugins();
+        super::overwrite_save(
+            root,
+            save_id,
+            world,
+            gas,
+            structures,
+            pipe_gas,
+            gas_registry,
+            &content_registry,
+            &enabled_plugins,
+            simulation_step,
+        )
+    }
+
+    fn load_save(
+        root: &Path,
+        save_id: &str,
+        gas_registry: &GasRegistry,
+    ) -> Result<LoadedSave, SaveError> {
+        let content_registry = test_content_registry();
+        super::load_save(root, save_id, gas_registry, &content_registry)
+    }
+
+    fn required_ids(meta: &SaveMetaToml, kind: &str) -> Vec<String> {
+        meta.required_content
+            .iter()
+            .filter(|item| item.kind == kind)
+            .map(|item| item.id.clone())
+            .collect()
+    }
+
+    fn patch_first_gas_id(path: &Path, replacement_prefix: &[u8]) {
+        let mut bytes = fs::read(path).expect("read gas chunk");
+        let id_len = u16::from_le_bytes([bytes[30], bytes[31]]) as usize;
+        assert!(id_len >= replacement_prefix.len());
+        for (offset, byte) in replacement_prefix.iter().copied().enumerate() {
+            bytes[32 + offset] = byte;
+        }
+        fs::write(path, bytes).expect("write patched gas chunk");
+    }
+
     #[test]
     fn save_roundtrip_preserves_world_and_gas_state() {
         let root = temp_saves_root("flux_save_roundtrip");
@@ -98,13 +196,13 @@ mod tests {
         let loaded = load_save(&root, &descriptor.id, &registry).expect("load save");
         assert_eq!(loaded.state.simulation_step, 123);
         assert_eq!(
-            loaded.state.world_cell_codes.len(),
+            loaded.state.world_cells.len(),
             (WORLD_WIDTH * WORLD_HEIGHT) as usize
         );
 
         let mut restored_world = WorldGrid::default();
         restored_world
-            .restore_from_cell_codes(&loaded.state.world_cell_codes)
+            .restore_cells(&loaded.state.world_cells)
             .expect("restore world");
         assert_eq!(restored_world.cell(10, 10), world.cell(10, 10));
         assert_eq!(restored_world.cell(11, 10), world.cell(11, 10));
@@ -130,12 +228,24 @@ mod tests {
         }
         assert!(restored_structures.editable_structure_at(14, 14).is_some());
         assert!(restored_structures.editable_structure_at(15, 14).is_some());
+        let source = restored_structures
+            .editable_structure_at(14, 14)
+            .expect("restored source");
+        assert_eq!(
+            source.params,
+            StructureParams::GasSource {
+                gas_index: 0,
+                amount: 10
+            }
+        );
         assert!(restored_structures.has_pipe_at(20, 20));
         assert!(restored_structures.has_vent_at(20, 20));
         assert_eq!(restored_pipe_gas.total_amount_particles(0), 100_000);
 
         let _ = fs::remove_dir_all(root);
     }
+
+    include!("save_content_gate_tests_block.rs");
 
     #[test]
     fn list_saves_sorted_from_new_to_old() {
@@ -281,170 +391,7 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
-    #[test]
-    fn load_rejects_unsupported_schema_version() {
-        let root = temp_saves_root("flux_save_old_schema_rejected");
-        let registry = test_registry();
-        let world = WorldGrid::default();
-        let gas = GasField::from_registry(&registry);
-        let structures = PlacedStructureMap::default();
-        let pipe_gas = PipeGasField::from_registry(&registry);
-
-        let descriptor = create_save(
-            &root,
-            "old-schema",
-            &world,
-            &gas,
-            &structures,
-            &pipe_gas,
-            &registry,
-            6,
-        )
-        .expect("save");
-        let meta_path = root.join(&descriptor.id).join(META_FILE);
-        let mut meta = read_meta(&meta_path).expect("read meta");
-        meta.schema_version = SCHEMA_VERSION - 1;
-        write_meta(&meta_path, &meta).expect("write downgraded meta");
-
-        let err = load_save(&root, &descriptor.id, &registry).expect_err("must reject old schema");
-        assert!(err.to_string().contains("Unsupported save schema version"));
-
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn load_rejects_missing_current_schema_chunks() {
-        let root = temp_saves_root("flux_save_missing_current_chunks");
-        let registry = test_registry();
-        let world = WorldGrid::default();
-        let gas = GasField::from_registry(&registry);
-        let structures = PlacedStructureMap::default();
-        let pipe_gas = PipeGasField::from_registry(&registry);
-
-        for missing_chunk in [CHUNK_PLACED_STRUCTURES_ID, CHUNK_PIPE_GAS_ID] {
-            let descriptor = create_save(
-                &root,
-                missing_chunk,
-                &world,
-                &gas,
-                &structures,
-                &pipe_gas,
-                &registry,
-                8,
-            )
-            .expect("save");
-            let meta_path = root.join(&descriptor.id).join(META_FILE);
-            let mut meta = read_meta(&meta_path).expect("read meta");
-            meta.chunks.retain(|chunk| chunk.id != missing_chunk);
-            write_meta(&meta_path, &meta).expect("write patched meta");
-
-            let err = load_save(&root, &descriptor.id, &registry)
-                .expect_err("must reject incomplete current-schema save");
-            assert!(err.to_string().contains(missing_chunk));
-        }
-
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn load_rejects_unknown_saved_gas_id() {
-        let root = temp_saves_root("flux_save_unknown_gas");
-        let registry = test_registry();
-        let world = WorldGrid::default();
-        let gas = GasField::from_registry(&registry);
-        let structures = PlacedStructureMap::default();
-        let pipe_gas = PipeGasField::from_registry(&registry);
-
-        let descriptor = create_save(
-            &root,
-            "unknown-gas",
-            &world,
-            &gas,
-            &structures,
-            &pipe_gas,
-            &registry,
-            5,
-        )
-        .expect("save");
-        let gas_path = root.join(&descriptor.id).join(GAS_STATE_FILE);
-        let mut bytes = fs::read(&gas_path).expect("read gas chunk");
-        let id_len = u16::from_le_bytes([bytes[30], bytes[31]]) as usize;
-        assert!(id_len >= 2);
-        bytes[32] = b'z';
-        bytes[33] = b'z';
-        fs::write(&gas_path, bytes).expect("write patched gas chunk");
-
-        let err =
-            load_save(&root, &descriptor.id, &registry).expect_err("must fail on unknown gas");
-        let message = err.to_string();
-        assert!(message.contains("unknown gas id") || message.contains("Gas chunk references"));
-
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn load_rejects_invalid_world_chunk_magic() {
-        let root = temp_saves_root("flux_save_bad_world_magic");
-        let registry = test_registry();
-        let world = WorldGrid::default();
-        let gas = GasField::from_registry(&registry);
-        let structures = PlacedStructureMap::default();
-        let pipe_gas = PipeGasField::from_registry(&registry);
-        let descriptor = create_save(
-            &root,
-            "bad-world-magic",
-            &world,
-            &gas,
-            &structures,
-            &pipe_gas,
-            &registry,
-            7,
-        )
-        .expect("save");
-
-        let world_path = root.join(&descriptor.id).join(WORLD_CELLS_FILE);
-        let mut bytes = fs::read(&world_path).expect("read world chunk");
-        bytes[0] = b'B';
-        fs::write(&world_path, bytes).expect("write patched world chunk");
-
-        let err = load_save(&root, &descriptor.id, &registry).expect_err("must fail on bad magic");
-        assert!(err.to_string().contains("Invalid world chunk magic"));
-
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn load_rejects_invalid_gas_chunk_version() {
-        let root = temp_saves_root("flux_save_bad_gas_version");
-        let registry = test_registry();
-        let world = WorldGrid::default();
-        let gas = GasField::from_registry(&registry);
-        let structures = PlacedStructureMap::default();
-        let pipe_gas = PipeGasField::from_registry(&registry);
-        let descriptor = create_save(
-            &root,
-            "bad-gas-version",
-            &world,
-            &gas,
-            &structures,
-            &pipe_gas,
-            &registry,
-            11,
-        )
-        .expect("save");
-
-        let gas_path = root.join(&descriptor.id).join(GAS_STATE_FILE);
-        let mut bytes = fs::read(&gas_path).expect("read gas chunk");
-        bytes[4] = 0xFF;
-        bytes[5] = 0x7F;
-        fs::write(&gas_path, bytes).expect("write patched gas chunk");
-
-        let err =
-            load_save(&root, &descriptor.id, &registry).expect_err("must fail on bad gas version");
-        assert!(err.to_string().contains("Unsupported gas chunk version"));
-
-        let _ = fs::remove_dir_all(root);
-    }
+    include!("save_format_tests_block.rs");
 
     #[test]
     fn save_session_state_uses_step_only_for_dirty_check() {

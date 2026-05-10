@@ -132,6 +132,7 @@ mod tests {
     ) -> Result<(RowBandStats, RowBandStats), String> {
         let game_cfg = GameConfig::load_from_default_location()?;
         let registry = game_cfg.gas_registry.clone();
+        let content_registry = crate::plugins::default_plugin::default_content_registry();
         let h2_index = registry
             .index_of("h2")
             .ok_or_else(|| "Registry does not contain gas id 'h2'".to_string())?;
@@ -147,11 +148,12 @@ mod tests {
                     saves_root.display()
                 )
             })?;
-        let loaded = load_save(&saves_root, &equals.id, &registry).map_err(|e| e.to_string())?;
+        let loaded = load_save(&saves_root, &equals.id, &registry, &content_registry)
+            .map_err(|e| e.to_string())?;
 
         let mut world = WorldGrid::default();
         world
-            .restore_from_cell_codes(&loaded.state.world_cell_codes)
+            .restore_cells(&loaded.state.world_cells)
             .map_err(|e| format!("World restore failed: {}", e))?;
         let mut field = GasField::from_registry(&registry);
         field
