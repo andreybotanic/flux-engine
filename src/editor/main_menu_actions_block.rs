@@ -268,6 +268,26 @@ fn handle_main_menu_actions(
                     &mut plugin_registry_state,
                 );
             }
+            MainMenuButtonAction::ReloadPlugins => {
+                handle_plugin_reload(
+                    &mut menu_ui,
+                    &world_load_state,
+                    &plugin_config,
+                    &mut plugin_source_registry,
+                    &mut loaded_plugin_registry,
+                    &mut enabled_plugins,
+                    &mut content_registry,
+                    &mut gas_registry,
+                    &mut gas,
+                    &mut pipe_gas,
+                    &mut pipe_flux,
+                    &mut gpu_state,
+                    &mut select_fields,
+                    &mut gas_settings,
+                    &mut source_settings,
+                    &mut plugin_registry_state,
+                );
+            }
             MainMenuButtonAction::SelectLoad(save_id) => {
                 match load_save(&saves_root, &save_id, &gas_registry, &content_registry) {
                     Ok(loaded) => {

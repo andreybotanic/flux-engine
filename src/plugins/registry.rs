@@ -9,8 +9,8 @@ use crate::plugins::{
     content::ContentRegistry,
     default_plugin::default_content_registry,
     source::{
-        discover_plugin_sources, DiscoveredPluginSource, PluginSourceDiscovery, PluginSourceKind,
-        RejectedPluginSource,
+        discover_plugin_sources, DiscoveredPluginSource, PluginSourceDiscovery,
+        PluginSourceFingerprint, PluginSourceKind, RejectedPluginSource,
     },
     state::{EnabledPluginSet, PluginRegistryEntry, PluginRegistryState, PluginRuntimeStatus},
     PluginId, PluginManifest, PluginRuntimeRegistration, PluginVersion, SubstanceRegistry,
@@ -49,6 +49,7 @@ pub struct PluginSourceRecord {
     pub content: bool,
     pub locked: bool,
     pub error_message: Option<String>,
+    pub fingerprint: PluginSourceFingerprint,
 }
 
 /// Runtime registry of every discovered plugin source.
@@ -342,6 +343,7 @@ fn default_source_record() -> PluginSourceRecord {
         content: true,
         locked: true,
         error_message: None,
+        fingerprint: PluginSourceFingerprint::default(),
     }
 }
 
@@ -356,6 +358,7 @@ fn discovered_source_record(source: &DiscoveredPluginSource) -> PluginSourceReco
         content: source.manifest.content,
         locked: false,
         error_message: None,
+        fingerprint: source.fingerprint.clone(),
     }
 }
 
@@ -370,6 +373,7 @@ fn rejected_source_record(source: &RejectedPluginSource) -> PluginSourceRecord {
         content: false,
         locked: false,
         error_message: Some(source.error.to_string()),
+        fingerprint: PluginSourceFingerprint::default(),
     }
 }
 

@@ -22,8 +22,9 @@ use crate::plugins::{
     manifest::PluginManifest,
     registration::PluginRuntimeRegistration,
     source::{
+        fingerprint_expanded_plugin_root, fingerprint_packaged_plugin_archive,
         resolve_plugin_layout, validate_archive_entry_path, ExpandedPluginSource,
-        PackagedPluginSource, MANIFEST_FILE_NAME,
+        PackagedPluginSource, PluginSourceFingerprint, MANIFEST_FILE_NAME,
     },
     PluginId, SubstanceDefinition, SubstanceId, SubstanceRegistry,
 };
@@ -41,6 +42,7 @@ pub(crate) struct ValidatedPackagedPlugin {
     pub source: PackagedPluginSource,
     pub manifest: PluginManifest,
     pub registration: PluginRuntimeRegistration,
+    pub fingerprint: PluginSourceFingerprint,
 }
 
 /// Parsed expanded plugin candidate before DLL handshake validation.
@@ -56,6 +58,7 @@ pub(crate) struct ValidatedExpandedPlugin {
     pub source: ExpandedPluginSource,
     pub manifest: PluginManifest,
     pub registration: PluginRuntimeRegistration,
+    pub fingerprint: PluginSourceFingerprint,
 }
 
 /// Reads and validates only the manifest layer of one packaged plugin archive.
@@ -172,11 +175,13 @@ pub(crate) fn validate_packaged_plugin_candidate(
     let _ = fs::remove_dir_all(&extracted_root);
     let registration = result?;
     validate_runtime_registration(&candidate.manifest, &registration)?;
+    let fingerprint = fingerprint_packaged_plugin_archive(candidate.source.archive_path())?;
 
     Ok(ValidatedPackagedPlugin {
         source: candidate.source.clone(),
         manifest: candidate.manifest.clone(),
         registration,
+        fingerprint,
     })
 }
 
@@ -196,11 +201,14 @@ pub(crate) fn validate_expanded_plugin_candidate(
     let _ = fs::remove_dir_all(&cached_root);
     let registration = result?;
     validate_runtime_registration(&candidate.manifest, &registration)?;
+    let fingerprint =
+        fingerprint_expanded_plugin_root(candidate.source.root_dir(), &candidate.manifest)?;
 
     Ok(ValidatedExpandedPlugin {
         source: candidate.source.clone(),
         manifest: candidate.manifest.clone(),
         registration,
+        fingerprint,
     })
 }
 

@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     fs,
     path::{Component, Path, PathBuf},
+    time::UNIX_EPOCH,
 };
 
 use crate::plugins::{
@@ -23,7 +24,7 @@ pub const PACKAGED_PLUGIN_EXTENSION: &str = "fluxplugin";
 pub const MANIFEST_FILE_NAME: &str = "manifest.toml";
 
 /// High-level source category used by the registry bootstrap.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PluginSourceKind {
     Builtin,
     Packaged,
@@ -100,6 +101,34 @@ pub struct PluginResolvedPaths {
     pub assets_dir: PathBuf,
 }
 
+/// Stable diagnostic fingerprint for one physical plugin source.
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PluginSourceFingerprint {
+    entries: Vec<PluginSourceFingerprintEntry>,
+}
+
+impl PluginSourceFingerprint {
+    /// Creates a fingerprint from already collected file entries.
+    pub fn new(mut entries: Vec<PluginSourceFingerprintEntry>) -> Self {
+        entries.sort();
+        entries.dedup_by(|left, right| left.relative_path == right.relative_path);
+        Self { entries }
+    }
+
+    /// Returns the deterministic file entries used by this fingerprint.
+    pub fn entries(&self) -> &[PluginSourceFingerprintEntry] {
+        &self.entries
+    }
+}
+
+/// One file entry inside a plugin source fingerprint.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PluginSourceFingerprintEntry {
+    pub relative_path: String,
+    pub byte_len: u64,
+    pub modified_unix_nanos: Option<u128>,
+}
+
 /// One fully validated physical plugin source.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DiscoveredPluginSource {
@@ -112,6 +141,7 @@ pub struct DiscoveredPluginSource {
     pub source: PluginSource,
     pub manifest: PluginManifest,
     pub registration: PluginRuntimeRegistration,
+    pub fingerprint: PluginSourceFingerprint,
 }
 
 impl DiscoveredPluginSource {
@@ -126,6 +156,7 @@ impl DiscoveredPluginSource {
             source: PluginSource::Archive(validated.source),
             manifest: validated.manifest,
             registration: validated.registration,
+            fingerprint: validated.fingerprint,
         }
     }
 
@@ -140,6 +171,7 @@ impl DiscoveredPluginSource {
             source: PluginSource::Directory(validated.source),
             manifest: validated.manifest,
             registration: validated.registration,
+            fingerprint: validated.fingerprint,
         }
     }
 }
@@ -304,6 +336,40 @@ pub fn resolve_plugin_layout(
     })
 }
 
+/// Builds a lightweight fingerprint for one packaged plugin archive.
+pub fn fingerprint_packaged_plugin_archive(
+    archive_path: &Path,
+) -> Result<PluginSourceFingerprint, PluginContractError> {
+    let metadata = fs::metadata(archive_path).map_err(|error| {
+        PluginContractError::Io(format!(
+            "failed to read packaged plugin metadata '{}': {}",
+            archive_path.display(),
+            error
+        ))
+    })?;
+    Ok(PluginSourceFingerprint::new(vec![fingerprint_entry(
+        archive_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("plugin.fluxplugin")
+            .to_string(),
+        &metadata,
+    )]))
+}
+
+/// Builds a fingerprint for one expanded plugin directory.
+pub fn fingerprint_expanded_plugin_root(
+    root_dir: &Path,
+    manifest: &PluginManifest,
+) -> Result<PluginSourceFingerprint, PluginContractError> {
+    let mut entries = Vec::new();
+    push_required_fingerprint_file(root_dir, Path::new(MANIFEST_FILE_NAME), &mut entries)?;
+    push_required_fingerprint_file(root_dir, &manifest.dll, &mut entries)?;
+    collect_optional_fingerprint_dir(root_dir, &manifest.configs, &mut entries)?;
+    collect_optional_fingerprint_dir(root_dir, &manifest.assets, &mut entries)?;
+    Ok(PluginSourceFingerprint::new(entries))
+}
+
 fn collect_packaged_archives(
     packaged_root: &Path,
     rejected_sources: &mut Vec<RejectedPluginSource>,
@@ -402,6 +468,119 @@ fn collect_expanded_plugin_roots(
             .cmp(right.file_name().unwrap_or_default())
     });
     roots
+}
+
+fn push_required_fingerprint_file(
+    root_dir: &Path,
+    relative_path: &Path,
+    entries: &mut Vec<PluginSourceFingerprintEntry>,
+) -> Result<(), PluginContractError> {
+    let metadata = fs::metadata(root_dir.join(relative_path)).map_err(|error| {
+        PluginContractError::Io(format!(
+            "failed to read plugin fingerprint file '{}': {}",
+            root_dir.join(relative_path).display(),
+            error
+        ))
+    })?;
+    if !metadata.is_file() {
+        return Err(PluginContractError::Io(format!(
+            "plugin fingerprint path '{}' is not a file",
+            root_dir.join(relative_path).display()
+        )));
+    }
+    entries.push(fingerprint_entry(
+        relative_path.to_string_lossy().replace('\\', "/"),
+        &metadata,
+    ));
+    Ok(())
+}
+
+fn collect_optional_fingerprint_dir(
+    root_dir: &Path,
+    relative_dir: &Path,
+    entries: &mut Vec<PluginSourceFingerprintEntry>,
+) -> Result<(), PluginContractError> {
+    let absolute_dir = root_dir.join(relative_dir);
+    if !absolute_dir.exists() {
+        return Ok(());
+    }
+    if !absolute_dir.is_dir() {
+        return Err(PluginContractError::Io(format!(
+            "plugin fingerprint path '{}' is not a directory",
+            absolute_dir.display()
+        )));
+    }
+    collect_fingerprint_dir_recursive(root_dir, &absolute_dir, entries)
+}
+
+fn collect_fingerprint_dir_recursive(
+    root_dir: &Path,
+    current_dir: &Path,
+    entries: &mut Vec<PluginSourceFingerprintEntry>,
+) -> Result<(), PluginContractError> {
+    let mut children = fs::read_dir(current_dir)
+        .map_err(|error| {
+            PluginContractError::Io(format!(
+                "failed to read plugin fingerprint directory '{}': {}",
+                current_dir.display(),
+                error
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            PluginContractError::Io(format!(
+                "failed to read one plugin fingerprint entry from '{}': {}",
+                current_dir.display(),
+                error
+            ))
+        })?;
+    children.sort_by_key(|entry| entry.path());
+
+    for child in children {
+        let path = child.path();
+        if path.is_dir() {
+            collect_fingerprint_dir_recursive(root_dir, &path, entries)?;
+            continue;
+        }
+        if !path.is_file() {
+            continue;
+        }
+        let metadata = fs::metadata(&path).map_err(|error| {
+            PluginContractError::Io(format!(
+                "failed to read plugin fingerprint file '{}': {}",
+                path.display(),
+                error
+            ))
+        })?;
+        let relative_path = path.strip_prefix(root_dir).map_err(|error| {
+            PluginContractError::Io(format!(
+                "failed to relativize plugin fingerprint file '{}': {}",
+                path.display(),
+                error
+            ))
+        })?;
+        entries.push(fingerprint_entry(
+            relative_path.to_string_lossy().replace('\\', "/"),
+            &metadata,
+        ));
+    }
+    Ok(())
+}
+
+fn fingerprint_entry(
+    relative_path: String,
+    metadata: &fs::Metadata,
+) -> PluginSourceFingerprintEntry {
+    let modified_unix_nanos = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos());
+    PluginSourceFingerprintEntry {
+        relative_path,
+        byte_len: metadata.len(),
+        modified_unix_nanos,
+    }
 }
 
 fn reject_duplicate_packaged_candidates(

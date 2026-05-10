@@ -1,7 +1,8 @@
 use crate::plugins::{
-    rebuild_plugin_registry_from_enabled_set, ContentRegistry, EnabledPluginSet,
-    LoadedPluginRegistry, PluginBootstrapConfig, PluginRegistryEntry, PluginRegistryState,
-    PluginRuntimeStatus, PluginSourceKind, PluginSourceRegistry,
+    rebuild_plugin_registry_from_enabled_set, reload_plugin_registry, ContentRegistry,
+    EnabledPluginSet, LoadedPluginRegistry, PluginBootstrapConfig, PluginRegistryEntry,
+    PluginRegistryState, PluginReloadError, PluginReloadRequest, PluginRuntimeStatus,
+    PluginSourceKind, PluginSourceRegistry,
 };
 use crate::ui::toggle_switch::{
     spawn_toggle_switch, spawn_toggle_switch_button, ToggleSwitchConfig, ToggleSwitchRoot,
@@ -26,6 +27,10 @@ fn root_plugins_button_visible(mode: MainMenuMode) -> bool {
 }
 
 fn plugin_toggles_allowed(mode: MainMenuMode, has_world: bool) -> bool {
+    mode == MainMenuMode::Main && !has_world
+}
+
+fn plugin_reload_allowed(mode: MainMenuMode, has_world: bool) -> bool {
     mode == MainMenuMode::Main && !has_world
 }
 
@@ -221,6 +226,66 @@ fn handle_plugin_toggle(
     *registry_state = output.registry_state;
     menu_ui.status_text.clear();
     menu_ui.needs_plugin_list_refresh = list_requires_rebuild;
+}
+
+fn handle_plugin_reload(
+    menu_ui: &mut MainMenuUiState,
+    world_load_state: &WorldLoadState,
+    config: &PluginBootstrapConfig,
+    source_registry: &mut PluginSourceRegistry,
+    loaded_registry: &mut LoadedPluginRegistry,
+    enabled_set: &mut EnabledPluginSet,
+    content_registry: &mut ContentRegistry,
+    gas_registry: &mut GasRegistry,
+    gas: &mut GasField,
+    pipe_gas: &mut crate::plugins::default_plugin::pipe_runtime::PipeGasField,
+    pipe_flux: &mut crate::plugins::default_plugin::pipe_runtime::PipeFluxField,
+    gpu_state: &mut crate::simulation::GpuRuntimeState,
+    select_fields: &mut SelectFieldState,
+    gas_settings: &mut GasToolSettings,
+    source_settings: &mut SourceStructureToolSettings,
+    registry_state: &mut PluginRegistryState,
+) {
+    if !plugin_reload_allowed(menu_ui.mode, world_load_state.has_world) {
+        menu_ui.status_text = PluginReloadError::WorldLoaded.to_string();
+        return;
+    }
+
+    match reload_plugin_registry(
+        &PluginReloadRequest::manual(),
+        config,
+        enabled_set,
+        world_load_state.has_world,
+        source_registry,
+        registry_state,
+    ) {
+        Ok(report) => {
+            report.output.registry_state.log_to_stderr();
+            *source_registry = report.output.source_registry;
+            *loaded_registry = report.output.loaded_registry;
+            *enabled_set = report.output.enabled_set;
+            *content_registry = report.output.content_registry;
+            *gas_registry = report.gas_registry;
+            *gas = GasField::from_registry(gas_registry);
+            *pipe_gas =
+                crate::plugins::default_plugin::pipe_runtime::PipeGasField::from_registry(
+                    gas_registry,
+                );
+            pipe_flux.clear_all();
+            gpu_state.reset_solver();
+            refresh_gas_select_options(select_fields, gas_registry, gas_settings, source_settings);
+            *registry_state = report.output.registry_state;
+            menu_ui.status_text = report.message;
+            menu_ui.needs_plugin_list_refresh = true;
+        }
+        Err(error) => {
+            menu_ui.status_text = match error {
+                PluginReloadError::WorldLoaded => error.to_string(),
+                PluginReloadError::Registry(message) => format!("Plugin reload failed: {}", message),
+                PluginReloadError::Config(message) => format!("Plugin reload failed: {}", message),
+            };
+        }
+    }
 }
 
 fn refresh_gas_select_options(
@@ -551,8 +616,9 @@ fn short_plugin_error(error: &str) -> String {
 mod main_menu_plugins_tests {
     use super::{
         plugin_list_requires_rebuild, plugin_registry_entry_keys, plugin_toggle_control,
-        plugin_toggle_label, plugin_toggle_presentation, root_plugins_button_visible,
-        return_main_menu_to_root, PluginToggleControl, PluginTogglePresentation,
+        plugin_toggle_label, plugin_toggle_presentation, plugin_reload_allowed,
+        root_plugins_button_visible, return_main_menu_to_root, PluginToggleControl,
+        PluginTogglePresentation,
     };
     use crate::{
         plugins::{
@@ -653,6 +719,14 @@ mod main_menu_plugins_tests {
             plugin_toggle_presentation(&entry, &enabled, MainMenuMode::Main, false),
             PluginTogglePresentation::Switch { interactive: true }
         );
+    }
+
+    #[test]
+    fn main_menu_plugins_reload_is_allowed_only_before_world_load() {
+        assert!(plugin_reload_allowed(MainMenuMode::Main, false));
+        assert!(!plugin_reload_allowed(MainMenuMode::Main, true));
+        assert!(!plugin_reload_allowed(MainMenuMode::InGame, true));
+        assert!(!plugin_reload_allowed(MainMenuMode::Hidden, false));
     }
 
     #[test]

@@ -16,6 +16,7 @@ use zip::{write::SimpleFileOptions, ZipWriter};
 const MANIFEST_RELATIVE: &str = "package_template/manifest.toml";
 const EXPANDED_OUTPUT_ROOT: &str = "target/plugins/expanded";
 const PACKAGE_OUTPUT_ROOT: &str = "target/plugins/packages";
+const DEV_PLUGIN_ROOT: &str = "plugins_dev";
 
 /// Error returned by the plugin build helper.
 #[derive(Debug)]
@@ -71,9 +72,15 @@ pub fn run_cli(repo_root: &Path, args: &[String]) -> Result<(), XtaskError> {
     };
     match command {
         "build-plugin" => {
-            let plugin_id = required_plugin_id(args)?;
-            let output = build_plugin(repo_root, plugin_id)?;
-            println!("Built expanded plugin at {}", output.display());
+            let request = parse_build_plugin_args(args)?;
+            if request.install_dev {
+                let output = build_plugin_for_dev_environment(repo_root, request.plugin_id)?;
+                println!("Built dev plugin at {}", output.display());
+                println!("Use Reload in Main Menu -> Plugins to refresh the running game.");
+            } else {
+                let output = build_plugin(repo_root, request.plugin_id)?;
+                println!("Built expanded plugin at {}", output.display());
+            }
             Ok(())
         }
         "pack-plugin" => {
@@ -168,6 +175,27 @@ pub fn build_plugin(repo_root: &Path, plugin_id: &str) -> Result<PathBuf, XtaskE
     Ok(output_root)
 }
 
+/// Builds one plugin and installs the expanded output into `plugins_dev/<plugin_id>`.
+pub fn build_plugin_for_dev_environment(
+    repo_root: &Path,
+    plugin_id: &str,
+) -> Result<PathBuf, XtaskError> {
+    let expanded_root = build_plugin(repo_root, plugin_id)?;
+    let plugin_id = PluginId::parse(plugin_id).map_err(|error| {
+        XtaskError::new(format!("invalid plugin id '{}': {}", plugin_id, error))
+    })?;
+    let dev_root = dev_plugin_root(repo_root, &plugin_id);
+    replace_dev_plugin_directory(&expanded_root, &dev_root)?;
+    validate_expanded_plugin_root(&dev_root).map_err(|error| {
+        XtaskError::new(format!(
+            "dev plugin '{}' failed runtime validation after install: {}",
+            dev_root.display(),
+            error
+        ))
+    })?;
+    Ok(dev_root)
+}
+
 /// Builds and packs one plugin into a `.fluxplugin` archive.
 pub fn pack_plugin(repo_root: &Path, plugin_id: &str) -> Result<PathBuf, XtaskError> {
     let project = find_plugin_project(repo_root, plugin_id)?;
@@ -240,9 +268,37 @@ fn required_plugin_id(args: &[String]) -> Result<&str, XtaskError> {
     Ok(args[1].as_str())
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BuildPluginRequest<'a> {
+    plugin_id: &'a str,
+    install_dev: bool,
+}
+
+fn parse_build_plugin_args(args: &[String]) -> Result<BuildPluginRequest<'_>, XtaskError> {
+    if args.len() == 2 {
+        return Ok(BuildPluginRequest {
+            plugin_id: args[1].as_str(),
+            install_dev: false,
+        });
+    }
+    if args.len() == 3 && args[2] == "--dev" {
+        return Ok(BuildPluginRequest {
+            plugin_id: args[1].as_str(),
+            install_dev: true,
+        });
+    }
+    if args.len() == 3 && args[1] == "--dev" {
+        return Ok(BuildPluginRequest {
+            plugin_id: args[2].as_str(),
+            install_dev: true,
+        });
+    }
+    Err(usage_error())
+}
+
 fn usage_error() -> XtaskError {
     XtaskError::new(
-        "usage: cargo xtask build-plugin <plugin_id> | pack-plugin <plugin_id> | build-all-plugins",
+        "usage: cargo xtask build-plugin <plugin_id> [--dev] | pack-plugin <plugin_id> | build-all-plugins",
     )
 }
 
@@ -407,10 +463,52 @@ fn recreate_dir(path: &Path) -> Result<(), XtaskError> {
     Ok(())
 }
 
+fn replace_dev_plugin_directory(expanded_root: &Path, dev_root: &Path) -> Result<(), XtaskError> {
+    let parent = dev_root.parent().ok_or_else(|| {
+        XtaskError::new(format!(
+            "dev plugin path '{}' has no parent directory",
+            dev_root.display()
+        ))
+    })?;
+    fs::create_dir_all(parent)?;
+    let temp_root = parent.join(format!(
+        ".tmp_{}_{}_{}",
+        dev_root
+            .file_name()
+            .and_then(OsStr::to_str)
+            .unwrap_or("plugin"),
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| XtaskError::new(format!("failed to create temp id: {}", error)))?
+            .as_nanos()
+    ));
+    if temp_root.exists() {
+        fs::remove_dir_all(&temp_root)?;
+    }
+    copy_dir_recursive(expanded_root, &temp_root)?;
+    if dev_root.exists() {
+        fs::remove_dir_all(dev_root)?;
+    }
+    fs::rename(&temp_root, dev_root).or_else(|rename_error| {
+        copy_dir_recursive(&temp_root, dev_root)?;
+        fs::remove_dir_all(&temp_root)?;
+        if dev_root.exists() {
+            Ok(())
+        } else {
+            Err(rename_error.into())
+        }
+    })
+}
+
 fn expanded_plugin_root(repo_root: &Path, plugin_id: &PluginId) -> PathBuf {
     repo_root
         .join(EXPANDED_OUTPUT_ROOT)
         .join(plugin_id.as_str())
+}
+
+fn dev_plugin_root(repo_root: &Path, plugin_id: &PluginId) -> PathBuf {
+    repo_root.join(DEV_PLUGIN_ROOT).join(plugin_id.as_str())
 }
 
 fn cargo_binary() -> PathBuf {
@@ -500,6 +598,55 @@ content = false
     }
 
     #[test]
+    fn build_plugin_args_accept_optional_dev_flag() {
+        let normal_args = [
+            "build-plugin".to_string(),
+            "flux.sample_content".to_string(),
+        ];
+        let normal = parse_build_plugin_args(&normal_args).expect("normal args");
+        assert_eq!(
+            normal,
+            BuildPluginRequest {
+                plugin_id: "flux.sample_content",
+                install_dev: false
+            }
+        );
+
+        let trailing_args = [
+            "build-plugin".to_string(),
+            "flux.sample_content".to_string(),
+            "--dev".to_string(),
+        ];
+        let trailing = parse_build_plugin_args(&trailing_args).expect("trailing dev flag");
+        assert_eq!(
+            trailing,
+            BuildPluginRequest {
+                plugin_id: "flux.sample_content",
+                install_dev: true
+            }
+        );
+
+        let leading_args = [
+            "build-plugin".to_string(),
+            "--dev".to_string(),
+            "flux.sample_content".to_string(),
+        ];
+        let leading = parse_build_plugin_args(&leading_args).expect("leading dev flag");
+        assert_eq!(leading, trailing);
+    }
+
+    #[test]
+    fn build_plugin_args_reject_unknown_extra_flags() {
+        let error = parse_build_plugin_args(&[
+            "build-plugin".to_string(),
+            "flux.sample_content".to_string(),
+            "--wat".to_string(),
+        ])
+        .expect_err("unknown flag must fail");
+        assert!(error.to_string().contains("usage: cargo xtask"));
+    }
+
+    #[test]
     fn duplicate_plugin_ids_are_rejected() {
         let root = temp_repo("flux_xtask_dupe");
         write_project_manifest(&root, "a", "dup.plugin");
@@ -518,5 +665,32 @@ content = false
         assert!(!package_path_allowed(Path::new("target/debug/plugin.dll")));
         assert!(!package_path_allowed(Path::new("assets/secret.key")));
         assert!(!package_path_allowed(Path::new(".env")));
+    }
+
+    #[test]
+    fn dev_install_replaces_existing_directory_contents() {
+        let root = temp_repo("flux_xtask_dev_install");
+        let expanded = root.join("target/plugins/expanded/flux.sample");
+        fs::create_dir_all(expanded.join("config")).expect("create expanded config");
+        fs::write(expanded.join("manifest.toml"), "new").expect("write manifest");
+        fs::write(expanded.join("config/sample.toml"), "config").expect("write config");
+
+        let dev_root = root.join("plugins_dev/flux.sample");
+        fs::create_dir_all(&dev_root).expect("create old dev root");
+        fs::write(dev_root.join("stale.txt"), "stale").expect("write stale file");
+
+        replace_dev_plugin_directory(&expanded, &dev_root).expect("replace dev root");
+
+        assert_eq!(
+            fs::read_to_string(dev_root.join("manifest.toml")).expect("read manifest"),
+            "new"
+        );
+        assert_eq!(
+            fs::read_to_string(dev_root.join("config/sample.toml")).expect("read config"),
+            "config"
+        );
+        assert!(!dev_root.join("stale.txt").exists());
+
+        let _ = fs::remove_dir_all(root);
     }
 }

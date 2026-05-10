@@ -1,6 +1,9 @@
 ﻿# Changelog
 
 ## 2026-05-10
+- Добавлен CLI-флаг запуска `--plugins-dev`: в этом режиме runtime отдаёт приоритет expanded sources из `plugins_dev/<plugin_id>` перед packaged `.fluxplugin` с тем же ID.
+- `cargo xtask build-plugin <plugin_id> --dev` теперь собирает plugin DLL, валидирует expanded output и обновляет runtime dev-каталог `plugins_dev/<plugin_id>` для последующего `Reload` в игре.
+- Реализован stage-8 dev reload: экран `Plugins` получил ручной `Reload`, registry/content/gas resources пересобираются атомарно только без загруженного мира, а dev-source fingerprint учитывает manifest/config/assets/DLL без упаковки `.fluxplugin`.
 - Упорядочен in-project plugin layout: built-in `flux.default` теперь хранит код, configs и plugin-owned assets внутри `src/plugins/default_plugin`, а новые подпапки `src/plugins/*/` по умолчанию игнорируются как отдельные plugin-репозитории.
 - Sample plugin crates `flux.sample_stage1` и `flux.sample_content` перенесены из `crates/` в `src/plugins/` как tracked test fixtures; `xtask` теперь ищет plugin projects в `src/plugins/*/package_template/manifest.toml`.
 - Default plugin assets загружаются через отдельный Bevy asset source `flux_default://...`, а pipe-runtime настройки вынесены из core `config/simulation.toml` в `src/plugins/default_plugin/config/pipe_runtime.toml`.

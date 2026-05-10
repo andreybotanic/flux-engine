@@ -424,6 +424,7 @@ enum MainMenuButtonAction {
     SelectLoad(String),
     SelectDelete(String),
     TogglePlugin(PluginId),
+    ReloadPlugins,
     ConfirmPrimary,
     ConfirmSecondary,
     ConfirmCancel,

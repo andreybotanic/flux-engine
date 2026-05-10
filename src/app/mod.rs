@@ -30,7 +30,9 @@ use crate::{
 /// Runs `run` logic.
 pub fn run() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let plugin_bootstrap_config = PluginBootstrapConfig::from_repo_root(repo_root, false);
+    let args: Vec<String> = std::env::args().collect();
+    let plugin_bootstrap_config =
+        PluginBootstrapConfig::from_repo_root(repo_root, plugins_dev_mode_requested(&args));
     let plugin_bootstrap = crate::plugins::bootstrap_plugin_registry(&plugin_bootstrap_config);
     plugin_bootstrap.registry_state.log_to_stderr();
     let game_config = GameConfig::load_from_default_location_with_content(
@@ -47,7 +49,6 @@ pub fn run() {
     let mut app = App::new();
     app.insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Time::<Fixed>::from_hz(30.0));
-    let args: Vec<String> = std::env::args().collect();
     let env_backend = std::env::var("FLUX_SIM_BACKEND").ok();
     let mut world_size = WorldSizeConfig::default();
     let mut requested_backend = parse_requested_backend(&args, env_backend.as_deref());
@@ -166,9 +167,13 @@ fn parse_requested_backend(args: &[String], env_backend: Option<&str>) -> Simula
     backend
 }
 
+fn plugins_dev_mode_requested(args: &[String]) -> bool {
+    args.iter().skip(1).any(|arg| arg == "--plugins-dev")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::parse_requested_backend;
+    use super::{parse_requested_backend, plugins_dev_mode_requested};
     use crate::simulation::backend::SimulationBackend;
 
     #[test]
@@ -201,5 +206,17 @@ mod tests {
             parse_requested_backend(&args, Some("gpu")),
             SimulationBackend::Cpu
         );
+    }
+
+    #[test]
+    fn plugins_dev_flag_enables_dev_mode() {
+        let args = vec!["flux_engine.exe".to_string(), "--plugins-dev".to_string()];
+        assert!(plugins_dev_mode_requested(&args));
+    }
+
+    #[test]
+    fn plugins_dev_mode_is_off_by_default() {
+        let args = vec!["flux_engine.exe".to_string()];
+        assert!(!plugins_dev_mode_requested(&args));
     }
 }

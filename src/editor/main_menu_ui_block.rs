@@ -158,6 +158,7 @@ fn refresh_main_menu_ui(
                 MainMenuButtonAction::BackToRoot | MainMenuButtonAction::TogglePlugin(_) => {
                     Display::Flex
                 }
+                MainMenuButtonAction::ReloadPlugins => Display::Flex,
                 _ => Display::None,
             },
             MainMenuScreen::Save => match action_button.0 {

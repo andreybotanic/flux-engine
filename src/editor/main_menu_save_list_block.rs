@@ -10,6 +10,8 @@ fn normalized_cursor_is_inside(normalized: Option<Vec2>) -> bool {
 }
 
 fn emit_main_menu_button_actions(
+    menu_ui: Res<MainMenuUiState>,
+    world_load_state: Res<WorldLoadState>,
     mut interactions: Query<
         (
             &Interaction,
@@ -28,6 +30,9 @@ fn emit_main_menu_button_actions(
         let active = match (&action_button.0, toggle_root) {
             (MainMenuButtonAction::TogglePlugin(_), Some(root)) => root.interactive,
             (MainMenuButtonAction::TogglePlugin(_), None) => false,
+            (MainMenuButtonAction::ReloadPlugins, _) => {
+                plugin_reload_allowed(menu_ui.mode, world_load_state.has_world)
+            }
             _ => true,
         };
         background.0 = if active {

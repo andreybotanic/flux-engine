@@ -7,6 +7,7 @@ pub mod loader;
 pub mod manifest;
 pub mod registration;
 pub mod registry;
+pub mod reload;
 pub mod source;
 pub mod state;
 pub mod substances;
@@ -33,11 +34,15 @@ pub use self::registry::{
     LoadedPluginRegistry, PluginBootstrapConfig, PluginBootstrapOutput, PluginSourceRecord,
     PluginSourceRegistry,
 };
+pub use self::reload::{
+    reload_plugin_registry, PluginReloadError, PluginReloadReport, PluginReloadRequest,
+};
 pub use self::source::{
     discover_dev_plugin_sources, discover_packaged_plugin_sources, discover_plugin_sources,
     validate_archive_entry_path, validate_relative_plugin_path, DiscoveredPluginSource,
     ExpandedPluginSource, PackagedPluginSource, PluginSource, PluginSourceDiscovery,
-    PluginSourceKind, RejectedPluginSource, PACKAGED_PLUGIN_EXTENSION,
+    PluginSourceFingerprint, PluginSourceFingerprintEntry, PluginSourceKind, RejectedPluginSource,
+    PACKAGED_PLUGIN_EXTENSION,
 };
 pub use self::state::{
     EnabledPluginSet, PluginRegistryEntry, PluginRegistryState, PluginRuntimeStatus,

@@ -652,6 +652,12 @@ fn setup_editor_ui(
                             .with_children(|actions| {
                                 spawn_main_menu_action_button(
                                     actions,
+                                    "Reload",
+                                    MainMenuButtonAction::ReloadPlugins,
+                                    140.0,
+                                );
+                                spawn_main_menu_action_button(
+                                    actions,
                                     "Back",
                                     MainMenuButtonAction::BackToRoot,
                                     140.0,

@@ -67,7 +67,7 @@ FluxEngine/
 - `plugin_state.toml`: Локальный runtime-файл пользовательских настроек plugin enable-state; хранится в корне проекта и игнорируется через `.gitignore`.
 - `plugins/.gitkeep`: Фиксирует пустой runtime-каталог для packaged plugins; реальные `.fluxplugin` игнорируются через `.gitignore`.
 - `plugins_dev/.gitkeep`: Фиксирует пустой runtime-каталог expanded dev plugins; реальные папки плагинов игнорируются через `.gitignore`.
-- `src/app/mod.rs`: Сборка Bevy-приложения, plugin bootstrap/config resource, backend-инициализация и запуск.
+- `src/app/mod.rs`: Сборка Bevy-приложения, plugin bootstrap/config resource, CLI-флаги запуска включая `--plugins-dev`, backend-инициализация и запуск.
 - `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
 - `src/config/hud.rs`: Публичные типы runtime-конфигов HUD, включая substance-контейнеры и режимы видимости по hover, без встроенных entity-label/fallback-конфигов.
@@ -77,10 +77,10 @@ FluxEngine/
 - `src/debug/mod.rs`: Debug-режимы, оверлейные метрики и диагностические ресурсы.
 - `src/editor/editor_ui_block.rs`: Runtime-обработка editor UI: tooltip, state sync, панели.
 - `src/editor/input_block.rs`: Мышь/кисть/выделение и применение инструментов к миру, unified pipe/structure-сети и мосту.
-- `src/editor/main_menu_actions_block.rs`: Обработчики действий меню: save/load/new/exit/plugins/confirm, очередь preview-capture и post-save follow-up сценарии.
+- `src/editor/main_menu_actions_block.rs`: Обработчики действий меню: save/load/new/exit/plugins/reload/confirm, очередь preview-capture и post-save follow-up сценарии.
 - `src/editor/main_menu_block.rs`: Композиция логики main menu (escape/actions/ui refresh).
 - `src/editor/main_menu_escape_block.rs`: Обработка Esc и переходов состояний меню/инструментов, включая возврат из `Plugins` к root screen.
-- `src/editor/main_menu_plugins_block.rs`: Сборка и in-place синхронизация списка runtime-плагинов для экрана `Plugins`, правила доступности toggle и safe registry rebuild после изменения `EnabledPluginSet`.
+- `src/editor/main_menu_plugins_block.rs`: Сборка и in-place синхронизация списка runtime-плагинов для экрана `Plugins`, правила доступности toggle/reload и safe registry rebuild после изменения `EnabledPluginSet`.
 - `src/editor/main_menu_save_list_block.rs`: Общая отправка action-ивентов кнопок главного меню, сборка карточек save/load, загрузка preview PNG в UI и hit-test логика primary-click по всей карточке.
 - `src/editor/main_menu_ui_block.rs`: Обновление состояния и видимости элементов меню, включая экраны save/load/confirm/plugins.
 - `src/editor/mod.rs`: Публичные editor-типы/ресурсы и точка сборки editor-систем, включая `Pipe/Vent/Bridge` и состояние поворота моста.
@@ -121,12 +121,13 @@ FluxEngine/
 - `src/plugins/flux_stage7_sample_content_plugin/src/lib.rs`: ABI v2 sample DLL, регистрирующая внешний газ `flux.sample_content.substance.neon`.
 - `src/plugins/diagnostics.rs`: Startup scan packaged archives, дедупликация `PluginId`, resource с результатами проверки и текст для статуса главного меню.
 - `src/plugins/id.rs`: Типизированные `PluginId`, `PluginVersion`, `PluginApiVersion` и проверка канонического формата ID.
-- `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL, ABI handshake `create/register/destroy` и сбор runtime content registration.
+- `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL, ABI handshake `create/register/destroy`, fingerprint source-а и сбор runtime content registration.
 - `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
 - `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API.
+- `src/plugins/reload.rs`: Атомарный manual reload/rescan runtime-плагинов без загруженного мира: rebuild registry, пересборка gas registry, generation/report и сравнение source fingerprints.
 - `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin content, включая внешние gas substances.
 - `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` и rebuild-helper для menu toggle; content registry создаётся из default descriptors плюс runtime registration включённых content-плагинов.
-- `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics и resolve plugin layout внутри plugin root.
+- `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics, source fingerprint и resolve plugin layout внутри plugin root.
 - `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses и aggregate `PluginRegistryState`.
 - `src/plugins/substances.rs`: Generic plugin-owned substance contract: `SubstanceId`, `SubstanceDefinition`, `SubstanceFlags` и deterministic `SubstanceRegistry` для compact runtime indices.
 - `src/render/mod.rs`: Плагин рендера и порядок render-систем, включая pipe visuals.
@@ -192,6 +193,6 @@ FluxEngine/
 - `src/world/mod.rs`: Плагин мира и события изменений клеток.
 - `src/world/structures.rs`: Unified layer/descriptor-модель структур, generic structure/layer ID wrapper-ы, `PlacedStructureMap`, rotation, bridge-footprint compatibility helpers и pipe-cut state.
 - `xtask/Cargo.toml`: Манифест helper-crate-а для сборки и упаковки runtime-плагинов.
-- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `pack-plugin`, `build-all-plugins`, discovery plugin projects и безопасной упаковки `.fluxplugin`.
+- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>` и безопасная упаковка `.fluxplugin`.
 - `xtask/src/main.rs`: CLI entrypoint, который запускает `xtask::run_from_env()` и возвращает non-zero exit code при ошибке.
 - `tmp_size.rs`: Временный локальный вспомогательный Rust-файл для ручных проверок/черновых экспериментов.

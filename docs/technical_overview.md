@@ -31,7 +31,7 @@
 - `debug`: отладочные режимы и диагностические инструменты.
 - `save`: сохранение/загрузка мира.
 - `config`: загрузка и валидация конфигурации игры.
-- `plugins`: runtime plugin contract, packaged/dev source discovery, registry/state bootstrap, Windows DLL handshake, startup diagnostics, default content и default plugin runtime для content-bound логики труб.
+- `plugins`: runtime plugin contract, packaged/dev source discovery, registry/state bootstrap/reload, Windows DLL handshake, startup diagnostics, default content и default plugin runtime для content-bound логики труб.
 
 ### Организация крупных модулей и документирование API
 
@@ -46,6 +46,7 @@
 - Поддерживаются два физических источника plugin-пакетов:
   - packaged archives `plugins/*.fluxplugin`;
   - expanded dev directories `plugins_dev/<plugin_id>/`.
+- По умолчанию при совпадении `PluginId` выбирается packaged source. При запуске с `--plugins-dev` включается dev mode, и expanded source из `plugins_dev/<plugin_id>` получает приоритет над packaged archive с тем же ID.
 - Пользовательские настройки включения хранятся отдельно от сейвов в `plugin_state.toml` в корне репозитория. Отсутствующий файл означает "включён только default plugin".
 - Synthetic default plugin `flux.default` существует всегда как built-in registry item: он принудительно `enabled`, `locked` и считается content-provider даже без внешних пакетов.
 - `PluginRegistryState` держит данные для экрана `Plugins` и подробные log-friendly сообщения по каждому plugin entry; root `Main Menu` не показывает список плагинов.
@@ -59,6 +60,7 @@
 - Manifest валидируется отдельно от runtime: проверяются `PluginId`, semver `version`, точное совпадение `api_version` с версией движка и безопасность относительных путей.
 - Перед extraction перечисляются все ZIP entries и запрещаются `..`, absolute roots, `.`-сегменты и Windows drive-prefix; это исключает выход за пределы plugin root.
 - На Windows DLL загружается не из исходного архива и не из исходной dev-папки, а из временной generation-копии в `std::env::temp_dir()/FluxEngine/plugin_cache/...`; после ABI-проверки копия удаляется best-effort.
+- Для каждого валидного physical source хранится `PluginSourceFingerprint`: packaged source fingerprint считается по архиву, а expanded dev source — по `manifest.toml`, DLL, `config/` и `assets/`.
 - Стабильный ABI использует plain C-compatible типы: `FluxUtf8Slice`, `FluxStatus`, `FluxHostApi`, `FluxRegistrar`, `FluxPluginHandle` и четыре обязательные export-функции DLL.
 - Начиная с API version `2`, `FluxRegistrar` поддерживает callback `register_gas_substance`: content-плагин может зарегистрировать газовые вещества во время handshake-сценария `api_version -> create -> register -> destroy`.
 - Для позитивной e2e-проверки stage-1 в репозитории добавлен отдельный sample `cdylib` crate `src/plugins/flux_stage1_sample_plugin`: unit-тесты собирают его, упаковывают в `.fluxplugin` и проверяют, что startup scan принимает рабочий DLL-плагин.
@@ -97,12 +99,21 @@
 - `xtask` ищет plugin projects в `src/plugins/*/package_template/manifest.toml`, читает runtime manifest тем же `PluginManifest`, сортирует проекты по `PluginId` и отклоняет дубли.
 - Поддерживаются команды:
   - `cargo xtask build-plugin <plugin_id>` собирает plugin DLL, копирует `manifest.toml`, `bin/`, `config/`, `assets/` в `target/plugins/expanded/<plugin_id>/` и валидирует expanded root через runtime loader.
+  - `cargo xtask build-plugin <plugin_id> --dev` делает ту же сборку, затем обновляет `plugins_dev/<plugin_id>` через временную папку и повторно валидирует установленный dev-root; после этого в запущенной игре достаточно нажать `Reload`.
   - `cargo xtask pack-plugin <plugin_id>` выполняет build, пишет `.fluxplugin` в `target/plugins/packages/<plugin_id>.fluxplugin` и валидирует archive через runtime loader.
   - `cargo xtask build-all-plugins` собирает и упаковывает все найденные plugin projects в детерминированном порядке.
 - Упаковщик включает в archive только разрешённые package paths (`manifest.toml`, `bin/`, `config/`, `assets/`) и запрещает служебные/опасные segments вроде `target`, `.git`, editor cache, secrets, `..` и absolute paths.
 - Stage-7 sample content plugin находится в `src/plugins/flux_stage7_sample_content_plugin`: его ABI v2 DLL регистрирует газ `flux.sample_content.substance.neon` с alias `neon`.
 - Runtime registration сохраняется в `PluginRuntimeRegistration`, затем `LoadedPluginRegistry` передаёт её в `ContentRegistry`. При включении/выключении content-плагина из `Main Menu -> Plugins` rebuild пересоздаёт `ContentRegistry`, `GasRegistry`, world/pipe gas fields, pipe flux state и GPU solver buffers, а gas dropdown-поля обновляются без перезапуска.
 - `GameConfig::load_from_default_location_with_content(...)` и `load_gas_registry_from_default_location(...)` строят `GasRegistry` из default substances плюс substances включённых content-плагинов. Save/load gate использует те же stable substance IDs, поэтому мир с plugin-owned газом требует соответствующий enabled content plugin.
+
+### Dev mode и hot reload (stage 8)
+
+- Ручной reload доступен на экране `Main Menu -> Plugins` только пока `WorldLoadState.has_world == false`; в `Game Menu -> Plugins` экран остаётся read-only.
+- `src/plugins/reload.rs` является единой точкой reload-контракта: сначала строится новый `PluginBootstrapOutput`, затем новый `GasRegistry`, и только после полного успеха UI заменяет активные Bevy resources.
+- Reload не меняет `WorldGrid`, `PlacedStructureMap`, `WorldLoadState` и save state. Сброс `GasField`, `PipeGasField`, `PipeFluxField` и GPU solver выполняется только в main menu без загруженного мира.
+- `PluginReloadReport` содержит monotonic generation, список source IDs с изменившимся fingerprint и готовые resources для атомарной замены.
+- Dev plugins можно менять как expanded directory `plugins_dev/<plugin_id>/`; для приоритета dev source игру нужно запускать с `--plugins-dev`. Изменения manifest/config/assets/DLL подхватываются reload/rescan без упаковки `.fluxplugin`. Изменения кода всё равно требуют пересборки DLL через `cargo xtask build-plugin <plugin_id> --dev` или обычный build plugin crate.
 
 ## Симуляция газа: текущее состояние MVP
 
