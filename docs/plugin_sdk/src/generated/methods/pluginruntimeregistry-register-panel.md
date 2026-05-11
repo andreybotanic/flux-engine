@@ -22,7 +22,7 @@ fn register_panel (& mut self , descriptor : PanelDescriptor)
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `descriptor` | `PanelDescriptor` | `descriptor` argument passed as `PanelDescriptor`. |
+| `descriptor` | [`PanelDescriptor`](../structures/paneldescriptor.md) | `descriptor` argument passed as `PanelDescriptor`. |
 
 ## Return Value
 
@@ -30,7 +30,20 @@ fn register_panel (& mut self , descriptor : PanelDescriptor)
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginruntimeregistry-register-panel.md`](../../examples/methods/pluginruntimeregistry-register-panel.md)_
+
 ```rust
-// Call `register_panel` from plugin-facing code when this operation is available in context.
+let mut registry = PluginRuntimeRegistry::default();
+let descriptor = PanelDescriptor {
+    id: ContentId::parse("flux.demo.panel.stats").expect("panel id"),
+    title: "Stats".to_string(),
+    root: UiNode::Column {
+        children: vec![UiNode::Text {
+            text: "Plugin statistics".to_string(),
+        }],
+    },
+};
+registry.register_panel(descriptor);
+assert!(registry.panels().contains_key(&ContentId::parse("flux.demo.panel.stats").expect("panel id")));
 ```
 

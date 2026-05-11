@@ -22,15 +22,19 @@ fn remove_all_gas (& mut self , cell : UVec2) -> Result < () , WorldApiError >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
 
 ## Return Value
 
-Result < () , WorldApiError >
+Result < () , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapimut-remove-all-gas.md`](../../examples/methods/worldapimut-remove-all-gas.md)_
+
 ```rust
-// Call `remove_all_gas` from plugin-facing code when this operation is available in context.
+world_mut.remove_all_gas(UVec2::new(42, 18))?;
+let gas = world.get_cell_gas(UVec2::new(42, 18))?;
+assert_eq!(gas.total_amount, 0);
 ```
 

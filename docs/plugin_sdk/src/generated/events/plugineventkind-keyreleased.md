@@ -16,14 +16,26 @@ Fired when a key is released.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `key` | `String` | `key` argument passed as `String`. |
-| `modifiers` | `InputModifiers` | `modifiers` argument passed as `InputModifiers`. |
+| `key` | String | Engine-provided key identifier for the released key. |
+| `modifiers` | [`InputModifiers`](../structures/inputmodifiers.md) | Modifier snapshot captured together with the key release. |
 
 ## SDK Example
 
+_Source: [`examples/events/plugineventkind-keyreleased.md`](../../examples/events/plugineventkind-keyreleased.md)_
+
 ```rust
-if event.kind() == PluginEventKind::KeyReleased {
-// Stop key-held plugin behavior.
+unsafe extern "C" fn on_key_released(
+    plugin: *mut FluxPluginHandle,
+    payload: *const FluxKeyEventPayload,
+    _host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let payload = unsafe { &*payload };
+    let plugin = unsafe { &mut *plugin };
+    let key = unsafe { std::slice::from_raw_parts(payload.key.ptr, payload.key.len) };
+    if key == b"Escape" {
+        plugin.dragging = false;
+    }
+    FluxStatus::OK
 }
 ```
 

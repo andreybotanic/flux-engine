@@ -22,9 +22,9 @@ pub struct RuntimeOverlayDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `ContentId` | `id` field stored as `ContentId`. |
-| `plugin_id` | `PluginId` | `plugin_id` field stored as `PluginId`. |
-| `label` | `String` | `label` field stored as `String`. |
-| `hotkey` | `Option < String >` | `hotkey` field stored as `Option < String >`. |
-| `render_policy` | `OverlayRenderPolicy` | `render_policy` field stored as `OverlayRenderPolicy`. |
+| `id` | [`ContentId`](../structures/contentid.md) | Stable content id of the overlay. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | Plugin that owns this overlay descriptor. |
+| `label` | String | Human-readable overlay label shown in UI. |
+| `hotkey` | Option < String > | Optional hotkey assigned to activate the overlay. |
+| `render_policy` | [`OverlayRenderPolicy`](../enums/overlayrenderpolicy.md) | Whether the overlay is rendered by core systems or by the plugin itself. |
 

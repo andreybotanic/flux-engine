@@ -22,17 +22,32 @@ pub type FluxSubmitHudBlockFn = unsafe extern "C" fn (context : * mut c_void , t
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `title` | `FluxUtf8Slice` | `title` argument passed as `FluxUtf8Slice`. |
-| `line` | `FluxUtf8Slice` | `line` argument passed as `FluxUtf8Slice`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `title` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `title` argument passed as `FluxUtf8Slice`. |
+| `line` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `line` argument passed as `FluxUtf8Slice`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxsubmithudblockfn.md`](../../examples/methods/fluxsubmithudblockfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxSubmitHudBlockFn` ABI signature supplied by FluxEngine.
+unsafe fn submit_counter_block(
+    callback: FluxSubmitHudBlockFn,
+    context: *mut std::ffi::c_void,
+    count: u32,
+) -> FluxStatus {
+    let line = format!("painted cells: {}", count);
+    unsafe {
+        callback(
+            context,
+            FluxUtf8Slice::from_str("Paint Demo"),
+            FluxUtf8Slice::from_str(line.as_str()),
+        )
+    }
+}
 ```
 

@@ -22,6 +22,6 @@ pub struct GasAmount
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `substance_id` | `SubstanceId` | `substance_id` field stored as `SubstanceId`. |
-| `amount` | `u32` | `amount` field stored as `u32`. |
+| `substance_id` | [`SubstanceId`](../structures/substanceid.md) | Stable substance identifier for the gas species stored in this entry. |
+| `amount` | u32 | Rounded particle count for this species inside the queried cell. |
 

@@ -18,3 +18,8 @@ Stable plugin API version wrapper.
 pub struct PluginApiVersion
 ```
 
+## Methods
+
+- [`PluginApiVersion::new`](../methods/pluginapiversion-new.md)
+- [`PluginApiVersion::value`](../methods/pluginapiversion-value.md)
+

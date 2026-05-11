@@ -22,11 +22,26 @@ pub struct WorldApi
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `content_registry` | `& 'a ContentRegistry` | `content_registry` field stored as `& 'a ContentRegistry`. |
-| `gas_registry` | `& 'a GasRegistry` | `gas_registry` field stored as `& 'a GasRegistry`. |
-| `world` | `& 'a WorldGrid` | `world` field stored as `& 'a WorldGrid`. |
-| `gas` | `& 'a GasField` | `gas` field stored as `& 'a GasField`. |
-| `structures` | `& 'a PlacedStructureMap` | `structures` field stored as `& 'a PlacedStructureMap`. |
-| `overlay_mode` | `Option < OverlayMode >` | `overlay_mode` field stored as `Option < OverlayMode >`. |
-| `hovered_cell` | `Option < UVec2 >` | `hovered_cell` field stored as `Option < UVec2 >`. |
+| `content_registry` | & 'a [`ContentRegistry`](../structures/contentregistry.md) | Read-only registry used to resolve cells, structures and overlays by stable ids. |
+| `gas_registry` | & 'a GasRegistry | Read-only gas registry used to resolve substance ids and compact gas indices. |
+| `world` | & 'a WorldGrid | Immutable access to the current world grid materials. |
+| `gas` | & 'a GasField | Immutable access to the current free-gas simulation field. |
+| `structures` | & 'a PlacedStructureMap | Immutable access to all placed structure instances in the world. |
+| `overlay_mode` | Option < [`OverlayMode`](../enums/overlaymode.md) > | Overlay mode visible to the current caller, if the dispatch includes overlay context. |
+| `hovered_cell` | Option < UVec2 > | Hovered world cell visible to the current caller, if the dispatch includes input context. |
+
+## Methods
+
+- [`WorldApi::get_cell_gas`](../methods/worldapi-get-cell-gas.md)
+- [`WorldApi::get_cell_gas_amount`](../methods/worldapi-get-cell-gas-amount.md)
+- [`WorldApi::get_cell_gas_velocity`](../methods/worldapi-get-cell-gas-velocity.md)
+- [`WorldApi::get_cell_info`](../methods/worldapi-get-cell-info.md)
+- [`WorldApi::get_cell_material`](../methods/worldapi-get-cell-material.md)
+- [`WorldApi::get_cell_structures`](../methods/worldapi-get-cell-structures.md)
+- [`WorldApi::get_cell_structures_on_layer`](../methods/worldapi-get-cell-structures-on-layer.md)
+- [`WorldApi::get_hovered_cell`](../methods/worldapi-get-hovered-cell.md)
+- [`WorldApi::get_overlay_mode`](../methods/worldapi-get-overlay-mode.md)
+- [`WorldApi::get_structure`](../methods/worldapi-get-structure.md)
+- [`WorldApi::get_structures_by_type`](../methods/worldapi-get-structures-by-type.md)
+- [`WorldApi::get_world_size`](../methods/worldapi-get-world-size.md)
 

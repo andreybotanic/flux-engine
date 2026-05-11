@@ -22,6 +22,6 @@ pub struct FluxSaveChunkDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `FluxUtf8Slice` | `id` field stored as `FluxUtf8Slice`. |
-| `version` | `u32` | `version` field stored as `u32`. |
+| `id` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Stable content id of the save chunk schema. |
+| `version` | u32 | Schema version written into save data for this chunk. |
 

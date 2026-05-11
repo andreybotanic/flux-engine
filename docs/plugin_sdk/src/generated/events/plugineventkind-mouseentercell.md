@@ -16,13 +16,25 @@ Fired when the cursor enters a world cell.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `0` | `MouseCellEvent` | `0` argument passed as `MouseCellEvent`. |
+| `payload` | [`MouseCellEvent`](../structures/mousecellevent.md) | Low-level mouse payload captured when the cursor entered a cell. |
 
 ## SDK Example
 
+_Source: [`examples/events/plugineventkind-mouseentercell.md`](../../examples/events/plugineventkind-mouseentercell.md)_
+
 ```rust
-if event.kind() == PluginEventKind::MouseEnterCell {
-// Start hover-specific plugin state.
+unsafe extern "C" fn on_mouse_enter_cell(
+    plugin: *mut FluxPluginHandle,
+    payload: *const FluxMouseCellEventPayload,
+    _host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let payload = unsafe { &*payload };
+    let plugin = unsafe { &mut *plugin };
+    if payload.has_cell != 0 {
+        plugin.last_x = payload.cell_x;
+        plugin.last_y = payload.cell_y;
+    }
+    FluxStatus::OK
 }
 ```
 

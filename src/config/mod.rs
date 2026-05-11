@@ -234,6 +234,11 @@ impl CellTypeVisualConfig {
 
 #[derive(Resource, Clone, Debug, PartialEq, Eq)]
 /// Stores one base config entry loaded from TOML for a built-in material or structure.
+///
+/// # Fields
+/// - `label`: Human-readable label shown in UI for this material or structure.
+/// - `draw_priority`: Relative ordering value used when drawing overlapping visuals.
+/// - `size_in_cells`: Sprite footprint expressed in world-cell dimensions.
 pub struct VisualPlacementConfig {
     pub label: String,
     pub draw_priority: i32,

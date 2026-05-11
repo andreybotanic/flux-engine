@@ -18,3 +18,8 @@ Semantic plugin version declared in the manifest.
 pub struct PluginVersion
 ```
 
+## Methods
+
+- [`PluginVersion::as_semver`](../methods/pluginversion-as-semver.md)
+- [`PluginVersion::parse`](../methods/pluginversion-parse.md)
+

@@ -22,8 +22,8 @@ pub struct SaveChunk
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `plugin_id` | `PluginId` | `plugin_id` field stored as `PluginId`. |
-| `chunk_id` | `ContentId` | `chunk_id` field stored as `ContentId`. |
-| `version` | `u32` | `version` field stored as `u32`. |
-| `bytes` | `Vec < u8 >` | `bytes` field stored as `Vec < u8 >`. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | Plugin that owns the save chunk payload. |
+| `chunk_id` | [`ContentId`](../structures/contentid.md) | Stable content id of the save chunk schema. |
+| `version` | u32 | Schema version stored alongside the chunk bytes. |
+| `bytes` | Vec < u8 > | Raw serialized payload bytes written by the plugin. |
 

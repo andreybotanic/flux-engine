@@ -22,18 +22,18 @@ pub struct FluxMouseCellEventPayload
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
-| `button` | `u32` | `button` field stored as `u32`. |
-| `has_cell` | `u8` | `has_cell` field stored as `u8`. |
-| `cell_x` | `u32` | `cell_x` field stored as `u32`. |
-| `cell_y` | `u32` | `cell_y` field stored as `u32`. |
-| `world_x` | `f32` | `world_x` field stored as `f32`. |
-| `world_y` | `f32` | `world_y` field stored as `f32`. |
-| `screen_x` | `f32` | `screen_x` field stored as `f32`. |
-| `screen_y` | `f32` | `screen_y` field stored as `f32`. |
-| `modifiers` | `u32` | `modifiers` field stored as `u32`. |
-| `has_active_tool_id` | `u8` | `has_active_tool_id` field stored as `u8`. |
-| `active_tool_id` | `FluxUtf8Slice` | `active_tool_id` field stored as `FluxUtf8Slice`. |
-| `is_over_ui` | `u8` | `is_over_ui` field stored as `u8`. |
+| `struct_size` | u32 | Size of this payload struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by the event producer and consumer. |
+| `button` | u32 | Encoded mouse button id associated with the event. |
+| `has_cell` | u8 | Whether `cell_x` and `cell_y` contain a valid world-cell target. |
+| `cell_x` | u32 | X coordinate of the targeted world cell. |
+| `cell_y` | u32 | Y coordinate of the targeted world cell. |
+| `world_x` | f32 | World-space cursor X coordinate. |
+| `world_y` | f32 | World-space cursor Y coordinate. |
+| `screen_x` | f32 | Screen-space cursor X coordinate. |
+| `screen_y` | f32 | Screen-space cursor Y coordinate. |
+| `modifiers` | u32 | Bitset of keyboard modifiers held during the event. |
+| `has_active_tool_id` | u8 | Whether `active_tool_id` contains a selected tool id. |
+| `active_tool_id` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Stable content id of the active tool, when present. |
+| `is_over_ui` | u8 | Whether the pointer was over UI when the event fired. |
 

@@ -22,15 +22,20 @@ fn get_cell_structures (& self , cell : UVec2) -> Result < Vec < StructureInfo >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
 
 ## Return Value
 
-Result < Vec < StructureInfo > , WorldApiError >
+Result < Vec < [`StructureInfo`](../structures/structureinfo.md) > , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-cell-structures.md`](../../examples/methods/worldapi-get-cell-structures.md)_
+
 ```rust
-// Call `get_cell_structures` from plugin-facing code when this operation is available in context.
+let structures = world.get_cell_structures(UVec2::new(24, 18))?;
+for structure in &structures {
+    println!("structure {} at {:?}", structure.kind.as_str(), structure.origin);
+}
 ```
 

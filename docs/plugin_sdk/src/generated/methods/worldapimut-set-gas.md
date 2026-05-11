@@ -22,18 +22,27 @@ fn set_gas (& mut self , cell : UVec2 , substance : & str , amount : u32 , veloc
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
-| `substance` | `& str` | `substance` argument passed as `& str`. |
-| `amount` | `u32` | `amount` argument passed as `u32`. |
-| `velocity` | `Vec2` | `velocity` argument passed as `Vec2`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
+| `substance` | & str | `substance` argument passed as `& str`. |
+| `amount` | u32 | `amount` argument passed as `u32`. |
+| `velocity` | Vec2 | `velocity` argument passed as `Vec2`. |
 
 ## Return Value
 
-Result < () , WorldApiError >
+Result < () , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapimut-set-gas.md`](../../examples/methods/worldapimut-set-gas.md)_
+
 ```rust
-// Call `set_gas` from plugin-facing code when this operation is available in context.
+world_mut.set_gas(
+    UVec2::new(42, 18),
+    "oxygen",
+    300,
+    Vec2::ZERO,
+)?;
+let amount = world.get_cell_gas_amount(UVec2::new(42, 18), "oxygen")?;
+assert_eq!(amount, 300);
 ```
 

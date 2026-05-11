@@ -18,3 +18,9 @@ In-memory store used while plugins write and read save chunks.
 pub struct SaveChunkStore
 ```
 
+## Methods
+
+- [`SaveChunkStore::chunks`](../methods/savechunkstore-chunks.md)
+- [`SaveChunkStore::read_plugin_chunk`](../methods/savechunkstore-read-plugin-chunk.md)
+- [`SaveChunkStore::write_plugin_chunk`](../methods/savechunkstore-write-plugin-chunk.md)
+

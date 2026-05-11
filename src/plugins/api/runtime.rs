@@ -18,7 +18,8 @@ const OVERLAY_HOTKEY_SLOTS: &[&str] = &[
 /// Subscription declared by one plugin for runtime events.
 ///
 /// # Fields
-/// Public fields of `PluginSubscription` are part of the generated SDK reference.
+/// - `plugin_id`: Plugin that subscribed to the runtime event.
+/// - `event_kind`: Event category the plugin asked to receive.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PluginSubscription {
     pub plugin_id: PluginId,
@@ -28,7 +29,11 @@ pub struct PluginSubscription {
 /// Overlay descriptor registered through the plugin API.
 ///
 /// # Fields
-/// Public fields of `RuntimeOverlayDescriptor` are part of the generated SDK reference.
+/// - `id`: Stable content id of the overlay.
+/// - `plugin_id`: Plugin that owns this overlay descriptor.
+/// - `label`: Human-readable overlay label shown in UI.
+/// - `hotkey`: Optional hotkey assigned to activate the overlay.
+/// - `render_policy`: Whether the overlay is rendered by core systems or by the plugin itself.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeOverlayDescriptor {
     pub id: ContentId,
@@ -41,7 +46,9 @@ pub struct RuntimeOverlayDescriptor {
 /// Save chunk descriptor registered through the plugin API.
 ///
 /// # Fields
-/// Public fields of `SaveChunkDescriptor` are part of the generated SDK reference.
+/// - `id`: Stable content id of the save chunk.
+/// - `plugin_id`: Plugin that owns the save chunk namespace.
+/// - `version`: Schema version written into saved chunk payloads.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SaveChunkDescriptor {
     pub id: ContentId,
@@ -52,7 +59,11 @@ pub struct SaveChunkDescriptor {
 /// Runtime registry for plugin API descriptors and event subscriber groups.
 ///
 /// # Fields
-/// Public fields of `PluginRuntimeRegistry` are part of the generated SDK reference.
+/// - `subscriptions`: Plugins grouped by event kind for runtime dispatch.
+/// - `tools`: Registered plugin tool descriptors keyed by stable content id.
+/// - `panels`: Registered plugin panel descriptors keyed by stable content id.
+/// - `overlays`: Registered plugin overlay descriptors keyed by stable content id.
+/// - `save_chunks`: Registered plugin save chunk descriptors keyed by stable content id.
 #[derive(Resource, Clone, Debug, Default)]
 pub struct PluginRuntimeRegistry {
     subscriptions: BTreeMap<PluginEventKind, BTreeSet<PluginId>>,
@@ -65,10 +76,6 @@ pub struct PluginRuntimeRegistry {
 impl PluginRuntimeRegistry {
     /// Registers one plugin as a subscriber for the given event kind.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `subscribe` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn subscribe(&mut self, plugin_id: PluginId, event_kind: PluginEventKind) {
         self.subscriptions
             .entry(event_kind)
@@ -78,10 +85,6 @@ impl PluginRuntimeRegistry {
 
     /// Returns plugin ids subscribed to one event kind.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `subscribers` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn subscribers(&self, event_kind: PluginEventKind) -> Vec<PluginId> {
         self.subscriptions
             .get(&event_kind)
@@ -91,80 +94,48 @@ impl PluginRuntimeRegistry {
 
     /// Registers a plugin-owned tool descriptor.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `register_tool` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn register_tool(&mut self, descriptor: ToolDescriptor) {
         self.tools.insert(descriptor.id.clone(), descriptor);
     }
 
     /// Registers a plugin-owned panel descriptor.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `register_panel` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn register_panel(&mut self, descriptor: PanelDescriptor) {
         self.panels.insert(descriptor.id.clone(), descriptor);
     }
 
     /// Registers a plugin-owned overlay descriptor.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `register_overlay` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn register_overlay(&mut self, descriptor: RuntimeOverlayDescriptor) {
         self.overlays.insert(descriptor.id.clone(), descriptor);
     }
 
     /// Registers a plugin-owned save chunk descriptor.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `register_save_chunk` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn register_save_chunk(&mut self, descriptor: SaveChunkDescriptor) {
         self.save_chunks.insert(descriptor.id.clone(), descriptor);
     }
 
     /// Returns registered tool descriptors.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `tools` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn tools(&self) -> &BTreeMap<ContentId, ToolDescriptor> {
         &self.tools
     }
 
     /// Returns registered panel descriptors.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `panels` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn panels(&self) -> &BTreeMap<ContentId, PanelDescriptor> {
         &self.panels
     }
 
     /// Returns registered overlay descriptors.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `overlays` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn overlays(&self) -> &BTreeMap<ContentId, RuntimeOverlayDescriptor> {
         &self.overlays
     }
 
     /// Returns registered save chunk descriptors.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `save_chunks` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn save_chunks(&self) -> &BTreeMap<ContentId, SaveChunkDescriptor> {
         &self.save_chunks
     }
@@ -172,10 +143,6 @@ impl PluginRuntimeRegistry {
 
 /// Builds the runtime API registry from enabled plugin metadata.
 ///
-/// # SDK Example
-/// ```rust
-/// // Call `build_plugin_runtime_registry` from plugin-facing code when this operation is available in context.
-/// ```
 pub fn build_plugin_runtime_registry(
     loaded_plugins: &[LoadedPluginMetadata],
 ) -> PluginRuntimeRegistry {

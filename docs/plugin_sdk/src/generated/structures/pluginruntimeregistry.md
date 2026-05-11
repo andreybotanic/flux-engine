@@ -18,3 +18,16 @@ Runtime registry for plugin API descriptors and event subscriber groups.
 pub struct PluginRuntimeRegistry
 ```
 
+## Methods
+
+- [`PluginRuntimeRegistry::overlays`](../methods/pluginruntimeregistry-overlays.md)
+- [`PluginRuntimeRegistry::panels`](../methods/pluginruntimeregistry-panels.md)
+- [`PluginRuntimeRegistry::register_overlay`](../methods/pluginruntimeregistry-register-overlay.md)
+- [`PluginRuntimeRegistry::register_panel`](../methods/pluginruntimeregistry-register-panel.md)
+- [`PluginRuntimeRegistry::register_save_chunk`](../methods/pluginruntimeregistry-register-save-chunk.md)
+- [`PluginRuntimeRegistry::register_tool`](../methods/pluginruntimeregistry-register-tool.md)
+- [`PluginRuntimeRegistry::save_chunks`](../methods/pluginruntimeregistry-save-chunks.md)
+- [`PluginRuntimeRegistry::subscribe`](../methods/pluginruntimeregistry-subscribe.md)
+- [`PluginRuntimeRegistry::subscribers`](../methods/pluginruntimeregistry-subscribers.md)
+- [`PluginRuntimeRegistry::tools`](../methods/pluginruntimeregistry-tools.md)
+

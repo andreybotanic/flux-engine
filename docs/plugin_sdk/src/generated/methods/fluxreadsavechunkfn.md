@@ -22,20 +22,43 @@ pub type FluxReadSaveChunkFn = unsafe extern "C" fn (context : * mut c_void , ch
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `chunk_id` | `FluxUtf8Slice` | `chunk_id` argument passed as `FluxUtf8Slice`. |
-| `out_version` | `* mut u32` | `out_version` argument passed as `* mut u32`. |
-| `bytes` | `* mut u8` | `bytes` argument passed as `* mut u8`. |
-| `len` | `usize` | `len` argument passed as `usize`. |
-| `out_len` | `* mut usize` | `out_len` argument passed as `* mut usize`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `chunk_id` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `chunk_id` argument passed as `FluxUtf8Slice`. |
+| `out_version` | * mut u32 | Output pointer filled by the callee as `* mut u32`. |
+| `bytes` | * mut u8 | `bytes` argument passed as `* mut u8`. |
+| `len` | usize | `len` argument passed as `usize`. |
+| `out_len` | * mut usize | Output pointer filled by the callee as `* mut usize`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxreadsavechunkfn.md`](../../examples/methods/fluxreadsavechunkfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxReadSaveChunkFn` ABI signature supplied by FluxEngine.
+unsafe fn read_counter_chunk(
+    callback: FluxReadSaveChunkFn,
+    context: *mut std::ffi::c_void,
+) -> Result<u32, FluxStatus> {
+    let mut version = 0u32;
+    let mut len = 0usize;
+    let mut bytes = [0u8; 4];
+    let status = unsafe {
+        callback(
+            context,
+            FluxUtf8Slice::from_str("flux.demo.save.counter"),
+            &mut version,
+            bytes.as_mut_ptr(),
+            bytes.len(),
+            &mut len,
+        )
+    };
+    if !status.is_ok() || version != 1 || len != bytes.len() {
+        return Err(status);
+    }
+    Ok(u32::from_le_bytes(bytes))
+}
 ```
 

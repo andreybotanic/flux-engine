@@ -18,3 +18,9 @@ Canonical identifier of one substance registered by a content plugin.
 pub struct SubstanceId
 ```
 
+## Methods
+
+- [`SubstanceId::as_str`](../methods/substanceid-as-str.md)
+- [`SubstanceId::leaf`](../methods/substanceid-leaf.md)
+- [`SubstanceId::parse`](../methods/substanceid-parse.md)
+

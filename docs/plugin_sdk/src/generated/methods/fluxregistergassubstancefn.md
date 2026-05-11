@@ -22,16 +22,32 @@ pub type FluxRegisterGasSubstanceFn = unsafe extern "C" fn (context : * mut c_vo
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `descriptor` | `* const FluxGasSubstanceDescriptor` | `descriptor` argument passed as `* const FluxGasSubstanceDescriptor`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `descriptor` | * const [`FluxGasSubstanceDescriptor`](../structures/fluxgassubstancedescriptor.md) | `descriptor` argument passed as `* const FluxGasSubstanceDescriptor`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxregistergassubstancefn.md`](../../examples/methods/fluxregistergassubstancefn.md)_
+
 ```rust
-// Store or call the callback through the `FluxRegisterGasSubstanceFn` ABI signature supplied by FluxEngine.
+unsafe fn register_oxygen(
+    callback: FluxRegisterGasSubstanceFn,
+    context: *mut std::ffi::c_void,
+) -> FluxStatus {
+    let descriptor = FluxGasSubstanceDescriptor {
+        id: FluxUtf8Slice::from_str("flux.demo.gas.oxygen"),
+        label: FluxUtf8Slice::from_str("Oxygen"),
+        alias: FluxUtf8Slice::from_str("o2"),
+        molecular_mass: 32.0,
+        color_r: 0.4,
+        color_g: 0.7,
+        color_b: 1.0,
+    };
+    unsafe { callback(context, &descriptor) }
+}
 ```
 

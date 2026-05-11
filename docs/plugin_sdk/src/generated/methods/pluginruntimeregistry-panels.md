@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& BTreeMap < ContentId , PanelDescriptor >
+& BTreeMap < [`ContentId`](../structures/contentid.md) , [`PanelDescriptor`](../structures/paneldescriptor.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginruntimeregistry-panels.md`](../../examples/methods/pluginruntimeregistry-panels.md)_
+
 ```rust
-// Call `panels` from plugin-facing code when this operation is available in context.
+let panels = registry.panels();
+assert!(panels.values().all(|panel| !panel.title.is_empty()));
 ```
 

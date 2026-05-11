@@ -22,7 +22,7 @@ pub struct StructureEvent
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `PlacedStructureId` | `id` field stored as `PlacedStructureId`. |
-| `kind` | `StructureKind` | `kind` field stored as `StructureKind`. |
-| `cell` | `UVec2` | `cell` field stored as `UVec2`. |
+| `id` | [`PlacedStructureId`](../structures/placedstructureid.md) | Runtime identifier of the structure instance that changed. |
+| `kind` | [`StructureKind`](../structures/structurekind.md) | Registered structure kind of the affected instance. |
+| `cell` | UVec2 | Primary world-cell location associated with the structure lifecycle event. |
 

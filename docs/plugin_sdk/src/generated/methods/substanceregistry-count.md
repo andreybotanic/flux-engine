@@ -28,7 +28,10 @@ usize
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceregistry-count.md`](../../examples/methods/substanceregistry-count.md)_
+
 ```rust
-// Call `count` from plugin-facing code when this operation is available in context.
+let count = registry.count();
+assert!(count >= 1);
 ```
 

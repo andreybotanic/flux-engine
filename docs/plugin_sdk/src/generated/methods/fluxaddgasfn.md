@@ -22,22 +22,39 @@ pub type FluxAddGasFn = unsafe extern "C" fn (context : * mut c_void , x : u32 ,
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `x` | `u32` | `x` argument passed as `u32`. |
-| `y` | `u32` | `y` argument passed as `u32`. |
-| `substance` | `FluxUtf8Slice` | `substance` argument passed as `FluxUtf8Slice`. |
-| `amount` | `u32` | `amount` argument passed as `u32`. |
-| `velocity_x` | `f32` | `velocity_x` argument passed as `f32`. |
-| `velocity_y` | `f32` | `velocity_y` argument passed as `f32`. |
-| `out_added` | `* mut u32` | `out_added` argument passed as `* mut u32`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `x` | u32 | `x` argument passed as `u32`. |
+| `y` | u32 | `y` argument passed as `u32`. |
+| `substance` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `substance` argument passed as `FluxUtf8Slice`. |
+| `amount` | u32 | `amount` argument passed as `u32`. |
+| `velocity_x` | f32 | `velocity_x` argument passed as `f32`. |
+| `velocity_y` | f32 | `velocity_y` argument passed as `f32`. |
+| `out_added` | * mut u32 | Output pointer filled by the callee as `* mut u32`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxaddgasfn.md`](../../examples/methods/fluxaddgasfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxAddGasFn` ABI signature supplied by FluxEngine.
+unsafe fn puff_oxygen(callback: FluxAddGasFn, context: *mut std::ffi::c_void) -> FluxStatus {
+    let mut added = 0u32;
+    let status = unsafe {
+        callback(
+            context,
+            42,
+            18,
+            FluxUtf8Slice::from_str("flux.default.gas.oxygen"),
+            120,
+            0.0,
+            1.5,
+            &mut added,
+        )
+    };
+    if status.is_ok() && added > 0 { FluxStatus::OK } else { status }
+}
 ```
 

@@ -22,16 +22,27 @@ pub type FluxRegisterEventHandlerFn = unsafe extern "C" fn (context : * mut c_vo
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `descriptor` | `* const FluxEventHandlerDescriptor` | `descriptor` argument passed as `* const FluxEventHandlerDescriptor`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `descriptor` | * const [`FluxEventHandlerDescriptor`](../structures/fluxeventhandlerdescriptor.md) | `descriptor` argument passed as `* const FluxEventHandlerDescriptor`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxregistereventhandlerfn.md`](../../examples/methods/fluxregistereventhandlerfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxRegisterEventHandlerFn` ABI signature supplied by FluxEngine.
+unsafe fn register_handler(
+    callback: FluxRegisterEventHandlerFn,
+    context: *mut std::ffi::c_void,
+) -> FluxStatus {
+    let descriptor = FluxEventHandlerDescriptor::new(
+        FluxEventKind::MouseDownCell,
+        FluxUtf8Slice::from_str("onMouseDownCell"),
+    );
+    unsafe { callback(context, &descriptor) }
+}
 ```
 

@@ -22,7 +22,7 @@ fn from_str (value : & str) -> Self
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `value` | `& str` | `value` argument passed as `& str`. |
+| `value` | & str | `value` argument passed as `& str`. |
 
 ## Return Value
 
@@ -30,7 +30,11 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxutf8slice-from-str.md`](../../examples/methods/fluxutf8slice-from-str.md)_
+
 ```rust
-// Call `from_str` from plugin-facing code when this operation is available in context.
+let slice = FluxUtf8Slice::from_str("flux.demo.overlay.heat");
+let bytes = unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) };
+assert_eq!(std::str::from_utf8(bytes).unwrap(), "flux.demo.overlay.heat");
 ```
 

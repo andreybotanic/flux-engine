@@ -22,7 +22,7 @@ fn core_default (overlay_id : ContentId) -> Self
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `overlay_id` | `ContentId` | `overlay_id` argument passed as `ContentId`. |
+| `overlay_id` | [`ContentId`](../structures/contentid.md) | `overlay_id` argument passed as `ContentId`. |
 
 ## Return Value
 
@@ -30,7 +30,11 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/overlayframe-core-default.md`](../../examples/methods/overlayframe-core-default.md)_
+
 ```rust
-// Call `core_default` from plugin-facing code when this operation is available in context.
+let overlay_id = ContentId::parse("flux.demo.overlay.temperature").expect("valid overlay id");
+let frame = OverlayFrame::core_default(overlay_id);
+assert_eq!(frame.policy, OverlayRenderPolicy::CoreDefault);
 ```
 

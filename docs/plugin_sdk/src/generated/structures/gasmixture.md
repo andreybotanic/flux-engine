@@ -22,7 +22,7 @@ pub struct GasMixture
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `species` | `Vec < GasAmount >` | `species` field stored as `Vec < GasAmount >`. |
-| `total_amount` | `u32` | `total_amount` field stored as `u32`. |
-| `velocity` | `Vec2` | `velocity` field stored as `Vec2`. |
+| `species` | Vec < [`GasAmount`](../structures/gasamount.md) > | Individual gas entries present in the cell, filtered to non-zero amounts. |
+| `total_amount` | u32 | Sum of all rounded gas particles currently stored in the cell. |
+| `velocity` | Vec2 | Cell-level gas velocity vector returned by the simulation state. |
 

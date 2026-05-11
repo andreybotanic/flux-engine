@@ -22,6 +22,10 @@ pub struct FluxEmptyEventPayload
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
+| `struct_size` | u32 | Size of this payload struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by the event producer and consumer. |
+
+## Methods
+
+- [`FluxEmptyEventPayload::new`](../methods/fluxemptyeventpayload-new.md)
 

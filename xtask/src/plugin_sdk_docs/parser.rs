@@ -36,7 +36,6 @@ pub(super) fn required_doc_block(
             source_path, item_name
         )));
     }
-    require_any_section(source_path, item_name, &block)?;
     Ok(block)
 }
 
@@ -49,21 +48,6 @@ pub(super) fn optional_doc_summary(attrs: &[Attribute]) -> Option<String> {
     } else {
         Some(summary)
     }
-}
-
-/// Requires at least one titled markdown section in a parsed Rustdoc block.
-pub(super) fn require_any_section(
-    source_path: &str,
-    item_name: &str,
-    docs: &DocBlock,
-) -> Result<(), XtaskError> {
-    if docs.sections.is_empty() {
-        return Err(XtaskError::new(format!(
-            "{}: SDK item `{}` must contain at least one `# ...` doc section",
-            source_path, item_name
-        )));
-    }
-    Ok(())
 }
 
 /// Requires a particular markdown heading to exist in a parsed Rustdoc block.
@@ -85,6 +69,14 @@ pub(super) fn require_section(
         "{}: SDK item `{}` must contain `{}` doc section",
         source_path, item_name, section
     )))
+}
+
+/// Returns the body of one named markdown section from a parsed doc block.
+pub(super) fn section_body<'a>(docs: &'a DocBlock, section: &str) -> Option<&'a str> {
+    docs.sections
+        .iter()
+        .find(|candidate| candidate.title == section)
+        .map(|candidate| candidate.body.as_str())
 }
 
 /// Parses raw doc-comment text into a summary plus `# Heading` sections.
@@ -162,26 +154,27 @@ fn doc_lines(attrs: &[Attribute]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_doc_block, require_section};
+    use super::{parse_doc_block, require_section, section_body};
 
     #[test]
     fn parses_summary_and_sections() {
-        let docs =
-            parse_doc_block("Short summary.\n\n# SDK Example\n```rust\nlet ok = true;\n```\n");
+        let docs = parse_doc_block(
+            "Short summary.\n\n# Fields\n- `id`: Stable identifier.\n\n# SDK Notes\nStable.\n",
+        );
 
         assert_eq!(docs.summary, "Short summary.");
-        assert_eq!(docs.sections.len(), 1);
-        assert_eq!(docs.sections[0].title, "SDK Example");
-        assert!(docs.sections[0].body.contains("let ok"));
+        assert_eq!(docs.sections.len(), 2);
+        assert_eq!(docs.sections[0].title, "Fields");
+        assert_eq!(section_body(&docs, "SDK Notes"), Some("Stable."));
     }
 
     #[test]
     fn required_section_reports_missing_heading() {
         let docs = parse_doc_block("Short summary.\n\n# SDK Notes\nStable.");
 
-        let error = require_section("src/plugins/abi.rs", "FluxStatus", &docs, "# SDK Example")
+        let error = require_section("src/plugins/abi.rs", "FluxStatus", &docs, "# Fields")
             .expect_err("missing section must fail");
 
-        assert!(error.to_string().contains("must contain `# SDK Example`"));
+        assert!(error.to_string().contains("must contain `# Fields`"));
     }
 }

@@ -22,16 +22,27 @@ pub type FluxRegisterSaveChunkFn = unsafe extern "C" fn (context : * mut c_void 
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `descriptor` | `* const FluxSaveChunkDescriptor` | `descriptor` argument passed as `* const FluxSaveChunkDescriptor`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `descriptor` | * const [`FluxSaveChunkDescriptor`](../structures/fluxsavechunkdescriptor.md) | `descriptor` argument passed as `* const FluxSaveChunkDescriptor`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxregistersavechunkfn.md`](../../examples/methods/fluxregistersavechunkfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxRegisterSaveChunkFn` ABI signature supplied by FluxEngine.
+unsafe fn register_chunk(
+    callback: FluxRegisterSaveChunkFn,
+    context: *mut std::ffi::c_void,
+) -> FluxStatus {
+    let descriptor = FluxSaveChunkDescriptor {
+        id: FluxUtf8Slice::from_str("flux.demo.save.counter"),
+        version: 1,
+    };
+    unsafe { callback(context, &descriptor) }
+}
 ```
 

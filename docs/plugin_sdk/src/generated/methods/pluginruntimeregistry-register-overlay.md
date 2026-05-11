@@ -22,7 +22,7 @@ fn register_overlay (& mut self , descriptor : RuntimeOverlayDescriptor)
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `descriptor` | `RuntimeOverlayDescriptor` | `descriptor` argument passed as `RuntimeOverlayDescriptor`. |
+| `descriptor` | [`RuntimeOverlayDescriptor`](../structures/runtimeoverlaydescriptor.md) | `descriptor` argument passed as `RuntimeOverlayDescriptor`. |
 
 ## Return Value
 
@@ -30,7 +30,18 @@ fn register_overlay (& mut self , descriptor : RuntimeOverlayDescriptor)
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginruntimeregistry-register-overlay.md`](../../examples/methods/pluginruntimeregistry-register-overlay.md)_
+
 ```rust
-// Call `register_overlay` from plugin-facing code when this operation is available in context.
+let mut registry = PluginRuntimeRegistry::default();
+let descriptor = RuntimeOverlayDescriptor {
+    id: ContentId::parse("flux.demo.overlay.temperature").expect("overlay id"),
+    plugin_id: PluginId::parse("flux.demo").expect("plugin id"),
+    label: "Temperature".to_string(),
+    hotkey: Some("F9".to_string()),
+    render_policy: OverlayRenderPolicy::PluginControlled,
+};
+registry.register_overlay(descriptor);
+assert!(registry.overlays().contains_key(&ContentId::parse("flux.demo.overlay.temperature").expect("overlay id")));
 ```
 

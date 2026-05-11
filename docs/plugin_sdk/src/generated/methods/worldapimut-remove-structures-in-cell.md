@@ -22,15 +22,18 @@ fn remove_structures_in_cell (& mut self , cell : UVec2 ,) -> Result < Vec < Pla
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
 
 ## Return Value
 
-Result < Vec < PlacedStructureId > , WorldApiError >
+Result < Vec < [`PlacedStructureId`](../structures/placedstructureid.md) > , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapimut-remove-structures-in-cell.md`](../../examples/methods/worldapimut-remove-structures-in-cell.md)_
+
 ```rust
-// Call `remove_structures_in_cell` from plugin-facing code when this operation is available in context.
+let removed = world_mut.remove_structures_in_cell(UVec2::new(30, 12))?;
+println!("removed {} structure(s)", removed.len());
 ```
 

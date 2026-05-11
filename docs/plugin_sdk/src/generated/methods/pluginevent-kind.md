@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-PluginEventKind
+[`PluginEventKind`](../enums/plugineventkind.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginevent-kind.md`](../../examples/methods/pluginevent-kind.md)_
+
 ```rust
-// Call `kind` from plugin-facing code when this operation is available in context.
+let event = PluginEvent::BuildHudForCell { cell: UVec2::new(12, 8) };
+assert_eq!(event.kind(), PluginEventKind::BuildHudForCell);
 ```
 

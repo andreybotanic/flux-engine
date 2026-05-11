@@ -22,7 +22,7 @@ fn register_provider_plugin (& mut self , plugin_id : PluginId)
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `plugin_id` | `PluginId` | `plugin_id` argument passed as `PluginId`. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | `plugin_id` argument passed as `PluginId`. |
 
 ## Return Value
 
@@ -30,7 +30,12 @@ fn register_provider_plugin (& mut self , plugin_id : PluginId)
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-register-provider-plugin.md`](../../examples/methods/contentregistry-register-provider-plugin.md)_
+
 ```rust
-// Call `register_provider_plugin` from plugin-facing code when this operation is available in context.
+let plugin_id = PluginId::parse("flux.demo").expect("plugin id");
+let mut registry = ContentRegistry::default();
+registry.register_provider_plugin(plugin_id.clone());
+assert!(registry.provider_plugins().contains(&plugin_id));
 ```
 

@@ -22,11 +22,11 @@ pub enum UiNode
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `Text` | `text: String` | `Text` variant. |
-| `Button` | `id: ContentId, label: String` | `Button` variant. |
-| `Checkbox` | `id: ContentId, label: String, checked: bool` | `Checkbox` variant. |
-| `Select` | `id: ContentId, label: String, options: Vec < String >, selected: usize` | `Select` variant. |
-| `Slider` | `id: ContentId, label: String, value: f32, min: f32, max: f32` | `Slider` variant. |
-| `Column` | `children: Vec < UiNode >` | `Column` variant. |
-| `Row` | `children: Vec < UiNode >` | `Row` variant. |
+| `Text` | text: String | Displays static text content. |
+| `Button` | id: [`ContentId`](../structures/contentid.md), label: String | Displays a clickable button identified by a stable content id. |
+| `Checkbox` | id: [`ContentId`](../structures/contentid.md), label: String, checked: bool | Displays a labelled boolean toggle. |
+| `Select` | id: [`ContentId`](../structures/contentid.md), label: String, options: Vec < String >, selected: usize | Displays a labelled option selector with a stable selected index. |
+| `Slider` | id: [`ContentId`](../structures/contentid.md), label: String, value: f32, min: f32, max: f32 | Displays a labelled floating-point slider with explicit bounds. |
+| `Column` | children: Vec < [`UiNode`](../enums/uinode.md) > | Lays out child nodes vertically. |
+| `Row` | children: Vec < [`UiNode`](../enums/uinode.md) > | Lays out child nodes horizontally. |
 

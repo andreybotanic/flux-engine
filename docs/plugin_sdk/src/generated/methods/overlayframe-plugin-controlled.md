@@ -22,7 +22,7 @@ fn plugin_controlled (overlay_id : ContentId) -> Self
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `overlay_id` | `ContentId` | `overlay_id` argument passed as `ContentId`. |
+| `overlay_id` | [`ContentId`](../structures/contentid.md) | `overlay_id` argument passed as `ContentId`. |
 
 ## Return Value
 
@@ -30,7 +30,17 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/overlayframe-plugin-controlled.md`](../../examples/methods/overlayframe-plugin-controlled.md)_
+
 ```rust
-// Call `plugin_controlled` from plugin-facing code when this operation is available in context.
+let overlay_id = ContentId::parse("flux.demo.overlay.temperature").expect("valid overlay id");
+let mut frame = OverlayFrame::plugin_controlled(overlay_id);
+frame.draw_commands.push(OverlayDrawCommand::Text {
+    cell: UVec2::new(10, 10),
+    text: "hot".to_string(),
+    color: Color::srgb(1.0, 0.2, 0.2),
+    z: 2.0,
+});
+assert_eq!(frame.policy, OverlayRenderPolicy::PluginControlled);
 ```
 

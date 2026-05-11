@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | [`CellContentDescriptor`](structures/cellcontentdescriptor.md) | struct | `src/plugins/content.rs` |
 | [`CellInfo`](structures/cellinfo.md) | struct | `src/plugins/api/world_api.rs` |
+| [`CellMaterial`](structures/cellmaterial.md) | struct | `src/world/grid.rs` |
 | [`CellStyleEntry`](structures/cellstyleentry.md) | struct | `src/plugins/api/render_api.rs` |
 | [`ContentId`](structures/contentid.md) | struct | `src/plugins/content.rs` |
 | [`ContentRegistry`](structures/contentregistry.md) | struct | `src/plugins/content.rs` |
@@ -36,11 +37,16 @@
 | [`GasMixture`](structures/gasmixture.md) | struct | `src/plugins/api/world_api.rs` |
 | [`GasStyleEntry`](structures/gasstyleentry.md) | struct | `src/plugins/api/render_api.rs` |
 | [`HudBlock`](structures/hudblock.md) | struct | `src/plugins/api/ui_api.rs` |
+| [`HudBlockConfig`](structures/hudblockconfig.md) | struct | `src/config/hud.rs` |
 | [`InputModifiers`](structures/inputmodifiers.md) | struct | `src/plugins/api/events.rs` |
+| [`LayerCellSpec`](structures/layercellspec.md) | struct | `src/world/structures.rs` |
+| [`LayerKind`](structures/layerkind.md) | struct | `src/world/structures.rs` |
+| [`LayerMarkerKind`](structures/layermarkerkind.md) | struct | `src/world/structures.rs` |
 | [`MouseCellEvent`](structures/mousecellevent.md) | struct | `src/plugins/api/events.rs` |
 | [`OverlayContentDescriptor`](structures/overlaycontentdescriptor.md) | struct | `src/plugins/content.rs` |
 | [`OverlayFrame`](structures/overlayframe.md) | struct | `src/plugins/api/render_api.rs` |
 | [`PanelDescriptor`](structures/paneldescriptor.md) | struct | `src/plugins/api/ui_api.rs` |
+| [`PlacedStructureId`](structures/placedstructureid.md) | struct | `src/world/structures.rs` |
 | [`PluginApiVersion`](structures/pluginapiversion.md) | struct | `src/plugins/id.rs` |
 | [`PluginId`](structures/pluginid.md) | struct | `src/plugins/id.rs` |
 | [`PluginManifest`](structures/pluginmanifest.md) | struct | `src/plugins/manifest.rs` |
@@ -53,15 +59,21 @@
 | [`SaveChunkStore`](structures/savechunkstore.md) | struct | `src/plugins/api/save_api.rs` |
 | [`SpriteMetadata`](structures/spritemetadata.md) | struct | `src/plugins/content.rs` |
 | [`StructureContentDescriptor`](structures/structurecontentdescriptor.md) | struct | `src/plugins/content.rs` |
+| [`StructureDescriptor`](structures/structuredescriptor.md) | struct | `src/world/structures.rs` |
 | [`StructureEvent`](structures/structureevent.md) | struct | `src/plugins/api/events.rs` |
 | [`StructureInfo`](structures/structureinfo.md) | struct | `src/plugins/api/world_api.rs` |
+| [`StructureKind`](structures/structurekind.md) | struct | `src/world/structures.rs` |
+| [`StructureLayer`](structures/structurelayer.md) | struct | `src/world/structures.rs` |
 | [`StructurePlacement`](structures/structureplacement.md) | struct | `src/plugins/api/world_api.rs` |
 | [`StructureStyleEntry`](structures/structurestyleentry.md) | struct | `src/plugins/api/render_api.rs` |
+| [`SubstanceContainerConfig`](structures/substancecontainerconfig.md) | struct | `src/config/hud.rs` |
 | [`SubstanceDefinition`](structures/substancedefinition.md) | struct | `src/plugins/substances.rs` |
 | [`SubstanceFlags`](structures/substanceflags.md) | struct | `src/plugins/substances.rs` |
 | [`SubstanceId`](structures/substanceid.md) | struct | `src/plugins/substances.rs` |
 | [`SubstanceRegistry`](structures/substanceregistry.md) | struct | `src/plugins/substances.rs` |
 | [`ToolDescriptor`](structures/tooldescriptor.md) | struct | `src/plugins/api/ui_api.rs` |
+| [`VisualPlacementConfig`](structures/visualplacementconfig.md) | struct | `src/config/mod.rs` |
 | [`WorldApi`](structures/worldapi.md) | struct | `src/plugins/api/world_api.rs` |
 | [`WorldApiMut`](structures/worldapimut.md) | struct | `src/plugins/api/world_api.rs` |
+| [`WorldCellHudConfig`](structures/worldcellhudconfig.md) | struct | `src/config/hud.rs` |
 

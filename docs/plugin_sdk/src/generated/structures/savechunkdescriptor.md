@@ -22,7 +22,7 @@ pub struct SaveChunkDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `ContentId` | `id` field stored as `ContentId`. |
-| `plugin_id` | `PluginId` | `plugin_id` field stored as `PluginId`. |
-| `version` | `u32` | `version` field stored as `u32`. |
+| `id` | [`ContentId`](../structures/contentid.md) | Stable content id of the save chunk. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | Plugin that owns the save chunk namespace. |
+| `version` | u32 | Schema version written into saved chunk payloads. |
 

@@ -22,6 +22,6 @@ pub struct CellStyleEntry
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` field stored as `UVec2`. |
-| `style` | `CellRenderStyle` | `style` field stored as `CellRenderStyle`. |
+| `cell` | UVec2 | Target world cell that receives the style override. |
+| `style` | [`CellRenderStyle`](../enums/cellrenderstyle.md) | Cell rendering style to apply in the overlay frame. |
 

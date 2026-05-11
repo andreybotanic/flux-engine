@@ -12,6 +12,9 @@ pub enum CellKind {
 }
 
 /// Identifies one solid world-cell content item by its stable content id.
+///
+/// # Fields
+/// - `id`: Stable registered content id backing this material handle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CellMaterial {
     id: &'static str,

@@ -22,19 +22,36 @@ pub type FluxWriteSaveChunkFn = unsafe extern "C" fn (context : * mut c_void , c
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `chunk_id` | `FluxUtf8Slice` | `chunk_id` argument passed as `FluxUtf8Slice`. |
-| `version` | `u32` | `version` argument passed as `u32`. |
-| `bytes` | `* const u8` | `bytes` argument passed as `* const u8`. |
-| `len` | `usize` | `len` argument passed as `usize`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `chunk_id` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `chunk_id` argument passed as `FluxUtf8Slice`. |
+| `version` | u32 | `version` argument passed as `u32`. |
+| `bytes` | * const u8 | `bytes` argument passed as `* const u8`. |
+| `len` | usize | `len` argument passed as `usize`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxwritesavechunkfn.md`](../../examples/methods/fluxwritesavechunkfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxWriteSaveChunkFn` ABI signature supplied by FluxEngine.
+unsafe fn write_counter_chunk(
+    callback: FluxWriteSaveChunkFn,
+    context: *mut std::ffi::c_void,
+    counter: u32,
+) -> FluxStatus {
+    let bytes = counter.to_le_bytes();
+    unsafe {
+        callback(
+            context,
+            FluxUtf8Slice::from_str("flux.demo.save.counter"),
+            1,
+            bytes.as_ptr(),
+            bytes.len(),
+        )
+    }
+}
 ```
 

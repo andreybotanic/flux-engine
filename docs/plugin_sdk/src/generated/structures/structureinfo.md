@@ -22,10 +22,10 @@ pub struct StructureInfo
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `PlacedStructureId` | `id` field stored as `PlacedStructureId`. |
-| `kind` | `StructureKind` | `kind` field stored as `StructureKind`. |
-| `origin` | `UVec2` | `origin` field stored as `UVec2`. |
-| `rotation` | `StructureRotation` | `rotation` field stored as `StructureRotation`. |
-| `params` | `StructureParams` | `params` field stored as `StructureParams`. |
-| `occupied_cells` | `Vec < UVec2 >` | `occupied_cells` field stored as `Vec < UVec2 >`. |
+| `id` | [`PlacedStructureId`](../structures/placedstructureid.md) | Stable runtime identifier of the placed structure instance. |
+| `kind` | [`StructureKind`](../structures/structurekind.md) | Registered structure kind used to resolve content metadata. |
+| `origin` | UVec2 | Placement origin in world-cell coordinates. |
+| `rotation` | [`StructureRotation`](../enums/structurerotation.md) | Canonical rotation stored for this structure instance. |
+| `params` | [`StructureParams`](../enums/structureparams.md) | Editable runtime parameters attached to this structure. |
+| `occupied_cells` | Vec < UVec2 > | All world cells currently occupied by the structure footprint. |
 

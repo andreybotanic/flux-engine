@@ -22,7 +22,7 @@ fn parse (raw : & str) -> Result < Self , String >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `raw` | `& str` | `raw` argument passed as `& str`. |
+| `raw` | & str | `raw` argument passed as `& str`. |
 
 ## Return Value
 
@@ -30,7 +30,10 @@ Result < Self , String >
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceid-parse.md`](../../examples/methods/substanceid-parse.md)_
+
 ```rust
-// Call `parse` from plugin-facing code when this operation is available in context.
+let id = SubstanceId::parse("flux.demo.gas.oxygen").expect("valid substance id");
+assert_eq!(id.leaf(), "oxygen");
 ```
 

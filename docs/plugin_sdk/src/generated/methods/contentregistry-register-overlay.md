@@ -22,7 +22,7 @@ fn register_overlay (& mut self , descriptor : OverlayContentDescriptor)
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `descriptor` | `OverlayContentDescriptor` | `descriptor` argument passed as `OverlayContentDescriptor`. |
+| `descriptor` | [`OverlayContentDescriptor`](../structures/overlaycontentdescriptor.md) | `descriptor` argument passed as `OverlayContentDescriptor`. |
 
 ## Return Value
 
@@ -30,7 +30,19 @@ fn register_overlay (& mut self , descriptor : OverlayContentDescriptor)
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-register-overlay.md`](../../examples/methods/contentregistry-register-overlay.md)_
+
 ```rust
-// Call `register_overlay` from plugin-facing code when this operation is available in context.
+let mut registry = ContentRegistry::default();
+let descriptor = OverlayContentDescriptor {
+    id: ContentId::parse("flux.demo.overlay.temperature").expect("id"),
+    plugin_id: PluginId::parse("flux.demo").expect("plugin id"),
+    mode: OverlayMode::plugin("flux.demo.overlay.temperature"),
+    label: "Temperature",
+    hotkey: "F9",
+    storage: LegacyStorageDescriptor::OverlayMode("temperature"),
+};
+registry.register_overlay(descriptor);
+assert!(registry.overlay_by_mode(OverlayMode::plugin("flux.demo.overlay.temperature")).is_some());
 ```
 

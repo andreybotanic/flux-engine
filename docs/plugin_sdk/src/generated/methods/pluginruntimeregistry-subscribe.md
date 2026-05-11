@@ -22,8 +22,8 @@ fn subscribe (& mut self , plugin_id : PluginId , event_kind : PluginEventKind)
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `plugin_id` | `PluginId` | `plugin_id` argument passed as `PluginId`. |
-| `event_kind` | `PluginEventKind` | `event_kind` argument passed as `PluginEventKind`. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | `plugin_id` argument passed as `PluginId`. |
+| `event_kind` | [`PluginEventKind`](../enums/plugineventkind.md) | `event_kind` argument passed as `PluginEventKind`. |
 
 ## Return Value
 
@@ -31,7 +31,12 @@ fn subscribe (& mut self , plugin_id : PluginId , event_kind : PluginEventKind)
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginruntimeregistry-subscribe.md`](../../examples/methods/pluginruntimeregistry-subscribe.md)_
+
 ```rust
-// Call `subscribe` from plugin-facing code when this operation is available in context.
+let plugin_id = PluginId::parse("flux.demo").expect("plugin id");
+let mut registry = PluginRuntimeRegistry::default();
+registry.subscribe(plugin_id.clone(), PluginEventKind::MouseDownCell);
+assert_eq!(registry.subscribers(PluginEventKind::MouseDownCell), vec![plugin_id]);
 ```
 

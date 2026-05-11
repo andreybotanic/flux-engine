@@ -28,7 +28,10 @@ i32
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxstatus-code.md`](../../examples/methods/fluxstatus-code.md)_
+
 ```rust
-// Call `code` from plugin-facing code when this operation is available in context.
+let status = FluxStatus::FAILED;
+assert_eq!(status.code(), 2);
 ```
 

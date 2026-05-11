@@ -22,15 +22,20 @@ fn cell_by_material (& self , material : CellMaterial) -> Option < & CellContent
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `material` | `CellMaterial` | `material` argument passed as `CellMaterial`. |
+| `material` | [`CellMaterial`](../structures/cellmaterial.md) | `material` argument passed as `CellMaterial`. |
 
 ## Return Value
 
-Option < & CellContentDescriptor >
+Option < & [`CellContentDescriptor`](../structures/cellcontentdescriptor.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-cell-by-material.md`](../../examples/methods/contentregistry-cell-by-material.md)_
+
 ```rust
-// Call `cell_by_material` from plugin-facing code when this operation is available in context.
+let descriptor = registry
+    .cell_by_material(CellMaterial::new("flux.demo.cell.steel"))
+    .expect("registered material should resolve");
+assert_eq!(descriptor.id.as_str(), "flux.demo.cell.steel");
 ```
 

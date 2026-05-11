@@ -22,16 +22,21 @@ fn read_plugin_chunk (& self , plugin_id : & PluginId , chunk_id : & ContentId ,
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `plugin_id` | `& PluginId` | `plugin_id` argument passed as `& PluginId`. |
-| `chunk_id` | `& ContentId` | `chunk_id` argument passed as `& ContentId`. |
+| `plugin_id` | & [`PluginId`](../structures/pluginid.md) | `plugin_id` argument passed as `& PluginId`. |
+| `chunk_id` | & [`ContentId`](../structures/contentid.md) | `chunk_id` argument passed as `& ContentId`. |
 
 ## Return Value
 
-Option < & SaveChunk >
+Option < & [`SaveChunk`](../structures/savechunk.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/savechunkstore-read-plugin-chunk.md`](../../examples/methods/savechunkstore-read-plugin-chunk.md)_
+
 ```rust
-// Call `read_plugin_chunk` from plugin-facing code when this operation is available in context.
+let chunk = store
+    .read_plugin_chunk(&plugin_id, &chunk_id)
+    .expect("plugin should have saved this chunk");
+assert_eq!(chunk.bytes.len(), 4);
 ```
 

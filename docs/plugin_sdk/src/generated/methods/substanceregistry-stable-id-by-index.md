@@ -22,15 +22,18 @@ fn stable_id_by_index (& self , index : usize) -> Option < & SubstanceId >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `index` | `usize` | `index` argument passed as `usize`. |
+| `index` | usize | `index` argument passed as `usize`. |
 
 ## Return Value
 
-Option < & SubstanceId >
+Option < & [`SubstanceId`](../structures/substanceid.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceregistry-stable-id-by-index.md`](../../examples/methods/substanceregistry-stable-id-by-index.md)_
+
 ```rust
-// Call `stable_id_by_index` from plugin-facing code when this operation is available in context.
+let id = registry.stable_id_by_index(0).expect("registry has index 0");
+assert!(id.as_str().starts_with("flux.demo.gas."));
 ```
 

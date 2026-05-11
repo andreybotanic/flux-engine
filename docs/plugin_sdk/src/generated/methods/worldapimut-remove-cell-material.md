@@ -22,15 +22,20 @@ fn remove_cell_material (& mut self , cell : UVec2) -> Result < bool , WorldApiE
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
 
 ## Return Value
 
-Result < bool , WorldApiError >
+Result < bool , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapimut-remove-cell-material.md`](../../examples/methods/worldapimut-remove-cell-material.md)_
+
 ```rust
-// Call `remove_cell_material` from plugin-facing code when this operation is available in context.
+let changed = world_mut.remove_cell_material(UVec2::new(20, 14))?;
+if changed {
+    println!("cell was cleared");
+}
 ```
 

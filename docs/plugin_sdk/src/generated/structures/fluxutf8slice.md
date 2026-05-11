@@ -22,6 +22,10 @@ pub struct FluxUtf8Slice
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `ptr` | `* const u8` | `ptr` field stored as `* const u8`. |
-| `len` | `usize` | `len` field stored as `usize`. |
+| `ptr` | * const u8 | Pointer to the first UTF-8 byte, or null when the slice is empty. |
+| `len` | usize | Number of bytes available through `ptr`. |
+
+## Methods
+
+- [`FluxUtf8Slice::from_str`](../methods/fluxutf8slice-from-str.md)
 

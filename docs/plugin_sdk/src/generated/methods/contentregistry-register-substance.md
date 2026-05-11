@@ -22,7 +22,7 @@ fn register_substance (& mut self , definition : SubstanceDefinition)
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `definition` | `SubstanceDefinition` | `definition` argument passed as `SubstanceDefinition`. |
+| `definition` | [`SubstanceDefinition`](../structures/substancedefinition.md) | `definition` argument passed as `SubstanceDefinition`. |
 
 ## Return Value
 
@@ -30,7 +30,19 @@ fn register_substance (& mut self , definition : SubstanceDefinition)
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-register-substance.md`](../../examples/methods/contentregistry-register-substance.md)_
+
 ```rust
-// Call `register_substance` from plugin-facing code when this operation is available in context.
+let mut registry = ContentRegistry::default();
+let definition = SubstanceDefinition::gas(
+    SubstanceId::parse("flux.demo.gas.oxygen").expect("id"),
+    PluginId::parse("flux.demo").expect("plugin id"),
+    "Oxygen",
+    32.0,
+    [0.3, 0.7, 1.0],
+    vec!["o2".to_string()],
+).expect("definition");
+registry.register_substance(definition);
+assert!(registry.substances().contains_key(&SubstanceId::parse("flux.demo.gas.oxygen").expect("id")));
 ```
 

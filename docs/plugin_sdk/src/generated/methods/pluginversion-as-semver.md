@@ -28,7 +28,11 @@ This method does not take plugin-supplied arguments.
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginversion-as-semver.md`](../../examples/methods/pluginversion-as-semver.md)_
+
 ```rust
-// Call `as_semver` from plugin-facing code when this operation is available in context.
+let version = PluginVersion::parse("2.0.1").expect("valid semver");
+let semver = version.as_semver();
+assert_eq!((semver.major, semver.minor, semver.patch), (2, 0, 1));
 ```
 

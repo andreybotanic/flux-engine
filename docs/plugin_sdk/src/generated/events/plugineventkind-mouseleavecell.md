@@ -16,13 +16,24 @@ Fired when the cursor leaves a world cell.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `0` | `MouseCellEvent` | `0` argument passed as `MouseCellEvent`. |
+| `payload` | [`MouseCellEvent`](../structures/mousecellevent.md) | Low-level mouse payload captured when the cursor left a cell. |
 
 ## SDK Example
 
+_Source: [`examples/events/plugineventkind-mouseleavecell.md`](../../examples/events/plugineventkind-mouseleavecell.md)_
+
 ```rust
-if event.kind() == PluginEventKind::MouseLeaveCell {
-// Clear hover-specific plugin state.
+unsafe extern "C" fn on_mouse_leave_cell(
+    plugin: *mut FluxPluginHandle,
+    payload: *const FluxMouseCellEventPayload,
+    _host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let payload = unsafe { &*payload };
+    let plugin = unsafe { &mut *plugin };
+    if payload.has_cell == 0 {
+        plugin.dragging = false;
+    }
+    FluxStatus::OK
 }
 ```
 

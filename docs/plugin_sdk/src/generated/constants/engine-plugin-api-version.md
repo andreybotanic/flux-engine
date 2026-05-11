@@ -18,9 +18,22 @@ Current engine-side plugin API version wrapper.
 pub const ENGINE_PLUGIN_API_VERSION: PluginApiVersion = ...;
 ```
 
+## SDK Notes
+
+`ENGINE_PLUGIN_API_VERSION` keeps the current ABI version in the strongly typed wrapper used by manifests and validation code.
+
 ## SDK Example
 
+_Source: [`examples/constants/engine-plugin-api-version.md`](../../examples/constants/engine-plugin-api-version.md)_
+
 ```rust
-// Use `ENGINE_PLUGIN_API_VERSION` when validating the Plugin SDK ABI contract.
+let manifest = PluginManifest::from_str(manifest_text)?;
+if manifest.api_version != ENGINE_PLUGIN_API_VERSION {
+    return Err(format!(
+        "plugin expects API {}, engine provides {}",
+        manifest.api_version,
+        ENGINE_PLUGIN_API_VERSION,
+    ));
+}
 ```
 

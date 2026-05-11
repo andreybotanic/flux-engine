@@ -22,6 +22,6 @@ pub struct GasStyleEntry
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` field stored as `UVec2`. |
-| `style` | `GasRenderStyle` | `style` field stored as `GasRenderStyle`. |
+| `cell` | UVec2 | Target world cell whose gas rendering is overridden. |
+| `style` | [`GasRenderStyle`](../enums/gasrenderstyle.md) | Gas rendering style to apply for that cell. |
 

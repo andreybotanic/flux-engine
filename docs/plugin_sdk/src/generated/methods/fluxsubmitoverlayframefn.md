@@ -22,19 +22,30 @@ pub type FluxSubmitOverlayFrameFn = unsafe extern "C" fn (context : * mut c_void
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `width` | `u32` | `width` argument passed as `u32`. |
-| `height` | `u32` | `height` argument passed as `u32`. |
-| `rgba8` | `* const u8` | `rgba8` argument passed as `* const u8`. |
-| `len` | `usize` | `len` argument passed as `usize`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `width` | u32 | `width` argument passed as `u32`. |
+| `height` | u32 | `height` argument passed as `u32`. |
+| `rgba8` | * const u8 | `rgba8` argument passed as `* const u8`. |
+| `len` | usize | `len` argument passed as `usize`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxsubmitoverlayframefn.md`](../../examples/methods/fluxsubmitoverlayframefn.md)_
+
 ```rust
-// Store or call the callback through the `FluxSubmitOverlayFrameFn` ABI signature supplied by FluxEngine.
+unsafe fn submit_checkerboard(
+    callback: FluxSubmitOverlayFrameFn,
+    context: *mut std::ffi::c_void,
+) -> FluxStatus {
+    let rgba8 = [
+        255, 0, 0, 255, 0, 0, 0, 0,
+        0, 0, 0, 0, 255, 0, 0, 255,
+    ];
+    unsafe { callback(context, 2, 2, rgba8.as_ptr(), rgba8.len()) }
+}
 ```
 

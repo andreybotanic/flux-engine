@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& BTreeMap < ContentId , OverlayContentDescriptor >
+& BTreeMap < [`ContentId`](../structures/contentid.md) , [`OverlayContentDescriptor`](../structures/overlaycontentdescriptor.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-overlays.md`](../../examples/methods/contentregistry-overlays.md)_
+
 ```rust
-// Call `overlays` from plugin-facing code when this operation is available in context.
+let overlays = registry.overlays();
+assert!(overlays.values().any(|overlay| overlay.hotkey.starts_with('F')));
 ```
 

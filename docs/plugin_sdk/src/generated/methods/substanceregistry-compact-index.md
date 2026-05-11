@@ -22,7 +22,7 @@ fn compact_index (& self , id_or_alias : & str) -> Option < usize >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `id_or_alias` | `& str` | `id_or_alias` argument passed as `& str`. |
+| `id_or_alias` | & str | `id_or_alias` argument passed as `& str`. |
 
 ## Return Value
 
@@ -30,7 +30,11 @@ Option < usize >
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceregistry-compact-index.md`](../../examples/methods/substanceregistry-compact-index.md)_
+
 ```rust
-// Call `compact_index` from plugin-facing code when this operation is available in context.
+let oxygen_index = registry.compact_index("o2").expect("alias should resolve");
+let oxygen = registry.get(oxygen_index).expect("index should be valid");
+assert_eq!(oxygen.id.leaf(), "oxygen");
 ```
 

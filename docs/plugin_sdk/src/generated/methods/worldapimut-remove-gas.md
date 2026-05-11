@@ -22,16 +22,21 @@ fn remove_gas (& mut self , cell : UVec2 , amount : u32) -> Result < GasMixture 
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
-| `amount` | `u32` | `amount` argument passed as `u32`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
+| `amount` | u32 | `amount` argument passed as `u32`. |
 
 ## Return Value
 
-Result < GasMixture , WorldApiError >
+Result < [`GasMixture`](../structures/gasmixture.md) , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapimut-remove-gas.md`](../../examples/methods/worldapimut-remove-gas.md)_
+
 ```rust
-// Call `remove_gas` from plugin-facing code when this operation is available in context.
+let removed = world_mut.remove_gas(UVec2::new(42, 18), 100)?;
+if removed.total_amount > 0 {
+    println!("removed {} particles", removed.total_amount);
+}
 ```
 

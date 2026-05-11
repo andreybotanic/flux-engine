@@ -28,7 +28,10 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxemptyeventpayload-new.md`](../../examples/methods/fluxemptyeventpayload-new.md)_
+
 ```rust
-// Call `new` from plugin-facing code when this operation is available in context.
+let payload = FluxEmptyEventPayload::new();
+assert_eq!(payload.api_version, ENGINE_PLUGIN_API_VERSION_VALUE);
 ```
 

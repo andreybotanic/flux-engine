@@ -22,11 +22,11 @@ fn new (plugin_root : FluxUtf8Slice , config_root : FluxUtf8Slice , assets_root 
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `plugin_root` | `FluxUtf8Slice` | `plugin_root` argument passed as `FluxUtf8Slice`. |
-| `config_root` | `FluxUtf8Slice` | `config_root` argument passed as `FluxUtf8Slice`. |
-| `assets_root` | `FluxUtf8Slice` | `assets_root` argument passed as `FluxUtf8Slice`. |
-| `write_error` | `Option < FluxWriteErrorFn >` | `write_error` argument passed as `Option < FluxWriteErrorFn >`. |
-| `error_context` | `* mut c_void` | `error_context` argument passed as `* mut c_void`. |
+| `plugin_root` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `plugin_root` argument passed as `FluxUtf8Slice`. |
+| `config_root` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `config_root` argument passed as `FluxUtf8Slice`. |
+| `assets_root` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `assets_root` argument passed as `FluxUtf8Slice`. |
+| `write_error` | Option < [`FluxWriteErrorFn`](../methods/fluxwriteerrorfn.md) > | `write_error` argument passed as `Option < FluxWriteErrorFn >`. |
+| `error_context` | * mut c_void | `error_context` argument passed as `* mut c_void`. |
 
 ## Return Value
 
@@ -34,7 +34,16 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxhostapi-new.md`](../../examples/methods/fluxhostapi-new.md)_
+
 ```rust
-// Call `new` from plugin-facing code when this operation is available in context.
+let host = FluxHostApi::new(
+    FluxUtf8Slice::from_str("plugins/flux.demo"),
+    FluxUtf8Slice::from_str("plugins/flux.demo/config"),
+    FluxUtf8Slice::from_str("plugins/flux.demo/assets"),
+    None,
+    std::ptr::null_mut(),
+);
+assert_eq!(host.api_version, ENGINE_PLUGIN_API_VERSION_VALUE);
 ```
 

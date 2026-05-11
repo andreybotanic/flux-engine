@@ -5,13 +5,15 @@ use crate::plugin_sdk_docs::parser::DocBlock;
 pub(in crate::plugin_sdk_docs) const DOCS_ROOT: &str = "docs/plugin_sdk";
 pub(in crate::plugin_sdk_docs) const DOCS_SRC_ROOT: &str = "docs/plugin_sdk/src";
 pub(in crate::plugin_sdk_docs) const GENERATED_DIR: &str = "generated";
+pub(in crate::plugin_sdk_docs) const EXAMPLES_DIR: &str = "examples";
 
 pub(in crate::plugin_sdk_docs) const SDK_SOURCES: &[SdkSource] = &[
     SdkSource::new("ABI v4", "src/plugins/abi.rs", SdkCategory::Abi),
-    SdkSource::new(
+    SdkSource::with_excludes(
         "ABI v4 Events",
         "src/plugins/abi_events.rs",
         SdkCategory::Abi,
+        &["FluxOn"],
     ),
     SdkSource::new("Manifest", "src/plugins/manifest.rs", SdkCategory::Manifest),
     SdkSource::new("Identifiers", "src/plugins/id.rs", SdkCategory::Manifest),
@@ -47,6 +49,55 @@ pub(in crate::plugin_sdk_docs) const SDK_SOURCES: &[SdkSource] = &[
         "src/plugins/api/save_api.rs",
         SdkCategory::EngineSide,
     ),
+    SdkSource::with_allowlist(
+        "World Grid",
+        "src/world/grid.rs",
+        SdkCategory::EngineSide,
+        &["CellMaterial"],
+    ),
+    SdkSource::with_allowlist(
+        "World Structures",
+        "src/world/structures.rs",
+        SdkCategory::EngineSide,
+        &[
+            "LayerKind",
+            "LayerMarkerKind",
+            "LayerCollisionKind",
+            "LayerCellSpec",
+            "StructureLayer",
+            "StructureDescriptor",
+            "StructureKind",
+            "StructureRotation",
+            "StructureParams",
+            "PlacedStructureId",
+        ],
+    ),
+    SdkSource::with_allowlist(
+        "Config",
+        "src/config/mod.rs",
+        SdkCategory::EngineSide,
+        &["VisualPlacementConfig"],
+    ),
+    SdkSource::with_allowlist(
+        "HUD Config",
+        "src/config/hud.rs",
+        SdkCategory::EngineSide,
+        &[
+            "HudBlockConfig",
+            "SubstanceKind",
+            "ContainerBacking",
+            "ConfiguredPipeNodeKind",
+            "HoverVisibility",
+            "SubstanceContainerConfig",
+            "WorldCellHudConfig",
+        ],
+    ),
+    SdkSource::with_allowlist(
+        "World View",
+        "src/render/world_view.rs",
+        SdkCategory::EngineSide,
+        &["OverlayMode"],
+    ),
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -55,6 +106,8 @@ pub(in crate::plugin_sdk_docs) struct SdkSource {
     pub(in crate::plugin_sdk_docs) title: &'static str,
     pub(in crate::plugin_sdk_docs) path: &'static str,
     pub(in crate::plugin_sdk_docs) category: SdkCategory,
+    pub(in crate::plugin_sdk_docs) allowlist: &'static [&'static str],
+    pub(in crate::plugin_sdk_docs) exclude_prefixes: &'static [&'static str],
 }
 
 impl SdkSource {
@@ -64,7 +117,59 @@ impl SdkSource {
             title,
             path,
             category,
+            allowlist: &[],
+            exclude_prefixes: &[],
         }
+    }
+
+    /// Creates a source descriptor limited to a known SDK-facing item allowlist.
+    const fn with_allowlist(
+        title: &'static str,
+        path: &'static str,
+        category: SdkCategory,
+        allowlist: &'static [&'static str],
+    ) -> Self {
+        Self {
+            title,
+            path,
+            category,
+            allowlist,
+            exclude_prefixes: &[],
+        }
+    }
+
+    /// Creates a source descriptor that excludes items by prefix.
+    const fn with_excludes(
+        title: &'static str,
+        path: &'static str,
+        category: SdkCategory,
+        exclude_prefixes: &'static [&'static str],
+    ) -> Self {
+        Self {
+            title,
+            path,
+            category,
+            allowlist: &[],
+            exclude_prefixes,
+        }
+    }
+
+    /// Returns true when this source should contribute the named item.
+    pub(in crate::plugin_sdk_docs) fn includes(self, item_name: &str) -> bool {
+        (self.allowlist.is_empty() || self.allowlist.contains(&item_name))
+            && !self
+                .exclude_prefixes
+                .iter()
+                .any(|prefix| item_name.starts_with(prefix))
+    }
+
+    /// Returns true when this source should contribute methods for the given owner type.
+    pub(in crate::plugin_sdk_docs) fn includes_owner(self, owner_name: &str) -> bool {
+        (self.allowlist.is_empty() || self.allowlist.contains(&owner_name))
+            && !self
+                .exclude_prefixes
+                .iter()
+                .any(|prefix| owner_name.starts_with(prefix))
     }
 }
 
@@ -170,12 +275,41 @@ pub(in crate::plugin_sdk_docs) struct ApiItemDoc {
     pub(in crate::plugin_sdk_docs) variants: Vec<ApiVariantDoc>,
     pub(in crate::plugin_sdk_docs) arguments: Vec<ApiArgumentDoc>,
     pub(in crate::plugin_sdk_docs) return_value: Option<String>,
+    pub(in crate::plugin_sdk_docs) methods: Vec<ApiMethodLink>,
+    pub(in crate::plugin_sdk_docs) example: Option<ApiExampleDoc>,
 }
 
 impl ApiItemDoc {
     /// Returns the relative link from a generated group index to this item.
     pub(in crate::plugin_sdk_docs) fn relative_link(&self) -> String {
         format!("{}/{}", self.group.directory_name(), self.file_name)
+    }
+}
+
+#[derive(Clone, Debug)]
+/// Cross-link from a structure page to one owned method page.
+pub(in crate::plugin_sdk_docs) struct ApiMethodLink {
+    pub(in crate::plugin_sdk_docs) name: String,
+    pub(in crate::plugin_sdk_docs) file_name: String,
+}
+
+#[derive(Clone, Debug)]
+/// External example snippet rendered into one generated page.
+pub(in crate::plugin_sdk_docs) struct ApiExampleDoc {
+    pub(in crate::plugin_sdk_docs) relative_path: PathBuf,
+    pub(in crate::plugin_sdk_docs) contents: String,
+}
+
+impl ApiExampleDoc {
+    /// Returns the stable example file path relative to `docs/plugin_sdk/src`.
+    pub(in crate::plugin_sdk_docs) fn relative_path_for(item: &ApiItemDoc) -> Option<PathBuf> {
+        let directory = match item.group {
+            ApiGroup::Methods => "methods",
+            ApiGroup::Events => "events",
+            ApiGroup::Constants => "constants",
+            _ => return None,
+        };
+        Some(PathBuf::from(EXAMPLES_DIR).join(directory).join(&item.file_name))
     }
 }
 

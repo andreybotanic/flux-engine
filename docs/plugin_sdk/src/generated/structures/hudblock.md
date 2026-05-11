@@ -22,8 +22,8 @@ pub struct HudBlock
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `ContentId` | `id` field stored as `ContentId`. |
-| `title` | `String` | `title` field stored as `String`. |
-| `lines` | `Vec < String >` | `lines` field stored as `Vec < String >`. |
-| `sort_order` | `i32` | `sort_order` field stored as `i32`. |
+| `id` | [`ContentId`](../structures/contentid.md) | Stable content id of the HUD block entry. |
+| `title` | String | Block title shown in the HUD. |
+| `lines` | Vec < String > | Text lines rendered inside the HUD block. |
+| `sort_order` | i32 | Ordering key used when multiple HUD blocks are combined. |
 

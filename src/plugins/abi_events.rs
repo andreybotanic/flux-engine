@@ -10,7 +10,28 @@ use super::{FluxPluginHandle, FluxRuntimeHost, FluxStatus, FluxUtf8Slice};
 /// enum over hardcoded integers when declaring handlers.
 ///
 /// # Variants
-/// Public variants of `FluxEventKind` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `WorldCreated`: Raw ABI tag for the fresh-world lifecycle event.
+/// - `WorldLoaded`: Raw ABI tag for the world-loaded lifecycle event.
+/// - `WorldBeforeSave`: Raw ABI tag for the pre-save lifecycle event.
+/// - `WorldAfterSave`: Raw ABI tag for the post-save lifecycle event.
+/// - `WorldUnloaded`: Raw ABI tag for the world-unloaded lifecycle event.
+/// - `SimulationPreCellGasStep`: Raw ABI tag for the pre-simulation gas tick event.
+/// - `SimulationPostCellGasStep`: Raw ABI tag for the post-simulation gas tick event.
+/// - `SimulationPausedChanged`: Raw ABI tag for the pause-state change event.
+/// - `StructurePlaced`: Raw ABI tag for the structure-placed event.
+/// - `StructureRemoved`: Raw ABI tag for the structure-removed event.
+/// - `ToolSelected`: Raw ABI tag for the tool-selected event.
+/// - `MouseDownCell`: Raw ABI tag for the mouse-button-down cell event.
+/// - `MouseMoveCell`: Raw ABI tag for the mouse-move cell event.
+/// - `MouseUpCell`: Raw ABI tag for the mouse-button-up cell event.
+/// - `MouseEnterCell`: Raw ABI tag for the mouse-enter cell event.
+/// - `MouseLeaveCell`: Raw ABI tag for the mouse-leave cell event.
+/// - `KeyPressed`: Raw ABI tag for the key-pressed event.
+/// - `KeyReleased`: Raw ABI tag for the key-released event.
+/// - `OverlayChanged`: Raw ABI tag for the overlay-changed event.
+/// - `BuildHudForCell`: Raw ABI tag for the HUD-build event.
+/// - `BuildPanel`: Raw ABI tag for the panel-build event.
+/// - `RenderOverlay`: Raw ABI tag for the overlay-render event.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FluxEventKind {
@@ -41,20 +62,12 @@ pub enum FluxEventKind {
 impl FluxEventKind {
     /// Returns the stable raw ABI tag used on the DLL boundary.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Convert a typed plugin-visible event kind into the raw ABI tag when needed.
-    /// ```
     pub fn as_raw(self) -> u32 {
         self as u32
     }
 
     /// Parses one raw ABI tag into a typed plugin-visible event kind.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Convert a raw ABI tag back into `FluxEventKind` when validating untyped input.
-    /// ```
     pub fn from_raw(value: u32) -> Option<Self> {
         Some(match value {
             0 => Self::WorldCreated,
@@ -168,7 +181,8 @@ impl FluxEventKind {
 /// Stable ABI descriptor that binds one plugin event kind to one named handler export.
 ///
 /// # Fields
-/// Public fields of `FluxEventHandlerDescriptor` are part of the generated SDK reference.
+/// - `event_kind`: Raw ABI event tag created from `FluxEventKind::as_raw()`.
+/// - `handler_name`: UTF-8 export name of the plugin callback that handles this event.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxEventHandlerDescriptor {
@@ -181,10 +195,6 @@ pub struct FluxEventHandlerDescriptor {
 impl FluxEventHandlerDescriptor {
     /// Creates one event-handler descriptor from the typed plugin-visible event enum.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Build a descriptor without hardcoding the raw numeric event tag.
-    /// ```
     pub fn new(event_kind: FluxEventKind, handler_name: FluxUtf8Slice) -> Self {
         Self {
             event_kind: event_kind.as_raw(),
@@ -195,10 +205,6 @@ impl FluxEventHandlerDescriptor {
 
 /// Callback used by plugins to register one explicit event-handler binding.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxRegisterEventHandlerFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxRegisterEventHandlerFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxEventHandlerDescriptor,
@@ -207,7 +213,8 @@ pub type FluxRegisterEventHandlerFn = unsafe extern "C" fn(
 /// Empty payload shared by lifecycle and tick events that do not carry extra fields.
 ///
 /// # Fields
-/// Public fields of `FluxEmptyEventPayload` are part of the generated SDK reference.
+/// - `struct_size`: Size of this payload struct used for ABI validation.
+/// - `api_version`: ABI version expected by the event producer and consumer.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxEmptyEventPayload {
@@ -218,10 +225,6 @@ pub struct FluxEmptyEventPayload {
 impl FluxEmptyEventPayload {
     /// Creates one empty event payload for ABI v4 event callbacks.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `new` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn new() -> Self {
         Self {
             struct_size: std::mem::size_of::<Self>() as u32,
@@ -233,7 +236,9 @@ impl FluxEmptyEventPayload {
 /// Payload emitted when the simulation pause flag changes.
 ///
 /// # Fields
-/// Public fields of `FluxSimulationPausedChangedEvent` are part of the generated SDK reference.
+/// - `struct_size`: Size of this payload struct used for ABI validation.
+/// - `api_version`: ABI version expected by the event producer and consumer.
+/// - `paused`: New pause flag encoded as `0` or `1`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxSimulationPausedChangedEvent {
@@ -245,7 +250,12 @@ pub struct FluxSimulationPausedChangedEvent {
 /// Payload emitted for structure placement and removal events.
 ///
 /// # Fields
-/// Public fields of `FluxStructureEventPayload` are part of the generated SDK reference.
+/// - `struct_size`: Size of this payload struct used for ABI validation.
+/// - `api_version`: ABI version expected by the event producer and consumer.
+/// - `structure_id`: Runtime id of the affected structure instance.
+/// - `structure_kind`: Stable structure kind id of the affected instance.
+/// - `cell_x`: X coordinate of the primary structure cell.
+/// - `cell_y`: Y coordinate of the primary structure cell.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxStructureEventPayload {
@@ -260,7 +270,20 @@ pub struct FluxStructureEventPayload {
 /// Payload emitted for low-level mouse interaction over world cells.
 ///
 /// # Fields
-/// Public fields of `FluxMouseCellEventPayload` are part of the generated SDK reference.
+/// - `struct_size`: Size of this payload struct used for ABI validation.
+/// - `api_version`: ABI version expected by the event producer and consumer.
+/// - `button`: Encoded mouse button id associated with the event.
+/// - `has_cell`: Whether `cell_x` and `cell_y` contain a valid world-cell target.
+/// - `cell_x`: X coordinate of the targeted world cell.
+/// - `cell_y`: Y coordinate of the targeted world cell.
+/// - `world_x`: World-space cursor X coordinate.
+/// - `world_y`: World-space cursor Y coordinate.
+/// - `screen_x`: Screen-space cursor X coordinate.
+/// - `screen_y`: Screen-space cursor Y coordinate.
+/// - `modifiers`: Bitset of keyboard modifiers held during the event.
+/// - `has_active_tool_id`: Whether `active_tool_id` contains a selected tool id.
+/// - `active_tool_id`: Stable content id of the active tool, when present.
+/// - `is_over_ui`: Whether the pointer was over UI when the event fired.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxMouseCellEventPayload {
@@ -283,7 +306,10 @@ pub struct FluxMouseCellEventPayload {
 /// Payload emitted for key press and key release events.
 ///
 /// # Fields
-/// Public fields of `FluxKeyEventPayload` are part of the generated SDK reference.
+/// - `struct_size`: Size of this payload struct used for ABI validation.
+/// - `api_version`: ABI version expected by the event producer and consumer.
+/// - `key`: UTF-8 key identifier emitted by the engine.
+/// - `modifiers`: Bitset of keyboard modifiers held during the event.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxKeyEventPayload {
@@ -296,7 +322,10 @@ pub struct FluxKeyEventPayload {
 /// Payload emitted when the active editor tool changes.
 ///
 /// # Fields
-/// Public fields of `FluxToolSelectedEventPayload` are part of the generated SDK reference.
+/// - `struct_size`: Size of this payload struct used for ABI validation.
+/// - `api_version`: ABI version expected by the event producer and consumer.
+/// - `has_tool_id`: Whether `tool_id` contains a valid active tool identifier.
+/// - `tool_id`: Stable content id of the newly active tool, when present.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxToolSelectedEventPayload {
@@ -309,7 +338,10 @@ pub struct FluxToolSelectedEventPayload {
 /// Payload emitted when the active overlay changes.
 ///
 /// # Fields
-/// Public fields of `FluxOverlayChangedEventPayload` are part of the generated SDK reference.
+/// - `struct_size`: Size of this payload struct used for ABI validation.
+/// - `api_version`: ABI version expected by the event producer and consumer.
+/// - `has_overlay_id`: Whether `overlay_id` contains a plugin-owned overlay identifier.
+/// - `overlay_id`: Stable content id of the newly active overlay, when present.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxOverlayChangedEventPayload {
@@ -322,7 +354,10 @@ pub struct FluxOverlayChangedEventPayload {
 /// Payload emitted when plugins can append HUD blocks for one cell.
 ///
 /// # Fields
-/// Public fields of `FluxBuildHudForCellEventPayload` are part of the generated SDK reference.
+/// - `struct_size`: Size of this payload struct used for ABI validation.
+/// - `api_version`: ABI version expected by the event producer and consumer.
+/// - `cell_x`: X coordinate of the hovered world cell.
+/// - `cell_y`: Y coordinate of the hovered world cell.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxBuildHudForCellEventPayload {
@@ -335,7 +370,9 @@ pub struct FluxBuildHudForCellEventPayload {
 /// Payload emitted when a plugin-owned panel should be built or refreshed.
 ///
 /// # Fields
-/// Public fields of `FluxBuildPanelEventPayload` are part of the generated SDK reference.
+/// - `struct_size`: Size of this payload struct used for ABI validation.
+/// - `api_version`: ABI version expected by the event producer and consumer.
+/// - `panel_id`: Stable content id of the panel being requested.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxBuildPanelEventPayload {
@@ -347,7 +384,9 @@ pub struct FluxBuildPanelEventPayload {
 /// Payload emitted when a plugin-controlled overlay should render a frame.
 ///
 /// # Fields
-/// Public fields of `FluxRenderOverlayEventPayload` are part of the generated SDK reference.
+/// - `struct_size`: Size of this payload struct used for ABI validation.
+/// - `api_version`: ABI version expected by the event producer and consumer.
+/// - `overlay_id`: Stable content id of the overlay that should render a frame.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxRenderOverlayEventPayload {
@@ -358,10 +397,6 @@ pub struct FluxRenderOverlayEventPayload {
 
 /// Function pointer type for `onWorldCreated`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnWorldCreatedFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnWorldCreatedFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxEmptyEventPayload,
@@ -370,10 +405,6 @@ pub type FluxOnWorldCreatedFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onWorldLoaded`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnWorldLoadedFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnWorldLoadedFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxEmptyEventPayload,
@@ -382,10 +413,6 @@ pub type FluxOnWorldLoadedFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onWorldBeforeSave`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnWorldBeforeSaveFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnWorldBeforeSaveFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxEmptyEventPayload,
@@ -394,10 +421,6 @@ pub type FluxOnWorldBeforeSaveFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onWorldAfterSave`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnWorldAfterSaveFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnWorldAfterSaveFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxEmptyEventPayload,
@@ -406,10 +429,6 @@ pub type FluxOnWorldAfterSaveFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onWorldUnloaded`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnWorldUnloadedFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnWorldUnloadedFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxEmptyEventPayload,
@@ -418,10 +437,6 @@ pub type FluxOnWorldUnloadedFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onSimulationPreCellGasStep`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnSimulationPreCellGasStepFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnSimulationPreCellGasStepFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxEmptyEventPayload,
@@ -430,10 +445,6 @@ pub type FluxOnSimulationPreCellGasStepFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onSimulationPostCellGasStep`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnSimulationPostCellGasStepFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnSimulationPostCellGasStepFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxEmptyEventPayload,
@@ -442,10 +453,6 @@ pub type FluxOnSimulationPostCellGasStepFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onSimulationPausedChanged`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnSimulationPausedChangedFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnSimulationPausedChangedFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxSimulationPausedChangedEvent,
@@ -454,10 +461,6 @@ pub type FluxOnSimulationPausedChangedFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onStructurePlaced`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnStructurePlacedFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnStructurePlacedFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxStructureEventPayload,
@@ -466,10 +469,6 @@ pub type FluxOnStructurePlacedFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onStructureRemoved`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnStructureRemovedFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnStructureRemovedFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxStructureEventPayload,
@@ -478,10 +477,6 @@ pub type FluxOnStructureRemovedFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onToolSelected`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnToolSelectedFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnToolSelectedFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxToolSelectedEventPayload,
@@ -490,10 +485,6 @@ pub type FluxOnToolSelectedFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onMouseDownCell`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnMouseDownCellFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnMouseDownCellFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxMouseCellEventPayload,
@@ -502,10 +493,6 @@ pub type FluxOnMouseDownCellFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onMouseMoveCell`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnMouseMoveCellFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnMouseMoveCellFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxMouseCellEventPayload,
@@ -514,10 +501,6 @@ pub type FluxOnMouseMoveCellFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onMouseUpCell`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnMouseUpCellFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnMouseUpCellFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxMouseCellEventPayload,
@@ -526,10 +509,6 @@ pub type FluxOnMouseUpCellFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onMouseEnterCell`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnMouseEnterCellFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnMouseEnterCellFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxMouseCellEventPayload,
@@ -538,10 +517,6 @@ pub type FluxOnMouseEnterCellFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onMouseLeaveCell`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnMouseLeaveCellFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnMouseLeaveCellFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxMouseCellEventPayload,
@@ -550,10 +525,6 @@ pub type FluxOnMouseLeaveCellFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onKeyPressed`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnKeyPressedFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnKeyPressedFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxKeyEventPayload,
@@ -562,10 +533,6 @@ pub type FluxOnKeyPressedFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onKeyReleased`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnKeyReleasedFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnKeyReleasedFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxKeyEventPayload,
@@ -574,10 +541,6 @@ pub type FluxOnKeyReleasedFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onOverlayChanged`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnOverlayChangedFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnOverlayChangedFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxOverlayChangedEventPayload,
@@ -586,10 +549,6 @@ pub type FluxOnOverlayChangedFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onBuildHudForCell`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnBuildHudForCellFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnBuildHudForCellFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxBuildHudForCellEventPayload,
@@ -598,10 +557,6 @@ pub type FluxOnBuildHudForCellFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onBuildPanel`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnBuildPanelFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnBuildPanelFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxBuildPanelEventPayload,
@@ -610,10 +565,6 @@ pub type FluxOnBuildPanelFn = unsafe extern "C" fn(
 
 /// Function pointer type for `onRenderOverlay`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxOnRenderOverlayFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxOnRenderOverlayFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxRenderOverlayEventPayload,
@@ -622,30 +573,18 @@ pub type FluxOnRenderOverlayFn = unsafe extern "C" fn(
 
 /// Returns the stable ABI numeric tag for one engine-side plugin event kind.
 ///
-/// # SDK Example
-/// ```rust
-/// // Call `event_kind_to_abi` from engine-side code when translating PluginEventKind values.
-/// ```
 pub fn event_kind_to_abi(kind: PluginEventKind) -> u32 {
     FluxEventKind::from_engine(kind).as_raw()
 }
 
 /// Converts one stable ABI numeric tag back into the engine-side event kind.
 ///
-/// # SDK Example
-/// ```rust
-/// // Call `event_kind_from_abi` from engine-side code when validating event registrations.
-/// ```
 pub fn event_kind_from_abi(value: u32) -> Option<PluginEventKind> {
     Some(FluxEventKind::from_raw(value)?.into_engine())
 }
 
 /// Returns the canonical handler name used in docs and demo plugins for one event kind.
 ///
-/// # SDK Example
-/// ```rust
-/// // Call `canonical_handler_name` from engine-side code when suggesting default handler exports.
-/// ```
 pub fn canonical_handler_name(kind: PluginEventKind) -> &'static str {
     FluxEventKind::from_engine(kind).canonical_handler_name()
 }

@@ -22,11 +22,15 @@ pub struct FluxHostApi
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
-| `plugin_root` | `FluxUtf8Slice` | `plugin_root` field stored as `FluxUtf8Slice`. |
-| `config_root` | `FluxUtf8Slice` | `config_root` field stored as `FluxUtf8Slice`. |
-| `assets_root` | `FluxUtf8Slice` | `assets_root` field stored as `FluxUtf8Slice`. |
-| `write_error` | `Option < FluxWriteErrorFn >` | `write_error` field stored as `Option < FluxWriteErrorFn >`. |
-| `error_context` | `* mut c_void` | `error_context` field stored as `* mut c_void`. |
+| `struct_size` | u32 | Size of this struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by both host and plugin. |
+| `plugin_root` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Absolute plugin package root visible to the runtime plugin. |
+| `config_root` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Absolute plugin configuration directory visible to the runtime plugin. |
+| `assets_root` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Absolute plugin asset directory visible to the runtime plugin. |
+| `write_error` | Option < [`FluxWriteErrorFn`](../methods/fluxwriteerrorfn.md) > | Optional callback for reporting host-readable error messages. |
+| `error_context` | * mut c_void | Opaque host-owned context passed back into `write_error`. |
+
+## Methods
+
+- [`FluxHostApi::new`](../methods/fluxhostapi-new.md)
 

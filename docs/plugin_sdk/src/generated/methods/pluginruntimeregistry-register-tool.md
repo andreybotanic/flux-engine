@@ -22,7 +22,7 @@ fn register_tool (& mut self , descriptor : ToolDescriptor)
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `descriptor` | `ToolDescriptor` | `descriptor` argument passed as `ToolDescriptor`. |
+| `descriptor` | [`ToolDescriptor`](../structures/tooldescriptor.md) | `descriptor` argument passed as `ToolDescriptor`. |
 
 ## Return Value
 
@@ -30,7 +30,17 @@ fn register_tool (& mut self , descriptor : ToolDescriptor)
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginruntimeregistry-register-tool.md`](../../examples/methods/pluginruntimeregistry-register-tool.md)_
+
 ```rust
-// Call `register_tool` from plugin-facing code when this operation is available in context.
+let mut registry = PluginRuntimeRegistry::default();
+let descriptor = ToolDescriptor {
+    id: ContentId::parse("flux.demo.tool.paint").expect("tool id"),
+    label: "Paint".to_string(),
+    icon_path: "icons/paint.png".to_string(),
+    silhouette_path: Some("icons/paint_silhouette.png".to_string()),
+};
+registry.register_tool(descriptor);
+assert!(registry.tools().contains_key(&ContentId::parse("flux.demo.tool.paint").expect("tool id")));
 ```
 

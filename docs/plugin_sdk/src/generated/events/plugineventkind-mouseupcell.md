@@ -16,13 +16,24 @@ Fired when a mouse button is released over a world cell.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `0` | `MouseCellEvent` | `0` argument passed as `MouseCellEvent`. |
+| `payload` | [`MouseCellEvent`](../structures/mousecellevent.md) | Low-level mouse payload captured for the button release. |
 
 ## SDK Example
 
+_Source: [`examples/events/plugineventkind-mouseupcell.md`](../../examples/events/plugineventkind-mouseupcell.md)_
+
 ```rust
-if event.kind() == PluginEventKind::MouseUpCell {
-// Finish a cell drag operation.
+unsafe extern "C" fn on_mouse_up_cell(
+    plugin: *mut FluxPluginHandle,
+    payload: *const FluxMouseCellEventPayload,
+    _host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let payload = unsafe { &*payload };
+    let plugin = unsafe { &mut *plugin };
+    if payload.button == 1 {
+        plugin.dragging = false;
+    }
+    FluxStatus::OK
 }
 ```
 

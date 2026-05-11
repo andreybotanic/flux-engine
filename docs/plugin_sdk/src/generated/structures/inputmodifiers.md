@@ -22,7 +22,7 @@ pub struct InputModifiers
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `shift` | `bool` | `shift` field stored as `bool`. |
-| `ctrl` | `bool` | `ctrl` field stored as `bool`. |
-| `alt` | `bool` | `alt` field stored as `bool`. |
+| `shift` | bool | Whether either Shift key was held when the input event fired. |
+| `ctrl` | bool | Whether either Control key was held when the input event fired. |
+| `alt` | bool | Whether either Alt key was held when the input event fired. |
 

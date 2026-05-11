@@ -8,213 +8,104 @@ use crate::{
 /// Plugin-visible event category.
 ///
 /// # Variants
-/// Public variants of `PluginEventKind` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `WorldCreated`: Fired immediately after the engine creates a fresh world state.
+/// - `WorldLoaded`: Fired after a saved world and its plugin state are loaded.
+/// - `WorldBeforeSave`: Fired synchronously before the engine serializes the current world.
+/// - `WorldAfterSave`: Fired after a save pass completes.
+/// - `WorldUnloaded`: Fired before the current world is dropped from memory.
+/// - `SimulationPreCellGasStep`: Fired before the core free-gas simulation step begins.
+/// - `SimulationPostCellGasStep`: Fired after the core free-gas simulation step completes.
+/// - `SimulationPausedChanged`: Fired whenever the simulation pause flag toggles.
+/// - `StructurePlaced`: Fired after a structure instance is placed into the world.
+/// - `StructureRemoved`: Fired after a structure instance is removed from the world.
+/// - `ToolSelected`: Fired when the active editor tool changes.
+/// - `MouseDownCell`: Fired when a mouse button is pressed over a world cell.
+/// - `MouseMoveCell`: Fired when the cursor moves across world cells.
+/// - `MouseUpCell`: Fired when a mouse button is released over a world cell.
+/// - `MouseEnterCell`: Fired when the cursor enters a world cell.
+/// - `MouseLeaveCell`: Fired when the cursor leaves a world cell.
+/// - `KeyPressed`: Fired when a keyboard key is pressed.
+/// - `KeyReleased`: Fired when a keyboard key is released.
+/// - `OverlayChanged`: Fired when the active overlay mode changes.
+/// - `BuildHudForCell`: Fired when plugins can append HUD blocks for the hovered cell.
+/// - `BuildPanel`: Fired when a plugin-owned panel should be built or refreshed.
+/// - `RenderOverlay`: Fired when a plugin-controlled overlay should produce a frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PluginEventKind {
     /// Fired after a new world is created.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::WorldCreated {
-    ///     // Initialize plugin state for a fresh world.
-    /// }
-    /// ```
     WorldCreated,
     /// Fired after a save slot has been loaded.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::WorldLoaded {
-    ///     // Read plugin save chunks through the runtime host.
-    /// }
-    /// ```
     WorldLoaded,
     /// Fired synchronously before the current world is saved.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::WorldBeforeSave {
-    ///     // Persist plugin-owned state with write_save_chunk.
-    /// }
-    /// ```
     WorldBeforeSave,
     /// Fired after a save operation finishes.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::WorldAfterSave {
-    ///     // Clear transient save status after a successful save pass.
-    /// }
-    /// ```
     WorldAfterSave,
     /// Fired before the current world is unloaded.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::WorldUnloaded {
-    ///     // Drop world-scoped plugin caches.
-    /// }
-    /// ```
     WorldUnloaded,
     /// Fired before the core free-gas simulation step.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::SimulationPreCellGasStep {
-    ///     // Inject gas before the simulation step with add_gas.
-    /// }
-    /// ```
     SimulationPreCellGasStep,
     /// Fired after the core free-gas simulation step.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::SimulationPostCellGasStep {
-    ///     // Observe post-step state or enqueue derived effects.
-    /// }
-    /// ```
     SimulationPostCellGasStep,
     /// Fired when the simulation pause state changes.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::SimulationPausedChanged {
-    ///     // Refresh plugin UI state that depends on pause/resume.
-    /// }
-    /// ```
     SimulationPausedChanged,
     /// Fired after a structure is placed.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::StructurePlaced {
-    ///     // Update plugin indexes that track structures.
-    /// }
-    /// ```
     StructurePlaced,
     /// Fired after a structure is removed.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::StructureRemoved {
-    ///     // Remove plugin metadata tied to the deleted structure.
-    /// }
-    /// ```
     StructureRemoved,
     /// Fired when the active editor tool changes.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::ToolSelected {
-    ///     // Read event.active_tool_id from the ABI payload.
-    /// }
-    /// ```
     ToolSelected,
     /// Fired when a mouse button is pressed over a world cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::MouseDownCell && event.has_cell != 0 {
-    ///     // Use event.cell_x and event.cell_y as the target cell.
-    /// }
-    /// ```
     MouseDownCell,
     /// Fired when the cursor moves over world cells.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::MouseMoveCell && event.has_cell != 0 {
-    ///     // Continue a drag operation across cells.
-    /// }
-    /// ```
     MouseMoveCell,
     /// Fired when a mouse button is released over a world cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::MouseUpCell {
-    ///     // Finish a cell drag operation.
-    /// }
-    /// ```
     MouseUpCell,
     /// Fired when the cursor enters a world cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::MouseEnterCell {
-    ///     // Start hover-specific plugin state.
-    /// }
-    /// ```
     MouseEnterCell,
     /// Fired when the cursor leaves a world cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::MouseLeaveCell {
-    ///     // Clear hover-specific plugin state.
-    /// }
-    /// ```
     MouseLeaveCell,
     /// Fired when a key is pressed.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::KeyPressed {
-    ///     // Read event.key from the ABI payload.
-    /// }
-    /// ```
     KeyPressed,
     /// Fired when a key is released.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::KeyReleased {
-    ///     // Stop key-held plugin behavior.
-    /// }
-    /// ```
     KeyReleased,
     /// Fired when the active overlay changes.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::OverlayChanged {
-    ///     // Read event.overlay_id from the ABI payload.
-    /// }
-    /// ```
     OverlayChanged,
     /// Fired when the HUD is built for the hovered cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::BuildHudForCell {
-    ///     // Add a HUD block with submit_hud_block.
-    /// }
-    /// ```
     BuildHudForCell,
     /// Fired when a plugin-owned panel should be built.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::BuildPanel {
-    ///     // Emit or refresh plugin panel UI state.
-    /// }
-    /// ```
     BuildPanel,
     /// Fired when a plugin-controlled overlay should submit a frame.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// if event.kind() == PluginEventKind::RenderOverlay {
-    ///     // Submit a 102x102 RGBA8 frame with submit_overlay_frame.
-    /// }
-    /// ```
     RenderOverlay,
 }
 
 /// Keyboard modifier state carried by plugin input events.
 ///
 /// # Fields
-/// Public fields of `InputModifiers` are part of the generated SDK reference.
+/// - `shift`: Whether either Shift key was held when the input event fired.
+/// - `ctrl`: Whether either Control key was held when the input event fired.
+/// - `alt`: Whether either Alt key was held when the input event fired.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct InputModifiers {
     pub shift: bool,
@@ -225,7 +116,10 @@ pub struct InputModifiers {
 /// Mouse button used by plugin cell input events.
 ///
 /// # Variants
-/// Public variants of `MouseCellButton` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `Left`: Primary mouse button.
+/// - `Right`: Secondary mouse button.
+/// - `Middle`: Middle or wheel mouse button.
+/// - `Other`: Additional mouse button encoded by its platform-provided numeric id.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MouseCellButton {
     Left,
@@ -237,7 +131,13 @@ pub enum MouseCellButton {
 /// Low-level mouse event in a world cell.
 ///
 /// # Fields
-/// Public fields of `MouseCellEvent` are part of the generated SDK reference.
+/// - `button`: Mouse button associated with the event, if the source event had one.
+/// - `cell`: Target world-cell coordinates under the cursor.
+/// - `world_position`: Cursor position in world-space coordinates.
+/// - `screen_position`: Cursor position in screen-space coordinates.
+/// - `modifiers`: Keyboard modifier snapshot captured with the mouse event.
+/// - `active_tool_id`: Active editor tool when the event fired, if one is selected.
+/// - `is_over_ui`: Whether the pointer was over game UI when the event was emitted.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MouseCellEvent {
     pub button: Option<MouseCellButton>,
@@ -252,7 +152,9 @@ pub struct MouseCellEvent {
 /// Structure lifecycle event payload.
 ///
 /// # Fields
-/// Public fields of `StructureEvent` are part of the generated SDK reference.
+/// - `id`: Runtime identifier of the structure instance that changed.
+/// - `kind`: Registered structure kind of the affected instance.
+/// - `cell`: Primary world-cell location associated with the structure lifecycle event.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructureEvent {
     pub id: PlacedStructureId,
@@ -263,7 +165,28 @@ pub struct StructureEvent {
 /// Runtime event payload sent through the Rust plugin API.
 ///
 /// # Variants
-/// Public variants of `PluginEvent` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `WorldCreated`: World-lifecycle event with no additional payload.
+/// - `WorldLoaded`: World-lifecycle event with no additional payload.
+/// - `WorldBeforeSave`: Save-lifecycle event with no additional payload.
+/// - `WorldAfterSave`: Save-lifecycle event with no additional payload.
+/// - `WorldUnloaded`: World-lifecycle event with no additional payload.
+/// - `SimulationPreCellGasStep`: Simulation tick event emitted before free-gas processing.
+/// - `SimulationPostCellGasStep`: Simulation tick event emitted after free-gas processing.
+/// - `SimulationPausedChanged`: Carries the new pause flag after a pause/resume transition.
+/// - `StructurePlaced`: Carries the placed structure payload.
+/// - `StructureRemoved`: Carries the removed structure payload.
+/// - `ToolSelected`: Carries the newly selected tool id, if any.
+/// - `MouseDownCell`: Carries the low-level mouse payload for a button press.
+/// - `MouseMoveCell`: Carries the low-level mouse payload for cursor movement.
+/// - `MouseUpCell`: Carries the low-level mouse payload for a button release.
+/// - `MouseEnterCell`: Carries the low-level mouse payload for cell entry.
+/// - `MouseLeaveCell`: Carries the low-level mouse payload for cell exit.
+/// - `KeyPressed`: Carries the pressed key string and modifier snapshot.
+/// - `KeyReleased`: Carries the released key string and modifier snapshot.
+/// - `OverlayChanged`: Carries the new overlay id, if the active overlay is plugin-owned.
+/// - `BuildHudForCell`: Carries the hovered world cell for HUD augmentation.
+/// - `BuildPanel`: Carries the plugin-owned panel id being requested.
+/// - `RenderOverlay`: Carries the plugin-owned overlay id that should render a frame.
 #[derive(Event, Clone, Debug, PartialEq)]
 pub enum PluginEvent {
     WorldCreated,
@@ -274,36 +197,67 @@ pub enum PluginEvent {
     SimulationPreCellGasStep,
     SimulationPostCellGasStep,
     SimulationPausedChanged {
+        /// New pause flag after the transition completes.
         paused: bool,
     },
-    StructurePlaced(StructureEvent),
-    StructureRemoved(StructureEvent),
+    StructurePlaced(
+        /// Structure payload describing the placed instance.
+        StructureEvent,
+    ),
+    StructureRemoved(
+        /// Structure payload describing the removed instance.
+        StructureEvent,
+    ),
     ToolSelected {
+        /// Newly selected tool id, or `None` when no tool is active.
         tool_id: Option<ContentId>,
     },
-    MouseDownCell(MouseCellEvent),
-    MouseMoveCell(MouseCellEvent),
-    MouseUpCell(MouseCellEvent),
-    MouseEnterCell(MouseCellEvent),
-    MouseLeaveCell(MouseCellEvent),
+    MouseDownCell(
+        /// Low-level mouse payload captured for the button press.
+        MouseCellEvent,
+    ),
+    MouseMoveCell(
+        /// Low-level mouse payload captured for cursor movement.
+        MouseCellEvent,
+    ),
+    MouseUpCell(
+        /// Low-level mouse payload captured for the button release.
+        MouseCellEvent,
+    ),
+    MouseEnterCell(
+        /// Low-level mouse payload captured when the cursor entered a cell.
+        MouseCellEvent,
+    ),
+    MouseLeaveCell(
+        /// Low-level mouse payload captured when the cursor left a cell.
+        MouseCellEvent,
+    ),
     KeyPressed {
+        /// Engine-provided key identifier for the pressed key.
         key: String,
+        /// Modifier snapshot captured together with the key press.
         modifiers: InputModifiers,
     },
     KeyReleased {
+        /// Engine-provided key identifier for the released key.
         key: String,
+        /// Modifier snapshot captured together with the key release.
         modifiers: InputModifiers,
     },
     OverlayChanged {
+        /// Newly active plugin-owned overlay id, if one is selected.
         overlay_id: Option<ContentId>,
     },
     BuildHudForCell {
+        /// Hovered world cell that the plugin can augment in the HUD.
         cell: UVec2,
     },
     BuildPanel {
+        /// Plugin-owned panel id being requested by the UI.
         panel_id: ContentId,
     },
     RenderOverlay {
+        /// Plugin-owned overlay id that should submit a frame.
         overlay_id: ContentId,
     },
 }
@@ -311,10 +265,6 @@ pub enum PluginEvent {
 impl PluginEvent {
     /// Returns the subscription category for this event.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `kind` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn kind(&self) -> PluginEventKind {
         match self {
             Self::WorldCreated => PluginEventKind::WorldCreated,

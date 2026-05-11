@@ -18,17 +18,13 @@ use crate::{
 /// Canonical identifier of one gameplay content item registered by a plugin.
 ///
 /// # Fields
-/// Public fields of `ContentId` are part of the generated SDK reference.
+/// - `0`: Canonical stable identifier string stored for this content item.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ContentId(String);
 
 impl ContentId {
     /// Parses and validates one content identifier.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `parse` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn parse(raw: &str) -> Result<Self, String> {
         validate_content_id(raw)?;
         Ok(Self(raw.to_string()))
@@ -36,10 +32,6 @@ impl ContentId {
 
     /// Returns the canonical string value.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `as_str` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -54,7 +46,9 @@ impl fmt::Display for ContentId {
 /// Describes sprite assets used by one content item.
 ///
 /// # Fields
-/// Public fields of `SpriteMetadata` are part of the generated SDK reference.
+/// - `image_path`: Relative asset path to the main sprite image.
+/// - `silhouette_path`: Optional relative asset path to the white-outline silhouette sprite.
+/// - `overlay_path`: Optional relative asset path to an overlay-specific sprite variant.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpriteMetadata {
     pub image_path: String,
@@ -65,7 +59,9 @@ pub struct SpriteMetadata {
 /// Describes how legacy save/runtime state still stores one content item.
 ///
 /// # Variants
-/// Public variants of `LegacyStorageDescriptor` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `WorldCellCode`: Legacy numeric world-cell code still used for save compatibility.
+/// - `PlacedStructureKind`: Legacy structure kind id still used by placed-structure serialization.
+/// - `OverlayMode`: Legacy overlay mode id still used by overlay persistence.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LegacyStorageDescriptor {
     WorldCellCode(u8),
@@ -76,7 +72,14 @@ pub enum LegacyStorageDescriptor {
 /// Describes one cell material registered by a content plugin.
 ///
 /// # Fields
-/// Public fields of `CellContentDescriptor` are part of the generated SDK reference.
+/// - `id`: Stable content id for this cell material entry.
+/// - `plugin_id`: Plugin that owns and registers this cell material.
+/// - `material`: Runtime cell material id used by the world grid.
+/// - `config_file_name`: Default-plugin config file that defines visual placement for this material.
+/// - `visual`: Visual placement metadata used by world rendering and UI.
+/// - `layer_descriptor`: Layer occupancy descriptor used for collision and rendering.
+/// - `sprite`: Sprite metadata used to render the material in the world and tool UI.
+/// - `storage`: Legacy storage mapping used for save compatibility.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CellContentDescriptor {
     pub id: ContentId,
@@ -92,7 +95,16 @@ pub struct CellContentDescriptor {
 /// Describes one placeable structure registered by a content plugin.
 ///
 /// # Fields
-/// Public fields of `StructureContentDescriptor` are part of the generated SDK reference.
+/// - `id`: Stable content id for this structure entry.
+/// - `plugin_id`: Plugin that owns and registers this structure.
+/// - `kind`: Runtime structure kind used by placement and save data.
+/// - `config_file_name`: Default-plugin config file that defines visual placement for this structure.
+/// - `visual`: Visual placement metadata used by world rendering and UI.
+/// - `layer_descriptors`: Layer descriptors keyed by supported rotation.
+/// - `allowed_rotations`: Rotations that the structure may be placed with.
+/// - `sprite`: Sprite metadata used to render the structure in the world and tool UI.
+/// - `hud`: HUD block configuration used when hovering this structure.
+/// - `storage`: Legacy storage mapping used for save compatibility.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructureContentDescriptor {
     pub id: ContentId,
@@ -110,10 +122,6 @@ pub struct StructureContentDescriptor {
 impl StructureContentDescriptor {
     /// Returns the layer descriptor for one rotation.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `layer_descriptor` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn layer_descriptor(&self, rotation: StructureRotation) -> &StructureDescriptor {
         self.layer_descriptors
             .get(&rotation)
@@ -124,7 +132,12 @@ impl StructureContentDescriptor {
 /// Describes one overlay mode registered by a content plugin.
 ///
 /// # Fields
-/// Public fields of `OverlayContentDescriptor` are part of the generated SDK reference.
+/// - `id`: Stable content id for this overlay mode.
+/// - `plugin_id`: Plugin that owns and registers this overlay.
+/// - `mode`: Runtime overlay mode value exposed to the renderer and UI.
+/// - `label`: Human-readable label shown in overlay selectors and UI.
+/// - `hotkey`: Keyboard shortcut used to activate the overlay.
+/// - `storage`: Legacy storage mapping used for save and runtime compatibility.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OverlayContentDescriptor {
     pub id: ContentId,
@@ -138,7 +151,12 @@ pub struct OverlayContentDescriptor {
 /// Runtime registry of content provider plugins and their registered content descriptors.
 ///
 /// # Fields
-/// Public fields of `ContentRegistry` are part of the generated SDK reference.
+/// - `provider_plugins`: Set of plugin ids that contribute gameplay content.
+/// - `cells`: Registered cell descriptors keyed by stable content id.
+/// - `structures`: Registered structure descriptors keyed by stable content id.
+/// - `overlays`: Registered overlay descriptors keyed by stable content id.
+/// - `substances`: Registered substance definitions keyed by stable substance id.
+/// - `world_cell_hud`: Optional default HUD configuration for hovered world cells.
 #[derive(Resource, Clone, Debug, Default)]
 pub struct ContentRegistry {
     provider_plugins: BTreeSet<PluginId>,
@@ -152,130 +170,78 @@ pub struct ContentRegistry {
 impl ContentRegistry {
     /// Adds one plugin to the set of content providers.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `register_provider_plugin` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn register_provider_plugin(&mut self, plugin_id: PluginId) {
         self.provider_plugins.insert(plugin_id);
     }
 
     /// Registers one cell material descriptor.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `register_cell` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn register_cell(&mut self, descriptor: CellContentDescriptor) {
         self.cells.insert(descriptor.id.clone(), descriptor);
     }
 
     /// Registers one structure descriptor.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `register_structure` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn register_structure(&mut self, descriptor: StructureContentDescriptor) {
         self.structures.insert(descriptor.id.clone(), descriptor);
     }
 
     /// Registers one overlay mode descriptor.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `register_overlay` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn register_overlay(&mut self, descriptor: OverlayContentDescriptor) {
         self.overlays.insert(descriptor.id.clone(), descriptor);
     }
 
     /// Registers one substance definition.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `register_substance` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn register_substance(&mut self, definition: SubstanceDefinition) {
         self.substances.insert(definition.id.clone(), definition);
     }
 
     /// Stores the default world-cell HUD descriptor.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `set_world_cell_hud` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn set_world_cell_hud(&mut self, descriptor: WorldCellHudConfig) {
         self.world_cell_hud = Some(descriptor);
     }
 
     /// Returns the registered content-provider plugin ids.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `provider_plugins` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn provider_plugins(&self) -> &BTreeSet<PluginId> {
         &self.provider_plugins
     }
 
     /// Returns every registered cell descriptor by stable content id.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `cells` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn cells(&self) -> &BTreeMap<ContentId, CellContentDescriptor> {
         &self.cells
     }
 
     /// Returns every registered structure descriptor by stable content id.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `structures` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn structures(&self) -> &BTreeMap<ContentId, StructureContentDescriptor> {
         &self.structures
     }
 
     /// Returns every registered overlay descriptor by stable content id.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `overlays` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn overlays(&self) -> &BTreeMap<ContentId, OverlayContentDescriptor> {
         &self.overlays
     }
 
     /// Returns every registered substance definition by stable substance id.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `substances` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn substances(&self) -> &BTreeMap<SubstanceId, SubstanceDefinition> {
         &self.substances
     }
 
     /// Returns the configured world-cell HUD descriptor.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `world_cell_hud` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn world_cell_hud(&self) -> Option<&WorldCellHudConfig> {
         self.world_cell_hud.as_ref()
     }
 
     /// Finds a registered cell descriptor by the legacy runtime material.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `cell_by_material` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn cell_by_material(&self, material: CellMaterial) -> Option<&CellContentDescriptor> {
         self.cells
             .values()
@@ -284,10 +250,6 @@ impl ContentRegistry {
 
     /// Finds a registered structure descriptor by the legacy runtime kind.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `structure_by_kind` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn structure_by_kind(&self, kind: StructureKind) -> Option<&StructureContentDescriptor> {
         self.structures
             .values()
@@ -296,10 +258,6 @@ impl ContentRegistry {
 
     /// Finds a registered overlay descriptor by the legacy runtime mode.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `overlay_by_mode` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn overlay_by_mode(&self, mode: OverlayMode) -> Option<&OverlayContentDescriptor> {
         self.overlays
             .values()

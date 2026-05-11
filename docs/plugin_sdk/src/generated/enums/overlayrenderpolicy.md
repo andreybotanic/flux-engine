@@ -22,6 +22,6 @@ pub enum OverlayRenderPolicy
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `CoreDefault` | `none` | `CoreDefault` variant. |
-| `PluginControlled` | `none` | `PluginControlled` variant. |
+| `CoreDefault` | none | The engine keeps its normal overlay rendering behavior. |
+| `PluginControlled` | none | The plugin is responsible for supplying the visible overlay frame. |
 

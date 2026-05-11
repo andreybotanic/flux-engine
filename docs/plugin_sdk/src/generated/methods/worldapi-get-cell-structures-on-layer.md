@@ -22,16 +22,22 @@ fn get_cell_structures_on_layer (& self , cell : UVec2 , layer : LayerKind ,) ->
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
-| `layer` | `LayerKind` | `layer` argument passed as `LayerKind`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
+| `layer` | [`LayerKind`](../structures/layerkind.md) | `layer` argument passed as `LayerKind`. |
 
 ## Return Value
 
-Result < Vec < StructureInfo > , WorldApiError >
+Result < Vec < [`StructureInfo`](../structures/structureinfo.md) > , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-cell-structures-on-layer.md`](../../examples/methods/worldapi-get-cell-structures-on-layer.md)_
+
 ```rust
-// Call `get_cell_structures_on_layer` from plugin-facing code when this operation is available in context.
+let structures = world.get_cell_structures_on_layer(
+    UVec2::new(24, 18),
+    LayerKind::new("flux.core.layer.appearance"),
+)?;
+assert!(structures.iter().all(|structure| !structure.occupied_cells.is_empty()));
 ```
 

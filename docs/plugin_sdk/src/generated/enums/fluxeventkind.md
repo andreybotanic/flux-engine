@@ -25,26 +25,26 @@ pub enum FluxEventKind
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `WorldCreated` | `none` | `WorldCreated` variant. |
-| `WorldLoaded` | `none` | `WorldLoaded` variant. |
-| `WorldBeforeSave` | `none` | `WorldBeforeSave` variant. |
-| `WorldAfterSave` | `none` | `WorldAfterSave` variant. |
-| `WorldUnloaded` | `none` | `WorldUnloaded` variant. |
-| `SimulationPreCellGasStep` | `none` | `SimulationPreCellGasStep` variant. |
-| `SimulationPostCellGasStep` | `none` | `SimulationPostCellGasStep` variant. |
-| `SimulationPausedChanged` | `none` | `SimulationPausedChanged` variant. |
-| `StructurePlaced` | `none` | `StructurePlaced` variant. |
-| `StructureRemoved` | `none` | `StructureRemoved` variant. |
-| `ToolSelected` | `none` | `ToolSelected` variant. |
-| `MouseDownCell` | `none` | `MouseDownCell` variant. |
-| `MouseMoveCell` | `none` | `MouseMoveCell` variant. |
-| `MouseUpCell` | `none` | `MouseUpCell` variant. |
-| `MouseEnterCell` | `none` | `MouseEnterCell` variant. |
-| `MouseLeaveCell` | `none` | `MouseLeaveCell` variant. |
-| `KeyPressed` | `none` | `KeyPressed` variant. |
-| `KeyReleased` | `none` | `KeyReleased` variant. |
-| `OverlayChanged` | `none` | `OverlayChanged` variant. |
-| `BuildHudForCell` | `none` | `BuildHudForCell` variant. |
-| `BuildPanel` | `none` | `BuildPanel` variant. |
-| `RenderOverlay` | `none` | `RenderOverlay` variant. |
+| `WorldCreated` | none | Raw ABI tag for the fresh-world lifecycle event. |
+| `WorldLoaded` | none | Raw ABI tag for the world-loaded lifecycle event. |
+| `WorldBeforeSave` | none | Raw ABI tag for the pre-save lifecycle event. |
+| `WorldAfterSave` | none | Raw ABI tag for the post-save lifecycle event. |
+| `WorldUnloaded` | none | Raw ABI tag for the world-unloaded lifecycle event. |
+| `SimulationPreCellGasStep` | none | Raw ABI tag for the pre-simulation gas tick event. |
+| `SimulationPostCellGasStep` | none | Raw ABI tag for the post-simulation gas tick event. |
+| `SimulationPausedChanged` | none | Raw ABI tag for the pause-state change event. |
+| `StructurePlaced` | none | Raw ABI tag for the structure-placed event. |
+| `StructureRemoved` | none | Raw ABI tag for the structure-removed event. |
+| `ToolSelected` | none | Raw ABI tag for the tool-selected event. |
+| `MouseDownCell` | none | Raw ABI tag for the mouse-button-down cell event. |
+| `MouseMoveCell` | none | Raw ABI tag for the mouse-move cell event. |
+| `MouseUpCell` | none | Raw ABI tag for the mouse-button-up cell event. |
+| `MouseEnterCell` | none | Raw ABI tag for the mouse-enter cell event. |
+| `MouseLeaveCell` | none | Raw ABI tag for the mouse-leave cell event. |
+| `KeyPressed` | none | Raw ABI tag for the key-pressed event. |
+| `KeyReleased` | none | Raw ABI tag for the key-released event. |
+| `OverlayChanged` | none | Raw ABI tag for the overlay-changed event. |
+| `BuildHudForCell` | none | Raw ABI tag for the HUD-build event. |
+| `BuildPanel` | none | Raw ABI tag for the panel-build event. |
+| `RenderOverlay` | none | Raw ABI tag for the overlay-render event. |
 

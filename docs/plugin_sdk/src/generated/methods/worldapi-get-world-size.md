@@ -28,7 +28,12 @@ UVec2
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-world-size.md`](../../examples/methods/worldapi-get-world-size.md)_
+
 ```rust
-// Call `get_world_size` from plugin-facing code when this operation is available in context.
+let size = world.get_world_size();
+let center = UVec2::new(size.x / 2, size.y / 2);
+let info = world.get_cell_info(center)?;
+assert!(info.in_bounds);
 ```
 

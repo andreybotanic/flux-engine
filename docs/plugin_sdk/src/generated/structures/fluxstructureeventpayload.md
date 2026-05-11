@@ -22,10 +22,10 @@ pub struct FluxStructureEventPayload
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
-| `structure_id` | `u32` | `structure_id` field stored as `u32`. |
-| `structure_kind` | `FluxUtf8Slice` | `structure_kind` field stored as `FluxUtf8Slice`. |
-| `cell_x` | `u32` | `cell_x` field stored as `u32`. |
-| `cell_y` | `u32` | `cell_y` field stored as `u32`. |
+| `struct_size` | u32 | Size of this payload struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by the event producer and consumer. |
+| `structure_id` | u32 | Runtime id of the affected structure instance. |
+| `structure_kind` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Stable structure kind id of the affected instance. |
+| `cell_x` | u32 | X coordinate of the primary structure cell. |
+| `cell_y` | u32 | Y coordinate of the primary structure cell. |
 

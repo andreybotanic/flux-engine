@@ -16,13 +16,25 @@ Fired when the cursor moves over world cells.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `0` | `MouseCellEvent` | `0` argument passed as `MouseCellEvent`. |
+| `payload` | [`MouseCellEvent`](../structures/mousecellevent.md) | Low-level mouse payload captured for cursor movement. |
 
 ## SDK Example
 
+_Source: [`examples/events/plugineventkind-mousemovecell.md`](../../examples/events/plugineventkind-mousemovecell.md)_
+
 ```rust
-if event.kind() == PluginEventKind::MouseMoveCell && event.has_cell != 0 {
-// Continue a drag operation across cells.
+unsafe extern "C" fn on_mouse_move_cell(
+    plugin: *mut FluxPluginHandle,
+    payload: *const FluxMouseCellEventPayload,
+    _host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let payload = unsafe { &*payload };
+    let plugin = unsafe { &mut *plugin };
+    if plugin.dragging && payload.has_cell != 0 {
+        plugin.last_x = payload.cell_x;
+        plugin.last_y = payload.cell_y;
+    }
+    FluxStatus::OK
 }
 ```
 

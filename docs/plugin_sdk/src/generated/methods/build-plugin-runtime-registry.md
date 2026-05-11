@@ -22,15 +22,20 @@ fn build_plugin_runtime_registry (loaded_plugins : & [LoadedPluginMetadata] ,) -
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `loaded_plugins` | `& [LoadedPluginMetadata]` | `loaded_plugins` argument passed as `& [LoadedPluginMetadata]`. |
+| `loaded_plugins` | & [LoadedPluginMetadata] | `loaded_plugins` argument passed as `& [LoadedPluginMetadata]`. |
 
 ## Return Value
 
-PluginRuntimeRegistry
+[`PluginRuntimeRegistry`](../structures/pluginruntimeregistry.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/build-plugin-runtime-registry.md`](../../examples/methods/build-plugin-runtime-registry.md)_
+
 ```rust
-// Call `build_plugin_runtime_registry` from plugin-facing code when this operation is available in context.
+let registry = build_plugin_runtime_registry(&[]);
+let overlay_count = registry.overlays().len();
+let hud_subscribers = registry.subscribers(PluginEventKind::BuildHudForCell);
+assert!(overlay_count >= hud_subscribers.len());
 ```
 

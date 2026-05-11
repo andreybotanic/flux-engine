@@ -22,15 +22,20 @@ fn overlay_by_mode (& self , mode : OverlayMode) -> Option < & OverlayContentDes
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `mode` | `OverlayMode` | `mode` argument passed as `OverlayMode`. |
+| `mode` | [`OverlayMode`](../enums/overlaymode.md) | `mode` argument passed as `OverlayMode`. |
 
 ## Return Value
 
-Option < & OverlayContentDescriptor >
+Option < & [`OverlayContentDescriptor`](../structures/overlaycontentdescriptor.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-overlay-by-mode.md`](../../examples/methods/contentregistry-overlay-by-mode.md)_
+
 ```rust
-// Call `overlay_by_mode` from plugin-facing code when this operation is available in context.
+let overlay = registry
+    .overlay_by_mode(OverlayMode::plugin("flux.demo.overlay.temperature"))
+    .expect("registered overlay should resolve");
+assert_eq!(overlay.label, "Temperature");
 ```
 

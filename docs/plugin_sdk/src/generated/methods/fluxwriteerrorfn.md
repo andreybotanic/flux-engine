@@ -22,16 +22,21 @@ pub type FluxWriteErrorFn = unsafe extern "C" fn (context : * mut c_void , messa
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `message` | `FluxUtf8Slice` | `message` argument passed as `FluxUtf8Slice`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `message` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `message` argument passed as `FluxUtf8Slice`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxwriteerrorfn.md`](../../examples/methods/fluxwriteerrorfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxWriteErrorFn` ABI signature supplied by FluxEngine.
+unsafe fn report_error(callback: FluxWriteErrorFn, context: *mut std::ffi::c_void) -> FluxStatus {
+    let status = unsafe { callback(context, FluxUtf8Slice::from_str("plugin failed to initialize")) };
+    if status.is_ok() { FluxStatus::OK } else { status }
+}
 ```
 

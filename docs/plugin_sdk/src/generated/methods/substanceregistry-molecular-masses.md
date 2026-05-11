@@ -28,7 +28,10 @@ Vec < f32 >
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceregistry-molecular-masses.md`](../../examples/methods/substanceregistry-molecular-masses.md)_
+
 ```rust
-// Call `molecular_masses` from plugin-facing code when this operation is available in context.
+let masses = registry.molecular_masses();
+assert!(masses.windows(2).all(|pair| pair[0] <= pair[1]));
 ```
 

@@ -22,7 +22,7 @@ fn canonical_handler_name (kind : PluginEventKind) -> & 'static str
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `kind` | `PluginEventKind` | `kind` argument passed as `PluginEventKind`. |
+| `kind` | [`PluginEventKind`](../enums/plugineventkind.md) | `kind` argument passed as `PluginEventKind`. |
 
 ## Return Value
 
@@ -30,7 +30,14 @@ fn canonical_handler_name (kind : PluginEventKind) -> & 'static str
 
 ## SDK Example
 
+_Source: [`examples/methods/canonical-handler-name.md`](../../examples/methods/canonical-handler-name.md)_
+
 ```rust
-// Call `canonical_handler_name` from engine-side code when suggesting default handler exports.
+let name = canonical_handler_name(PluginEventKind::MouseDownCell);
+let descriptor = FluxEventHandlerDescriptor::new(
+    FluxEventKind::MouseDownCell,
+    FluxUtf8Slice::from_str(name),
+);
+assert_eq!(descriptor.event_kind, FluxEventKind::MouseDownCell.as_raw());
 ```
 

@@ -22,15 +22,19 @@ fn get_by_id (& self , id : & SubstanceId) -> Option < & SubstanceDefinition >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `id` | `& SubstanceId` | `id` argument passed as `& SubstanceId`. |
+| `id` | & [`SubstanceId`](../structures/substanceid.md) | `id` argument passed as `& SubstanceId`. |
 
 ## Return Value
 
-Option < & SubstanceDefinition >
+Option < & [`SubstanceDefinition`](../structures/substancedefinition.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceregistry-get-by-id.md`](../../examples/methods/substanceregistry-get-by-id.md)_
+
 ```rust
-// Call `get_by_id` from plugin-facing code when this operation is available in context.
+let oxygen_id = SubstanceId::parse("flux.demo.gas.oxygen").expect("id");
+let oxygen = registry.get_by_id(&oxygen_id).expect("oxygen is registered");
+assert_eq!(oxygen.label, "Oxygen");
 ```
 

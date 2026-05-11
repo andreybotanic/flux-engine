@@ -28,7 +28,10 @@ bool
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxstatus-is-ok.md`](../../examples/methods/fluxstatus-is-ok.md)_
+
 ```rust
-// Call `is_ok` from plugin-facing code when this operation is available in context.
+let status = FluxStatus::OK;
+assert!(status.is_ok());
 ```
 

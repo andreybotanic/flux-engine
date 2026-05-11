@@ -24,11 +24,15 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& [SubstanceDefinition]
+& [[`SubstanceDefinition`](../structures/substancedefinition.md)]
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceregistry-all.md`](../../examples/methods/substanceregistry-all.md)_
+
 ```rust
-// Call `all` from plugin-facing code when this operation is available in context.
+let definitions = registry.all();
+let labels: Vec<_> = definitions.iter().map(|definition| definition.label.as_str()).collect();
+assert!(!labels.is_empty());
 ```
 

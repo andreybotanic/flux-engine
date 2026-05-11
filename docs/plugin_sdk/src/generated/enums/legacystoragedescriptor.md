@@ -22,7 +22,7 @@ pub enum LegacyStorageDescriptor
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `WorldCellCode` | `u8` | `WorldCellCode` variant. |
-| `PlacedStructureKind` | `& 'static str` | `PlacedStructureKind` variant. |
-| `OverlayMode` | `& 'static str` | `OverlayMode` variant. |
+| `WorldCellCode` | u8 | Legacy numeric world-cell code still used for save compatibility. |
+| `PlacedStructureKind` | & 'static str | Legacy structure kind id still used by placed-structure serialization. |
+| `OverlayMode` | & 'static str | Legacy overlay mode id still used by overlay persistence. |
 

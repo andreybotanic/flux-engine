@@ -22,7 +22,7 @@ pub enum GasRenderStyle
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `Hidden` | `none` | `Hidden` variant. |
-| `Normal` | `none` | `Normal` variant. |
-| `Custom` | `color: Color, intensity: f32` | `Custom` variant. |
+| `Hidden` | none | Gas is hidden for the target cell. |
+| `Normal` | none | Gas uses the engine's default overlay rendering. |
+| `Custom` | color: Color, intensity: f32 | Gas is rendered with a plugin-provided color and intensity. |
 

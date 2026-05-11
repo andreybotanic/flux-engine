@@ -20,7 +20,11 @@ pub const FLUX_PLUGIN_CREATE_EXPORT_NAME: & [u8] = ...;
 
 ## SDK Example
 
+_Source: [`examples/constants/flux-plugin-create-export-name.md`](../../examples/constants/flux-plugin-create-export-name.md)_
+
 ```rust
-// Use `FLUX_PLUGIN_CREATE_EXPORT_NAME` when validating the Plugin SDK ABI contract.
+let symbol = std::ffi::CStr::from_bytes_with_nul(FLUX_PLUGIN_CREATE_EXPORT_NAME)
+    .expect("export name must stay null-terminated");
+assert_eq!(symbol.to_str().unwrap(), "flux_plugin_create");
 ```
 

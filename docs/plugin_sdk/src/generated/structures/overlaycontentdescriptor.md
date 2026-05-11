@@ -22,10 +22,10 @@ pub struct OverlayContentDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `ContentId` | `id` field stored as `ContentId`. |
-| `plugin_id` | `PluginId` | `plugin_id` field stored as `PluginId`. |
-| `mode` | `OverlayMode` | `mode` field stored as `OverlayMode`. |
-| `label` | `& 'static str` | `label` field stored as `& 'static str`. |
-| `hotkey` | `& 'static str` | `hotkey` field stored as `& 'static str`. |
-| `storage` | `LegacyStorageDescriptor` | `storage` field stored as `LegacyStorageDescriptor`. |
+| `id` | [`ContentId`](../structures/contentid.md) | Stable content id for this overlay mode. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | Plugin that owns and registers this overlay. |
+| `mode` | [`OverlayMode`](../enums/overlaymode.md) | Runtime overlay mode value exposed to the renderer and UI. |
+| `label` | & 'static str | Human-readable label shown in overlay selectors and UI. |
+| `hotkey` | & 'static str | Keyboard shortcut used to activate the overlay. |
+| `storage` | [`LegacyStorageDescriptor`](../enums/legacystoragedescriptor.md) | Legacy storage mapping used for save and runtime compatibility. |
 

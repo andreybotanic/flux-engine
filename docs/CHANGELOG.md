@@ -1,6 +1,8 @@
 ﻿# Changelog
 
 ## 2026-05-11
+- Plugin SDK reference расширен и ужесточён: generator теперь подтягивает allowlisted SDK-типы из `src/world/*`, `src/config/*` и `src/render/world_view.rs`, требует явные описания для всех публичных SDK-полей и enum-вариантов, а также валится при отсутствии external example-snippet.
+- Все `SDK Example` для Plugin SDK вынесены из Rustdoc в `docs/plugin_sdk/src/examples/{methods,events,constants}/`; generated pages теперь встраивают эти snippets, ссылаются на них напрямую и больше не показывают internal helper aliases `FluxOn*Fn`.
 - Перестроена generated-навигация Plugin SDK: API reference теперь сгруппирован по `Structures`, `Enums`, `Constants`, `Methods` и `Events`, а вторым уровнем меню идут конкретные структуры, enum-ы, константы, методы и события с отдельными страницами.
 - Generated-страницы Plugin SDK теперь выводят для структур таблицы полей, для enum-ов таблицы вариантов, для констант декларации, для методов сигнатуры/аргументы/возвращаемые значения/примеры, а для событий условия срабатывания и payload-аргументы.
 - Пункты generated API первого уровня в Plugin SDK sidebar теперь сворачиваемые и закрыты по умолчанию.

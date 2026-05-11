@@ -22,13 +22,18 @@ pub struct OverlayFrame
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `overlay_id` | `ContentId` | `overlay_id` field stored as `ContentId`. |
-| `policy` | `OverlayRenderPolicy` | `policy` field stored as `OverlayRenderPolicy`. |
-| `background` | `Option < Color >` | `background` field stored as `Option < Color >`. |
-| `world_alpha` | `f32` | `world_alpha` field stored as `f32`. |
-| `show_core_gas` | `bool` | `show_core_gas` field stored as `bool`. |
-| `cell_styles` | `Vec < CellStyleEntry >` | `cell_styles` field stored as `Vec < CellStyleEntry >`. |
-| `structure_styles` | `Vec < StructureStyleEntry >` | `structure_styles` field stored as `Vec < StructureStyleEntry >`. |
-| `gas_styles` | `Vec < GasStyleEntry >` | `gas_styles` field stored as `Vec < GasStyleEntry >`. |
-| `draw_commands` | `Vec < OverlayDrawCommand >` | `draw_commands` field stored as `Vec < OverlayDrawCommand >`. |
+| `overlay_id` | [`ContentId`](../structures/contentid.md) | Stable content id of the overlay producing this frame. |
+| `policy` | [`OverlayRenderPolicy`](../enums/overlayrenderpolicy.md) | Rendering ownership mode used for this frame. |
+| `background` | Option < Color > | Optional full-frame background color drawn before cell content. |
+| `world_alpha` | f32 | Alpha multiplier applied to the core world rendering pass. |
+| `show_core_gas` | bool | Whether core gas rendering remains visible underneath plugin styling. |
+| `cell_styles` | Vec < [`CellStyleEntry`](../structures/cellstyleentry.md) > | Per-cell visual overrides emitted by the plugin. |
+| `structure_styles` | Vec < [`StructureStyleEntry`](../structures/structurestyleentry.md) > | Per-structure visual overrides emitted by the plugin. |
+| `gas_styles` | Vec < [`GasStyleEntry`](../structures/gasstyleentry.md) > | Per-cell gas visual overrides emitted by the plugin. |
+| `draw_commands` | Vec < [`OverlayDrawCommand`](../enums/overlaydrawcommand.md) > | Extra draw primitives layered on top of the frame. |
+
+## Methods
+
+- [`OverlayFrame::core_default`](../methods/overlayframe-core-default.md)
+- [`OverlayFrame::plugin_controlled`](../methods/overlayframe-plugin-controlled.md)
 

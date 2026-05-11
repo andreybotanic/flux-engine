@@ -22,15 +22,18 @@ fn get_structures_by_type (& self , kind : StructureKind) -> Vec < StructureInfo
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `kind` | `StructureKind` | `kind` argument passed as `StructureKind`. |
+| `kind` | [`StructureKind`](../structures/structurekind.md) | `kind` argument passed as `StructureKind`. |
 
 ## Return Value
 
-Vec < StructureInfo >
+Vec < [`StructureInfo`](../structures/structureinfo.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-structures-by-type.md`](../../examples/methods/worldapi-get-structures-by-type.md)_
+
 ```rust
-// Call `get_structures_by_type` from plugin-facing code when this operation is available in context.
+let pumps = world.get_structures_by_type(StructureKind::new("flux.default.structure.pump"));
+assert!(pumps.iter().all(|structure| structure.kind.as_str().contains("pump")));
 ```
 

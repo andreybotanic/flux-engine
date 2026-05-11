@@ -22,7 +22,7 @@ pub struct PanelDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `ContentId` | `id` field stored as `ContentId`. |
-| `title` | `String` | `title` field stored as `String`. |
-| `root` | `UiNode` | `root` field stored as `UiNode`. |
+| `id` | [`ContentId`](../structures/contentid.md) | Stable content id of the panel. |
+| `title` | String | Human-readable panel title shown by the UI. |
+| `root` | [`UiNode`](../enums/uinode.md) | Root declarative UI node used to build the panel contents. |
 

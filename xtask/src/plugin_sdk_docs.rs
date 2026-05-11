@@ -110,7 +110,7 @@ fn generated_plugin_sdk_files(repo_root: &Path) -> Result<Vec<GeneratedFile>, Xt
         });
         for item in group_items {
             let mut contents = String::new();
-            render_item_page(&mut contents, &item);
+            render_item_page(&mut contents, &item, &items);
             files.push(GeneratedFile {
                 relative_path: PathBuf::from(GENERATED_DIR)
                     .join(group.directory_name())
@@ -150,15 +150,76 @@ fn summary_groups<'a>(
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     use super::{check_plugin_sdk_docs, generated_plugin_sdk_files};
+
+    struct TempRepo {
+        root: PathBuf,
+    }
+
+    impl Drop for TempRepo {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
 
     fn repo_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("xtask has repo parent")
             .to_path_buf()
+    }
+
+    fn copy_tree(source: &Path, destination: &Path) {
+        let metadata = fs::metadata(source).expect("source metadata");
+        if metadata.is_dir() {
+            fs::create_dir_all(destination).expect("create destination directory");
+            for entry in fs::read_dir(source).expect("read directory") {
+                let entry = entry.expect("directory entry");
+                copy_tree(&entry.path(), &destination.join(entry.file_name()));
+            }
+            return;
+        }
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent).expect("create destination parent");
+        }
+        fs::copy(source, destination).expect("copy file");
+    }
+
+    fn temp_repo(label: &str) -> TempRepo {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time since epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "flux_plugin_sdk_docs_{}_{}_{}",
+            label,
+            std::process::id(),
+            suffix
+        ));
+        fs::create_dir_all(&root).expect("create temp repo root");
+        let repo = repo_root();
+        copy_tree(&repo.join("src"), &root.join("src"));
+        copy_tree(
+            &repo.join("docs").join("plugin_sdk").join("src").join("examples"),
+            &root.join("docs")
+                .join("plugin_sdk")
+                .join("src")
+                .join("examples"),
+        );
+        TempRepo { root }
+    }
+
+    fn rewrite_file(path: &Path, from: &str, to: &str) {
+        let text = fs::read_to_string(path).expect("read file to rewrite");
+        let updated = text.replace(from, to);
+        assert_ne!(text, updated, "rewrite pattern must match");
+        fs::write(path, updated).expect("write rewritten file");
     }
 
     #[test]
@@ -204,7 +265,41 @@ mod tests {
 
         assert!(page.contents.contains("## Fields"));
         assert!(page.contents.contains("set_cell_material"));
-        assert!(page.contents.contains("Option < FluxSetCellMaterialFn >"));
+        assert!(page
+            .contents
+            .contains("[`FluxSetCellMaterialFn`](../methods/fluxsetcellmaterialfn.md)"));
+    }
+
+    #[test]
+    fn generated_structure_pages_include_method_links() {
+        let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
+        let page = files
+            .iter()
+            .find(|file| file.relative_path == Path::new("generated/structures/worldapi.md"))
+            .expect("WorldApi page");
+
+        assert!(page.contents.contains("## Methods"));
+        assert!(page
+            .contents
+            .contains("[`WorldApi::get_cell_info`](../methods/worldapi-get-cell-info.md)"));
+    }
+
+    #[test]
+    fn allowlisted_sources_only_generate_selected_types_and_methods() {
+        let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
+
+        assert!(files
+            .iter()
+            .any(|file| file.relative_path == Path::new("generated/structures/cellmaterial.md")));
+        assert!(files.iter().any(
+            |file| file.relative_path == Path::new("generated/methods/cellmaterial-new.md")
+        ));
+        assert!(!files
+            .iter()
+            .any(|file| file.relative_path == Path::new("generated/structures/worldgrid.md")));
+        assert!(!files.iter().any(
+            |file| file.relative_path == Path::new("generated/structures/placedstructuremap.md")
+        ));
     }
 
     #[test]
@@ -220,9 +315,101 @@ mod tests {
         assert!(page.contents.contains("## Arguments"));
         assert!(page.contents.contains("cell"));
         assert!(page.contents.contains("## Return Value"));
+        assert!(page.contents.contains("[`CellInfo`](../structures/cellinfo.md)"));
         assert!(page
             .contents
-            .contains("Result < CellInfo , WorldApiError >"));
+            .contains("[`WorldApiError`](../enums/worldapierror.md)"));
+    }
+
+    #[test]
+    fn generated_event_pages_use_payload_name_for_tuple_variants() {
+        let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
+        let page = files
+            .iter()
+            .find(|file| {
+                file.relative_path
+                    == Path::new("generated/events/plugineventkind-mousedowncell.md")
+            })
+            .expect("MouseDownCell event page");
+
+        assert!(page.contents.contains("| `payload` |"));
+        assert!(!page.contents.contains("| `0` |"));
+        assert!(page
+            .contents
+            .contains("[`MouseCellEvent`](../structures/mousecellevent.md)"));
+    }
+
+    #[test]
+    fn fluxon_callbacks_are_hidden_from_generated_docs() {
+        let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
+        let methods_index = files
+            .iter()
+            .find(|file| file.relative_path == Path::new("generated/methods.md"))
+            .expect("methods index page");
+
+        assert!(!methods_index.contents.contains("FluxOn"));
+        assert!(!methods_index.contents.contains("fluxon"));
+        assert!(!files
+            .iter()
+            .any(|file| file.relative_path.to_string_lossy().contains("fluxon")));
+        assert!(!files
+            .iter()
+            .any(|file| file.contents.contains("FluxOnWorldCreatedFn")));
+    }
+
+    #[test]
+    fn missing_example_file_is_reported() {
+        let repo = temp_repo("missing_example");
+        let missing = repo
+            .root
+            .join("docs")
+            .join("plugin_sdk")
+            .join("src")
+            .join("examples")
+            .join("methods")
+            .join("worldapi-get-cell-info.md");
+        fs::remove_file(&missing).expect("remove example file");
+
+        let error = generated_plugin_sdk_files(&repo.root).expect_err("missing example must fail");
+
+        assert!(error.to_string().contains("worldapi-get-cell-info.md"));
+        assert!(error
+            .to_string()
+            .contains("missing Plugin SDK example for `WorldApi::get_cell_info`"));
+    }
+
+    #[test]
+    fn missing_field_description_is_reported() {
+        let repo = temp_repo("missing_field");
+        rewrite_file(
+            &repo.root.join("src").join("world").join("structures.rs"),
+            "/// - `layers`: Layer definitions that describe footprint, markers and collisions.\n",
+            "",
+        );
+
+        let error =
+            generated_plugin_sdk_files(&repo.root).expect_err("missing field description must fail");
+
+        assert!(error
+            .to_string()
+            .contains("SDK item `StructureDescriptor` is missing a description for field `layers`"));
+    }
+
+    #[test]
+    fn missing_variant_description_is_reported() {
+        let repo = temp_repo("missing_variant");
+        rewrite_file(
+            &repo.root.join("src").join("world").join("structures.rs"),
+            "/// - `Deg270`: Clockwise three-quarter-turn orientation.\n",
+            "",
+        );
+
+        let error = generated_plugin_sdk_files(&repo.root)
+            .expect_err("missing variant description must fail");
+
+        assert!(error
+            .to_string()
+            .contains("SDK item `StructureRotation` is missing a description for variant `Deg270`"));
     }
 
     #[test]

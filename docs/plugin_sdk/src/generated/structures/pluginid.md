@@ -18,3 +18,9 @@ Canonical plugin identifier used across manifests and registries.
 pub struct PluginId
 ```
 
+## Methods
+
+- [`PluginId::as_str`](../methods/pluginid-as-str.md)
+- [`PluginId::default_plugin`](../methods/pluginid-default-plugin.md)
+- [`PluginId::parse`](../methods/pluginid-parse.md)
+

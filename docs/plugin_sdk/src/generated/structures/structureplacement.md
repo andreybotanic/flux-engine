@@ -22,8 +22,8 @@ pub struct StructurePlacement
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `kind` | `StructureKind` | `kind` field stored as `StructureKind`. |
-| `origin` | `UVec2` | `origin` field stored as `UVec2`. |
-| `rotation` | `StructureRotation` | `rotation` field stored as `StructureRotation`. |
-| `params` | `StructureParams` | `params` field stored as `StructureParams`. |
+| `kind` | [`StructureKind`](../structures/structurekind.md) | Registered structure kind to place. |
+| `origin` | UVec2 | Placement origin in world-cell coordinates. |
+| `rotation` | [`StructureRotation`](../enums/structurerotation.md) | Rotation to use when resolving layer descriptors and footprint cells. |
+| `params` | [`StructureParams`](../enums/structureparams.md) | Initial editable parameters stored on the created structure instance. |
 

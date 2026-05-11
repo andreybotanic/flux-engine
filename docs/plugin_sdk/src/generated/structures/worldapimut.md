@@ -22,10 +22,22 @@ pub struct WorldApiMut
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `content_registry` | `& 'a ContentRegistry` | `content_registry` field stored as `& 'a ContentRegistry`. |
-| `gas_registry` | `& 'a GasRegistry` | `gas_registry` field stored as `& 'a GasRegistry`. |
-| `world` | `& 'a mut WorldGrid` | `world` field stored as `& 'a mut WorldGrid`. |
-| `gas` | `& 'a mut GasField` | `gas` field stored as `& 'a mut GasField`. |
-| `structures` | `& 'a mut PlacedStructureMap` | `structures` field stored as `& 'a mut PlacedStructureMap`. |
-| `gpu_state` | `Option < & 'a mut GpuRuntimeState >` | `gpu_state` field stored as `Option < & 'a mut GpuRuntimeState >`. |
+| `content_registry` | & 'a [`ContentRegistry`](../structures/contentregistry.md) | Read-only registry used to validate cell and structure ids before mutations. |
+| `gas_registry` | & 'a GasRegistry | Read-only gas registry used to resolve substance ids during gas mutations. |
+| `world` | & 'a mut WorldGrid | Mutable access to world-cell materials. |
+| `gas` | & 'a mut GasField | Mutable access to the free-gas simulation field. |
+| `structures` | & 'a mut PlacedStructureMap | Mutable access to placed structures and their layer occupancy maps. |
+| `gpu_state` | Option < & 'a mut GpuRuntimeState > | Optional GPU upload state that is marked dirty after successful world or gas edits. |
+
+## Methods
+
+- [`WorldApiMut::add_gas`](../methods/worldapimut-add-gas.md)
+- [`WorldApiMut::place_structure`](../methods/worldapimut-place-structure.md)
+- [`WorldApiMut::remove_all_gas`](../methods/worldapimut-remove-all-gas.md)
+- [`WorldApiMut::remove_cell_material`](../methods/worldapimut-remove-cell-material.md)
+- [`WorldApiMut::remove_gas`](../methods/worldapimut-remove-gas.md)
+- [`WorldApiMut::remove_structure`](../methods/worldapimut-remove-structure.md)
+- [`WorldApiMut::remove_structures_in_cell`](../methods/worldapimut-remove-structures-in-cell.md)
+- [`WorldApiMut::set_cell_material`](../methods/worldapimut-set-cell-material.md)
+- [`WorldApiMut::set_gas`](../methods/worldapimut-set-gas.md)
 

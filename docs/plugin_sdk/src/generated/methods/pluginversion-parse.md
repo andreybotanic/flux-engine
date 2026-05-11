@@ -22,7 +22,7 @@ fn parse (raw : & str) -> Result < Self , PluginContractError >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `raw` | `& str` | `raw` argument passed as `& str`. |
+| `raw` | & str | `raw` argument passed as `& str`. |
 
 ## Return Value
 
@@ -30,7 +30,10 @@ Result < Self , PluginContractError >
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginversion-parse.md`](../../examples/methods/pluginversion-parse.md)_
+
 ```rust
-// Call `parse` from plugin-facing code when this operation is available in context.
+let version = PluginVersion::parse("1.4.0-beta.2").expect("valid semver");
+assert_eq!(version.as_semver().minor, 4);
 ```
 

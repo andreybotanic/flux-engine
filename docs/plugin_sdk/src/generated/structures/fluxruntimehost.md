@@ -22,13 +22,17 @@ pub struct FluxRuntimeHost
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
-| `context` | `* mut c_void` | `context` field stored as `* mut c_void`. |
-| `set_cell_material` | `Option < FluxSetCellMaterialFn >` | `set_cell_material` field stored as `Option < FluxSetCellMaterialFn >`. |
-| `add_gas` | `Option < FluxAddGasFn >` | `add_gas` field stored as `Option < FluxAddGasFn >`. |
-| `submit_overlay_frame` | `Option < FluxSubmitOverlayFrameFn >` | `submit_overlay_frame` field stored as `Option < FluxSubmitOverlayFrameFn >`. |
-| `submit_hud_block` | `Option < FluxSubmitHudBlockFn >` | `submit_hud_block` field stored as `Option < FluxSubmitHudBlockFn >`. |
-| `write_save_chunk` | `Option < FluxWriteSaveChunkFn >` | `write_save_chunk` field stored as `Option < FluxWriteSaveChunkFn >`. |
-| `read_save_chunk` | `Option < FluxReadSaveChunkFn >` | `read_save_chunk` field stored as `Option < FluxReadSaveChunkFn >`. |
+| `struct_size` | u32 | Size of this struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by both host and plugin. |
+| `context` | * mut c_void | Opaque host-owned context passed back into callback functions. |
+| `set_cell_material` | Option < [`FluxSetCellMaterialFn`](../methods/fluxsetcellmaterialfn.md) > | Optional callback for changing a world cell material. |
+| `add_gas` | Option < [`FluxAddGasFn`](../methods/fluxaddgasfn.md) > | Optional callback for adding free gas with velocity. |
+| `submit_overlay_frame` | Option < [`FluxSubmitOverlayFrameFn`](../methods/fluxsubmitoverlayframefn.md) > | Optional callback for sending an RGBA8 overlay frame to the host. |
+| `submit_hud_block` | Option < [`FluxSubmitHudBlockFn`](../methods/fluxsubmithudblockfn.md) > | Optional callback for appending one HUD block line. |
+| `write_save_chunk` | Option < [`FluxWriteSaveChunkFn`](../methods/fluxwritesavechunkfn.md) > | Optional callback for writing a plugin-owned save chunk. |
+| `read_save_chunk` | Option < [`FluxReadSaveChunkFn`](../methods/fluxreadsavechunkfn.md) > | Optional callback for reading a plugin-owned save chunk. |
+
+## Methods
+
+- [`FluxRuntimeHost::new`](../methods/fluxruntimehost-new.md)
 

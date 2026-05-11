@@ -22,15 +22,19 @@ fn event_kind_from_abi (value : u32) -> Option < PluginEventKind >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `value` | `u32` | `value` argument passed as `u32`. |
+| `value` | u32 | `value` argument passed as `u32`. |
 
 ## Return Value
 
-Option < PluginEventKind >
+Option < [`PluginEventKind`](../enums/plugineventkind.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/event-kind-from-abi.md`](../../examples/methods/event-kind-from-abi.md)_
+
 ```rust
-// Call `event_kind_from_abi` from engine-side code when validating event registrations.
+let engine_kind = event_kind_from_abi(FluxEventKind::BuildPanel.as_raw())
+    .expect("known ABI event tag");
+assert_eq!(engine_kind, PluginEventKind::BuildPanel);
 ```
 

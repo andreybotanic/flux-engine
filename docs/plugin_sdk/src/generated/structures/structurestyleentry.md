@@ -22,8 +22,8 @@ pub struct StructureStyleEntry
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `structure_id` | `PlacedStructureId` | `structure_id` field stored as `PlacedStructureId`. |
-| `kind` | `StructureKind` | `kind` field stored as `StructureKind`. |
-| `style` | `StructureRenderStyle` | `style` field stored as `StructureRenderStyle`. |
-| `z_order` | `f32` | `z_order` field stored as `f32`. |
+| `structure_id` | [`PlacedStructureId`](../structures/placedstructureid.md) | Runtime id of the structure receiving the style override. |
+| `kind` | [`StructureKind`](../structures/structurekind.md) | Registered structure kind of the styled structure. |
+| `style` | [`StructureRenderStyle`](../enums/structurerenderstyle.md) | Structure rendering style to apply in the overlay frame. |
+| `z_order` | f32 | Explicit ordering value used for overlay composition. |
 

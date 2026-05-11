@@ -7,15 +7,23 @@
 | API item | Kind | Source |
 | --- | --- | --- |
 | [`CellRenderStyle`](enums/cellrenderstyle.md) | enum | `src/plugins/api/render_api.rs` |
+| [`ConfiguredPipeNodeKind`](enums/configuredpipenodekind.md) | enum | `src/config/hud.rs` |
+| [`ContainerBacking`](enums/containerbacking.md) | enum | `src/config/hud.rs` |
 | [`FluxEventKind`](enums/fluxeventkind.md) | enum | `src/plugins/abi_events.rs` |
 | [`GasRenderStyle`](enums/gasrenderstyle.md) | enum | `src/plugins/api/render_api.rs` |
+| [`HoverVisibility`](enums/hovervisibility.md) | enum | `src/config/hud.rs` |
+| [`LayerCollisionKind`](enums/layercollisionkind.md) | enum | `src/world/structures.rs` |
 | [`LegacyStorageDescriptor`](enums/legacystoragedescriptor.md) | enum | `src/plugins/content.rs` |
 | [`MouseCellButton`](enums/mousecellbutton.md) | enum | `src/plugins/api/events.rs` |
 | [`OverlayDrawCommand`](enums/overlaydrawcommand.md) | enum | `src/plugins/api/render_api.rs` |
+| [`OverlayMode`](enums/overlaymode.md) | enum | `src/render/world_view.rs` |
 | [`OverlayRenderPolicy`](enums/overlayrenderpolicy.md) | enum | `src/plugins/api/render_api.rs` |
 | [`PluginEvent`](enums/pluginevent.md) | enum | `src/plugins/api/events.rs` |
 | [`PluginEventKind`](enums/plugineventkind.md) | enum | `src/plugins/api/events.rs` |
+| [`StructureParams`](enums/structureparams.md) | enum | `src/world/structures.rs` |
 | [`StructureRenderStyle`](enums/structurerenderstyle.md) | enum | `src/plugins/api/render_api.rs` |
+| [`StructureRotation`](enums/structurerotation.md) | enum | `src/world/structures.rs` |
+| [`SubstanceKind`](enums/substancekind.md) | enum | `src/config/hud.rs` |
 | [`UiNode`](enums/uinode.md) | enum | `src/plugins/api/ui_api.rs` |
 | [`WorldApiError`](enums/worldapierror.md) | enum | `src/plugins/api/world_api.rs` |
 

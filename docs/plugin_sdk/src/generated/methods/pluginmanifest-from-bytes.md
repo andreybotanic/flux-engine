@@ -22,7 +22,7 @@ fn from_bytes (value : & [u8]) -> Result < Self , PluginContractError >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `value` | `& [u8]` | `value` argument passed as `& [u8]`. |
+| `value` | & [u8] | `value` argument passed as `& [u8]`. |
 
 ## Return Value
 
@@ -30,7 +30,20 @@ Result < Self , PluginContractError >
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginmanifest-from-bytes.md`](../../examples/methods/pluginmanifest-from-bytes.md)_
+
 ```rust
-// Call `from_bytes` from plugin-facing code when this operation is available in context.
+let bytes = br#"
+id = "flux.demo"
+display_name = "Flux Demo"
+version = "1.2.3"
+api_version = 4
+dll = "bin/flux_demo.dll"
+configs = "config"
+assets = "assets"
+content = false
+"#;
+let manifest = PluginManifest::from_bytes(bytes).expect("manifest bytes should parse");
+assert_eq!(manifest.version.as_semver().major, 1);
 ```
 

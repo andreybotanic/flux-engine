@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& BTreeMap < ContentId , RuntimeOverlayDescriptor >
+& BTreeMap < [`ContentId`](../structures/contentid.md) , [`RuntimeOverlayDescriptor`](../structures/runtimeoverlaydescriptor.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginruntimeregistry-overlays.md`](../../examples/methods/pluginruntimeregistry-overlays.md)_
+
 ```rust
-// Call `overlays` from plugin-facing code when this operation is available in context.
+let overlays = registry.overlays();
+assert!(overlays.values().any(|overlay| overlay.render_policy == OverlayRenderPolicy::PluginControlled));
 ```
 

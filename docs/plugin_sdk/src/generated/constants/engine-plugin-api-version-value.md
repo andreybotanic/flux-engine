@@ -20,7 +20,15 @@ pub const ENGINE_PLUGIN_API_VERSION_VALUE: u32 = ...;
 
 ## SDK Example
 
+_Source: [`examples/constants/engine-plugin-api-version-value.md`](../../examples/constants/engine-plugin-api-version-value.md)_
+
 ```rust
-// Use `ENGINE_PLUGIN_API_VERSION_VALUE` when validating the Plugin SDK ABI contract.
+if host.api_version != ENGINE_PLUGIN_API_VERSION_VALUE {
+    return Err(format!(
+        "plugin was loaded with ABI {}, but the engine exports {}",
+        host.api_version,
+        ENGINE_PLUGIN_API_VERSION_VALUE,
+    ));
+}
 ```
 

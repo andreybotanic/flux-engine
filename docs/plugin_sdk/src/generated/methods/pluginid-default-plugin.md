@@ -28,7 +28,10 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginid-default-plugin.md`](../../examples/methods/pluginid-default-plugin.md)_
+
 ```rust
-// Call `default_plugin` from plugin-facing code when this operation is available in context.
+let plugin_id = PluginId::default_plugin();
+assert_eq!(plugin_id.as_str(), DEFAULT_PLUGIN_ID_VALUE);
 ```
 

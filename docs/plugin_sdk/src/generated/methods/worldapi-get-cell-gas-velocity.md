@@ -22,16 +22,21 @@ fn get_cell_gas_velocity (& self , cell : UVec2 , substance : & str ,) -> Result
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
-| `substance` | `& str` | `substance` argument passed as `& str`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
+| `substance` | & str | `substance` argument passed as `& str`. |
 
 ## Return Value
 
-Result < Vec2 , WorldApiError >
+Result < Vec2 , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-cell-gas-velocity.md`](../../examples/methods/worldapi-get-cell-gas-velocity.md)_
+
 ```rust
-// Call `get_cell_gas_velocity` from plugin-facing code when this operation is available in context.
+let velocity = world.get_cell_gas_velocity(UVec2::new(24, 18), "oxygen")?;
+if velocity.length() > 0.0 {
+    println!("gas drift: {:?}", velocity);
+}
 ```
 

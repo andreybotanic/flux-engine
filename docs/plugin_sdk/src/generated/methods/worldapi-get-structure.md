@@ -22,15 +22,19 @@ fn get_structure (& self , id : PlacedStructureId) -> Option < StructureInfo >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `id` | `PlacedStructureId` | `id` argument passed as `PlacedStructureId`. |
+| `id` | [`PlacedStructureId`](../structures/placedstructureid.md) | `id` argument passed as `PlacedStructureId`. |
 
 ## Return Value
 
-Option < StructureInfo >
+Option < [`StructureInfo`](../structures/structureinfo.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-structure.md`](../../examples/methods/worldapi-get-structure.md)_
+
 ```rust
-// Call `get_structure` from plugin-facing code when this operation is available in context.
+if let Some(structure) = world.get_structure(PlacedStructureId(12)) {
+    println!("{} occupies {} cells", structure.kind.as_str(), structure.occupied_cells.len());
+}
 ```
 

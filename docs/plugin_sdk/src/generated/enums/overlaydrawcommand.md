@@ -22,9 +22,9 @@ pub enum OverlayDrawCommand
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `Rect` | `cell: UVec2, color: Color, z: f32` | `Rect` variant. |
-| `Outline` | `cell: UVec2, color: Color, z: f32` | `Outline` variant. |
-| `Sprite` | `cell: UVec2, asset_path: String, z: f32` | `Sprite` variant. |
-| `Line` | `from: Vec2, to: Vec2, color: Color, z: f32` | `Line` variant. |
-| `Text` | `cell: UVec2, text: String, color: Color, z: f32` | `Text` variant. |
+| `Rect` | cell: UVec2, color: Color, z: f32 | Draws a filled rectangle aligned to one world cell. |
+| `Outline` | cell: UVec2, color: Color, z: f32 | Draws an outlined rectangle aligned to one world cell. |
+| `Sprite` | cell: UVec2, asset_path: String, z: f32 | Draws a sprite aligned to one world cell. |
+| `Line` | from: Vec2, to: Vec2, color: Color, z: f32 | Draws a world-space line between two points. |
+| `Text` | cell: UVec2, text: String, color: Color, z: f32 | Draws text anchored to one world cell. |
 

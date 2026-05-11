@@ -22,15 +22,19 @@ fn get_cell_gas (& self , cell : UVec2) -> Result < GasMixture , WorldApiError >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
 
 ## Return Value
 
-Result < GasMixture , WorldApiError >
+Result < [`GasMixture`](../structures/gasmixture.md) , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-cell-gas.md`](../../examples/methods/worldapi-get-cell-gas.md)_
+
 ```rust
-// Call `get_cell_gas` from plugin-facing code when this operation is available in context.
+let gas = world.get_cell_gas(UVec2::new(24, 18))?;
+let non_zero_species = gas.species.iter().filter(|entry| entry.amount > 0).count();
+assert!(gas.total_amount >= non_zero_species as u32);
 ```
 

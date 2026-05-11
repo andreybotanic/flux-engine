@@ -22,8 +22,8 @@ pub struct FluxOverlayDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `FluxUtf8Slice` | `id` field stored as `FluxUtf8Slice`. |
-| `label` | `FluxUtf8Slice` | `label` field stored as `FluxUtf8Slice`. |
-| `hotkey` | `FluxUtf8Slice` | `hotkey` field stored as `FluxUtf8Slice`. |
-| `render_policy` | `u32` | `render_policy` field stored as `u32`. |
+| `id` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Stable content id of the overlay being registered. |
+| `label` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Human-readable overlay label shown in selectors and menus. |
+| `hotkey` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Optional hotkey string requested for the overlay. |
+| `render_policy` | u32 | Raw ABI tag describing whether the overlay is core- or plugin-rendered. |
 

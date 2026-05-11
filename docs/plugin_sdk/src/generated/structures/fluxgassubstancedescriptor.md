@@ -22,11 +22,11 @@ pub struct FluxGasSubstanceDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `FluxUtf8Slice` | `id` field stored as `FluxUtf8Slice`. |
-| `label` | `FluxUtf8Slice` | `label` field stored as `FluxUtf8Slice`. |
-| `alias` | `FluxUtf8Slice` | `alias` field stored as `FluxUtf8Slice`. |
-| `molecular_mass` | `f32` | `molecular_mass` field stored as `f32`. |
-| `color_r` | `f32` | `color_r` field stored as `f32`. |
-| `color_g` | `f32` | `color_g` field stored as `f32`. |
-| `color_b` | `f32` | `color_b` field stored as `f32`. |
+| `id` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Stable substance id passed to the host for registration. |
+| `label` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Human-readable substance label shown in UI and debug output. |
+| `alias` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Legacy short alias accepted by runtime gas APIs. |
+| `molecular_mass` | f32 | Relative molecular mass used by gas simulation ordering. |
+| `color_r` | f32 | Red channel of the normalized gas display color. |
+| `color_g` | f32 | Green channel of the normalized gas display color. |
+| `color_b` | f32 | Blue channel of the normalized gas display color. |
 

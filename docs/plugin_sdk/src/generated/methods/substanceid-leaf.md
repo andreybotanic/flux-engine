@@ -28,7 +28,10 @@ This method does not take plugin-supplied arguments.
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceid-leaf.md`](../../examples/methods/substanceid-leaf.md)_
+
 ```rust
-// Call `leaf` from plugin-facing code when this operation is available in context.
+let id = SubstanceId::parse("flux.demo.gas.oxygen").expect("valid substance id");
+assert_eq!(id.leaf(), "oxygen");
 ```
 

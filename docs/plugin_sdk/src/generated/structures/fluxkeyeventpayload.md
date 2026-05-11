@@ -22,8 +22,8 @@ pub struct FluxKeyEventPayload
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
-| `key` | `FluxUtf8Slice` | `key` field stored as `FluxUtf8Slice`. |
-| `modifiers` | `u32` | `modifiers` field stored as `u32`. |
+| `struct_size` | u32 | Size of this payload struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by the event producer and consumer. |
+| `key` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | UTF-8 key identifier emitted by the engine. |
+| `modifiers` | u32 | Bitset of keyboard modifiers held during the event. |
 

@@ -22,7 +22,7 @@ fn set_world_cell_hud (& mut self , descriptor : WorldCellHudConfig)
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `descriptor` | `WorldCellHudConfig` | `descriptor` argument passed as `WorldCellHudConfig`. |
+| `descriptor` | [`WorldCellHudConfig`](../structures/worldcellhudconfig.md) | `descriptor` argument passed as `WorldCellHudConfig`. |
 
 ## Return Value
 
@@ -30,7 +30,21 @@ fn set_world_cell_hud (& mut self , descriptor : WorldCellHudConfig)
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-set-world-cell-hud.md`](../../examples/methods/contentregistry-set-world-cell-hud.md)_
+
 ```rust
-// Call `set_world_cell_hud` from plugin-facing code when this operation is available in context.
+let mut registry = ContentRegistry::default();
+registry.set_world_cell_hud(WorldCellHudConfig {
+    label: "Hovered Cell".to_string(),
+    block: HudBlockConfig {
+        sort_order: 0,
+        substance_containers: vec![SubstanceContainerConfig {
+            substance: SubstanceKind::Gas,
+            backing: ContainerBacking::WorldCell,
+            visible_on_hover: HoverVisibility::SameCell,
+        }],
+    },
+});
+assert!(registry.world_cell_hud().is_some());
 ```
 

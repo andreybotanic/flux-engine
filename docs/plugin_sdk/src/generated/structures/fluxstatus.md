@@ -22,5 +22,10 @@ pub struct FluxStatus
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `0` | `i32` | `0` field stored as `i32`. |
+| `0` | i32 | Raw integer status code returned across the stable ABI boundary. |
+
+## Methods
+
+- [`FluxStatus::code`](../methods/fluxstatus-code.md)
+- [`FluxStatus::is_ok`](../methods/fluxstatus-is-ok.md)
 

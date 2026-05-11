@@ -22,7 +22,7 @@ fn event_kind_to_abi (kind : PluginEventKind) -> u32
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `kind` | `PluginEventKind` | `kind` argument passed as `PluginEventKind`. |
+| `kind` | [`PluginEventKind`](../enums/plugineventkind.md) | `kind` argument passed as `PluginEventKind`. |
 
 ## Return Value
 
@@ -30,7 +30,10 @@ u32
 
 ## SDK Example
 
+_Source: [`examples/methods/event-kind-to-abi.md`](../../examples/methods/event-kind-to-abi.md)_
+
 ```rust
-// Call `event_kind_to_abi` from engine-side code when translating PluginEventKind values.
+let abi_tag = event_kind_to_abi(PluginEventKind::RenderOverlay);
+assert_eq!(abi_tag, FluxEventKind::RenderOverlay.as_raw());
 ```
 

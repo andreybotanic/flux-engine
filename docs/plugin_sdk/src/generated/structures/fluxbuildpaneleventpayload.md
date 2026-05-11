@@ -22,7 +22,7 @@ pub struct FluxBuildPanelEventPayload
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
-| `panel_id` | `FluxUtf8Slice` | `panel_id` field stored as `FluxUtf8Slice`. |
+| `struct_size` | u32 | Size of this payload struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by the event producer and consumer. |
+| `panel_id` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Stable content id of the panel being requested. |
 

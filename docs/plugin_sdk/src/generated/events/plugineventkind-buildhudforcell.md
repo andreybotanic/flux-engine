@@ -16,13 +16,31 @@ Fired when the HUD is built for the hovered cell.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
+| `cell` | UVec2 | Hovered world cell that the plugin can augment in the HUD. |
 
 ## SDK Example
 
+_Source: [`examples/events/plugineventkind-buildhudforcell.md`](../../examples/events/plugineventkind-buildhudforcell.md)_
+
 ```rust
-if event.kind() == PluginEventKind::BuildHudForCell {
-// Add a HUD block with submit_hud_block.
+unsafe extern "C" fn on_build_hud_for_cell(
+    _plugin: *mut FluxPluginHandle,
+    payload: *const FluxBuildHudForCellEventPayload,
+    host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let payload = unsafe { &*payload };
+    let host = unsafe { &mut *host };
+    let Some(submit_hud_block) = host.submit_hud_block else {
+        return FluxStatus::FAILED;
+    };
+    let line = format!("cell ({}, {})", payload.cell_x, payload.cell_y);
+    unsafe {
+        submit_hud_block(
+            host.context,
+            FluxUtf8Slice::from_str("Demo"),
+            FluxUtf8Slice::from_str(line.as_str()),
+        )
+    }
 }
 ```
 

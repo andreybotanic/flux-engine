@@ -22,6 +22,10 @@ pub struct FluxEventHandlerDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `event_kind` | `u32` | Raw ABI tag produced from `FluxEventKind::as_raw()`. |
-| `handler_name` | `FluxUtf8Slice` | Name of the plugin export that handles this event kind. |
+| `event_kind` | u32 | Raw ABI tag produced from `FluxEventKind::as_raw()`. |
+| `handler_name` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Name of the plugin export that handles this event kind. |
+
+## Methods
+
+- [`FluxEventHandlerDescriptor::new`](../methods/fluxeventhandlerdescriptor-new.md)
 

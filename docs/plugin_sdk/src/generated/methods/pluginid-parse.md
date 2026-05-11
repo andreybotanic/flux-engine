@@ -22,7 +22,7 @@ fn parse (raw : & str) -> Result < Self , PluginContractError >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `raw` | `& str` | `raw` argument passed as `& str`. |
+| `raw` | & str | `raw` argument passed as `& str`. |
 
 ## Return Value
 
@@ -30,7 +30,10 @@ Result < Self , PluginContractError >
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginid-parse.md`](../../examples/methods/pluginid-parse.md)_
+
 ```rust
-// Call `parse` from plugin-facing code when this operation is available in context.
+let plugin_id = PluginId::parse("flux.demo").expect("valid plugin id");
+assert_eq!(plugin_id.as_str(), "flux.demo");
 ```
 

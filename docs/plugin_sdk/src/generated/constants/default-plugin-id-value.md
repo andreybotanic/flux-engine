@@ -22,3 +22,12 @@ pub const DEFAULT_PLUGIN_ID_VALUE: & str = ...;
 
 `DEFAULT_PLUGIN_ID_VALUE` is a stable constant in the Plugin SDK reference.
 
+## SDK Example
+
+_Source: [`examples/constants/default-plugin-id-value.md`](../../examples/constants/default-plugin-id-value.md)_
+
+```rust
+let built_in = PluginId::default_plugin();
+assert_eq!(built_in.as_str(), DEFAULT_PLUGIN_ID_VALUE);
+```
+

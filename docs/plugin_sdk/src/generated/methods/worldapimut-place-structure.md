@@ -22,15 +22,25 @@ fn place_structure (& mut self , request : StructurePlacement ,) -> Result < Opt
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `request` | `StructurePlacement` | `request` argument passed as `StructurePlacement`. |
+| `request` | [`StructurePlacement`](../structures/structureplacement.md) | `request` argument passed as `StructurePlacement`. |
 
 ## Return Value
 
-Result < Option < PlacedStructureId > , WorldApiError >
+Result < Option < [`PlacedStructureId`](../structures/placedstructureid.md) > , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapimut-place-structure.md`](../../examples/methods/worldapimut-place-structure.md)_
+
 ```rust
-// Call `place_structure` from plugin-facing code when this operation is available in context.
+let placed = world_mut.place_structure(StructurePlacement {
+    kind: StructureKind::new("flux.default.structure.filter"),
+    origin: UVec2::new(30, 12),
+    rotation: StructureRotation::Deg90,
+    params: StructureParams::None,
+})?;
+if let Some(id) = placed {
+    println!("placed structure id {}", id.0);
+}
 ```
 

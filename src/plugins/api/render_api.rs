@@ -8,7 +8,8 @@ use crate::{
 /// Defines who controls rendering for one plugin overlay.
 ///
 /// # Variants
-/// Public variants of `OverlayRenderPolicy` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `CoreDefault`: The engine keeps its normal overlay rendering behavior.
+/// - `PluginControlled`: The plugin is responsible for supplying the visible overlay frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OverlayRenderPolicy {
     CoreDefault,
@@ -18,7 +19,11 @@ pub enum OverlayRenderPolicy {
 /// Display style for one world cell in a plugin-controlled overlay.
 ///
 /// # Variants
-/// Public variants of `CellRenderStyle` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `Hidden`: The cell is hidden in the plugin-controlled overlay frame.
+/// - `Normal`: The cell uses the engine's default overlay rendering.
+/// - `Filled`: The cell is rendered as a filled color block with explicit alpha.
+/// - `Outline`: The cell is rendered as an outline with explicit color and alpha.
+/// - `Sprite`: The cell is rendered with a plugin-provided sprite asset override.
 #[derive(Clone, Debug, PartialEq)]
 pub enum CellRenderStyle {
     Hidden,
@@ -31,7 +36,11 @@ pub enum CellRenderStyle {
 /// Display style for one placed structure in a plugin-controlled overlay.
 ///
 /// # Variants
-/// Public variants of `StructureRenderStyle` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `Hidden`: The structure is hidden in the plugin-controlled overlay frame.
+/// - `Normal`: The structure uses the engine's default overlay rendering.
+/// - `OutlineOnly`: The structure footprint is rendered as an outline only.
+/// - `Filled`: The structure footprint is rendered as a filled color block.
+/// - `SpriteOverride`: The structure is rendered with a plugin-provided sprite asset override.
 #[derive(Clone, Debug, PartialEq)]
 pub enum StructureRenderStyle {
     Hidden,
@@ -44,7 +53,9 @@ pub enum StructureRenderStyle {
 /// Display style for cell gas in a plugin-controlled overlay.
 ///
 /// # Variants
-/// Public variants of `GasRenderStyle` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `Hidden`: Gas is hidden for the target cell.
+/// - `Normal`: Gas uses the engine's default overlay rendering.
+/// - `Custom`: Gas is rendered with a plugin-provided color and intensity.
 #[derive(Clone, Debug, PartialEq)]
 pub enum GasRenderStyle {
     Hidden,
@@ -55,7 +66,11 @@ pub enum GasRenderStyle {
 /// Extra draw command emitted by a plugin overlay.
 ///
 /// # Variants
-/// Public variants of `OverlayDrawCommand` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `Rect`: Draws a filled rectangle aligned to one world cell.
+/// - `Outline`: Draws an outlined rectangle aligned to one world cell.
+/// - `Sprite`: Draws a sprite aligned to one world cell.
+/// - `Line`: Draws a world-space line between two points.
+/// - `Text`: Draws text anchored to one world cell.
 #[derive(Clone, Debug, PartialEq)]
 pub enum OverlayDrawCommand {
     Rect {
@@ -90,7 +105,8 @@ pub enum OverlayDrawCommand {
 /// Per-cell style entry for an overlay frame.
 ///
 /// # Fields
-/// Public fields of `CellStyleEntry` are part of the generated SDK reference.
+/// - `cell`: Target world cell that receives the style override.
+/// - `style`: Cell rendering style to apply in the overlay frame.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CellStyleEntry {
     pub cell: UVec2,
@@ -100,7 +116,10 @@ pub struct CellStyleEntry {
 /// Per-structure style entry for an overlay frame.
 ///
 /// # Fields
-/// Public fields of `StructureStyleEntry` are part of the generated SDK reference.
+/// - `structure_id`: Runtime id of the structure receiving the style override.
+/// - `kind`: Registered structure kind of the styled structure.
+/// - `style`: Structure rendering style to apply in the overlay frame.
+/// - `z_order`: Explicit ordering value used for overlay composition.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StructureStyleEntry {
     pub structure_id: PlacedStructureId,
@@ -112,7 +131,8 @@ pub struct StructureStyleEntry {
 /// Per-cell gas style entry for an overlay frame.
 ///
 /// # Fields
-/// Public fields of `GasStyleEntry` are part of the generated SDK reference.
+/// - `cell`: Target world cell whose gas rendering is overridden.
+/// - `style`: Gas rendering style to apply for that cell.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GasStyleEntry {
     pub cell: UVec2,
@@ -122,7 +142,15 @@ pub struct GasStyleEntry {
 /// Render frame returned by a plugin for one overlay refresh.
 ///
 /// # Fields
-/// Public fields of `OverlayFrame` are part of the generated SDK reference.
+/// - `overlay_id`: Stable content id of the overlay producing this frame.
+/// - `policy`: Rendering ownership mode used for this frame.
+/// - `background`: Optional full-frame background color drawn before cell content.
+/// - `world_alpha`: Alpha multiplier applied to the core world rendering pass.
+/// - `show_core_gas`: Whether core gas rendering remains visible underneath plugin styling.
+/// - `cell_styles`: Per-cell visual overrides emitted by the plugin.
+/// - `structure_styles`: Per-structure visual overrides emitted by the plugin.
+/// - `gas_styles`: Per-cell gas visual overrides emitted by the plugin.
+/// - `draw_commands`: Extra draw primitives layered on top of the frame.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OverlayFrame {
     pub overlay_id: ContentId,
@@ -139,10 +167,6 @@ pub struct OverlayFrame {
 impl OverlayFrame {
     /// Builds an empty frame that keeps normal core rendering.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `core_default` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn core_default(overlay_id: ContentId) -> Self {
         Self {
             overlay_id,
@@ -159,10 +183,6 @@ impl OverlayFrame {
 
     /// Builds an empty plugin-controlled overlay frame.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `plugin_controlled` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn plugin_controlled(overlay_id: ContentId) -> Self {
         Self {
             overlay_id,

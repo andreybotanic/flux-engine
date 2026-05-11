@@ -22,10 +22,10 @@ fn write_plugin_chunk (& mut self , plugin_id : PluginId , chunk_id : ContentId 
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `plugin_id` | `PluginId` | `plugin_id` argument passed as `PluginId`. |
-| `chunk_id` | `ContentId` | `chunk_id` argument passed as `ContentId`. |
-| `version` | `u32` | `version` argument passed as `u32`. |
-| `bytes` | `Vec < u8 >` | `bytes` argument passed as `Vec < u8 >`. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | `plugin_id` argument passed as `PluginId`. |
+| `chunk_id` | [`ContentId`](../structures/contentid.md) | `chunk_id` argument passed as `ContentId`. |
+| `version` | u32 | `version` argument passed as `u32`. |
+| `bytes` | Vec < u8 > | `bytes` argument passed as `Vec < u8 >`. |
 
 ## Return Value
 
@@ -33,7 +33,14 @@ fn write_plugin_chunk (& mut self , plugin_id : PluginId , chunk_id : ContentId 
 
 ## SDK Example
 
+_Source: [`examples/methods/savechunkstore-write-plugin-chunk.md`](../../examples/methods/savechunkstore-write-plugin-chunk.md)_
+
 ```rust
-// Call `write_plugin_chunk` from plugin-facing code when this operation is available in context.
+let plugin_id = PluginId::parse("flux.demo").expect("plugin id");
+let chunk_id = ContentId::parse("flux.demo.save.counter").expect("chunk id");
+let mut store = SaveChunkStore::default();
+store.write_plugin_chunk(plugin_id.clone(), chunk_id.clone(), 1, 7u32.to_le_bytes().to_vec());
+let chunk = store.read_plugin_chunk(&plugin_id, &chunk_id).expect("chunk should exist");
+assert_eq!(chunk.version, 1);
 ```
 

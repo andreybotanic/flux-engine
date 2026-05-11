@@ -22,11 +22,15 @@ pub struct SubstanceDefinition
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `SubstanceId` | `id` field stored as `SubstanceId`. |
-| `plugin_id` | `PluginId` | `plugin_id` field stored as `PluginId`. |
-| `label` | `String` | `label` field stored as `String`. |
-| `molecular_mass` | `f32` | `molecular_mass` field stored as `f32`. |
-| `color` | `[f32 ; 3]` | `color` field stored as `[f32 ; 3]`. |
-| `aliases` | `Vec < String >` | `aliases` field stored as `Vec < String >`. |
-| `flags` | `SubstanceFlags` | `flags` field stored as `SubstanceFlags`. |
+| `id` | [`SubstanceId`](../structures/substanceid.md) | Stable substance identifier used across content, saves and runtime lookups. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | Plugin that owns and registers this substance. |
+| `label` | String | Human-readable label shown in UI and debugging output. |
+| `molecular_mass` | f32 | Relative molecular mass used to sort gas substances and simulate buoyancy. |
+| `color` | [f32 ; 3] | RGB color used by gas rendering and related UI. |
+| `aliases` | Vec < String > | Additional lookup ids accepted by runtime APIs and legacy config. |
+| `flags` | [`SubstanceFlags`](../structures/substanceflags.md) | Feature flags that describe which simulation systems can use this substance. |
+
+## Methods
+
+- [`SubstanceDefinition::gas`](../methods/substancedefinition-gas.md)
 

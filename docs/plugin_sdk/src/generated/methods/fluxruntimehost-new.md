@@ -22,7 +22,7 @@ fn new (context : * mut c_void) -> Self
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
 
 ## Return Value
 
@@ -30,7 +30,11 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxruntimehost-new.md`](../../examples/methods/fluxruntimehost-new.md)_
+
 ```rust
-// Call `new` from plugin-facing code when this operation is available in context.
+let runtime_host = FluxRuntimeHost::new(std::ptr::null_mut());
+assert_eq!(runtime_host.api_version, ENGINE_PLUGIN_API_VERSION_VALUE);
+assert!(runtime_host.set_cell_material.is_some());
 ```
 

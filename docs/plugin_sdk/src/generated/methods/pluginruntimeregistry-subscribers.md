@@ -22,15 +22,18 @@ fn subscribers (& self , event_kind : PluginEventKind) -> Vec < PluginId >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `event_kind` | `PluginEventKind` | `event_kind` argument passed as `PluginEventKind`. |
+| `event_kind` | [`PluginEventKind`](../enums/plugineventkind.md) | `event_kind` argument passed as `PluginEventKind`. |
 
 ## Return Value
 
-Vec < PluginId >
+Vec < [`PluginId`](../structures/pluginid.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginruntimeregistry-subscribers.md`](../../examples/methods/pluginruntimeregistry-subscribers.md)_
+
 ```rust
-// Call `subscribers` from plugin-facing code when this operation is available in context.
+let subscribers = registry.subscribers(PluginEventKind::RenderOverlay);
+assert!(subscribers.iter().all(|plugin_id| plugin_id.as_str().starts_with("flux.")));
 ```
 

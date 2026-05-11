@@ -22,14 +22,18 @@ pub struct StructureContentDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `ContentId` | `id` field stored as `ContentId`. |
-| `plugin_id` | `PluginId` | `plugin_id` field stored as `PluginId`. |
-| `kind` | `StructureKind` | `kind` field stored as `StructureKind`. |
-| `config_file_name` | `& 'static str` | `config_file_name` field stored as `& 'static str`. |
-| `visual` | `VisualPlacementConfig` | `visual` field stored as `VisualPlacementConfig`. |
-| `layer_descriptors` | `BTreeMap < StructureRotation , StructureDescriptor >` | `layer_descriptors` field stored as `BTreeMap < StructureRotation , StructureDescriptor >`. |
-| `allowed_rotations` | `Vec < StructureRotation >` | `allowed_rotations` field stored as `Vec < StructureRotation >`. |
-| `sprite` | `SpriteMetadata` | `sprite` field stored as `SpriteMetadata`. |
-| `hud` | `HudBlockConfig` | `hud` field stored as `HudBlockConfig`. |
-| `storage` | `LegacyStorageDescriptor` | `storage` field stored as `LegacyStorageDescriptor`. |
+| `id` | [`ContentId`](../structures/contentid.md) | Stable content id for this structure entry. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | Plugin that owns and registers this structure. |
+| `kind` | [`StructureKind`](../structures/structurekind.md) | Runtime structure kind used by placement and save data. |
+| `config_file_name` | & 'static str | Default-plugin config file that defines visual placement for this structure. |
+| `visual` | [`VisualPlacementConfig`](../structures/visualplacementconfig.md) | Visual placement metadata used by world rendering and UI. |
+| `layer_descriptors` | BTreeMap < [`StructureRotation`](../enums/structurerotation.md) , [`StructureDescriptor`](../structures/structuredescriptor.md) > | Layer descriptors keyed by supported rotation. |
+| `allowed_rotations` | Vec < [`StructureRotation`](../enums/structurerotation.md) > | Rotations that the structure may be placed with. |
+| `sprite` | [`SpriteMetadata`](../structures/spritemetadata.md) | Sprite metadata used to render the structure in the world and tool UI. |
+| `hud` | [`HudBlockConfig`](../structures/hudblockconfig.md) | HUD block configuration used when hovering this structure. |
+| `storage` | [`LegacyStorageDescriptor`](../enums/legacystoragedescriptor.md) | Legacy storage mapping used for save compatibility. |
+
+## Methods
+
+- [`StructureContentDescriptor::layer_descriptor`](../methods/structurecontentdescriptor-layer-descriptor.md)
 

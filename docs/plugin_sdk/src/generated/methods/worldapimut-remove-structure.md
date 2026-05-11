@@ -22,15 +22,18 @@ fn remove_structure (& mut self , id : PlacedStructureId) -> Result < bool , Wor
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `id` | `PlacedStructureId` | `id` argument passed as `PlacedStructureId`. |
+| `id` | [`PlacedStructureId`](../structures/placedstructureid.md) | `id` argument passed as `PlacedStructureId`. |
 
 ## Return Value
 
-Result < bool , WorldApiError >
+Result < bool , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapimut-remove-structure.md`](../../examples/methods/worldapimut-remove-structure.md)_
+
 ```rust
-// Call `remove_structure` from plugin-facing code when this operation is available in context.
+let removed = world_mut.remove_structure(PlacedStructureId(12))?;
+assert!(removed || !removed);
 ```
 

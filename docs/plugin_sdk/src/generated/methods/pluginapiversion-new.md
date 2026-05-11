@@ -22,7 +22,7 @@ fn new (value : u32) -> Self
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `value` | `u32` | `value` argument passed as `u32`. |
+| `value` | u32 | `value` argument passed as `u32`. |
 
 ## Return Value
 
@@ -30,7 +30,10 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginapiversion-new.md`](../../examples/methods/pluginapiversion-new.md)_
+
 ```rust
-// Call `new` from plugin-facing code when this operation is available in context.
+let api_version = PluginApiVersion::new(ENGINE_PLUGIN_API_VERSION_VALUE);
+assert_eq!(api_version.value(), ENGINE_PLUGIN_API_VERSION_VALUE);
 ```
 

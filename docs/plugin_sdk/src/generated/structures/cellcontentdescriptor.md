@@ -22,12 +22,12 @@ pub struct CellContentDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `ContentId` | `id` field stored as `ContentId`. |
-| `plugin_id` | `PluginId` | `plugin_id` field stored as `PluginId`. |
-| `material` | `CellMaterial` | `material` field stored as `CellMaterial`. |
-| `config_file_name` | `& 'static str` | `config_file_name` field stored as `& 'static str`. |
-| `visual` | `VisualPlacementConfig` | `visual` field stored as `VisualPlacementConfig`. |
-| `layer_descriptor` | `StructureDescriptor` | `layer_descriptor` field stored as `StructureDescriptor`. |
-| `sprite` | `SpriteMetadata` | `sprite` field stored as `SpriteMetadata`. |
-| `storage` | `LegacyStorageDescriptor` | `storage` field stored as `LegacyStorageDescriptor`. |
+| `id` | [`ContentId`](../structures/contentid.md) | Stable content id for this cell material entry. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | Plugin that owns and registers this cell material. |
+| `material` | [`CellMaterial`](../structures/cellmaterial.md) | Runtime cell material id used by the world grid. |
+| `config_file_name` | & 'static str | Default-plugin config file that defines visual placement for this material. |
+| `visual` | [`VisualPlacementConfig`](../structures/visualplacementconfig.md) | Visual placement metadata used by world rendering and UI. |
+| `layer_descriptor` | [`StructureDescriptor`](../structures/structuredescriptor.md) | Layer occupancy descriptor used for collision and rendering. |
+| `sprite` | [`SpriteMetadata`](../structures/spritemetadata.md) | Sprite metadata used to render the material in the world and tool UI. |
+| `storage` | [`LegacyStorageDescriptor`](../enums/legacystoragedescriptor.md) | Legacy storage mapping used for save compatibility. |
 

@@ -18,3 +18,14 @@ Registry of plugin-owned substances with deterministic compact runtime order.
 pub struct SubstanceRegistry
 ```
 
+## Methods
+
+- [`SubstanceRegistry::all`](../methods/substanceregistry-all.md)
+- [`SubstanceRegistry::compact_index`](../methods/substanceregistry-compact-index.md)
+- [`SubstanceRegistry::count`](../methods/substanceregistry-count.md)
+- [`SubstanceRegistry::get`](../methods/substanceregistry-get.md)
+- [`SubstanceRegistry::get_by_id`](../methods/substanceregistry-get-by-id.md)
+- [`SubstanceRegistry::molecular_masses`](../methods/substanceregistry-molecular-masses.md)
+- [`SubstanceRegistry::new`](../methods/substanceregistry-new.md)
+- [`SubstanceRegistry::stable_id_by_index`](../methods/substanceregistry-stable-id-by-index.md)
+

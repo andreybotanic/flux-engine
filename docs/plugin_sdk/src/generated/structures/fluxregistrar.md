@@ -22,14 +22,18 @@ pub struct FluxRegistrar
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
-| `register_gas_substance` | `Option < FluxRegisterGasSubstanceFn >` | `register_gas_substance` field stored as `Option < FluxRegisterGasSubstanceFn >`. |
-| `register_event_handler` | `Option < FluxRegisterEventHandlerFn >` | `register_event_handler` field stored as `Option < FluxRegisterEventHandlerFn >`. |
-| `register_tool` | `Option < FluxRegisterToolFn >` | `register_tool` field stored as `Option < FluxRegisterToolFn >`. |
-| `register_overlay` | `Option < FluxRegisterOverlayFn >` | `register_overlay` field stored as `Option < FluxRegisterOverlayFn >`. |
-| `register_save_chunk` | `Option < FluxRegisterSaveChunkFn >` | `register_save_chunk` field stored as `Option < FluxRegisterSaveChunkFn >`. |
-| `registration_context` | `* mut c_void` | `registration_context` field stored as `* mut c_void`. |
-| `reserved2` | `* mut c_void` | `reserved2` field stored as `* mut c_void`. |
-| `reserved3` | `* mut c_void` | `reserved3` field stored as `* mut c_void`. |
+| `struct_size` | u32 | Size of this struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by both host and plugin. |
+| `register_gas_substance` | Option < [`FluxRegisterGasSubstanceFn`](../methods/fluxregistergassubstancefn.md) > | Optional callback for registering gas-capable substances. |
+| `register_event_handler` | Option < [`FluxRegisterEventHandlerFn`](../methods/fluxregistereventhandlerfn.md) > | Optional callback for registering named event handlers. |
+| `register_tool` | Option < [`FluxRegisterToolFn`](../methods/fluxregistertoolfn.md) > | Optional callback for registering tool descriptors. |
+| `register_overlay` | Option < [`FluxRegisterOverlayFn`](../methods/fluxregisteroverlayfn.md) > | Optional callback for registering overlay descriptors. |
+| `register_save_chunk` | Option < [`FluxRegisterSaveChunkFn`](../methods/fluxregistersavechunkfn.md) > | Optional callback for registering save chunk descriptors. |
+| `registration_context` | * mut c_void | Opaque host-owned context passed back into registrar callbacks. |
+| `reserved2` | * mut c_void | Reserved pointer slot kept for forward-compatible ABI expansion. |
+| `reserved3` | * mut c_void | Reserved pointer slot kept for forward-compatible ABI expansion. |
+
+## Methods
+
+- [`FluxRegistrar::new`](../methods/fluxregistrar-new.md)
 

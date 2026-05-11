@@ -11,6 +11,9 @@ use crate::{
 };
 
 /// Identifies the visual/runtime layer used by a structure or world cell.
+///
+/// # Fields
+/// - `id`: Stable registered layer id backing this handle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LayerKind {
     id: &'static str,
@@ -39,6 +42,9 @@ impl LayerKind {
 pub const APPEARANCE_LAYER: LayerKind = LayerKind::new("flux.core.layer.appearance");
 
 /// Identifies the marker rendered inside a layer cell.
+///
+/// # Fields
+/// - `id`: Stable registered marker id backing this handle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LayerMarkerKind {
     id: &'static str,
@@ -64,6 +70,10 @@ impl LayerMarkerKind {
 }
 
 /// Defines whether a layer cell participates in collision checks.
+///
+/// # Variants
+/// - `RenderOnly`: The cell is visible but does not block placement in its layer.
+/// - `Special`: The cell participates in layer-specific collision checks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayerCollisionKind {
     RenderOnly,
@@ -71,6 +81,11 @@ pub enum LayerCollisionKind {
 }
 
 /// Describes one occupied local cell inside a structure layer.
+///
+/// # Fields
+/// - `local_cell`: Cell coordinates relative to the structure origin.
+/// - `marker_kind`: Marker id rendered for this local cell.
+/// - `collision`: Collision behavior of this cell inside its layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LayerCellSpec {
     pub local_cell: IVec2,
@@ -79,6 +94,10 @@ pub struct LayerCellSpec {
 }
 
 /// Describes all cells that belong to one structure layer.
+///
+/// # Fields
+/// - `kind`: Layer id that owns the listed cells.
+/// - `cells`: Local-cell specifications that belong to this layer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructureLayer {
     pub kind: LayerKind,
@@ -86,6 +105,9 @@ pub struct StructureLayer {
 }
 
 /// Stores static display/runtime information for a structure or world material.
+///
+/// # Fields
+/// - `layers`: Layer definitions that describe footprint, markers and collisions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructureDescriptor {
     pub layers: Vec<StructureLayer>,
@@ -134,6 +156,9 @@ impl StructureDescriptor {
 }
 
 /// Enumerates placeable structure kinds stored in the runtime world.
+///
+/// # Fields
+/// - `id`: Stable registered content id backing this structure kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StructureKind {
     id: &'static str,
@@ -159,6 +184,12 @@ impl StructureKind {
 }
 
 /// Stores a canonical rotation for a placed structure.
+///
+/// # Variants
+/// - `Deg0`: Default unrotated orientation.
+/// - `Deg90`: Clockwise quarter-turn orientation.
+/// - `Deg180`: Half-turn orientation.
+/// - `Deg270`: Clockwise three-quarter-turn orientation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum StructureRotation {
     Deg0,
@@ -188,6 +219,11 @@ impl StructureRotation {
 }
 
 /// Stores runtime parameters for structures that need editable state.
+///
+/// # Variants
+/// - `None`: Structure has no editable runtime parameters.
+/// - `GasSource`: Structure emits a configured gas substance and amount.
+/// - `GasSink`: Structure consumes a configured amount of gas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StructureParams {
     None,
@@ -196,6 +232,9 @@ pub enum StructureParams {
 }
 
 /// Stores the stable id of one placed structure instance.
+///
+/// # Fields
+/// - `0`: Raw runtime id used to reference one placed structure instance.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PlacedStructureId(pub u32);
 

@@ -16,13 +16,22 @@ Fired when the active overlay changes.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `overlay_id` | `Option < ContentId >` | `overlay_id` argument passed as `Option < ContentId >`. |
+| `overlay_id` | Option < [`ContentId`](../structures/contentid.md) > | Newly active plugin-owned overlay id, if one is selected. |
 
 ## SDK Example
 
+_Source: [`examples/events/plugineventkind-overlaychanged.md`](../../examples/events/plugineventkind-overlaychanged.md)_
+
 ```rust
-if event.kind() == PluginEventKind::OverlayChanged {
-// Read event.overlay_id from the ABI payload.
+unsafe extern "C" fn on_overlay_changed(
+    plugin: *mut FluxPluginHandle,
+    payload: *const FluxOverlayChangedEventPayload,
+    _host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let payload = unsafe { &*payload };
+    let plugin = unsafe { &mut *plugin };
+    plugin.dragging = payload.has_overlay_id != 0;
+    FluxStatus::OK
 }
 ```
 

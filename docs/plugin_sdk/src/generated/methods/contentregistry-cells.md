@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& BTreeMap < ContentId , CellContentDescriptor >
+& BTreeMap < [`ContentId`](../structures/contentid.md) , [`CellContentDescriptor`](../structures/cellcontentdescriptor.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-cells.md`](../../examples/methods/contentregistry-cells.md)_
+
 ```rust
-// Call `cells` from plugin-facing code when this operation is available in context.
+let cells = registry.cells();
+assert!(cells.keys().any(|id| id.as_str().starts_with("flux.")));
 ```
 

@@ -22,7 +22,7 @@ fn parse (raw : & str) -> Result < Self , String >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `raw` | `& str` | `raw` argument passed as `& str`. |
+| `raw` | & str | `raw` argument passed as `& str`. |
 
 ## Return Value
 
@@ -30,7 +30,10 @@ Result < Self , String >
 
 ## SDK Example
 
+_Source: [`examples/methods/contentid-parse.md`](../../examples/methods/contentid-parse.md)_
+
 ```rust
-// Call `parse` from plugin-facing code when this operation is available in context.
+let overlay_id = ContentId::parse("flux.demo.overlay.temperature").expect("valid content id");
+assert_eq!(overlay_id.as_str(), "flux.demo.overlay.temperature");
 ```
 

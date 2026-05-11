@@ -22,13 +22,18 @@ pub struct PluginManifest
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `PluginId` | `id` field stored as `PluginId`. |
-| `display_name` | `String` | `display_name` field stored as `String`. |
-| `version` | `PluginVersion` | `version` field stored as `PluginVersion`. |
-| `api_version` | `PluginApiVersion` | `api_version` field stored as `PluginApiVersion`. |
-| `dll` | `PathBuf` | `dll` field stored as `PathBuf`. |
-| `configs` | `PathBuf` | `configs` field stored as `PathBuf`. |
-| `assets` | `PathBuf` | `assets` field stored as `PathBuf`. |
-| `content` | `bool` | `content` field stored as `bool`. |
-| `description` | `Option < String >` | `description` field stored as `Option < String >`. |
+| `id` | [`PluginId`](../structures/pluginid.md) | Canonical plugin identifier declared by the manifest. |
+| `display_name` | String | Human-readable plugin name shown in UI. |
+| `version` | [`PluginVersion`](../structures/pluginversion.md) | Semantic plugin version declared by the manifest. |
+| `api_version` | [`PluginApiVersion`](../structures/pluginapiversion.md) | ABI version that this plugin expects from the engine. |
+| `dll` | PathBuf | Relative path to the runtime DLL inside the plugin package. |
+| `configs` | PathBuf | Relative path to the plugin configuration directory. |
+| `assets` | PathBuf | Relative path to the plugin asset directory. |
+| `content` | bool | Whether the plugin contributes gameplay content that affects world loading. |
+| `description` | Option < String > | Optional human-readable manifest description shown in plugin UI. |
+
+## Methods
+
+- [`PluginManifest::from_bytes`](../methods/pluginmanifest-from-bytes.md)
+- [`PluginManifest::from_str`](../methods/pluginmanifest-from-str.md)
 

@@ -1,0 +1,40 @@
+```rust
+let mut registry = ContentRegistry::default();
+let descriptor = StructureContentDescriptor {
+    id: ContentId::parse("flux.demo.structure.filter").expect("id"),
+    plugin_id: PluginId::parse("flux.demo").expect("plugin id"),
+    kind: StructureKind::new("flux.demo.structure.filter"),
+    config_file_name: "filter.toml",
+    visual: VisualPlacementConfig {
+        label: "Filter".to_string(),
+        draw_priority: 20,
+        size_in_cells: UVec2::new(2, 1),
+    },
+    layer_descriptors: std::collections::BTreeMap::from([(
+        StructureRotation::Deg0,
+        StructureDescriptor {
+            layers: vec![StructureLayer {
+                kind: LayerKind::new("flux.core.layer.appearance"),
+                cells: vec![LayerCellSpec {
+                    local_cell: IVec2::ZERO,
+                    marker_kind: LayerMarkerKind::new("flux.demo.marker.filter"),
+                    collision: LayerCollisionKind::Special,
+                }],
+            }],
+        },
+    )]),
+    allowed_rotations: vec![StructureRotation::Deg0],
+    sprite: SpriteMetadata {
+        image_path: "structures/filter.png".to_string(),
+        silhouette_path: Some("structures/filter_silhouette.png".to_string()),
+        overlay_path: None,
+    },
+    hud: HudBlockConfig {
+        sort_order: 0,
+        substance_containers: Vec::new(),
+    },
+    storage: LegacyStorageDescriptor::PlacedStructureKind("filter"),
+};
+registry.register_structure(descriptor);
+assert!(registry.structure_by_kind(StructureKind::new("flux.demo.structure.filter")).is_some());
+```

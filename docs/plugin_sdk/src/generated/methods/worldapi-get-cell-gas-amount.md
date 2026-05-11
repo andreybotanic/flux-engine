@@ -22,16 +22,21 @@ fn get_cell_gas_amount (& self , cell : UVec2 , substance : & str) -> Result < u
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
-| `substance` | `& str` | `substance` argument passed as `& str`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
+| `substance` | & str | `substance` argument passed as `& str`. |
 
 ## Return Value
 
-Result < u32 , WorldApiError >
+Result < u32 , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-cell-gas-amount.md`](../../examples/methods/worldapi-get-cell-gas-amount.md)_
+
 ```rust
-// Call `get_cell_gas_amount` from plugin-facing code when this operation is available in context.
+let amount = world.get_cell_gas_amount(UVec2::new(24, 18), "oxygen")?;
+if amount > 0 {
+    println!("oxygen count: {}", amount);
+}
 ```
 

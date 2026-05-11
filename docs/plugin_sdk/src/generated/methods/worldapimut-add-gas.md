@@ -22,18 +22,26 @@ fn add_gas (& mut self , cell : UVec2 , substance : & str , amount : u32 , veloc
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
-| `substance` | `& str` | `substance` argument passed as `& str`. |
-| `amount` | `u32` | `amount` argument passed as `u32`. |
-| `velocity` | `Vec2` | `velocity` argument passed as `Vec2`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
+| `substance` | & str | `substance` argument passed as `& str`. |
+| `amount` | u32 | `amount` argument passed as `u32`. |
+| `velocity` | Vec2 | `velocity` argument passed as `Vec2`. |
 
 ## Return Value
 
-Result < u32 , WorldApiError >
+Result < u32 , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapimut-add-gas.md`](../../examples/methods/worldapimut-add-gas.md)_
+
 ```rust
-// Call `add_gas` from plugin-facing code when this operation is available in context.
+let added = world_mut.add_gas(
+    UVec2::new(42, 18),
+    "oxygen",
+    150,
+    Vec2::new(0.0, 1.0),
+)?;
+assert!(added <= 150);
 ```
 

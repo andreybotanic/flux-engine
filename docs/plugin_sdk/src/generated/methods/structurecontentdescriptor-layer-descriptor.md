@@ -22,15 +22,21 @@ fn layer_descriptor (& self , rotation : StructureRotation) -> & StructureDescri
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `rotation` | `StructureRotation` | `rotation` argument passed as `StructureRotation`. |
+| `rotation` | [`StructureRotation`](../enums/structurerotation.md) | `rotation` argument passed as `StructureRotation`. |
 
 ## Return Value
 
-& StructureDescriptor
+& [`StructureDescriptor`](../structures/structuredescriptor.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/structurecontentdescriptor-layer-descriptor.md`](../../examples/methods/structurecontentdescriptor-layer-descriptor.md)_
+
 ```rust
-// Call `layer_descriptor` from plugin-facing code when this operation is available in context.
+let descriptor = registry
+    .structure_by_kind(StructureKind::new("flux.demo.structure.filter"))
+    .expect("registered structure");
+let layer_descriptor = descriptor.layer_descriptor(StructureRotation::Deg90);
+assert!(layer_descriptor.size_in_cells().x >= 1);
 ```
 

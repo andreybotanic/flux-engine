@@ -28,7 +28,11 @@ This method does not take plugin-supplied arguments.
 
 ## SDK Example
 
+_Source: [`examples/methods/contentid-as-str.md`](../../examples/methods/contentid-as-str.md)_
+
 ```rust
-// Call `as_str` from plugin-facing code when this operation is available in context.
+let tool_id = ContentId::parse("flux.demo.tool.paint").expect("valid tool id");
+let raw = tool_id.as_str();
+assert!(raw.starts_with("flux.demo.tool."));
 ```
 

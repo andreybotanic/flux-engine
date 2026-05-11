@@ -28,7 +28,10 @@ This method does not take plugin-supplied arguments.
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginid-as-str.md`](../../examples/methods/pluginid-as-str.md)_
+
 ```rust
-// Call `as_str` from plugin-facing code when this operation is available in context.
+let plugin_id = PluginId::parse("flux.demo").expect("valid plugin id");
+assert!(plugin_id.as_str().starts_with("flux."));
 ```
 

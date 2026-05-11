@@ -22,12 +22,12 @@ fn gas (id : SubstanceId , plugin_id : PluginId , label : impl Into < String > ,
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `id` | `SubstanceId` | `id` argument passed as `SubstanceId`. |
-| `plugin_id` | `PluginId` | `plugin_id` argument passed as `PluginId`. |
-| `label` | `impl Into < String >` | `label` argument passed as `impl Into < String >`. |
-| `molecular_mass` | `f32` | `molecular_mass` argument passed as `f32`. |
-| `color` | `[f32 ; 3]` | `color` argument passed as `[f32 ; 3]`. |
-| `aliases` | `Vec < String >` | `aliases` argument passed as `Vec < String >`. |
+| `id` | [`SubstanceId`](../structures/substanceid.md) | `id` argument passed as `SubstanceId`. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | `plugin_id` argument passed as `PluginId`. |
+| `label` | impl Into < String > | `label` argument passed as `impl Into < String >`. |
+| `molecular_mass` | f32 | `molecular_mass` argument passed as `f32`. |
+| `color` | [f32 ; 3] | `color` argument passed as `[f32 ; 3]`. |
+| `aliases` | Vec < String > | `aliases` argument passed as `Vec < String >`. |
 
 ## Return Value
 
@@ -35,7 +35,17 @@ Result < Self , String >
 
 ## SDK Example
 
+_Source: [`examples/methods/substancedefinition-gas.md`](../../examples/methods/substancedefinition-gas.md)_
+
 ```rust
-// Call `gas` from plugin-facing code when this operation is available in context.
+let definition = SubstanceDefinition::gas(
+    SubstanceId::parse("flux.demo.gas.oxygen").expect("id"),
+    PluginId::parse("flux.demo").expect("plugin id"),
+    "Oxygen",
+    32.0,
+    [0.3, 0.7, 1.0],
+    vec!["o2".to_string()],
+).expect("definition should validate");
+assert!(definition.flags.gas);
 ```
 

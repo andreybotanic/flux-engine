@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& BTreeMap < ContentId , ToolDescriptor >
+& BTreeMap < [`ContentId`](../structures/contentid.md) , [`ToolDescriptor`](../structures/tooldescriptor.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginruntimeregistry-tools.md`](../../examples/methods/pluginruntimeregistry-tools.md)_
+
 ```rust
-// Call `tools` from plugin-facing code when this operation is available in context.
+let tools = registry.tools();
+assert!(tools.values().any(|tool| tool.label.contains("Paint")));
 ```
 

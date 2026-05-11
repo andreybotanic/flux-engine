@@ -22,7 +22,8 @@ use crate::world::structures::{PlacedStructure, StructureDescriptor};
 /// Describes one gas amount inside a mixture using a stable substance id.
 ///
 /// # Fields
-/// Public fields of `GasAmount` are part of the generated SDK reference.
+/// - `substance_id`: Stable substance identifier for the gas species stored in this entry.
+/// - `amount`: Rounded particle count for this species inside the queried cell.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GasAmount {
     pub substance_id: SubstanceId,
@@ -32,7 +33,9 @@ pub struct GasAmount {
 /// Describes gas content and cell-level gas velocity for one world cell.
 ///
 /// # Fields
-/// Public fields of `GasMixture` are part of the generated SDK reference.
+/// - `species`: Individual gas entries present in the cell, filtered to non-zero amounts.
+/// - `total_amount`: Sum of all rounded gas particles currently stored in the cell.
+/// - `velocity`: Cell-level gas velocity vector returned by the simulation state.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GasMixture {
     pub species: Vec<GasAmount>,
@@ -43,7 +46,12 @@ pub struct GasMixture {
 /// Read-only snapshot of one placed structure.
 ///
 /// # Fields
-/// Public fields of `StructureInfo` are part of the generated SDK reference.
+/// - `id`: Stable runtime identifier of the placed structure instance.
+/// - `kind`: Registered structure kind used to resolve content metadata.
+/// - `origin`: Placement origin in world-cell coordinates.
+/// - `rotation`: Canonical rotation stored for this structure instance.
+/// - `params`: Editable runtime parameters attached to this structure.
+/// - `occupied_cells`: All world cells currently occupied by the structure footprint.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructureInfo {
     pub id: PlacedStructureId,
@@ -57,7 +65,13 @@ pub struct StructureInfo {
 /// Read-only snapshot of one world cell.
 ///
 /// # Fields
-/// Public fields of `CellInfo` are part of the generated SDK reference.
+/// - `cell`: Queried world-cell coordinates.
+/// - `in_bounds`: Always `true` for successful calls; included for explicit API consumers.
+/// - `is_boundary`: Whether the cell belongs to the non-editable world border.
+/// - `is_editable`: Whether plugin tools may mutate this cell through world APIs.
+/// - `material`: Solid material occupying the cell, if the cell is not empty.
+/// - `gas`: Complete gas mixture snapshot for the cell.
+/// - `structures`: All placed structures that currently occupy the cell.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CellInfo {
     pub cell: UVec2,
@@ -72,7 +86,10 @@ pub struct CellInfo {
 /// Request used by plugins to place a registered structure.
 ///
 /// # Fields
-/// Public fields of `StructurePlacement` are part of the generated SDK reference.
+/// - `kind`: Registered structure kind to place.
+/// - `origin`: Placement origin in world-cell coordinates.
+/// - `rotation`: Rotation to use when resolving layer descriptors and footprint cells.
+/// - `params`: Initial editable parameters stored on the created structure instance.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructurePlacement {
     pub kind: StructureKind,
@@ -84,7 +101,11 @@ pub struct StructurePlacement {
 /// Error returned by world-facing plugin API operations.
 ///
 /// # Variants
-/// Public variants of `WorldApiError` are listed in the Rust declaration and documented by the generated SDK reference.
+/// - `OutOfBounds`: The requested world cell lies outside the fixed simulation bounds.
+/// - `NotEditable`: The target cell is inside the protected boundary and cannot be modified.
+/// - `UnknownCellMaterial`: The provided cell material id is not registered in the content registry.
+/// - `UnknownStructureKind`: The provided structure kind id is not registered in the content registry.
+/// - `UnknownSubstance`: The provided substance id or alias is not registered in the gas registry.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WorldApiError {
     OutOfBounds(UVec2),
@@ -97,7 +118,13 @@ pub enum WorldApiError {
 /// Read-only world API exposed to plugin systems and event handlers.
 ///
 /// # Fields
-/// Public fields of `WorldApi` are part of the generated SDK reference.
+/// - `content_registry`: Read-only registry used to resolve cells, structures and overlays by stable ids.
+/// - `gas_registry`: Read-only gas registry used to resolve substance ids and compact gas indices.
+/// - `world`: Immutable access to the current world grid materials.
+/// - `gas`: Immutable access to the current free-gas simulation field.
+/// - `structures`: Immutable access to all placed structure instances in the world.
+/// - `overlay_mode`: Overlay mode visible to the current caller, if the dispatch includes overlay context.
+/// - `hovered_cell`: Hovered world cell visible to the current caller, if the dispatch includes input context.
 pub struct WorldApi<'a> {
     pub content_registry: &'a ContentRegistry,
     pub gas_registry: &'a GasRegistry,
@@ -111,20 +138,12 @@ pub struct WorldApi<'a> {
 impl<'a> WorldApi<'a> {
     /// Returns the fixed world size in cells.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_world_size` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_world_size(&self) -> UVec2 {
         UVec2::new(WORLD_WIDTH, WORLD_HEIGHT)
     }
 
     /// Returns full read-only information for one cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_cell_info` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_cell_info(&self, cell: UVec2) -> Result<CellInfo, WorldApiError> {
         self.ensure_in_bounds(cell)?;
         Ok(CellInfo {
@@ -140,10 +159,6 @@ impl<'a> WorldApi<'a> {
 
     /// Returns the solid material occupying one cell, if any.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_cell_material` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_cell_material(&self, cell: UVec2) -> Result<Option<CellMaterial>, WorldApiError> {
         self.ensure_in_bounds(cell)?;
         Ok(self.world.solid_material(cell.x, cell.y))
@@ -151,10 +166,6 @@ impl<'a> WorldApi<'a> {
 
     /// Returns the full gas mixture stored in one cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_cell_gas` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_cell_gas(&self, cell: UVec2) -> Result<GasMixture, WorldApiError> {
         self.ensure_in_bounds(cell)?;
         Ok(self.gas_mixture_from_counts(
@@ -167,10 +178,6 @@ impl<'a> WorldApi<'a> {
 
     /// Returns one gas amount in a cell by stable substance id or alias.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_cell_gas_amount` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_cell_gas_amount(&self, cell: UVec2, substance: &str) -> Result<u32, WorldApiError> {
         self.ensure_in_bounds(cell)?;
         let gas_index = self
@@ -182,10 +189,6 @@ impl<'a> WorldApi<'a> {
 
     /// Returns the cell-level velocity for a gas if that gas is present in the cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_cell_gas_velocity` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_cell_gas_velocity(
         &self,
         cell: UVec2,
@@ -201,10 +204,6 @@ impl<'a> WorldApi<'a> {
 
     /// Returns all placed structures occupying one cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_cell_structures` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_cell_structures(&self, cell: UVec2) -> Result<Vec<StructureInfo>, WorldApiError> {
         self.ensure_in_bounds(cell)?;
         Ok(self
@@ -217,10 +216,6 @@ impl<'a> WorldApi<'a> {
 
     /// Returns structures that occupy one cell through a particular layer.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_cell_structures_on_layer` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_cell_structures_on_layer(
         &self,
         cell: UVec2,
@@ -240,20 +235,12 @@ impl<'a> WorldApi<'a> {
 
     /// Returns one placed structure by runtime id.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_structure` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_structure(&self, id: PlacedStructureId) -> Option<StructureInfo> {
         self.structures.structure(id).map(structure_info)
     }
 
     /// Returns all placed structures with the requested kind.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_structures_by_type` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_structures_by_type(&self, kind: StructureKind) -> Vec<StructureInfo> {
         self.structures
             .iter()
@@ -264,20 +251,12 @@ impl<'a> WorldApi<'a> {
 
     /// Returns the active overlay mode when the caller supplied overlay context.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_overlay_mode` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_overlay_mode(&self) -> Option<OverlayMode> {
         self.overlay_mode
     }
 
     /// Returns the currently hovered world cell when the caller supplied input context.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `get_hovered_cell` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn get_hovered_cell(&self) -> Option<UVec2> {
         self.hovered_cell
     }
@@ -313,7 +292,12 @@ impl<'a> WorldApi<'a> {
 /// Mutable world API exposed to plugin systems and event handlers.
 ///
 /// # Fields
-/// Public fields of `WorldApiMut` are part of the generated SDK reference.
+/// - `content_registry`: Read-only registry used to validate cell and structure ids before mutations.
+/// - `gas_registry`: Read-only gas registry used to resolve substance ids during gas mutations.
+/// - `world`: Mutable access to world-cell materials.
+/// - `gas`: Mutable access to the free-gas simulation field.
+/// - `structures`: Mutable access to placed structures and their layer occupancy maps.
+/// - `gpu_state`: Optional GPU upload state that is marked dirty after successful world or gas edits.
 pub struct WorldApiMut<'a> {
     pub content_registry: &'a ContentRegistry,
     pub gas_registry: &'a GasRegistry,
@@ -326,10 +310,6 @@ pub struct WorldApiMut<'a> {
 impl<'a> WorldApiMut<'a> {
     /// Sets a solid material in one editable world cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `set_cell_material` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn set_cell_material(
         &mut self,
         cell: UVec2,
@@ -356,10 +336,6 @@ impl<'a> WorldApiMut<'a> {
 
     /// Removes a solid material from one editable world cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `remove_cell_material` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn remove_cell_material(&mut self, cell: UVec2) -> Result<bool, WorldApiError> {
         ensure_in_bounds(cell)?;
         if !is_editable_cell(cell.x, cell.y) {
@@ -370,10 +346,6 @@ impl<'a> WorldApiMut<'a> {
 
     /// Places a registered structure using registry-driven layer collision checks.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `place_structure` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn place_structure(
         &mut self,
         request: StructurePlacement,
@@ -397,20 +369,12 @@ impl<'a> WorldApiMut<'a> {
 
     /// Removes one placed structure by id.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `remove_structure` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn remove_structure(&mut self, id: PlacedStructureId) -> Result<bool, WorldApiError> {
         Ok(self.structures.remove_structure(id))
     }
 
     /// Removes all structures occupying one cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `remove_structures_in_cell` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn remove_structures_in_cell(
         &mut self,
         cell: UVec2,
@@ -421,10 +385,6 @@ impl<'a> WorldApiMut<'a> {
 
     /// Adds gas with a requested cell velocity.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `add_gas` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn add_gas(
         &mut self,
         cell: UVec2,
@@ -445,10 +405,6 @@ impl<'a> WorldApiMut<'a> {
 
     /// Sets one gas amount and cell velocity.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `set_gas` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn set_gas(
         &mut self,
         cell: UVec2,
@@ -469,10 +425,6 @@ impl<'a> WorldApiMut<'a> {
 
     /// Removes gas proportionally from all substances in one cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `remove_gas` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn remove_gas(&mut self, cell: UVec2, amount: u32) -> Result<GasMixture, WorldApiError> {
         ensure_in_bounds(cell)?;
         let removed = self
@@ -485,10 +437,6 @@ impl<'a> WorldApiMut<'a> {
 
     /// Removes all gas from one cell.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `remove_all_gas` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn remove_all_gas(&mut self, cell: UVec2) -> Result<(), WorldApiError> {
         ensure_in_bounds(cell)?;
         self.gas.clear_cell(cell.x, cell.y);

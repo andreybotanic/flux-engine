@@ -22,7 +22,7 @@ fn from_raw (value : u32) -> Option < Self >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `value` | `u32` | `value` argument passed as `u32`. |
+| `value` | u32 | `value` argument passed as `u32`. |
 
 ## Return Value
 
@@ -30,7 +30,10 @@ Option < Self >
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxeventkind-from-raw.md`](../../examples/methods/fluxeventkind-from-raw.md)_
+
 ```rust
-// Convert a raw ABI tag back into `FluxEventKind` when validating untyped input.
+let kind = FluxEventKind::from_raw(21).expect("known event tag");
+assert_eq!(kind, FluxEventKind::RenderOverlay);
 ```
 

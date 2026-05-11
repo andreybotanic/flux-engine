@@ -22,15 +22,20 @@ fn get_cell_info (& self , cell : UVec2) -> Result < CellInfo , WorldApiError >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
 
 ## Return Value
 
-Result < CellInfo , WorldApiError >
+Result < [`CellInfo`](../structures/cellinfo.md) , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-cell-info.md`](../../examples/methods/worldapi-get-cell-info.md)_
+
 ```rust
-// Call `get_cell_info` from plugin-facing code when this operation is available in context.
+let info = world.get_cell_info(UVec2::new(24, 18))?;
+if info.is_editable {
+    println!("cell {:?} can be modified", info.cell);
+}
 ```
 

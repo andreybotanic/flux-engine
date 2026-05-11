@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& BTreeMap < ContentId , SaveChunkDescriptor >
+& BTreeMap < [`ContentId`](../structures/contentid.md) , [`SaveChunkDescriptor`](../structures/savechunkdescriptor.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginruntimeregistry-save-chunks.md`](../../examples/methods/pluginruntimeregistry-save-chunks.md)_
+
 ```rust
-// Call `save_chunks` from plugin-facing code when this operation is available in context.
+let save_chunks = registry.save_chunks();
+assert!(save_chunks.values().all(|chunk| chunk.version >= 1));
 ```
 

@@ -16,13 +16,30 @@ Fired when a plugin-owned panel should be built.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `panel_id` | `ContentId` | `panel_id` argument passed as `ContentId`. |
+| `panel_id` | [`ContentId`](../structures/contentid.md) | Plugin-owned panel id being requested by the UI. |
 
 ## SDK Example
 
+_Source: [`examples/events/plugineventkind-buildpanel.md`](../../examples/events/plugineventkind-buildpanel.md)_
+
 ```rust
-if event.kind() == PluginEventKind::BuildPanel {
-// Emit or refresh plugin panel UI state.
+unsafe extern "C" fn on_build_panel(
+    _plugin: *mut FluxPluginHandle,
+    payload: *const FluxBuildPanelEventPayload,
+    host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let payload = unsafe { &*payload };
+    let host = unsafe { &mut *host };
+    let Some(submit_hud_block) = host.submit_hud_block else {
+        return FluxStatus::FAILED;
+    };
+    unsafe {
+        submit_hud_block(
+            host.context,
+            FluxUtf8Slice::from_str("Panel"),
+            payload.panel_id,
+        )
+    }
 }
 ```
 

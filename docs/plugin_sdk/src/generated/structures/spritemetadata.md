@@ -22,7 +22,7 @@ pub struct SpriteMetadata
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `image_path` | `String` | `image_path` field stored as `String`. |
-| `silhouette_path` | `Option < String >` | `silhouette_path` field stored as `Option < String >`. |
-| `overlay_path` | `Option < String >` | `overlay_path` field stored as `Option < String >`. |
+| `image_path` | String | Relative asset path to the main sprite image. |
+| `silhouette_path` | Option < String > | Optional relative asset path to the white-outline silhouette sprite. |
+| `overlay_path` | Option < String > | Optional relative asset path to an overlay-specific sprite variant. |
 

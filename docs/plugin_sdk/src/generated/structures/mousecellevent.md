@@ -22,11 +22,11 @@ pub struct MouseCellEvent
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `button` | `Option < MouseCellButton >` | `button` field stored as `Option < MouseCellButton >`. |
-| `cell` | `UVec2` | `cell` field stored as `UVec2`. |
-| `world_position` | `Vec2` | `world_position` field stored as `Vec2`. |
-| `screen_position` | `Vec2` | `screen_position` field stored as `Vec2`. |
-| `modifiers` | `InputModifiers` | `modifiers` field stored as `InputModifiers`. |
-| `active_tool_id` | `Option < ContentId >` | `active_tool_id` field stored as `Option < ContentId >`. |
-| `is_over_ui` | `bool` | `is_over_ui` field stored as `bool`. |
+| `button` | Option < [`MouseCellButton`](../enums/mousecellbutton.md) > | Mouse button associated with the event, if the source event had one. |
+| `cell` | UVec2 | Target world-cell coordinates under the cursor. |
+| `world_position` | Vec2 | Cursor position in world-space coordinates. |
+| `screen_position` | Vec2 | Cursor position in screen-space coordinates. |
+| `modifiers` | [`InputModifiers`](../structures/inputmodifiers.md) | Keyboard modifier snapshot captured with the mouse event. |
+| `active_tool_id` | Option < [`ContentId`](../structures/contentid.md) > | Active editor tool when the event fired, if one is selected. |
+| `is_over_ui` | bool | Whether the pointer was over game UI when the event was emitted. |
 

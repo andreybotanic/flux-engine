@@ -22,8 +22,8 @@ pub struct FluxToolDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | `FluxUtf8Slice` | `id` field stored as `FluxUtf8Slice`. |
-| `label` | `FluxUtf8Slice` | `label` field stored as `FluxUtf8Slice`. |
-| `icon_path` | `FluxUtf8Slice` | `icon_path` field stored as `FluxUtf8Slice`. |
-| `silhouette_path` | `FluxUtf8Slice` | `silhouette_path` field stored as `FluxUtf8Slice`. |
+| `id` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Stable content id of the tool being registered. |
+| `label` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Human-readable tool label shown in the UI. |
+| `icon_path` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Relative asset path to the main tool icon. |
+| `silhouette_path` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Relative asset path to the optional silhouette icon. |
 

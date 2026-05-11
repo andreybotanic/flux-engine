@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& BTreeSet < PluginId >
+& BTreeSet < [`PluginId`](../structures/pluginid.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-provider-plugins.md`](../../examples/methods/contentregistry-provider-plugins.md)_
+
 ```rust
-// Call `provider_plugins` from plugin-facing code when this operation is available in context.
+let provider_plugins = registry.provider_plugins();
+assert!(provider_plugins.iter().any(|plugin_id| plugin_id.as_str() == "flux.demo"));
 ```
 

@@ -22,7 +22,7 @@ fn from_str (value : & str) -> Result < Self , PluginContractError >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `value` | `& str` | `value` argument passed as `& str`. |
+| `value` | & str | `value` argument passed as `& str`. |
 
 ## Return Value
 
@@ -30,7 +30,19 @@ Result < Self , PluginContractError >
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginmanifest-from-str.md`](../../examples/methods/pluginmanifest-from-str.md)_
+
 ```rust
-// Call `from_str` from plugin-facing code when this operation is available in context.
+let manifest = PluginManifest::from_str(r#"
+id = "flux.demo"
+display_name = "Flux Demo"
+version = "1.2.3"
+api_version = 4
+dll = "bin/flux_demo.dll"
+configs = "config"
+assets = "assets"
+content = true
+"#).expect("manifest should parse");
+assert_eq!(manifest.id.as_str(), "flux.demo");
 ```
 

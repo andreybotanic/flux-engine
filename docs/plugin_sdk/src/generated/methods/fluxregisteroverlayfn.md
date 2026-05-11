@@ -22,16 +22,29 @@ pub type FluxRegisterOverlayFn = unsafe extern "C" fn (context : * mut c_void , 
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `descriptor` | `* const FluxOverlayDescriptor` | `descriptor` argument passed as `* const FluxOverlayDescriptor`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `descriptor` | * const [`FluxOverlayDescriptor`](../structures/fluxoverlaydescriptor.md) | `descriptor` argument passed as `* const FluxOverlayDescriptor`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxregisteroverlayfn.md`](../../examples/methods/fluxregisteroverlayfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxRegisterOverlayFn` ABI signature supplied by FluxEngine.
+unsafe fn register_overlay(
+    callback: FluxRegisterOverlayFn,
+    context: *mut std::ffi::c_void,
+) -> FluxStatus {
+    let descriptor = FluxOverlayDescriptor {
+        id: FluxUtf8Slice::from_str("flux.demo.overlay.temperature"),
+        label: FluxUtf8Slice::from_str("Temperature"),
+        hotkey: FluxUtf8Slice::from_str("F9"),
+        render_policy: 1,
+    };
+    unsafe { callback(context, &descriptor) }
+}
 ```
 

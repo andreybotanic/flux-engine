@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& BTreeMap < ContentId , StructureContentDescriptor >
+& BTreeMap < [`ContentId`](../structures/contentid.md) , [`StructureContentDescriptor`](../structures/structurecontentdescriptor.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-structures.md`](../../examples/methods/contentregistry-structures.md)_
+
 ```rust
-// Call `structures` from plugin-facing code when this operation is available in context.
+let structures = registry.structures();
+assert!(structures.values().all(|descriptor| !descriptor.allowed_rotations.is_empty()));
 ```
 

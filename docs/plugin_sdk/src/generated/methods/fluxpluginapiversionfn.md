@@ -28,7 +28,15 @@ u32
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxpluginapiversionfn.md`](../../examples/methods/fluxpluginapiversionfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxPluginApiVersionFn` ABI signature supplied by FluxEngine.
+unsafe fn validate_api_version(symbol: FluxPluginApiVersionFn) -> Result<(), String> {
+    let version = unsafe { symbol() };
+    if version != ENGINE_PLUGIN_API_VERSION_VALUE {
+        return Err(format!("plugin ABI {} is unsupported", version));
+    }
+    Ok(())
+}
 ```
 

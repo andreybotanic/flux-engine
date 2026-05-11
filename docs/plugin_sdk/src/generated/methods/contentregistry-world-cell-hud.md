@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-Option < & WorldCellHudConfig >
+Option < & [`WorldCellHudConfig`](../structures/worldcellhudconfig.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-world-cell-hud.md`](../../examples/methods/contentregistry-world-cell-hud.md)_
+
 ```rust
-// Call `world_cell_hud` from plugin-facing code when this operation is available in context.
+let hud = registry.world_cell_hud().expect("world cell HUD should be configured");
+assert!(!hud.label.is_empty());
 ```
 

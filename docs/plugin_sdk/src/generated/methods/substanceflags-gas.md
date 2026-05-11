@@ -28,7 +28,10 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceflags-gas.md`](../../examples/methods/substanceflags-gas.md)_
+
 ```rust
-// Call `gas` from plugin-facing code when this operation is available in context.
+let flags = SubstanceFlags::gas();
+assert!(flags.gas);
 ```
 

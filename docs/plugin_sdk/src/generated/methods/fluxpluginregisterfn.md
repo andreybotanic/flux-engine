@@ -22,16 +22,24 @@ pub type FluxPluginRegisterFn = unsafe extern "C" fn (plugin : * mut FluxPluginH
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `plugin` | `* mut FluxPluginHandle` | `plugin` argument passed as `* mut FluxPluginHandle`. |
-| `registrar` | `* mut FluxRegistrar` | `registrar` argument passed as `* mut FluxRegistrar`. |
+| `plugin` | * mut [`FluxPluginHandle`](../structures/fluxpluginhandle.md) | `plugin` argument passed as `* mut FluxPluginHandle`. |
+| `registrar` | * mut [`FluxRegistrar`](../structures/fluxregistrar.md) | `registrar` argument passed as `* mut FluxRegistrar`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxpluginregisterfn.md`](../../examples/methods/fluxpluginregisterfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxPluginRegisterFn` ABI signature supplied by FluxEngine.
+unsafe fn register_plugin_instance(
+    symbol: FluxPluginRegisterFn,
+    plugin: *mut FluxPluginHandle,
+    registrar: &mut FluxRegistrar,
+) -> FluxStatus {
+    unsafe { symbol(plugin, registrar as *mut FluxRegistrar) }
+}
 ```
 

@@ -28,7 +28,10 @@ u32
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxeventkind-as-raw.md`](../../examples/methods/fluxeventkind-as-raw.md)_
+
 ```rust
-// Convert a typed plugin-visible event kind into the raw ABI tag when needed.
+let raw = FluxEventKind::MouseDownCell.as_raw();
+assert_eq!(raw, 11);
 ```
 

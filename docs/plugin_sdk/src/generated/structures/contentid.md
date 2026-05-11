@@ -18,3 +18,8 @@ Canonical identifier of one gameplay content item registered by a plugin.
 pub struct ContentId
 ```
 
+## Methods
+
+- [`ContentId::as_str`](../methods/contentid-as-str.md)
+- [`ContentId::parse`](../methods/contentid-parse.md)
+

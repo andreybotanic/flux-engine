@@ -22,16 +22,24 @@ fn set_cell_material (& mut self , cell : UVec2 , material : CellMaterial ,) -> 
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
-| `material` | `CellMaterial` | `material` argument passed as `CellMaterial`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
+| `material` | [`CellMaterial`](../structures/cellmaterial.md) | `material` argument passed as `CellMaterial`. |
 
 ## Return Value
 
-Result < bool , WorldApiError >
+Result < bool , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapimut-set-cell-material.md`](../../examples/methods/worldapimut-set-cell-material.md)_
+
 ```rust
-// Call `set_cell_material` from plugin-facing code when this operation is available in context.
+let changed = world_mut.set_cell_material(
+    UVec2::new(20, 14),
+    CellMaterial::new("flux.default.cell.metal"),
+)?;
+if changed {
+    println!("cell material updated");
+}
 ```
 

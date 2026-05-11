@@ -22,8 +22,8 @@ pub struct FluxBuildHudForCellEventPayload
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
-| `cell_x` | `u32` | `cell_x` field stored as `u32`. |
-| `cell_y` | `u32` | `cell_y` field stored as `u32`. |
+| `struct_size` | u32 | Size of this payload struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by the event producer and consumer. |
+| `cell_x` | u32 | X coordinate of the hovered world cell. |
+| `cell_y` | u32 | Y coordinate of the hovered world cell. |
 

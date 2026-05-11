@@ -22,8 +22,8 @@ pub enum MouseCellButton
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `Left` | `none` | `Left` variant. |
-| `Right` | `none` | `Right` variant. |
-| `Middle` | `none` | `Middle` variant. |
-| `Other` | `u16` | `Other` variant. |
+| `Left` | none | Primary mouse button. |
+| `Right` | none | Secondary mouse button. |
+| `Middle` | none | Middle or wheel mouse button. |
+| `Other` | u16 | Additional mouse button encoded by its platform-provided numeric id. |
 

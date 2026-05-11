@@ -22,7 +22,7 @@ pub struct FluxSimulationPausedChangedEvent
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
-| `paused` | `u8` | `paused` field stored as `u8`. |
+| `struct_size` | u32 | Size of this payload struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by the event producer and consumer. |
+| `paused` | u8 | New pause flag encoded as `0` or `1`. |
 

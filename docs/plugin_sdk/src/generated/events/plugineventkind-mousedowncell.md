@@ -16,13 +16,40 @@ Fired when a mouse button is pressed over a world cell.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `0` | `MouseCellEvent` | `0` argument passed as `MouseCellEvent`. |
+| `payload` | [`MouseCellEvent`](../structures/mousecellevent.md) | Low-level mouse payload captured for the button press. |
 
 ## SDK Example
 
+_Source: [`examples/events/plugineventkind-mousedowncell.md`](../../examples/events/plugineventkind-mousedowncell.md)_
+
 ```rust
-if event.kind() == PluginEventKind::MouseDownCell && event.has_cell != 0 {
-// Use event.cell_x and event.cell_y as the target cell.
+unsafe extern "C" fn on_mouse_down_cell(
+    plugin: *mut FluxPluginHandle,
+    payload: *const FluxMouseCellEventPayload,
+    host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let payload = unsafe { &*payload };
+    let plugin = unsafe { &mut *plugin };
+    let host = unsafe { &mut *host };
+    if payload.has_cell == 0 || payload.is_over_ui != 0 || payload.button != 1 {
+        return FluxStatus::OK;
+    }
+
+    plugin.dragging = true;
+    plugin.last_x = payload.cell_x;
+    plugin.last_y = payload.cell_y;
+
+    let Some(set_cell_material) = host.set_cell_material else {
+        return FluxStatus::FAILED;
+    };
+    unsafe {
+        set_cell_material(
+            host.context,
+            payload.cell_x,
+            payload.cell_y,
+            FluxUtf8Slice::from_str("flux.default.cell.metal"),
+        )
+    }
 }
 ```
 

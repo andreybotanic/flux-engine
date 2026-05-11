@@ -22,15 +22,18 @@ fn get (& self , index : usize) -> Option < & SubstanceDefinition >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `index` | `usize` | `index` argument passed as `usize`. |
+| `index` | usize | `index` argument passed as `usize`. |
 
 ## Return Value
 
-Option < & SubstanceDefinition >
+Option < & [`SubstanceDefinition`](../structures/substancedefinition.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceregistry-get.md`](../../examples/methods/substanceregistry-get.md)_
+
 ```rust
-// Call `get` from plugin-facing code when this operation is available in context.
+let first = registry.get(0).expect("registry has at least one substance");
+assert!(first.flags.gas);
 ```
 

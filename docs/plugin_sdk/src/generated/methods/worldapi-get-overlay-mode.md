@@ -24,11 +24,17 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-Option < OverlayMode >
+Option < [`OverlayMode`](../enums/overlaymode.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-overlay-mode.md`](../../examples/methods/worldapi-get-overlay-mode.md)_
+
 ```rust
-// Call `get_overlay_mode` from plugin-facing code when this operation is available in context.
+if let Some(mode) = world.get_overlay_mode() {
+    if mode.is_gas() {
+        println!("gas overlay is active");
+    }
+}
 ```
 

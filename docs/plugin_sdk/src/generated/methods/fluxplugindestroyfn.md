@@ -22,7 +22,7 @@ pub type FluxPluginDestroyFn = unsafe extern "C" fn (plugin : * mut FluxPluginHa
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `plugin` | `* mut FluxPluginHandle` | `plugin` argument passed as `* mut FluxPluginHandle`. |
+| `plugin` | * mut [`FluxPluginHandle`](../structures/fluxpluginhandle.md) | `plugin` argument passed as `* mut FluxPluginHandle`. |
 
 ## Return Value
 
@@ -30,7 +30,11 @@ pub type FluxPluginDestroyFn = unsafe extern "C" fn (plugin : * mut FluxPluginHa
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxplugindestroyfn.md`](../../examples/methods/fluxplugindestroyfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxPluginDestroyFn` ABI signature supplied by FluxEngine.
+unsafe fn destroy_plugin_instance(symbol: FluxPluginDestroyFn, plugin: *mut FluxPluginHandle) {
+    unsafe { symbol(plugin) };
+}
 ```
 

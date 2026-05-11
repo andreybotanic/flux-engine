@@ -22,15 +22,19 @@ fn get_cell_material (& self , cell : UVec2) -> Result < Option < CellMaterial >
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` argument passed as `UVec2`. |
+| `cell` | UVec2 | `cell` argument passed as `UVec2`. |
 
 ## Return Value
 
-Result < Option < CellMaterial > , WorldApiError >
+Result < Option < [`CellMaterial`](../structures/cellmaterial.md) > , [`WorldApiError`](../enums/worldapierror.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-cell-material.md`](../../examples/methods/worldapi-get-cell-material.md)_
+
 ```rust
-// Call `get_cell_material` from plugin-facing code when this operation is available in context.
+if let Some(material) = world.get_cell_material(UVec2::new(24, 18))? {
+    println!("solid material: {}", material.as_str());
+}
 ```
 

@@ -22,8 +22,8 @@ pub struct FluxToolSelectedEventPayload
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `struct_size` | `u32` | `struct_size` field stored as `u32`. |
-| `api_version` | `u32` | `api_version` field stored as `u32`. |
-| `has_tool_id` | `u8` | `has_tool_id` field stored as `u8`. |
-| `tool_id` | `FluxUtf8Slice` | `tool_id` field stored as `FluxUtf8Slice`. |
+| `struct_size` | u32 | Size of this payload struct used for ABI validation. |
+| `api_version` | u32 | ABI version expected by the event producer and consumer. |
+| `has_tool_id` | u8 | Whether `tool_id` contains a valid active tool identifier. |
+| `tool_id` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Stable content id of the newly active tool, when present. |
 

@@ -16,13 +16,22 @@ Fired when the active editor tool changes.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `tool_id` | `Option < ContentId >` | `tool_id` argument passed as `Option < ContentId >`. |
+| `tool_id` | Option < [`ContentId`](../structures/contentid.md) > | Newly selected tool id, or `None` when no tool is active. |
 
 ## SDK Example
 
+_Source: [`examples/events/plugineventkind-toolselected.md`](../../examples/events/plugineventkind-toolselected.md)_
+
 ```rust
-if event.kind() == PluginEventKind::ToolSelected {
-// Read event.active_tool_id from the ABI payload.
+unsafe extern "C" fn on_tool_selected(
+    plugin: *mut FluxPluginHandle,
+    payload: *const FluxToolSelectedEventPayload,
+    _host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let payload = unsafe { &*payload };
+    let plugin = unsafe { &mut *plugin };
+    plugin.dragging = payload.has_tool_id != 0;
+    FluxStatus::OK
 }
 ```
 

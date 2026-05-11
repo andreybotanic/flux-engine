@@ -10,7 +10,8 @@ pub use self::events::*;
 /// Opaque UTF-8 string view used by the stable plugin ABI.
 ///
 /// # Fields
-/// Public fields of `FluxUtf8Slice` are part of the generated SDK reference.
+/// - `ptr`: Pointer to the first UTF-8 byte, or null when the slice is empty.
+/// - `len`: Number of bytes available through `ptr`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FluxUtf8Slice {
@@ -21,10 +22,6 @@ pub struct FluxUtf8Slice {
 impl FluxUtf8Slice {
     /// Creates a borrowed UTF-8 slice for ABI calls.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `from_str` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn from_str(value: &str) -> Self {
         if value.is_empty() {
             return Self {
@@ -43,7 +40,7 @@ impl FluxUtf8Slice {
 /// Status code returned by plugin ABI functions.
 ///
 /// # Fields
-/// Public fields of `FluxStatus` are part of the generated SDK reference.
+/// - `0`: Raw integer status code returned across the stable ABI boundary.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FluxStatus(pub i32);
@@ -55,20 +52,12 @@ impl FluxStatus {
 
     /// Returns the raw numeric status code.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `code` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn code(self) -> i32 {
         self.0
     }
 
     /// Returns `true` when the ABI call succeeded.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `is_ok` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn is_ok(self) -> bool {
         self == Self::OK
     }
@@ -76,17 +65,19 @@ impl FluxStatus {
 
 /// Callback used by plugins to write a host-readable error message.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxWriteErrorFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxWriteErrorFn =
     unsafe extern "C" fn(context: *mut c_void, message: FluxUtf8Slice) -> FluxStatus;
 
 /// C-compatible gas substance descriptor emitted by content plugins.
 ///
 /// # Fields
-/// Public fields of `FluxGasSubstanceDescriptor` are part of the generated SDK reference.
+/// - `id`: Stable substance id passed to the host for registration.
+/// - `label`: Human-readable substance label shown in UI and debug output.
+/// - `alias`: Legacy short alias accepted by runtime gas APIs.
+/// - `molecular_mass`: Relative molecular mass used by gas simulation ordering.
+/// - `color_r`: Red channel of the normalized gas display color.
+/// - `color_g`: Green channel of the normalized gas display color.
+/// - `color_b`: Blue channel of the normalized gas display color.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxGasSubstanceDescriptor {
@@ -101,10 +92,6 @@ pub struct FluxGasSubstanceDescriptor {
 
 /// Callback used by plugins to register one gas-capable substance.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxRegisterGasSubstanceFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxRegisterGasSubstanceFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxGasSubstanceDescriptor,
@@ -113,7 +100,10 @@ pub type FluxRegisterGasSubstanceFn = unsafe extern "C" fn(
 /// C-compatible tool descriptor emitted by plugins.
 ///
 /// # Fields
-/// Public fields of `FluxToolDescriptor` are part of the generated SDK reference.
+/// - `id`: Stable content id of the tool being registered.
+/// - `label`: Human-readable tool label shown in the UI.
+/// - `icon_path`: Relative asset path to the main tool icon.
+/// - `silhouette_path`: Relative asset path to the optional silhouette icon.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxToolDescriptor {
@@ -125,17 +115,16 @@ pub struct FluxToolDescriptor {
 
 /// Callback used by plugins to register one tool descriptor.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxRegisterToolFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxRegisterToolFn =
     unsafe extern "C" fn(context: *mut c_void, descriptor: *const FluxToolDescriptor) -> FluxStatus;
 
 /// C-compatible overlay descriptor emitted by plugins.
 ///
 /// # Fields
-/// Public fields of `FluxOverlayDescriptor` are part of the generated SDK reference.
+/// - `id`: Stable content id of the overlay being registered.
+/// - `label`: Human-readable overlay label shown in selectors and menus.
+/// - `hotkey`: Optional hotkey string requested for the overlay.
+/// - `render_policy`: Raw ABI tag describing whether the overlay is core- or plugin-rendered.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxOverlayDescriptor {
@@ -147,10 +136,6 @@ pub struct FluxOverlayDescriptor {
 
 /// Callback used by plugins to register one overlay descriptor.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxRegisterOverlayFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxRegisterOverlayFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxOverlayDescriptor,
@@ -159,7 +144,8 @@ pub type FluxRegisterOverlayFn = unsafe extern "C" fn(
 /// C-compatible save chunk descriptor emitted by plugins.
 ///
 /// # Fields
-/// Public fields of `FluxSaveChunkDescriptor` are part of the generated SDK reference.
+/// - `id`: Stable content id of the save chunk schema.
+/// - `version`: Schema version written into save data for this chunk.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxSaveChunkDescriptor {
@@ -169,10 +155,6 @@ pub struct FluxSaveChunkDescriptor {
 
 /// Callback used by plugins to register one save chunk descriptor.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxRegisterSaveChunkFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxRegisterSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxSaveChunkDescriptor,
@@ -180,10 +162,6 @@ pub type FluxRegisterSaveChunkFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to set one world cell material by stable content id.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxSetCellMaterialFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxSetCellMaterialFn = unsafe extern "C" fn(
     context: *mut c_void,
     x: u32,
@@ -193,10 +171,6 @@ pub type FluxSetCellMaterialFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to add free gas with a cell velocity.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxAddGasFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxAddGasFn = unsafe extern "C" fn(
     context: *mut c_void,
     x: u32,
@@ -210,10 +184,6 @@ pub type FluxAddGasFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to submit one complete RGBA8 overlay frame.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxSubmitOverlayFrameFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
     context: *mut c_void,
     width: u32,
@@ -224,10 +194,6 @@ pub type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to append one HUD block for the hovered cell.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxSubmitHudBlockFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxSubmitHudBlockFn = unsafe extern "C" fn(
     context: *mut c_void,
     title: FluxUtf8Slice,
@@ -236,10 +202,6 @@ pub type FluxSubmitHudBlockFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to write a plugin-owned save chunk.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxWriteSaveChunkFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxWriteSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     chunk_id: FluxUtf8Slice,
@@ -250,10 +212,6 @@ pub type FluxWriteSaveChunkFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to read a plugin-owned save chunk.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxReadSaveChunkFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxReadSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     chunk_id: FluxUtf8Slice,
@@ -266,7 +224,15 @@ pub type FluxReadSaveChunkFn = unsafe extern "C" fn(
 /// Runtime host callback table passed to one typed plugin event handler.
 ///
 /// # Fields
-/// Public fields of `FluxRuntimeHost` are part of the generated SDK reference.
+/// - `struct_size`: Size of this struct used for ABI validation.
+/// - `api_version`: ABI version expected by both host and plugin.
+/// - `context`: Opaque host-owned context passed back into callback functions.
+/// - `set_cell_material`: Optional callback for changing a world cell material.
+/// - `add_gas`: Optional callback for adding free gas with velocity.
+/// - `submit_overlay_frame`: Optional callback for sending an RGBA8 overlay frame to the host.
+/// - `submit_hud_block`: Optional callback for appending one HUD block line.
+/// - `write_save_chunk`: Optional callback for writing a plugin-owned save chunk.
+/// - `read_save_chunk`: Optional callback for reading a plugin-owned save chunk.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxRuntimeHost {
@@ -284,10 +250,6 @@ pub struct FluxRuntimeHost {
 impl FluxRuntimeHost {
     /// Creates a runtime host callback table for a single event dispatch.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `new` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn new(context: *mut c_void) -> Self {
         Self {
             struct_size: std::mem::size_of::<Self>() as u32,
@@ -306,7 +268,13 @@ impl FluxRuntimeHost {
 /// Host callbacks and runtime paths exposed to one plugin instance.
 ///
 /// # Fields
-/// Public fields of `FluxHostApi` are part of the generated SDK reference.
+/// - `struct_size`: Size of this struct used for ABI validation.
+/// - `api_version`: ABI version expected by both host and plugin.
+/// - `plugin_root`: Absolute plugin package root visible to the runtime plugin.
+/// - `config_root`: Absolute plugin configuration directory visible to the runtime plugin.
+/// - `assets_root`: Absolute plugin asset directory visible to the runtime plugin.
+/// - `write_error`: Optional callback for reporting host-readable error messages.
+/// - `error_context`: Opaque host-owned context passed back into `write_error`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxHostApi {
@@ -322,10 +290,6 @@ pub struct FluxHostApi {
 impl FluxHostApi {
     /// Creates the stage-1 host API payload.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `new` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn new(
         plugin_root: FluxUtf8Slice,
         config_root: FluxUtf8Slice,
@@ -348,7 +312,16 @@ impl FluxHostApi {
 /// Future-proof registrar payload passed into `flux_plugin_register`.
 ///
 /// # Fields
-/// Public fields of `FluxRegistrar` are part of the generated SDK reference.
+/// - `struct_size`: Size of this struct used for ABI validation.
+/// - `api_version`: ABI version expected by both host and plugin.
+/// - `register_gas_substance`: Optional callback for registering gas-capable substances.
+/// - `register_event_handler`: Optional callback for registering named event handlers.
+/// - `register_tool`: Optional callback for registering tool descriptors.
+/// - `register_overlay`: Optional callback for registering overlay descriptors.
+/// - `register_save_chunk`: Optional callback for registering save chunk descriptors.
+/// - `registration_context`: Opaque host-owned context passed back into registrar callbacks.
+/// - `reserved2`: Reserved pointer slot kept for forward-compatible ABI expansion.
+/// - `reserved3`: Reserved pointer slot kept for forward-compatible ABI expansion.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxRegistrar {
@@ -367,10 +340,6 @@ pub struct FluxRegistrar {
 impl FluxRegistrar {
     /// Creates the registrar payload used by `flux_plugin_register`.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `new` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn new(
         register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
         register_event_handler: Option<FluxRegisterEventHandlerFn>,
@@ -397,7 +366,7 @@ impl FluxRegistrar {
 /// Opaque plugin-owned handle shared back to the host across ABI calls.
 ///
 /// # Fields
-/// Public fields of `FluxPluginHandle` are part of the generated SDK reference.
+/// - `_private`: Zero-sized private marker that prevents plugins from depending on the handle layout.
 #[repr(C)]
 #[derive(Debug)]
 pub struct FluxPluginHandle {
@@ -406,18 +375,10 @@ pub struct FluxPluginHandle {
 
 /// Function pointer type for `flux_plugin_api_version`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxPluginApiVersionFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxPluginApiVersionFn = unsafe extern "C" fn() -> u32;
 
 /// Function pointer type for `flux_plugin_create`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxPluginCreateFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxPluginCreateFn = unsafe extern "C" fn(
     host: *const FluxHostApi,
     out_plugin: *mut *mut FluxPluginHandle,
@@ -425,10 +386,6 @@ pub type FluxPluginCreateFn = unsafe extern "C" fn(
 
 /// Function pointer type for `flux_plugin_register`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxPluginRegisterFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxPluginRegisterFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     registrar: *mut FluxRegistrar,
@@ -436,40 +393,20 @@ pub type FluxPluginRegisterFn = unsafe extern "C" fn(
 
 /// Function pointer type for `flux_plugin_destroy`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxPluginDestroyFn` ABI signature supplied by FluxEngine.
-/// ```
 pub type FluxPluginDestroyFn = unsafe extern "C" fn(plugin: *mut FluxPluginHandle);
 
 /// Null-terminated export name for `flux_plugin_api_version`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Use `FLUX_PLUGIN_API_VERSION_EXPORT_NAME` when validating the Plugin SDK ABI contract.
-/// ```
 pub const FLUX_PLUGIN_API_VERSION_EXPORT_NAME: &[u8] = b"flux_plugin_api_version\0";
 
 /// Null-terminated export name for `flux_plugin_create`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Use `FLUX_PLUGIN_CREATE_EXPORT_NAME` when validating the Plugin SDK ABI contract.
-/// ```
 pub const FLUX_PLUGIN_CREATE_EXPORT_NAME: &[u8] = b"flux_plugin_create\0";
 
 /// Null-terminated export name for `flux_plugin_register`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Use `FLUX_PLUGIN_REGISTER_EXPORT_NAME` when validating the Plugin SDK ABI contract.
-/// ```
 pub const FLUX_PLUGIN_REGISTER_EXPORT_NAME: &[u8] = b"flux_plugin_register\0";
 
 /// Null-terminated export name for `flux_plugin_destroy`.
 ///
-/// # SDK Example
-/// ```rust
-/// // Use `FLUX_PLUGIN_DESTROY_EXPORT_NAME` when validating the Plugin SDK ABI contract.
-/// ```
 pub const FLUX_PLUGIN_DESTROY_EXPORT_NAME: &[u8] = b"flux_plugin_destroy\0";

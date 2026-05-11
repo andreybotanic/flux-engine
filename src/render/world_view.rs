@@ -260,6 +260,12 @@ pub(crate) fn preview_world_extent() -> Vec2 {
 }
 
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Eq, Default)]
+/// Active world overlay mode used by rendering and plugin callbacks.
+///
+/// # Variants
+/// - `Main`: Default world rendering mode.
+/// - `Gas`: Core gas-concentration overlay mode.
+/// - `Plugin`: Plugin-owned overlay mode identified by a stable content id.
 pub enum OverlayMode {
     #[default]
     Main,

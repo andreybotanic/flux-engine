@@ -22,9 +22,9 @@ pub enum WorldApiError
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `OutOfBounds` | `UVec2` | `OutOfBounds` variant. |
-| `NotEditable` | `UVec2` | `NotEditable` variant. |
-| `UnknownCellMaterial` | `String` | `UnknownCellMaterial` variant. |
-| `UnknownStructureKind` | `String` | `UnknownStructureKind` variant. |
-| `UnknownSubstance` | `String` | `UnknownSubstance` variant. |
+| `OutOfBounds` | UVec2 | The requested world cell lies outside the fixed simulation bounds. |
+| `NotEditable` | UVec2 | The target cell is inside the protected boundary and cannot be modified. |
+| `UnknownCellMaterial` | String | The provided cell material id is not registered in the content registry. |
+| `UnknownStructureKind` | String | The provided structure kind id is not registered in the content registry. |
+| `UnknownSubstance` | String | The provided substance id or alias is not registered in the gas registry. |
 

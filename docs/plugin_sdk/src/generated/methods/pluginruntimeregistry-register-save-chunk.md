@@ -22,7 +22,7 @@ fn register_save_chunk (& mut self , descriptor : SaveChunkDescriptor)
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `descriptor` | `SaveChunkDescriptor` | `descriptor` argument passed as `SaveChunkDescriptor`. |
+| `descriptor` | [`SaveChunkDescriptor`](../structures/savechunkdescriptor.md) | `descriptor` argument passed as `SaveChunkDescriptor`. |
 
 ## Return Value
 
@@ -30,7 +30,16 @@ fn register_save_chunk (& mut self , descriptor : SaveChunkDescriptor)
 
 ## SDK Example
 
+_Source: [`examples/methods/pluginruntimeregistry-register-save-chunk.md`](../../examples/methods/pluginruntimeregistry-register-save-chunk.md)_
+
 ```rust
-// Call `register_save_chunk` from plugin-facing code when this operation is available in context.
+let mut registry = PluginRuntimeRegistry::default();
+let descriptor = SaveChunkDescriptor {
+    id: ContentId::parse("flux.demo.save.counter").expect("chunk id"),
+    plugin_id: PluginId::parse("flux.demo").expect("plugin id"),
+    version: 1,
+};
+registry.register_save_chunk(descriptor);
+assert!(registry.save_chunks().contains_key(&ContentId::parse("flux.demo.save.counter").expect("chunk id")));
 ```
 

@@ -28,7 +28,12 @@ Option < UVec2 >
 
 ## SDK Example
 
+_Source: [`examples/methods/worldapi-get-hovered-cell.md`](../../examples/methods/worldapi-get-hovered-cell.md)_
+
 ```rust
-// Call `get_hovered_cell` from plugin-facing code when this operation is available in context.
+if let Some(cell) = world.get_hovered_cell() {
+    let info = world.get_cell_info(cell)?;
+    println!("hovered cell {:?} contains {} structures", cell, info.structures.len());
+}
 ```
 

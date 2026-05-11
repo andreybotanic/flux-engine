@@ -22,9 +22,9 @@ pub enum StructureRenderStyle
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `Hidden` | `none` | `Hidden` variant. |
-| `Normal` | `none` | `Normal` variant. |
-| `OutlineOnly` | `color: Color, alpha: f32` | `OutlineOnly` variant. |
-| `Filled` | `color: Color, alpha: f32` | `Filled` variant. |
-| `SpriteOverride` | `asset_path: String, alpha: f32` | `SpriteOverride` variant. |
+| `Hidden` | none | The structure is hidden in the plugin-controlled overlay frame. |
+| `Normal` | none | The structure uses the engine's default overlay rendering. |
+| `OutlineOnly` | color: Color, alpha: f32 | The structure footprint is rendered as an outline only. |
+| `Filled` | color: Color, alpha: f32 | The structure footprint is rendered as a filled color block. |
+| `SpriteOverride` | asset_path: String, alpha: f32 | The structure is rendered with a plugin-provided sprite asset override. |
 

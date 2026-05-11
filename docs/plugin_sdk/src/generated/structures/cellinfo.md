@@ -22,11 +22,11 @@ pub struct CellInfo
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `cell` | `UVec2` | `cell` field stored as `UVec2`. |
-| `in_bounds` | `bool` | `in_bounds` field stored as `bool`. |
-| `is_boundary` | `bool` | `is_boundary` field stored as `bool`. |
-| `is_editable` | `bool` | `is_editable` field stored as `bool`. |
-| `material` | `Option < CellMaterial >` | `material` field stored as `Option < CellMaterial >`. |
-| `gas` | `GasMixture` | `gas` field stored as `GasMixture`. |
-| `structures` | `Vec < StructureInfo >` | `structures` field stored as `Vec < StructureInfo >`. |
+| `cell` | UVec2 | Queried world-cell coordinates. |
+| `in_bounds` | bool | Always `true` for successful calls; included for explicit API consumers. |
+| `is_boundary` | bool | Whether the cell belongs to the non-editable world border. |
+| `is_editable` | bool | Whether plugin tools may mutate this cell through world APIs. |
+| `material` | Option < [`CellMaterial`](../structures/cellmaterial.md) > | Solid material occupying the cell, if the cell is not empty. |
+| `gas` | [`GasMixture`](../structures/gasmixture.md) | Complete gas mixture snapshot for the cell. |
+| `structures` | Vec < [`StructureInfo`](../structures/structureinfo.md) > | All placed structures that currently occupy the cell. |
 

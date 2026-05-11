@@ -22,16 +22,26 @@ pub type FluxPluginCreateFn = unsafe extern "C" fn (host : * const FluxHostApi ,
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `host` | `* const FluxHostApi` | `host` argument passed as `* const FluxHostApi`. |
-| `out_plugin` | `* mut * mut FluxPluginHandle` | `out_plugin` argument passed as `* mut * mut FluxPluginHandle`. |
+| `host` | * const [`FluxHostApi`](../structures/fluxhostapi.md) | `host` argument passed as `* const FluxHostApi`. |
+| `out_plugin` | * mut * mut [`FluxPluginHandle`](../structures/fluxpluginhandle.md) | Output pointer filled by the callee as `* mut * mut FluxPluginHandle`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxplugincreatefn.md`](../../examples/methods/fluxplugincreatefn.md)_
+
 ```rust
-// Store or call the callback through the `FluxPluginCreateFn` ABI signature supplied by FluxEngine.
+unsafe fn create_plugin_instance(symbol: FluxPluginCreateFn, host: &FluxHostApi) -> Result<*mut FluxPluginHandle, FluxStatus> {
+    let mut plugin = std::ptr::null_mut();
+    let status = unsafe { symbol(host as *const FluxHostApi, &mut plugin) };
+    if status.is_ok() && !plugin.is_null() {
+        Ok(plugin)
+    } else {
+        Err(status)
+    }
+}
 ```
 

@@ -28,7 +28,10 @@ This method does not take plugin-supplied arguments.
 
 ## SDK Example
 
+_Source: [`examples/methods/substanceid-as-str.md`](../../examples/methods/substanceid-as-str.md)_
+
 ```rust
-// Call `as_str` from plugin-facing code when this operation is available in context.
+let id = SubstanceId::parse("flux.demo.gas.oxygen").expect("valid substance id");
+assert_eq!(id.as_str(), "flux.demo.gas.oxygen");
 ```
 

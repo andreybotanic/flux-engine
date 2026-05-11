@@ -65,8 +65,9 @@ FluxEngine/
 - `docs/plugin_sdk/book.toml`: Конфигурация mdBook-сайта Plugin SDK; build output направлен в `target/plugin_sdk_docs`, а sidebar folding включён для collapsed-by-default generated API групп.
 - `docs/plugin_sdk/src/SUMMARY.md`: Генерируемая навигация Plugin SDK book: guide-главы и generated API reference, сгруппированный по структурам, enum-ам, константам, методам и событиям.
 - `docs/plugin_sdk/src/*.md`: Ручные guide-главы Plugin SDK: обзор, lifecycle, структура package, manifest, сборка и reload.
+- `docs/plugin_sdk/src/examples/{methods,events,constants}/*.md`: Внешние markdown-snippet примеры для generated Plugin SDK страниц; каждая константа, метод/callback и событие берут `SDK Example` отсюда, а не из больших Rustdoc-блоков в коде.
 - `docs/plugin_sdk/src/generated/*.md`: Детерминированно сгенерированные индексные API-главы Plugin SDK для групп `Structures`, `Enums`, `Constants`, `Methods` и `Events`; обновляются через `cargo xtask generate-plugin-sdk-docs`.
-- `docs/plugin_sdk/src/generated/{structures,enums,constants,methods,events}/*.md`: Детерминированно сгенерированные страницы конкретных Plugin SDK API-сущностей с описаниями полей, вариантов, деклараций, аргументов, возвращаемых значений и event payload.
+- `docs/plugin_sdk/src/generated/{structures,enums,constants,methods,events}/*.md`: Детерминированно сгенерированные страницы конкретных Plugin SDK API-сущностей с описаниями полей, вариантов, деклараций, аргументов, возвращаемых значений, ссылками на связанные SDK-типы, списками методов структур и встраиваемыми external example-snippets.
 - `docs/plugin_sdk/theme/sdk.css`: Кастомные стили интерактивных SDK API-блоков, бейджей и фильтра.
 - `docs/plugin_sdk/theme/sdk.js`: Кастомная интерактивность Plugin SDK book: фильтр API items и copy-кнопки для code blocks.
 - `docs/plans/plugin_system/00_roadmap.md`: Общий roadmap будущей миграции FluxEngine на runtime-плагины.
@@ -219,9 +220,9 @@ FluxEngine/
 - `xtask/Cargo.toml`: Манифест helper-crate-а для сборки/упаковки runtime-плагинов и генерации Plugin SDK документации.
 - `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, Plugin SDK docs команд, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>` и безопасная упаковка `.fluxplugin`.
 - `xtask/src/plugin_sdk_docs.rs`: Orchestration-модуль Plugin SDK docs команд: собирает generated Markdown, stale-check и mdBook build.
-- `xtask/src/plugin_sdk_docs/collector.rs`: Сбор Plugin SDK API-сущностей из Rust AST через `syn`: структуры, методы, callback-типы, константы и события.
-- `xtask/src/plugin_sdk_docs/model.rs`: Общие модели generated Plugin SDK reference: группы API, item docs, поля, аргументы, варианты и source metadata.
-- `xtask/src/plugin_sdk_docs/parser.rs`: Парсинг SDK-facing Rustdoc через `syn` и строгая валидация обязательных секций.
-- `xtask/src/plugin_sdk_docs/render.rs`: Рендер generated API items в Markdown/HTML-блоки mdBook.
+- `xtask/src/plugin_sdk_docs/collector.rs`: Сбор Plugin SDK API-сущностей из Rust AST через `syn`: структуры, методы, callback-типы, константы и события, allowlist/exclude-фильтрация source-файлов, валидация описаний полей/вариантов и загрузка external example-snippets.
+- `xtask/src/plugin_sdk_docs/model.rs`: Общие модели generated Plugin SDK reference: группы API, item docs, поля, аргументы, варианты, source metadata и схема путей для external examples.
+- `xtask/src/plugin_sdk_docs/parser.rs`: Парсинг SDK-facing Rustdoc через `syn` и строгая валидация summary/обязательных секций без встраивания `# SDK Example` в исходный код.
+- `xtask/src/plugin_sdk_docs/render.rs`: Рендер generated API items в Markdown/HTML-блоки mdBook, включая cross-links на документированные SDK-типы, списки методов структур и подключение external example-snippets.
 - `xtask/src/main.rs`: CLI entrypoint, который запускает `xtask::run_from_env()` и возвращает non-zero exit code при ошибке.
 - `tmp_size.rs`: Временный локальный вспомогательный Rust-файл для ручных проверок/черновых экспериментов.

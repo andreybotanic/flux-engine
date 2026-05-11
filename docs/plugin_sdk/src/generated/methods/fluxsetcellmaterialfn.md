@@ -22,18 +22,32 @@ pub type FluxSetCellMaterialFn = unsafe extern "C" fn (context : * mut c_void , 
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `x` | `u32` | `x` argument passed as `u32`. |
-| `y` | `u32` | `y` argument passed as `u32`. |
-| `material_id` | `FluxUtf8Slice` | `material_id` argument passed as `FluxUtf8Slice`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `x` | u32 | `x` argument passed as `u32`. |
+| `y` | u32 | `y` argument passed as `u32`. |
+| `material_id` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `material_id` argument passed as `FluxUtf8Slice`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxsetcellmaterialfn.md`](../../examples/methods/fluxsetcellmaterialfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxSetCellMaterialFn` ABI signature supplied by FluxEngine.
+unsafe fn paint_cell(
+    callback: FluxSetCellMaterialFn,
+    context: *mut std::ffi::c_void,
+) -> FluxStatus {
+    unsafe {
+        callback(
+            context,
+            20,
+            12,
+            FluxUtf8Slice::from_str("flux.default.cell.metal"),
+        )
+    }
+}
 ```
 

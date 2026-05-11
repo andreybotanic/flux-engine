@@ -24,11 +24,14 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& BTreeMap < SubstanceId , SubstanceDefinition >
+& BTreeMap < [`SubstanceId`](../structures/substanceid.md) , [`SubstanceDefinition`](../structures/substancedefinition.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-substances.md`](../../examples/methods/contentregistry-substances.md)_
+
 ```rust
-// Call `substances` from plugin-facing code when this operation is available in context.
+let substances = registry.substances();
+assert!(substances.values().all(|definition| definition.flags.gas));
 ```
 

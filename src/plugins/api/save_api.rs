@@ -5,7 +5,10 @@ use crate::plugins::{ContentId, PluginId};
 /// One plugin-owned save chunk payload.
 ///
 /// # Fields
-/// Public fields of `SaveChunk` are part of the generated SDK reference.
+/// - `plugin_id`: Plugin that owns the save chunk payload.
+/// - `chunk_id`: Stable content id of the save chunk schema.
+/// - `version`: Schema version stored alongside the chunk bytes.
+/// - `bytes`: Raw serialized payload bytes written by the plugin.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SaveChunk {
     pub plugin_id: PluginId,
@@ -17,7 +20,7 @@ pub struct SaveChunk {
 /// In-memory store used while plugins write and read save chunks.
 ///
 /// # Fields
-/// Public fields of `SaveChunkStore` are part of the generated SDK reference.
+/// - `chunks`: Collected plugin-owned save chunks stored for the current save or load pass.
 #[derive(Resource, Clone, Debug, Default, PartialEq, Eq)]
 pub struct SaveChunkStore {
     chunks: Vec<SaveChunk>,
@@ -26,10 +29,6 @@ pub struct SaveChunkStore {
 impl SaveChunkStore {
     /// Writes or replaces one plugin-owned save chunk.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `write_plugin_chunk` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn write_plugin_chunk(
         &mut self,
         plugin_id: PluginId,
@@ -56,10 +55,6 @@ impl SaveChunkStore {
 
     /// Reads one plugin-owned save chunk.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `read_plugin_chunk` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn read_plugin_chunk(
         &self,
         plugin_id: &PluginId,
@@ -72,10 +67,6 @@ impl SaveChunkStore {
 
     /// Returns all currently stored plugin chunks.
     ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `chunks` from plugin-facing code when this operation is available in context.
-    /// ```
     pub fn chunks(&self) -> &[SaveChunk] {
         &self.chunks
     }

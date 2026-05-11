@@ -18,3 +18,21 @@ Runtime registry of content provider plugins and their registered content descri
 pub struct ContentRegistry
 ```
 
+## Methods
+
+- [`ContentRegistry::cell_by_material`](../methods/contentregistry-cell-by-material.md)
+- [`ContentRegistry::cells`](../methods/contentregistry-cells.md)
+- [`ContentRegistry::overlay_by_mode`](../methods/contentregistry-overlay-by-mode.md)
+- [`ContentRegistry::overlays`](../methods/contentregistry-overlays.md)
+- [`ContentRegistry::provider_plugins`](../methods/contentregistry-provider-plugins.md)
+- [`ContentRegistry::register_cell`](../methods/contentregistry-register-cell.md)
+- [`ContentRegistry::register_overlay`](../methods/contentregistry-register-overlay.md)
+- [`ContentRegistry::register_provider_plugin`](../methods/contentregistry-register-provider-plugin.md)
+- [`ContentRegistry::register_structure`](../methods/contentregistry-register-structure.md)
+- [`ContentRegistry::register_substance`](../methods/contentregistry-register-substance.md)
+- [`ContentRegistry::set_world_cell_hud`](../methods/contentregistry-set-world-cell-hud.md)
+- [`ContentRegistry::structure_by_kind`](../methods/contentregistry-structure-by-kind.md)
+- [`ContentRegistry::structures`](../methods/contentregistry-structures.md)
+- [`ContentRegistry::substances`](../methods/contentregistry-substances.md)
+- [`ContentRegistry::world_cell_hud`](../methods/contentregistry-world-cell-hud.md)
+

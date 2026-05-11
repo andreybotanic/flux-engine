@@ -22,12 +22,12 @@ fn new (register_gas_substance : Option < FluxRegisterGasSubstanceFn > , registe
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `register_gas_substance` | `Option < FluxRegisterGasSubstanceFn >` | `register_gas_substance` argument passed as `Option < FluxRegisterGasSubstanceFn >`. |
-| `register_event_handler` | `Option < FluxRegisterEventHandlerFn >` | `register_event_handler` argument passed as `Option < FluxRegisterEventHandlerFn >`. |
-| `register_tool` | `Option < FluxRegisterToolFn >` | `register_tool` argument passed as `Option < FluxRegisterToolFn >`. |
-| `register_overlay` | `Option < FluxRegisterOverlayFn >` | `register_overlay` argument passed as `Option < FluxRegisterOverlayFn >`. |
-| `register_save_chunk` | `Option < FluxRegisterSaveChunkFn >` | `register_save_chunk` argument passed as `Option < FluxRegisterSaveChunkFn >`. |
-| `registration_context` | `* mut c_void` | `registration_context` argument passed as `* mut c_void`. |
+| `register_gas_substance` | Option < [`FluxRegisterGasSubstanceFn`](../methods/fluxregistergassubstancefn.md) > | `register_gas_substance` argument passed as `Option < FluxRegisterGasSubstanceFn >`. |
+| `register_event_handler` | Option < [`FluxRegisterEventHandlerFn`](../methods/fluxregistereventhandlerfn.md) > | `register_event_handler` argument passed as `Option < FluxRegisterEventHandlerFn >`. |
+| `register_tool` | Option < [`FluxRegisterToolFn`](../methods/fluxregistertoolfn.md) > | `register_tool` argument passed as `Option < FluxRegisterToolFn >`. |
+| `register_overlay` | Option < [`FluxRegisterOverlayFn`](../methods/fluxregisteroverlayfn.md) > | `register_overlay` argument passed as `Option < FluxRegisterOverlayFn >`. |
+| `register_save_chunk` | Option < [`FluxRegisterSaveChunkFn`](../methods/fluxregistersavechunkfn.md) > | `register_save_chunk` argument passed as `Option < FluxRegisterSaveChunkFn >`. |
+| `registration_context` | * mut c_void | `registration_context` argument passed as `* mut c_void`. |
 
 ## Return Value
 
@@ -35,7 +35,11 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxregistrar-new.md`](../../examples/methods/fluxregistrar-new.md)_
+
 ```rust
-// Call `new` from plugin-facing code when this operation is available in context.
+let registrar = FluxRegistrar::new(None, None, None, None, None, std::ptr::null_mut());
+assert_eq!(registrar.api_version, ENGINE_PLUGIN_API_VERSION_VALUE);
+assert!(registrar.register_event_handler.is_none());
 ```
 

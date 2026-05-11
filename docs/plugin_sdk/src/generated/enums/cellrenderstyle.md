@@ -22,9 +22,9 @@ pub enum CellRenderStyle
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `Hidden` | `none` | `Hidden` variant. |
-| `Normal` | `none` | `Normal` variant. |
-| `Filled` | `color: Color, alpha: f32` | `Filled` variant. |
-| `Outline` | `color: Color, alpha: f32` | `Outline` variant. |
-| `Sprite` | `asset_path: String, alpha: f32` | `Sprite` variant. |
+| `Hidden` | none | The cell is hidden in the plugin-controlled overlay frame. |
+| `Normal` | none | The cell uses the engine's default overlay rendering. |
+| `Filled` | color: Color, alpha: f32 | The cell is rendered as a filled color block with explicit alpha. |
+| `Outline` | color: Color, alpha: f32 | The cell is rendered as an outline with explicit color and alpha. |
+| `Sprite` | asset_path: String, alpha: f32 | The cell is rendered with a plugin-provided sprite asset override. |
 

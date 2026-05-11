@@ -22,5 +22,9 @@ pub struct SubstanceFlags
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `gas` | `bool` | `gas` field stored as `bool`. |
+| `gas` | bool | Whether the substance participates in the gas simulation pipeline. |
+
+## Methods
+
+- [`SubstanceFlags::gas`](../methods/substanceflags-gas.md)
 

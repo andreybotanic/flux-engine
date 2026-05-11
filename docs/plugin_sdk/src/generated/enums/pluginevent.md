@@ -22,26 +22,26 @@ pub enum PluginEvent
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `WorldCreated` | `none` | `WorldCreated` variant. |
-| `WorldLoaded` | `none` | `WorldLoaded` variant. |
-| `WorldBeforeSave` | `none` | `WorldBeforeSave` variant. |
-| `WorldAfterSave` | `none` | `WorldAfterSave` variant. |
-| `WorldUnloaded` | `none` | `WorldUnloaded` variant. |
-| `SimulationPreCellGasStep` | `none` | `SimulationPreCellGasStep` variant. |
-| `SimulationPostCellGasStep` | `none` | `SimulationPostCellGasStep` variant. |
-| `SimulationPausedChanged` | `paused: bool` | `SimulationPausedChanged` variant. |
-| `StructurePlaced` | `StructureEvent` | `StructurePlaced` variant. |
-| `StructureRemoved` | `StructureEvent` | `StructureRemoved` variant. |
-| `ToolSelected` | `tool_id: Option < ContentId >` | `ToolSelected` variant. |
-| `MouseDownCell` | `MouseCellEvent` | `MouseDownCell` variant. |
-| `MouseMoveCell` | `MouseCellEvent` | `MouseMoveCell` variant. |
-| `MouseUpCell` | `MouseCellEvent` | `MouseUpCell` variant. |
-| `MouseEnterCell` | `MouseCellEvent` | `MouseEnterCell` variant. |
-| `MouseLeaveCell` | `MouseCellEvent` | `MouseLeaveCell` variant. |
-| `KeyPressed` | `key: String, modifiers: InputModifiers` | `KeyPressed` variant. |
-| `KeyReleased` | `key: String, modifiers: InputModifiers` | `KeyReleased` variant. |
-| `OverlayChanged` | `overlay_id: Option < ContentId >` | `OverlayChanged` variant. |
-| `BuildHudForCell` | `cell: UVec2` | `BuildHudForCell` variant. |
-| `BuildPanel` | `panel_id: ContentId` | `BuildPanel` variant. |
-| `RenderOverlay` | `overlay_id: ContentId` | `RenderOverlay` variant. |
+| `WorldCreated` | none | World-lifecycle event with no additional payload. |
+| `WorldLoaded` | none | World-lifecycle event with no additional payload. |
+| `WorldBeforeSave` | none | Save-lifecycle event with no additional payload. |
+| `WorldAfterSave` | none | Save-lifecycle event with no additional payload. |
+| `WorldUnloaded` | none | World-lifecycle event with no additional payload. |
+| `SimulationPreCellGasStep` | none | Simulation tick event emitted before free-gas processing. |
+| `SimulationPostCellGasStep` | none | Simulation tick event emitted after free-gas processing. |
+| `SimulationPausedChanged` | paused: bool | Carries the new pause flag after a pause/resume transition. |
+| `StructurePlaced` | [`StructureEvent`](../structures/structureevent.md) | Carries the placed structure payload. |
+| `StructureRemoved` | [`StructureEvent`](../structures/structureevent.md) | Carries the removed structure payload. |
+| `ToolSelected` | tool_id: Option < [`ContentId`](../structures/contentid.md) > | Carries the newly selected tool id, if any. |
+| `MouseDownCell` | [`MouseCellEvent`](../structures/mousecellevent.md) | Carries the low-level mouse payload for a button press. |
+| `MouseMoveCell` | [`MouseCellEvent`](../structures/mousecellevent.md) | Carries the low-level mouse payload for cursor movement. |
+| `MouseUpCell` | [`MouseCellEvent`](../structures/mousecellevent.md) | Carries the low-level mouse payload for a button release. |
+| `MouseEnterCell` | [`MouseCellEvent`](../structures/mousecellevent.md) | Carries the low-level mouse payload for cell entry. |
+| `MouseLeaveCell` | [`MouseCellEvent`](../structures/mousecellevent.md) | Carries the low-level mouse payload for cell exit. |
+| `KeyPressed` | key: String, modifiers: [`InputModifiers`](../structures/inputmodifiers.md) | Carries the pressed key string and modifier snapshot. |
+| `KeyReleased` | key: String, modifiers: [`InputModifiers`](../structures/inputmodifiers.md) | Carries the released key string and modifier snapshot. |
+| `OverlayChanged` | overlay_id: Option < [`ContentId`](../structures/contentid.md) > | Carries the new overlay id, if the active overlay is plugin-owned. |
+| `BuildHudForCell` | cell: UVec2 | Carries the hovered world cell for HUD augmentation. |
+| `BuildPanel` | panel_id: [`ContentId`](../structures/contentid.md) | Carries the plugin-owned panel id being requested. |
+| `RenderOverlay` | overlay_id: [`ContentId`](../structures/contentid.md) | Carries the plugin-owned overlay id that should render a frame. |
 

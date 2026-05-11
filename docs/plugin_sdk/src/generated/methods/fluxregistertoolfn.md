@@ -22,16 +22,26 @@ pub type FluxRegisterToolFn = unsafe extern "C" fn (context : * mut c_void , des
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `context` | `* mut c_void` | `context` argument passed as `* mut c_void`. |
-| `descriptor` | `* const FluxToolDescriptor` | `descriptor` argument passed as `* const FluxToolDescriptor`. |
+| `context` | * mut c_void | `context` argument passed as `* mut c_void`. |
+| `descriptor` | * const [`FluxToolDescriptor`](../structures/fluxtooldescriptor.md) | `descriptor` argument passed as `* const FluxToolDescriptor`. |
 
 ## Return Value
 
-FluxStatus
+[`FluxStatus`](../structures/fluxstatus.md)
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxregistertoolfn.md`](../../examples/methods/fluxregistertoolfn.md)_
+
 ```rust
-// Store or call the callback through the `FluxRegisterToolFn` ABI signature supplied by FluxEngine.
+unsafe fn register_tool(callback: FluxRegisterToolFn, context: *mut std::ffi::c_void) -> FluxStatus {
+    let descriptor = FluxToolDescriptor {
+        id: FluxUtf8Slice::from_str("flux.demo.tool.paint"),
+        label: FluxUtf8Slice::from_str("Paint"),
+        icon_path: FluxUtf8Slice::from_str("icons/paint.png"),
+        silhouette_path: FluxUtf8Slice::from_str("icons/paint_silhouette.png"),
+    };
+    unsafe { callback(context, &descriptor) }
+}
 ```
 

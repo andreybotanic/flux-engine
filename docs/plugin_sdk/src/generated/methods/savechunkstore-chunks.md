@@ -24,11 +24,15 @@ This method does not take plugin-supplied arguments.
 
 ## Return Value
 
-& [SaveChunk]
+& [[`SaveChunk`](../structures/savechunk.md)]
 
 ## SDK Example
 
+_Source: [`examples/methods/savechunkstore-chunks.md`](../../examples/methods/savechunkstore-chunks.md)_
+
 ```rust
-// Call `chunks` from plugin-facing code when this operation is available in context.
+let chunks = store.chunks();
+let total_bytes: usize = chunks.iter().map(|chunk| chunk.bytes.len()).sum();
+assert!(total_bytes >= chunks.len());
 ```
 

@@ -22,15 +22,20 @@ fn structure_by_kind (& self , kind : StructureKind) -> Option < & StructureCont
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `kind` | `StructureKind` | `kind` argument passed as `StructureKind`. |
+| `kind` | [`StructureKind`](../structures/structurekind.md) | `kind` argument passed as `StructureKind`. |
 
 ## Return Value
 
-Option < & StructureContentDescriptor >
+Option < & [`StructureContentDescriptor`](../structures/structurecontentdescriptor.md) >
 
 ## SDK Example
 
+_Source: [`examples/methods/contentregistry-structure-by-kind.md`](../../examples/methods/contentregistry-structure-by-kind.md)_
+
 ```rust
-// Call `structure_by_kind` from plugin-facing code when this operation is available in context.
+let descriptor = registry
+    .structure_by_kind(StructureKind::new("flux.demo.structure.filter"))
+    .expect("registered structure kind should resolve");
+assert_eq!(descriptor.kind.as_str(), "flux.demo.structure.filter");
 ```
 

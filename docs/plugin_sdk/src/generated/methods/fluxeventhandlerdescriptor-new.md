@@ -22,8 +22,8 @@ fn new (event_kind : FluxEventKind , handler_name : FluxUtf8Slice) -> Self
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `event_kind` | `FluxEventKind` | `event_kind` argument passed as `FluxEventKind`. |
-| `handler_name` | `FluxUtf8Slice` | `handler_name` argument passed as `FluxUtf8Slice`. |
+| `event_kind` | [`FluxEventKind`](../enums/fluxeventkind.md) | `event_kind` argument passed as `FluxEventKind`. |
+| `handler_name` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | `handler_name` argument passed as `FluxUtf8Slice`. |
 
 ## Return Value
 
@@ -31,7 +31,13 @@ Self
 
 ## SDK Example
 
+_Source: [`examples/methods/fluxeventhandlerdescriptor-new.md`](../../examples/methods/fluxeventhandlerdescriptor-new.md)_
+
 ```rust
-// Build a descriptor without hardcoding the raw numeric event tag.
+let descriptor = FluxEventHandlerDescriptor::new(
+    FluxEventKind::BuildHudForCell,
+    FluxUtf8Slice::from_str("onBuildHudForCell"),
+);
+assert_eq!(descriptor.event_kind, FluxEventKind::BuildHudForCell.as_raw());
 ```
 
