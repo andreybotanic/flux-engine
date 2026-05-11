@@ -9,18 +9,19 @@ pub mod manifest;
 pub mod registration;
 pub mod registry;
 pub mod reload;
+pub mod runtime_dll;
 pub mod source;
 pub mod state;
 pub mod substances;
 
 pub use self::api::{
-    CellInfo, CellRenderStyle, CellStyleEntry, GasAmount, GasMixture, GasRenderStyle,
-    GasStyleEntry, HudBlock, InputModifiers, MouseCellButton, MouseCellEvent, OverlayDrawCommand,
-    OverlayFrame, OverlayRenderPolicy, PanelDescriptor, PluginEvent, PluginEventKind,
-    PluginRuntimeRegistry, PluginSubscription, RuntimeOverlayDescriptor, SaveChunk,
-    SaveChunkDescriptor, SaveChunkStore, StructureEvent, StructureInfo, StructurePlacement,
-    StructureRenderStyle, StructureStyleEntry, ToolDescriptor, UiNode, WorldApi, WorldApiError,
-    WorldApiMut,
+    build_plugin_runtime_registry, CellInfo, CellRenderStyle, CellStyleEntry, GasAmount,
+    GasMixture, GasRenderStyle, GasStyleEntry, HudBlock, InputModifiers, MouseCellButton,
+    MouseCellEvent, OverlayDrawCommand, OverlayFrame, OverlayRenderPolicy, PanelDescriptor,
+    PluginEvent, PluginEventKind, PluginRuntimeRegistry, PluginSubscription,
+    RuntimeOverlayDescriptor, SaveChunk, SaveChunkDescriptor, SaveChunkStore, StructureEvent,
+    StructureInfo, StructurePlacement, StructureRenderStyle, StructureStyleEntry, ToolDescriptor,
+    UiNode, WorldApi, WorldApiError, WorldApiMut,
 };
 pub use self::content::{
     CellContentDescriptor, ContentId, ContentRegistry, LegacyStorageDescriptor,
@@ -46,6 +47,10 @@ pub use self::registry::{
 };
 pub use self::reload::{
     reload_plugin_registry, PluginReloadError, PluginReloadReport, PluginReloadRequest,
+};
+pub use self::runtime_dll::{
+    overlay_is_plugin_controlled, PluginHudBlockStore, PluginOverlayFrameStore,
+    RuntimeDllHostPlugin, RuntimeDllPluginRegistry, RuntimeHostContext,
 };
 pub use self::source::{
     discover_dev_plugin_sources, discover_packaged_plugin_sources, discover_plugin_sources,

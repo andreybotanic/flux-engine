@@ -12,10 +12,12 @@ use crate::{
     editor::EditorPlugin,
     input::InputPlugin,
     plugins::{
+        build_plugin_runtime_registry,
         default_plugin::{
             asset_root, pipe_runtime::DefaultPluginRuntimePlugin, DEFAULT_PLUGIN_ASSET_SOURCE,
         },
-        DefaultPluginContent, PluginBootstrapConfig,
+        DefaultPluginContent, PluginBootstrapConfig, PluginHudBlockStore, PluginOverlayFrameStore,
+        RuntimeDllHostPlugin, RuntimeDllPluginRegistry, SaveChunkStore,
     },
     render::RenderPlugin,
     simulation::{
@@ -36,7 +38,12 @@ pub fn run() {
     let plugin_bootstrap = crate::plugins::bootstrap_plugin_registry(&plugin_bootstrap_config);
     plugin_bootstrap.registry_state.log_to_stderr();
     let plugin_runtime_registry =
-        plugin_runtime_registry_from_loaded_plugins(plugin_bootstrap.loaded_registry.entries());
+        build_plugin_runtime_registry(plugin_bootstrap.loaded_registry.entries());
+    let runtime_dll_registry =
+        RuntimeDllPluginRegistry::from_loaded_plugins(plugin_bootstrap.loaded_registry.entries());
+    for error in runtime_dll_registry.errors() {
+        eprintln!("Runtime plugin load error: {error}");
+    }
     let game_config = GameConfig::load_from_default_location_with_content(
         &plugin_bootstrap.content_registry,
     )
@@ -100,6 +107,10 @@ pub fn run() {
         .insert_resource(plugin_bootstrap.enabled_set)
         .insert_resource(plugin_bootstrap.content_registry)
         .insert_resource(plugin_runtime_registry)
+        .insert_resource(runtime_dll_registry)
+        .init_resource::<PluginOverlayFrameStore>()
+        .init_resource::<PluginHudBlockStore>()
+        .init_resource::<SaveChunkStore>()
         .insert_resource(default_plugin_content)
         .insert_resource(plugin_bootstrap.registry_state)
         .insert_resource(plugin_bootstrap_config)
@@ -137,32 +148,12 @@ pub fn run() {
             RenderPlugin,
             InputPlugin,
             UiPlugin,
+            RuntimeDllHostPlugin,
             EditorPlugin,
             DebugPlugin,
         ));
 
     app.run();
-}
-
-fn plugin_runtime_registry_from_loaded_plugins(
-    loaded_plugins: &[crate::plugins::LoadedPluginMetadata],
-) -> crate::plugins::PluginRuntimeRegistry {
-    let mut registry = crate::plugins::PluginRuntimeRegistry::default();
-    for plugin in loaded_plugins {
-        for event_kind in &plugin.registration.event_subscriptions {
-            registry.subscribe(plugin.plugin_id.clone(), *event_kind);
-        }
-        for tool in &plugin.registration.tools {
-            registry.register_tool(tool.clone());
-        }
-        for overlay in &plugin.registration.overlays {
-            registry.register_overlay(overlay.clone());
-        }
-        for save_chunk in &plugin.registration.save_chunks {
-            registry.register_save_chunk(save_chunk.clone());
-        }
-    }
-    registry
 }
 
 fn gpu_backend_available(width: u32, height: u32) -> bool {

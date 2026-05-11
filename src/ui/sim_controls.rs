@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::editor::MainMenuState;
+use crate::plugins::PluginEvent;
 use crate::save::WorldLoadState;
 use crate::simulation::{SimulationControl, SimulationSpeed};
 use crate::ui::palette;
@@ -143,12 +144,19 @@ pub(crate) fn handle_sim_control_keyboard(
     mut control: ResMut<SimulationControl>,
     world_load_state: Res<WorldLoadState>,
     main_menu: Option<Res<MainMenuState>>,
+    mut plugin_events: EventWriter<PluginEvent>,
 ) {
     if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
         return;
     }
     if keys.just_pressed(KeyCode::Space) {
+        let was_paused = control.paused;
         apply_pause_toggle(&mut control, &world_load_state);
+        if was_paused != control.paused {
+            plugin_events.write(PluginEvent::SimulationPausedChanged {
+                paused: control.paused,
+            });
+        }
     }
     if keys.just_pressed(KeyCode::Period) {
         control.speed = control.speed.faster();
@@ -167,6 +175,7 @@ pub(crate) fn handle_sim_control_buttons(
     mut control: ResMut<SimulationControl>,
     world_load_state: Res<WorldLoadState>,
     main_menu: Option<Res<MainMenuState>>,
+    mut plugin_events: EventWriter<PluginEvent>,
 ) {
     if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
         return;
@@ -178,7 +187,15 @@ pub(crate) fn handle_sim_control_buttons(
 
         match *action {
             SimControlAction::Speed(speed) => control.speed = speed,
-            SimControlAction::Pause => apply_pause_toggle(&mut control, &world_load_state),
+            SimControlAction::Pause => {
+                let was_paused = control.paused;
+                apply_pause_toggle(&mut control, &world_load_state);
+                if was_paused != control.paused {
+                    plugin_events.write(PluginEvent::SimulationPausedChanged {
+                        paused: control.paused,
+                    });
+                }
+            }
         }
     }
 }

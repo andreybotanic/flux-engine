@@ -133,11 +133,12 @@ FluxEngine/
 - `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API.
 - `src/plugins/reload.rs`: Атомарный manual reload/rescan runtime-плагинов без загруженного мира: rebuild registry, пересборка gas registry, generation/report и сравнение source fingerprints.
 - `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin capabilities/content, включая внешние gas substances, event subscriptions, tools, overlays и save chunks.
+- `src/plugins/runtime_dll.rs`: Live DLL executor, runtime event dispatch, host callbacks для world/gas/UI/overlay/save APIs и stores для plugin HUD/overlay output.
 - `src/plugins/flux_api_demo_common.rs`: Shared v3 C ABI shim used by the API demo DLL plugin crates.
-- `src/plugins/flux_api_cell_demo_plugin/`: Runtime DLL fixture that registers a cell/tool demo and low-level mouse cell event subscriptions.
-- `src/plugins/flux_api_tick_demo_plugin/`: Runtime DLL fixture that registers simulation pre/post gas step subscriptions.
-- `src/plugins/flux_api_temperature_overlay_plugin/`: Runtime DLL fixture that registers a plugin-controlled temperature overlay descriptor.
-- `src/plugins/flux_api_ui_save_demo_plugin/`: Runtime DLL fixture that registers HUD/panel-oriented subscriptions plus a plugin save chunk descriptor.
+- `src/plugins/flux_api_cell_demo_plugin/`: Runtime DLL fixture that registers a cell/tool demo and draws metal-cell lines from low-level right-button mouse events.
+- `src/plugins/flux_api_tick_demo_plugin/`: Runtime DLL fixture that registers simulation pre/post gas step subscriptions and injects moving H2 in one fixed cell during pre-step.
+- `src/plugins/flux_api_temperature_overlay_plugin/`: Runtime DLL fixture that registers a plugin-controlled temperature overlay and submits a complete heatmap frame.
+- `src/plugins/flux_api_ui_save_demo_plugin/`: Runtime DLL fixture that registers HUD/panel-oriented subscriptions, shows per-cell left-click HUD counters and writes a plugin save chunk.
 - `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` и rebuild-helper для menu toggle; content registry создаётся из default descriptors плюс runtime registration включённых content-плагинов.
 - `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics, source fingerprint и resolve plugin layout внутри plugin root.
 - `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses и aggregate `PluginRegistryState`.

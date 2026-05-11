@@ -11,7 +11,7 @@ mod tests {
                 ENTITY_GAS_SINK_ID, ENTITY_PIPE_ID, ENTITY_VENT_ID, SUBSTANCE_H2_ID,
                 SUBSTANCE_O2_ID,
             },
-            EnabledPluginSet, PluginId,
+            ContentId, EnabledPluginSet, PluginId, SaveChunkStore,
         },
         world::{
             grid::WorldGrid,
@@ -241,6 +241,49 @@ mod tests {
         assert!(restored_structures.has_pipe_at(20, 20));
         assert!(restored_structures.has_vent_at(20, 20));
         assert_eq!(restored_pipe_gas.total_amount_particles(0), 100_000);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn save_roundtrip_preserves_plugin_chunks() {
+        let root = temp_saves_root("flux_save_plugin_chunks");
+        let registry = test_registry();
+        let world = WorldGrid::default();
+        let gas = GasField::from_registry(&registry);
+        let structures = PlacedStructureMap::default();
+        let pipe_gas = PipeGasField::from_registry(&registry);
+        let content_registry = test_content_registry();
+        let enabled_plugins = default_enabled_plugins();
+        let plugin_id = PluginId::parse("flux.api_ui_save_demo").expect("plugin id");
+        let chunk_id =
+            ContentId::parse("flux.api_ui_save_demo.save.counter").expect("chunk id");
+        let mut chunks = SaveChunkStore::default();
+        chunks.write_plugin_chunk(plugin_id.clone(), chunk_id.clone(), 1, 42u32.to_le_bytes().to_vec());
+
+        let descriptor = create_save_with_plugin_chunks(
+            &root,
+            "Plugin Chunk Save",
+            &world,
+            &gas,
+            &structures,
+            &pipe_gas,
+            &registry,
+            &content_registry,
+            &enabled_plugins,
+            7,
+            &chunks,
+        )
+        .expect("create save");
+        let loaded = load_save(&root, &descriptor.id, &registry).expect("load save");
+        let restored = loaded
+            .state
+            .plugin_save_chunks
+            .read_plugin_chunk(&plugin_id, &chunk_id)
+            .expect("plugin chunk");
+
+        assert_eq!(restored.version, 1);
+        assert_eq!(restored.bytes, 42u32.to_le_bytes().to_vec());
 
         let _ = fs::remove_dir_all(root);
     }

@@ -17,7 +17,7 @@ use crate::{
             PipeContainerKind, PipeFluxField, PipeGasField, PipeGasSnapshot,
             PipeNodeGasSnapshotEntry, PipeNodeKey,
         },
-        ContentId, ContentRegistry, EnabledPluginSet, PluginId, SubstanceId,
+        ContentId, ContentRegistry, EnabledPluginSet, PluginId, SaveChunkStore, SubstanceId,
     },
     render::OverlayMode,
     simulation::{
@@ -48,6 +48,7 @@ const CHUNK_GAS_STATE_ID: &str = "gas_state";
 const CHUNK_PIPE_GAS_ID: &str = "pipe_gas";
 const CHUNK_PLACED_STRUCTURES_ID: &str = "placed_structures";
 const CHUNK_PREVIEW_PNG_ID: &str = "preview_png";
+const PLUGIN_CHUNK_ID_PREFIX: &str = "plugin:";
 const WORLD_CELLS_FILE: &str = "world_cells.bin";
 const GAS_STATE_FILE: &str = "gas_state.bin";
 const PIPE_GAS_FILE: &str = "pipe_gas.bin";
@@ -203,6 +204,7 @@ pub struct RuntimeWorldState {
     pub gas_snapshot: GasFieldSnapshot,
     pub placed_structures_snapshot: PlacedStructureSnapshot,
     pub pipe_gas_snapshot: PipeGasSnapshot,
+    pub plugin_save_chunks: SaveChunkStore,
     pub simulation_step: u64,
 }
 

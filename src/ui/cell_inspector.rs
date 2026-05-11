@@ -8,8 +8,10 @@ use crate::{
     },
     editor::{is_cursor_over_ui, ActiveEditorTool, MainMenuState},
     input::camera::MainCamera,
-    plugins::default_plugin::pipe_runtime::{
-        PipeFlowVisualState, PipeGasField, PipeSimulationConfig,
+    plugins::{
+        default_plugin::pipe_runtime::{PipeFlowVisualState, PipeGasField, PipeSimulationConfig},
+        ContentRegistry, PluginEvent, PluginHudBlockStore, PluginRuntimeRegistry,
+        RuntimeDllPluginRegistry, RuntimeHostContext,
     },
     save::WorldLoadState,
     simulation::gas::GasField,
@@ -110,6 +112,10 @@ pub(crate) fn update_cell_inspector(
         Res<PipeGasField>,
         Res<PipeFlowVisualState>,
     ),
+    mut plugin_runtime: ResMut<RuntimeDllPluginRegistry>,
+    plugin_registry: Res<PluginRuntimeRegistry>,
+    content_registry: Res<ContentRegistry>,
+    mut plugin_hud: ResMut<PluginHudBlockStore>,
     mut ui_queries: ParamSet<(
         Single<(&mut Node, &mut Visibility), With<CellInspectorRoot>>,
         Query<(&CellInspectorBlockSlot, &mut Node)>,
@@ -167,7 +173,7 @@ pub(crate) fn update_cell_inspector(
         return;
     };
 
-    let blocks = build_cell_inspector_blocks(
+    let mut blocks = build_cell_inspector_blocks(
         cell,
         &world,
         &gas,
@@ -181,6 +187,25 @@ pub(crate) fn update_cell_inspector(
         &pipe_gas,
         &flow_state,
         false,
+    );
+    plugin_hud.clear();
+    {
+        let mut plugin_context = RuntimeHostContext::new(&content_registry, &gas_registry);
+        plugin_context.hud_blocks = Some(&mut plugin_hud);
+        plugin_runtime.dispatch_event(
+            &plugin_registry,
+            &PluginEvent::BuildHudForCell { cell },
+            &mut plugin_context,
+        );
+    }
+    blocks.extend(
+        plugin_hud
+            .blocks
+            .iter()
+            .map(|block| CellInspectorBlockView {
+                title: block.title.clone(),
+                lines: block.lines.clone(),
+            }),
     );
     let panel_height = estimate_cell_inspector_height(&blocks);
     let panel_position = compute_hud_position(

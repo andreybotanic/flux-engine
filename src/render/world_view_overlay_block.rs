@@ -1,6 +1,8 @@
 pub fn update_overlay_mode(
     input: Res<ButtonInput<KeyCode>>,
     mut overlay_mode: ResMut<OverlayMode>,
+    runtime_overlays: Res<crate::plugins::PluginRuntimeRegistry>,
+    mut plugin_events: EventWriter<crate::plugins::PluginEvent>,
     main_menu: Option<Res<crate::editor::MainMenuState>>,
 ) {
     if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
@@ -8,13 +10,71 @@ pub fn update_overlay_mode(
     }
     if input.just_pressed(KeyCode::F1) {
         *overlay_mode = OverlayMode::Main;
+        plugin_events.write(crate::plugins::PluginEvent::OverlayChanged {
+            overlay_id: Some(crate::plugins::default_plugin::overlay_mode_content_id(
+                OverlayMode::Main,
+            )),
+        });
     }
     if input.just_pressed(KeyCode::F2) {
         *overlay_mode = OverlayMode::Gas;
+        plugin_events.write(crate::plugins::PluginEvent::OverlayChanged {
+            overlay_id: Some(crate::plugins::default_plugin::overlay_mode_content_id(
+                OverlayMode::Gas,
+            )),
+        });
     }
-    if input.just_pressed(KeyCode::F3) {
-        *overlay_mode = crate::plugins::default_plugin::pipes_overlay_mode();
+    let Some(id) = pressed_registered_overlay_hotkey(&input, &runtime_overlays) else {
+        return;
+    };
+    *overlay_mode = registered_overlay_mode(&id);
+    plugin_events.write(crate::plugins::PluginEvent::OverlayChanged {
+        overlay_id: Some(id),
+    });
+}
+
+fn pressed_registered_overlay_hotkey(
+    input: &ButtonInput<KeyCode>,
+    runtime_overlays: &crate::plugins::PluginRuntimeRegistry,
+) -> Option<crate::plugins::ContentId> {
+    for (id, descriptor) in runtime_overlays.overlays() {
+        let Some(hotkey) = descriptor.hotkey.as_deref() else {
+            continue;
+        };
+        let Some(key_code) = overlay_hotkey_to_key_code(hotkey) else {
+            continue;
+        };
+        if input.just_pressed(key_code) {
+            return Some(id.clone());
+        }
     }
+    None
+}
+
+fn overlay_hotkey_to_key_code(hotkey: &str) -> Option<KeyCode> {
+    match hotkey {
+        "F1" => Some(KeyCode::F1),
+        "F2" => Some(KeyCode::F2),
+        "F3" => Some(KeyCode::F3),
+        "F4" => Some(KeyCode::F4),
+        "F5" => Some(KeyCode::F5),
+        "F6" => Some(KeyCode::F6),
+        "F7" => Some(KeyCode::F7),
+        "F8" => Some(KeyCode::F8),
+        "F9" => Some(KeyCode::F9),
+        "F10" => Some(KeyCode::F10),
+        "F11" => Some(KeyCode::F11),
+        "F12" => Some(KeyCode::F12),
+        _ => None,
+    }
+}
+
+fn registered_overlay_mode(id: &crate::plugins::ContentId) -> OverlayMode {
+    if let Some(mode) = crate::plugins::default_plugin::overlay_mode_from_content_id(id) {
+        return mode;
+    }
+    let leaked_id = Box::leak(id.as_str().to_string().into_boxed_str());
+    OverlayMode::plugin(leaked_id)
 }
 
 /// Runs `apply_overlay_mode` logic.

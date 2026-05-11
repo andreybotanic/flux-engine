@@ -27,13 +27,17 @@ fn handle_main_menu_actions(
         ResMut<EnabledPluginSet>,
         ResMut<ContentRegistry>,
         ResMut<PluginRegistryState>,
+        ResMut<PluginRuntimeRegistry>,
+        ResMut<RuntimeDllPluginRegistry>,
     ),
     save_name_input: Single<&TextInputField, With<MainMenuSaveNameInputField>>,
     mut world_changed: EventWriter<WorldCellChanged>,
+    mut plugin_events: EventWriter<PluginEvent>,
     mut exit_writer: EventWriter<AppExit>,
     mut overlay_mode: ResMut<OverlayMode>,
     mut camera_query: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
     mut gpu_state: ResMut<crate::simulation::GpuRuntimeState>,
+    mut save_chunks: ResMut<SaveChunkStore>,
 ) {
     let pending_actions = action_requests
         .read()
@@ -70,6 +74,8 @@ fn handle_main_menu_actions(
         mut enabled_plugins,
         mut content_registry,
         mut plugin_registry_state,
+        mut plugin_runtime_registry,
+        mut runtime_dll_plugins,
     ) = plugin_resources;
     if !main_menu.open {
         return;
@@ -106,6 +112,7 @@ fn handle_main_menu_actions(
                     &mut world_changed,
                 ) {
                     Ok(_) => {
+                        *save_chunks = SaveChunkStore::default();
                         let Ok((mut camera_transform, mut camera_projection)) =
                             camera_query.single_mut()
                         else {
@@ -120,6 +127,7 @@ fn handle_main_menu_actions(
                         );
                         save_session.mark_persisted(step.0, None);
                         world_load_state.has_world = true;
+                        plugin_events.write(PluginEvent::WorldCreated);
                         menu_ui.mode = MainMenuMode::Hidden;
                         menu_ui.screen = MainMenuScreen::Root;
                         menu_ui.confirm_state = None;
@@ -175,6 +183,8 @@ fn handle_main_menu_actions(
                     &mut world_changed,
                 ) {
                     menu_ui.status_text = format!("Exit to main failed: {}", err);
+                } else {
+                    plugin_events.write(PluginEvent::WorldUnloaded);
                 }
             }
             MainMenuButtonAction::ExitApp => {
@@ -199,7 +209,15 @@ fn handle_main_menu_actions(
                     continue;
                 }
                 let name = save_name_input.text.clone();
-                match create_save(
+                dispatch_plugin_save_event(
+                    PluginEvent::WorldBeforeSave,
+                    &mut runtime_dll_plugins,
+                    &plugin_runtime_registry,
+                    &content_registry,
+                    &gas_registry,
+                    &mut save_chunks,
+                );
+                match create_save_with_plugin_chunks(
                     &saves_root,
                     &name,
                     &world,
@@ -210,8 +228,17 @@ fn handle_main_menu_actions(
                     &content_registry,
                     &enabled_plugins,
                     step.0,
+                    &save_chunks,
                 ) {
                     Ok(descriptor) => {
+                        dispatch_plugin_save_event(
+                            PluginEvent::WorldAfterSave,
+                            &mut runtime_dll_plugins,
+                            &plugin_runtime_registry,
+                            &content_registry,
+                            &gas_registry,
+                            &mut save_chunks,
+                        );
                         save_session.mark_persisted(step.0, Some(descriptor.id.clone()));
                         refresh_saves_cache(&mut menu_ui);
                         if let Err(err) = queue_save_preview_capture(
@@ -266,6 +293,8 @@ fn handle_main_menu_actions(
                     &mut gas_settings,
                     &mut source_settings,
                     &mut plugin_registry_state,
+                    &mut plugin_runtime_registry,
+                    &mut runtime_dll_plugins,
                 );
             }
             MainMenuButtonAction::ReloadPlugins => {
@@ -286,11 +315,14 @@ fn handle_main_menu_actions(
                     &mut gas_settings,
                     &mut source_settings,
                     &mut plugin_registry_state,
+                    &mut plugin_runtime_registry,
+                    &mut runtime_dll_plugins,
                 );
             }
             MainMenuButtonAction::SelectLoad(save_id) => {
                 match load_save(&saves_root, &save_id, &gas_registry, &content_registry) {
                     Ok(loaded) => {
+                        let loaded_plugin_chunks = loaded.state.plugin_save_chunks.clone();
                         match apply_runtime_world_state(
                             loaded.state,
                             &mut world,
@@ -302,6 +334,7 @@ fn handle_main_menu_actions(
                             &mut world_changed,
                         ) {
                             Ok(_) => {
+                                *save_chunks = loaded_plugin_chunks;
                                 let Ok((mut camera_transform, mut camera_projection)) =
                                     camera_query.single_mut()
                                 else {
@@ -318,6 +351,7 @@ fn handle_main_menu_actions(
                                 save_session
                                     .mark_persisted(step.0, Some(loaded.descriptor.id.clone()));
                                 world_load_state.has_world = true;
+                                plugin_events.write(PluginEvent::WorldLoaded);
                                 menu_ui.mode = MainMenuMode::Hidden;
                                 menu_ui.screen = MainMenuScreen::Root;
                                 menu_ui.confirm_state = None;
@@ -343,7 +377,15 @@ fn handle_main_menu_actions(
                 menu_ui.confirm_text.clear();
                 match confirm {
                     Some(MainMenuConfirmState::OverwriteSave(save_id)) => {
-                        match overwrite_save(
+                        dispatch_plugin_save_event(
+                            PluginEvent::WorldBeforeSave,
+                            &mut runtime_dll_plugins,
+                            &plugin_runtime_registry,
+                            &content_registry,
+                            &gas_registry,
+                            &mut save_chunks,
+                        );
+                        match overwrite_save_with_plugin_chunks(
                             &saves_root,
                             &save_id,
                             &world,
@@ -354,8 +396,17 @@ fn handle_main_menu_actions(
                             &content_registry,
                             &enabled_plugins,
                             step.0,
+                            &save_chunks,
                         ) {
                             Ok(descriptor) => {
+                                dispatch_plugin_save_event(
+                                    PluginEvent::WorldAfterSave,
+                                    &mut runtime_dll_plugins,
+                                    &plugin_runtime_registry,
+                                    &content_registry,
+                                    &gas_registry,
+                                    &mut save_chunks,
+                                );
                                 save_session.mark_persisted(step.0, Some(descriptor.id.clone()));
                                 refresh_saves_cache(&mut menu_ui);
                                 if let Err(err) = queue_save_preview_capture(
@@ -432,6 +483,8 @@ fn handle_main_menu_actions(
                             ) {
                                 menu_ui.status_text = format!("Exit to main failed: {}", err);
                                 menu_ui.screen = MainMenuScreen::Root;
+                            } else {
+                                plugin_events.write(PluginEvent::WorldUnloaded);
                             }
                         }
                         MainMenuDeferredAction::ExitApp => {
@@ -468,6 +521,7 @@ fn handle_save_preview_capture_finished(
     mut save_session: ResMut<SaveSessionState>,
     mut world_load_state: ResMut<WorldLoadState>,
     mut world_changed: EventWriter<WorldCellChanged>,
+    mut plugin_events: EventWriter<PluginEvent>,
     mut exit_writer: EventWriter<AppExit>,
 ) {
     if finished.is_empty() {
@@ -498,6 +552,8 @@ fn handle_save_preview_capture_finished(
                             ) {
                                 menu_ui.status_text = format!("Exit to main failed: {}", err);
                                 menu_ui.screen = MainMenuScreen::Save;
+                            } else {
+                                plugin_events.write(PluginEvent::WorldUnloaded);
                             }
                         }
                         MainMenuDeferredAction::ExitApp => {
@@ -616,6 +672,19 @@ fn queue_save_preview_capture(
     menu_ui.screen = MainMenuScreen::Save;
     menu_ui.status_text = "Generating save preview...".to_string();
     Ok(())
+}
+
+fn dispatch_plugin_save_event(
+    event: PluginEvent,
+    runtime_dll_plugins: &mut RuntimeDllPluginRegistry,
+    plugin_runtime_registry: &PluginRuntimeRegistry,
+    content_registry: &ContentRegistry,
+    gas_registry: &GasRegistry,
+    save_chunks: &mut SaveChunkStore,
+) {
+    let mut context = RuntimeHostContext::new(content_registry, gas_registry);
+    context.save_chunks = Some(save_chunks);
+    runtime_dll_plugins.dispatch_event(plugin_runtime_registry, &event, &mut context);
 }
 
 fn open_delete_confirmation(menu_ui: &mut MainMenuUiState, save_id: String) {

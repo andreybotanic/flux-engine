@@ -3,8 +3,12 @@
 ## 2026-05-11
 - Расширен Plugin API: добавлен Rust-first слой `src/plugins/api/` для чтения/изменения мира, событий, overlay-рендера, UI descriptors и plugin save chunks.
 - ABI runtime-плагинов повышен до version `3`: registrar принимает подписки на события, tool/overlay/save-chunk descriptors и газовые вещества; `add_gas`/`set_gas` поддерживают передачу скорости газа.
+- Добавлен live DLL executor: включённые runtime-плагины остаются загруженными, получают `flux_plugin_on_event` и могут менять мир через host callbacks.
+- Plugin save chunks теперь записываются в save-slot как отдельные `plugin_chunks/*.bin`, восстанавливаются при загрузке мира и доступны runtime DLL-плагинам через read/write callbacks.
 - Добавлены низкоуровневые plugin input events по клеткам (`MouseDownCell`/`MouseMoveCell`/`MouseUpCell`) без core-семантики path/rect и без общих событий `CellChanged`/`CellGasChanged`/`CellMaterialChanged`.
-- Добавлены runtime DLL demo-плагины для точечной проверки v3 API: cell/tool, tick subscription, plugin-controlled temperature overlay descriptor и UI/save chunk descriptor.
+- Добавлены runtime DLL demo-плагины для визуальной проверки v3 API: рисование metal-линии правой кнопкой мыши, tick-инъекция H2 в фиксированной клетке со скоростью, plugin-controlled temperature heatmap с автоматически назначенным hotkey и HUD/save counter demo с отдельным счётчиком левых кликов для каждой клетки.
+- World mutation через runtime plugin API теперь помечает изменённые клетки для render sync, поэтому новые/изменённые solid cells появляются без сохранения и повторной загрузки мира.
+- Plugin overlay hotkeys больше не обрабатываются как hardcoded `F4` в render-коде: registry назначает следующий свободный function-key слот после registered default overlays, а render path принимает от плагина готовый RGBA8 overlay frame.
 
 ## 2026-05-10
 - Добавлен CLI-флаг запуска `--plugins-dev`: в этом режиме runtime отдаёт приоритет expanded sources из `plugins_dev/<plugin_id>` перед packaged `.fluxplugin` с тем же ID.

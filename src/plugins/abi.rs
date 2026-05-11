@@ -119,6 +119,137 @@ pub type FluxRegisterSaveChunkFn = unsafe extern "C" fn(
     descriptor: *const FluxSaveChunkDescriptor,
 ) -> FluxStatus;
 
+/// Runtime event payload passed to a live DLL plugin.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FluxRuntimeEvent {
+    pub struct_size: u32,
+    pub api_version: u32,
+    pub event_kind: u32,
+    pub has_cell: u8,
+    pub cell_x: u32,
+    pub cell_y: u32,
+    pub button: u32,
+    pub world_x: f32,
+    pub world_y: f32,
+    pub screen_x: f32,
+    pub screen_y: f32,
+    pub modifiers: u32,
+    pub active_tool_id: FluxUtf8Slice,
+    pub overlay_id: FluxUtf8Slice,
+    pub key: FluxUtf8Slice,
+}
+
+impl FluxRuntimeEvent {
+    /// Creates an empty runtime event payload for one ABI event kind.
+    pub fn new(event_kind: u32) -> Self {
+        Self {
+            struct_size: std::mem::size_of::<Self>() as u32,
+            api_version: ENGINE_PLUGIN_API_VERSION_VALUE,
+            event_kind,
+            has_cell: 0,
+            cell_x: 0,
+            cell_y: 0,
+            button: 0,
+            world_x: 0.0,
+            world_y: 0.0,
+            screen_x: 0.0,
+            screen_y: 0.0,
+            modifiers: 0,
+            active_tool_id: FluxUtf8Slice::from_str(""),
+            overlay_id: FluxUtf8Slice::from_str(""),
+            key: FluxUtf8Slice::from_str(""),
+        }
+    }
+}
+
+/// Callback used by plugins to set one world cell material by stable content id.
+pub type FluxSetCellMaterialFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    x: u32,
+    y: u32,
+    material_id: FluxUtf8Slice,
+) -> FluxStatus;
+
+/// Callback used by plugins to add free gas with a cell velocity.
+pub type FluxAddGasFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    x: u32,
+    y: u32,
+    substance: FluxUtf8Slice,
+    amount: u32,
+    velocity_x: f32,
+    velocity_y: f32,
+    out_added: *mut u32,
+) -> FluxStatus;
+
+/// Callback used by plugins to submit one complete RGBA8 overlay frame.
+pub type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    width: u32,
+    height: u32,
+    rgba8: *const u8,
+    len: usize,
+) -> FluxStatus;
+
+/// Callback used by plugins to append one HUD block for the hovered cell.
+pub type FluxSubmitHudBlockFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    title: FluxUtf8Slice,
+    line: FluxUtf8Slice,
+) -> FluxStatus;
+
+/// Callback used by plugins to write a plugin-owned save chunk.
+pub type FluxWriteSaveChunkFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    chunk_id: FluxUtf8Slice,
+    version: u32,
+    bytes: *const u8,
+    len: usize,
+) -> FluxStatus;
+
+/// Callback used by plugins to read a plugin-owned save chunk.
+pub type FluxReadSaveChunkFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    chunk_id: FluxUtf8Slice,
+    out_version: *mut u32,
+    bytes: *mut u8,
+    len: usize,
+    out_len: *mut usize,
+) -> FluxStatus;
+
+/// Runtime host callback table passed to `flux_plugin_on_event`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FluxRuntimeHost {
+    pub struct_size: u32,
+    pub api_version: u32,
+    pub context: *mut c_void,
+    pub set_cell_material: Option<FluxSetCellMaterialFn>,
+    pub add_gas: Option<FluxAddGasFn>,
+    pub submit_overlay_frame: Option<FluxSubmitOverlayFrameFn>,
+    pub submit_hud_block: Option<FluxSubmitHudBlockFn>,
+    pub write_save_chunk: Option<FluxWriteSaveChunkFn>,
+    pub read_save_chunk: Option<FluxReadSaveChunkFn>,
+}
+
+impl FluxRuntimeHost {
+    /// Creates a runtime host callback table for a single event dispatch.
+    pub fn new(context: *mut c_void) -> Self {
+        Self {
+            struct_size: std::mem::size_of::<Self>() as u32,
+            api_version: ENGINE_PLUGIN_API_VERSION_VALUE,
+            context,
+            set_cell_material: Some(crate::plugins::runtime_dll::set_cell_material_callback),
+            add_gas: Some(crate::plugins::runtime_dll::add_gas_callback),
+            submit_overlay_frame: Some(crate::plugins::runtime_dll::submit_overlay_frame_callback),
+            submit_hud_block: Some(crate::plugins::runtime_dll::submit_hud_block_callback),
+            write_save_chunk: Some(crate::plugins::runtime_dll::write_save_chunk_callback),
+            read_save_chunk: Some(crate::plugins::runtime_dll::read_save_chunk_callback),
+        }
+    }
+}
+
 /// Host callbacks and runtime paths exposed to one plugin instance.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -219,6 +350,13 @@ pub type FluxPluginRegisterFn = unsafe extern "C" fn(
 /// Function pointer type for `flux_plugin_destroy`.
 pub type FluxPluginDestroyFn = unsafe extern "C" fn(plugin: *mut FluxPluginHandle);
 
+/// Function pointer type for `flux_plugin_on_event`.
+pub type FluxPluginOnEventFn = unsafe extern "C" fn(
+    plugin: *mut FluxPluginHandle,
+    event: *const FluxRuntimeEvent,
+    host: *mut FluxRuntimeHost,
+) -> FluxStatus;
+
 /// Null-terminated export name for `flux_plugin_api_version`.
 pub const FLUX_PLUGIN_API_VERSION_EXPORT_NAME: &[u8] = b"flux_plugin_api_version\0";
 
@@ -230,3 +368,6 @@ pub const FLUX_PLUGIN_REGISTER_EXPORT_NAME: &[u8] = b"flux_plugin_register\0";
 
 /// Null-terminated export name for `flux_plugin_destroy`.
 pub const FLUX_PLUGIN_DESTROY_EXPORT_NAME: &[u8] = b"flux_plugin_destroy\0";
+
+/// Null-terminated export name for `flux_plugin_on_event`.
+pub const FLUX_PLUGIN_ON_EVENT_EXPORT_NAME: &[u8] = b"flux_plugin_on_event\0";

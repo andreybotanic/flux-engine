@@ -128,6 +128,7 @@ fn write_slot(
     content_registry: &ContentRegistry,
     enabled_plugins: &EnabledPluginSet,
     simulation_step: u64,
+    plugin_save_chunks: &SaveChunkStore,
     allow_overwrite: bool,
 ) -> Result<(), SaveError> {
     let slot_dir = root.join(&descriptor.id);
@@ -138,7 +139,7 @@ fn write_slot(
         )));
     }
 
-    let chunk_meta = vec![
+    let mut chunk_meta = vec![
         SaveChunkMetaToml {
             id: CHUNK_WORLD_CELLS_ID.to_string(),
             file: WORLD_CELLS_FILE.to_string(),
@@ -165,6 +166,13 @@ fn write_slot(
             format: "png_v1".to_string(),
         },
     ];
+    for chunk in plugin_save_chunks.chunks() {
+        chunk_meta.push(SaveChunkMetaToml {
+            id: plugin_chunk_meta_id(&chunk.plugin_id, &chunk.chunk_id),
+            file: plugin_chunk_file_name(&chunk.plugin_id, &chunk.chunk_id),
+            format: format!("plugin_chunk_v{}", chunk.version),
+        });
+    }
 
     let world_cells = world.snapshot_cells();
     let gas_snapshot = gas.snapshot_state();
@@ -248,6 +256,7 @@ fn write_slot(
             &pipe_gas_snapshot,
             content_registry,
         )?;
+        write_plugin_save_chunks(&tmp_dir, plugin_save_chunks)?;
         Ok(())
     })();
 
@@ -336,6 +345,112 @@ fn write_meta(path: &Path, meta: &SaveMetaToml) -> Result<(), SaveError> {
             "Failed to write save meta '{}': {}",
             path.display(),
             err
+        ))
+    })
+}
+
+fn plugin_chunk_meta_id(plugin_id: &PluginId, chunk_id: &ContentId) -> String {
+    format!(
+        "{PLUGIN_CHUNK_ID_PREFIX}{}:{}",
+        plugin_id.as_str(),
+        chunk_id.as_str()
+    )
+}
+
+fn plugin_chunk_file_name(plugin_id: &PluginId, chunk_id: &ContentId) -> String {
+    format!(
+        "plugin_chunks/{}__{}.bin",
+        safe_plugin_chunk_path_fragment(plugin_id.as_str()),
+        safe_plugin_chunk_path_fragment(chunk_id.as_str())
+    )
+}
+
+fn safe_plugin_chunk_path_fragment(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn write_plugin_save_chunks(
+    slot_dir: &Path,
+    plugin_save_chunks: &SaveChunkStore,
+) -> Result<(), SaveError> {
+    for chunk in plugin_save_chunks.chunks() {
+        let path = slot_dir.join(plugin_chunk_file_name(&chunk.plugin_id, &chunk.chunk_id));
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|err| {
+                SaveError::Io(format!(
+                    "Failed to create plugin save chunk directory '{}': {}",
+                    parent.display(),
+                    err
+                ))
+            })?;
+        }
+        fs::write(&path, &chunk.bytes).map_err(|err| {
+            SaveError::Io(format!(
+                "Failed to write plugin save chunk '{}': {}",
+                path.display(),
+                err
+            ))
+        })?;
+    }
+    Ok(())
+}
+
+fn read_plugin_save_chunks(
+    slot_dir: &Path,
+    meta: &SaveMetaToml,
+) -> Result<SaveChunkStore, SaveError> {
+    let mut store = SaveChunkStore::default();
+    for chunk in meta
+        .chunks
+        .iter()
+        .filter(|chunk| chunk.id.starts_with(PLUGIN_CHUNK_ID_PREFIX))
+    {
+        let Some((plugin_id, chunk_id)) = parse_plugin_chunk_meta_id(&chunk.id) else {
+            return Err(SaveError::Validation(format!(
+                "Invalid plugin save chunk id '{}'",
+                chunk.id
+            )));
+        };
+        let version = parse_plugin_chunk_format(&chunk.format)?;
+        let path = slot_dir.join(&chunk.file);
+        let bytes = fs::read(&path).map_err(|err| {
+            SaveError::Io(format!(
+                "Failed to read plugin save chunk '{}': {}",
+                path.display(),
+                err
+            ))
+        })?;
+        store.write_plugin_chunk(plugin_id, chunk_id, version, bytes);
+    }
+    Ok(store)
+}
+
+fn parse_plugin_chunk_meta_id(value: &str) -> Option<(PluginId, ContentId)> {
+    let rest = value.strip_prefix(PLUGIN_CHUNK_ID_PREFIX)?;
+    let (plugin_id, chunk_id) = rest.split_once(':')?;
+    Some((
+        PluginId::parse(plugin_id).ok()?,
+        ContentId::parse(chunk_id).ok()?,
+    ))
+}
+
+fn parse_plugin_chunk_format(value: &str) -> Result<u32, SaveError> {
+    let raw = value.strip_prefix("plugin_chunk_v").ok_or_else(|| {
+        SaveError::Validation(format!("Invalid plugin save chunk format '{}'", value))
+    })?;
+    raw.parse::<u32>().map_err(|err| {
+        SaveError::Validation(format!(
+            "Invalid plugin save chunk version '{}': {}",
+            value, err
         ))
     })
 }

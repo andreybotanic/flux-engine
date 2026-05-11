@@ -141,6 +141,102 @@ pub struct FluxRegistrar {
 /// Opaque demo plugin instance handle.
 pub struct FluxPluginHandle {
     api_version: u32,
+    dragging: bool,
+    last_x: u32,
+    last_y: u32,
+    counter: u32,
+    cell_counters: Vec<u32>,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+/// Runtime event payload passed by the host to demo plugins.
+pub struct FluxRuntimeEvent {
+    pub struct_size: u32,
+    pub api_version: u32,
+    pub event_kind: u32,
+    pub has_cell: u8,
+    pub cell_x: u32,
+    pub cell_y: u32,
+    pub button: u32,
+    pub world_x: f32,
+    pub world_y: f32,
+    pub screen_x: f32,
+    pub screen_y: f32,
+    pub modifiers: u32,
+    pub active_tool_id: FluxUtf8Slice,
+    pub overlay_id: FluxUtf8Slice,
+    pub key: FluxUtf8Slice,
+}
+
+/// Host callback used by demo plugins to set a world cell material.
+pub type FluxSetCellMaterialFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    x: u32,
+    y: u32,
+    material_id: FluxUtf8Slice,
+) -> FluxStatus;
+
+/// Host callback used by demo plugins to add gas with velocity.
+pub type FluxAddGasFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    x: u32,
+    y: u32,
+    substance: FluxUtf8Slice,
+    amount: u32,
+    velocity_x: f32,
+    velocity_y: f32,
+    out_added: *mut u32,
+) -> FluxStatus;
+
+/// Host callback used by demo plugins to submit one complete RGBA8 overlay frame.
+pub type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    width: u32,
+    height: u32,
+    rgba8: *const u8,
+    len: usize,
+) -> FluxStatus;
+
+/// Host callback used by demo plugins to submit one HUD block.
+pub type FluxSubmitHudBlockFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    title: FluxUtf8Slice,
+    line: FluxUtf8Slice,
+) -> FluxStatus;
+
+/// Host callback used by demo plugins to write one save chunk.
+pub type FluxWriteSaveChunkFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    chunk_id: FluxUtf8Slice,
+    version: u32,
+    bytes: *const u8,
+    len: usize,
+) -> FluxStatus;
+
+/// Host callback used by demo plugins to read one plugin-owned save chunk.
+pub type FluxReadSaveChunkFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    chunk_id: FluxUtf8Slice,
+    out_version: *mut u32,
+    bytes: *mut u8,
+    len: usize,
+    out_len: *mut usize,
+) -> FluxStatus;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+/// Runtime host callback table passed by the engine to demo plugins.
+pub struct FluxRuntimeHost {
+    pub struct_size: u32,
+    pub api_version: u32,
+    pub context: *mut c_void,
+    pub set_cell_material: Option<FluxSetCellMaterialFn>,
+    pub add_gas: Option<FluxAddGasFn>,
+    pub submit_overlay_frame: Option<FluxSubmitOverlayFrameFn>,
+    pub submit_hud_block: Option<FluxSubmitHudBlockFn>,
+    pub write_save_chunk: Option<FluxWriteSaveChunkFn>,
+    pub read_save_chunk: Option<FluxReadSaveChunkFn>,
 }
 
 /// Declarative registration data used by each small API demo plugin.
@@ -167,6 +263,11 @@ pub unsafe fn create(
     }
     *out_plugin = Box::into_raw(Box::new(FluxPluginHandle {
         api_version: host.api_version,
+        dragging: false,
+        last_x: 0,
+        last_y: 0,
+        counter: 0,
+        cell_counters: vec![0; 102 * 102],
     }));
     FluxStatus::OK
 }

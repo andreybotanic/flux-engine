@@ -2,6 +2,7 @@
 pub fn setup_world_view(
     mut commands: Commands,
     simulation_images: Res<GasSimulationImages>,
+    plugin_overlay_image: Res<PluginOverlayImage>,
     world: Res<WorldGrid>,
     structures: Res<PlacedStructureMap>,
     world_load_state: Res<WorldLoadState>,
@@ -152,6 +153,18 @@ pub fn setup_world_view(
             Visibility::Hidden
         },
         GasMainOverlaySprite,
+    ));
+
+    commands.spawn((
+        Sprite {
+            image: plugin_overlay_image.texture.clone(),
+            custom_size: Some(world_size),
+            color: Color::WHITE,
+            ..default()
+        },
+        Transform::from_xyz(0.0, 0.0, 1.14),
+        Visibility::Hidden,
+        PluginOverlaySprite,
     ));
 
     let mut wall_entities = WallEntities::default();

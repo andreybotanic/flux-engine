@@ -1,8 +1,9 @@
 use crate::plugins::{
-    rebuild_plugin_registry_from_enabled_set, reload_plugin_registry, ContentRegistry,
-    EnabledPluginSet, LoadedPluginRegistry, PluginBootstrapConfig, PluginRegistryEntry,
-    PluginRegistryState, PluginReloadError, PluginReloadRequest, PluginRuntimeStatus,
-    PluginSourceKind, PluginSourceRegistry,
+    build_plugin_runtime_registry, rebuild_plugin_registry_from_enabled_set,
+    reload_plugin_registry, ContentRegistry, EnabledPluginSet, LoadedPluginRegistry,
+    PluginBootstrapConfig, PluginRegistryEntry, PluginRegistryState, PluginReloadError,
+    PluginReloadRequest, PluginRuntimeRegistry, PluginRuntimeStatus, PluginSourceKind,
+    PluginSourceRegistry, RuntimeDllPluginRegistry,
 };
 use crate::ui::toggle_switch::{
     spawn_toggle_switch, spawn_toggle_switch_button, ToggleSwitchConfig, ToggleSwitchRoot,
@@ -172,6 +173,8 @@ fn handle_plugin_toggle(
     gas_settings: &mut GasToolSettings,
     source_settings: &mut SourceStructureToolSettings,
     registry_state: &mut PluginRegistryState,
+    runtime_registry: &mut PluginRuntimeRegistry,
+    runtime_dll_plugins: &mut RuntimeDllPluginRegistry,
 ) {
     let old_registry_state = registry_state.clone();
     let Some(entry) = registry_state
@@ -213,10 +216,19 @@ fn handle_plugin_toggle(
         plugin_list_requires_rebuild(&old_registry_state, &output.registry_state);
     output.registry_state.log_to_stderr();
 
+    let next_runtime_registry = build_plugin_runtime_registry(output.loaded_registry.entries());
+    let next_runtime_dll_plugins =
+        RuntimeDllPluginRegistry::from_loaded_plugins(output.loaded_registry.entries());
+    for error in next_runtime_dll_plugins.errors() {
+        eprintln!("Runtime plugin load error: {error}");
+    }
+
     *source_registry = output.source_registry;
     *loaded_registry = output.loaded_registry;
     *enabled_set = output.enabled_set;
     *content_registry = output.content_registry;
+    *runtime_registry = next_runtime_registry;
+    *runtime_dll_plugins = next_runtime_dll_plugins;
     *gas_registry = next_gas_registry;
     *gas = GasField::from_registry(gas_registry);
     *pipe_gas = crate::plugins::default_plugin::pipe_runtime::PipeGasField::from_registry(gas_registry);
@@ -245,6 +257,8 @@ fn handle_plugin_reload(
     gas_settings: &mut GasToolSettings,
     source_settings: &mut SourceStructureToolSettings,
     registry_state: &mut PluginRegistryState,
+    runtime_registry: &mut PluginRuntimeRegistry,
+    runtime_dll_plugins: &mut RuntimeDllPluginRegistry,
 ) {
     if !plugin_reload_allowed(menu_ui.mode, world_load_state.has_world) {
         menu_ui.status_text = PluginReloadError::WorldLoaded.to_string();
@@ -261,10 +275,20 @@ fn handle_plugin_reload(
     ) {
         Ok(report) => {
             report.output.registry_state.log_to_stderr();
+            let next_runtime_registry =
+                build_plugin_runtime_registry(report.output.loaded_registry.entries());
+            let next_runtime_dll_plugins =
+                RuntimeDllPluginRegistry::from_loaded_plugins(report.output.loaded_registry.entries());
+            for error in next_runtime_dll_plugins.errors() {
+                eprintln!("Runtime plugin load error: {error}");
+            }
+
             *source_registry = report.output.source_registry;
             *loaded_registry = report.output.loaded_registry;
             *enabled_set = report.output.enabled_set;
             *content_registry = report.output.content_registry;
+            *runtime_registry = next_runtime_registry;
+            *runtime_dll_plugins = next_runtime_dll_plugins;
             *gas_registry = report.gas_registry;
             *gas = GasField::from_registry(gas_registry);
             *pipe_gas =

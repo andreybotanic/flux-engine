@@ -74,6 +74,35 @@ pub fn create_save(
     enabled_plugins: &EnabledPluginSet,
     simulation_step: u64,
 ) -> Result<SaveDescriptor, SaveError> {
+    create_save_with_plugin_chunks(
+        root,
+        display_name,
+        world,
+        gas,
+        structures,
+        pipe_gas,
+        gas_registry,
+        content_registry,
+        enabled_plugins,
+        simulation_step,
+        &SaveChunkStore::default(),
+    )
+}
+
+/// Creates a save and includes plugin-owned save chunks in the slot.
+pub fn create_save_with_plugin_chunks(
+    root: &Path,
+    display_name: &str,
+    world: &WorldGrid,
+    gas: &GasField,
+    structures: &PlacedStructureMap,
+    pipe_gas: &crate::plugins::default_plugin::pipe_runtime::PipeGasField,
+    gas_registry: &GasRegistry,
+    content_registry: &ContentRegistry,
+    enabled_plugins: &EnabledPluginSet,
+    simulation_step: u64,
+    plugin_save_chunks: &SaveChunkStore,
+) -> Result<SaveDescriptor, SaveError> {
     validate_display_name(display_name)?;
     fs::create_dir_all(root).map_err(|err| {
         SaveError::Io(format!(
@@ -108,6 +137,7 @@ pub fn create_save(
         content_registry,
         enabled_plugins,
         simulation_step,
+        plugin_save_chunks,
         false,
     )?;
     Ok(descriptor)
@@ -125,6 +155,35 @@ pub fn overwrite_save(
     content_registry: &ContentRegistry,
     enabled_plugins: &EnabledPluginSet,
     simulation_step: u64,
+) -> Result<SaveDescriptor, SaveError> {
+    overwrite_save_with_plugin_chunks(
+        root,
+        save_id,
+        world,
+        gas,
+        structures,
+        pipe_gas,
+        gas_registry,
+        content_registry,
+        enabled_plugins,
+        simulation_step,
+        &SaveChunkStore::default(),
+    )
+}
+
+/// Overwrites a save and includes plugin-owned save chunks in the slot.
+pub fn overwrite_save_with_plugin_chunks(
+    root: &Path,
+    save_id: &str,
+    world: &WorldGrid,
+    gas: &GasField,
+    structures: &PlacedStructureMap,
+    pipe_gas: &crate::plugins::default_plugin::pipe_runtime::PipeGasField,
+    gas_registry: &GasRegistry,
+    content_registry: &ContentRegistry,
+    enabled_plugins: &EnabledPluginSet,
+    simulation_step: u64,
+    plugin_save_chunks: &SaveChunkStore,
 ) -> Result<SaveDescriptor, SaveError> {
     let slot_dir = root.join(save_id);
     let meta_path = slot_dir.join(META_FILE);
@@ -153,6 +212,7 @@ pub fn overwrite_save(
         content_registry,
         enabled_plugins,
         simulation_step,
+        plugin_save_chunks,
         true,
     )?;
     Ok(descriptor)
@@ -199,6 +259,7 @@ pub fn load_save(
     let placed_structures_snapshot =
         read_placed_structures_chunk(&placed_structures_path, content_registry, gas_registry)?;
     let pipe_gas_snapshot = read_pipe_gas_chunk(&pipe_gas_path, gas_registry, content_registry)?;
+    let plugin_save_chunks = read_plugin_save_chunks(&slot_dir, &meta)?;
 
     if gas_file.width != WORLD_WIDTH || gas_file.height != WORLD_HEIGHT {
         return Err(SaveError::Validation(format!(
@@ -222,6 +283,7 @@ pub fn load_save(
             gas_snapshot: mapped_snapshot,
             placed_structures_snapshot,
             pipe_gas_snapshot,
+            plugin_save_chunks,
             simulation_step: gas_file.simulation_step,
         },
     })
@@ -240,6 +302,7 @@ pub fn new_game_snapshot(gas_registry: &GasRegistry) -> RuntimeWorldState {
         gas_snapshot: gas.snapshot_state(),
         placed_structures_snapshot: structures.snapshot_state(),
         pipe_gas_snapshot: pipe_gas.snapshot_state(),
+        plugin_save_chunks: SaveChunkStore::default(),
         simulation_step: 0,
     }
 }

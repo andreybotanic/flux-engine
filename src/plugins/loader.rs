@@ -13,10 +13,11 @@ use zip::ZipArchive;
 use crate::plugins::{
     abi::{
         FluxGasSubstanceDescriptor, FluxHostApi, FluxOverlayDescriptor, FluxPluginApiVersionFn,
-        FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginHandle, FluxPluginRegisterFn,
-        FluxRegistrar, FluxSaveChunkDescriptor, FluxStatus, FluxToolDescriptor, FluxUtf8Slice,
-        FLUX_PLUGIN_API_VERSION_EXPORT_NAME, FLUX_PLUGIN_CREATE_EXPORT_NAME,
-        FLUX_PLUGIN_DESTROY_EXPORT_NAME, FLUX_PLUGIN_REGISTER_EXPORT_NAME,
+        FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginHandle, FluxPluginOnEventFn,
+        FluxPluginRegisterFn, FluxRegistrar, FluxSaveChunkDescriptor, FluxStatus,
+        FluxToolDescriptor, FluxUtf8Slice, FLUX_PLUGIN_API_VERSION_EXPORT_NAME,
+        FLUX_PLUGIN_CREATE_EXPORT_NAME, FLUX_PLUGIN_DESTROY_EXPORT_NAME,
+        FLUX_PLUGIN_ON_EVENT_EXPORT_NAME, FLUX_PLUGIN_REGISTER_EXPORT_NAME,
     },
     api::{
         events::PluginEventKind,
@@ -28,12 +29,13 @@ use crate::plugins::{
     id::{PluginApiVersion, ENGINE_PLUGIN_API_VERSION},
     manifest::PluginManifest,
     registration::PluginRuntimeRegistration,
+    runtime_dll::RuntimeDllPlugin,
     source::{
         fingerprint_expanded_plugin_root, fingerprint_packaged_plugin_archive,
         resolve_plugin_layout, validate_archive_entry_path, ExpandedPluginSource,
-        PackagedPluginSource, PluginSourceFingerprint, MANIFEST_FILE_NAME,
+        PackagedPluginSource, PluginSourceFingerprint, PluginSourceKind, MANIFEST_FILE_NAME,
     },
-    ContentId, PluginId, SubstanceDefinition, SubstanceId, SubstanceRegistry,
+    ContentId, LoadedPluginMetadata, PluginId, SubstanceDefinition, SubstanceId, SubstanceRegistry,
 };
 
 /// Parsed packaged plugin candidate before DLL handshake validation.
@@ -240,6 +242,136 @@ pub fn validate_runtime_registration(
         ))
     })?;
     Ok(())
+}
+
+/// Creates a live DLL plugin instance for runtime event dispatch.
+pub fn instantiate_runtime_plugin(
+    plugin: &LoadedPluginMetadata,
+) -> Result<RuntimeDllPlugin, PluginContractError> {
+    let manifest = plugin.manifest.as_ref().ok_or_else(|| {
+        PluginContractError::Manifest(format!(
+            "plugin '{}' has no runtime manifest",
+            plugin.plugin_id
+        ))
+    })?;
+    let source_path = plugin.source_path.as_ref().ok_or_else(|| {
+        PluginContractError::Manifest(format!(
+            "plugin '{}' has no runtime source path",
+            plugin.plugin_id
+        ))
+    })?;
+
+    let cache_root = match plugin.source_kind {
+        PluginSourceKind::Packaged => {
+            let candidate = PackagedPluginCandidate {
+                source: PackagedPluginSource::new(source_path.clone()),
+                manifest: manifest.clone(),
+            };
+            extract_packaged_plugin_to_cache(&candidate)?
+        }
+        PluginSourceKind::Dev => {
+            let candidate = ExpandedPluginCandidate {
+                source: ExpandedPluginSource::new(source_path.clone()),
+                manifest: manifest.clone(),
+            };
+            copy_expanded_plugin_to_cache(&candidate)?
+        }
+        PluginSourceKind::Builtin => {
+            return Err(PluginContractError::Manifest(
+                "builtin plugin does not have a runtime DLL".to_string(),
+            ));
+        }
+    };
+
+    let result = instantiate_runtime_plugin_from_root(plugin, manifest, &cache_root);
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&cache_root);
+    }
+    result
+}
+
+fn instantiate_runtime_plugin_from_root(
+    plugin: &LoadedPluginMetadata,
+    manifest: &PluginManifest,
+    plugin_root: &Path,
+) -> Result<RuntimeDllPlugin, PluginContractError> {
+    let resolved_paths = resolve_plugin_layout(plugin_root, manifest)?;
+    let plugin_root_utf8 = path_to_utf8_string(&resolved_paths.root_dir);
+    let config_root_utf8 = path_to_utf8_string(&resolved_paths.configs_dir);
+    let assets_root_utf8 = path_to_utf8_string(&resolved_paths.assets_dir);
+    let mut host_error_message = String::new();
+
+    unsafe {
+        let library = Library::new(&resolved_paths.dll_path).map_err(|error| {
+            PluginContractError::Dll(format!(
+                "failed to load DLL '{}': {}",
+                manifest.dll.display(),
+                error
+            ))
+        })?;
+        let api_version_fn = load_symbol::<FluxPluginApiVersionFn>(
+            &library,
+            FLUX_PLUGIN_API_VERSION_EXPORT_NAME,
+            "flux_plugin_api_version",
+        )?;
+        let create_fn = load_symbol::<FluxPluginCreateFn>(
+            &library,
+            FLUX_PLUGIN_CREATE_EXPORT_NAME,
+            "flux_plugin_create",
+        )?;
+        let destroy_fn = load_symbol::<FluxPluginDestroyFn>(
+            &library,
+            FLUX_PLUGIN_DESTROY_EXPORT_NAME,
+            "flux_plugin_destroy",
+        )?;
+        let on_event_fn = library
+            .get::<FluxPluginOnEventFn>(FLUX_PLUGIN_ON_EVENT_EXPORT_NAME)
+            .ok()
+            .map(|symbol| *symbol);
+
+        let exported_api_version = PluginApiVersion::new(api_version_fn());
+        if exported_api_version != ENGINE_PLUGIN_API_VERSION {
+            return Err(PluginContractError::Abi(format!(
+                "DLL API version '{}' does not match engine API '{}'",
+                exported_api_version, ENGINE_PLUGIN_API_VERSION
+            )));
+        }
+
+        let host_api = FluxHostApi::new(
+            FluxUtf8Slice::from_str(&plugin_root_utf8),
+            FluxUtf8Slice::from_str(&config_root_utf8),
+            FluxUtf8Slice::from_str(&assets_root_utf8),
+            Some(write_host_error_message),
+            (&mut host_error_message as *mut String).cast::<c_void>(),
+        );
+        let mut plugin_handle: *mut FluxPluginHandle = ptr::null_mut();
+        let create_status = create_fn(&host_api, &mut plugin_handle);
+        if !create_status.is_ok() {
+            if !plugin_handle.is_null() {
+                destroy_fn(plugin_handle);
+            }
+            return Err(status_error(
+                "flux_plugin_create",
+                create_status,
+                &host_error_message,
+                PluginContractError::Abi,
+            ));
+        }
+        if plugin_handle.is_null() {
+            return Err(PluginContractError::Abi(
+                "flux_plugin_create returned OK but plugin handle is null".to_string(),
+            ));
+        }
+
+        Ok(RuntimeDllPlugin {
+            plugin_id: plugin.plugin_id.clone(),
+            handle: plugin_handle,
+            destroy_fn,
+            on_event_fn,
+            cache_root: plugin_root.to_path_buf(),
+            library,
+        })
+    }
 }
 
 fn extract_packaged_plugin_to_cache(
