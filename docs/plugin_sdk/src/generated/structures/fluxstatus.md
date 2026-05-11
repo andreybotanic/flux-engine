@@ -27,5 +27,6 @@ pub struct FluxStatus
 ## Methods
 
 - [`FluxStatus::code`](../methods/fluxstatus-code.md)
+- [`FluxStatus::into_result`](../methods/fluxstatus-into-result.md)
 - [`FluxStatus::is_ok`](../methods/fluxstatus-is-ok.md)
 

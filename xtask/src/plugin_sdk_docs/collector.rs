@@ -10,11 +10,11 @@ use crate::{
     plugin_sdk_docs::{
         model::{
             ApiArgumentDoc, ApiExampleDoc, ApiFieldDoc, ApiGroup, ApiItemDoc, ApiMethodLink,
-            ApiVariantDoc, DOCS_SRC_ROOT, SdkCategory, SdkItemKind, SdkSource, SDK_SOURCES,
+            ApiVariantDoc, SdkCategory, SdkItemKind, SdkSource, DOCS_SRC_ROOT, SDK_SOURCES,
         },
         parser::{
-            impl_owner_name, is_public, optional_doc_summary, require_section,
-            required_doc_block, section_body, DocBlock,
+            impl_owner_name, is_public, optional_doc_summary, require_section, required_doc_block,
+            section_body, DocBlock,
         },
     },
     XtaskError,
@@ -49,7 +49,7 @@ pub(super) fn collect_api_items(repo_root: &Path) -> Result<Vec<ApiItemDoc>, Xta
         }
         let variant = item
             .name
-            .strip_prefix("PluginEventKind::")
+            .strip_prefix("PluginEvent::")
             .unwrap_or(&item.name);
         item.arguments = event_payloads.remove(variant).unwrap_or_default();
     }
@@ -116,11 +116,11 @@ fn collect_source_items(
             {
                 push_struct_doc(source, items, &item)?
             }
-            Item::Enum(item) if is_public(&item.vis) => {
-                if item.ident == "PluginEvent" {
+            Item::Enum(item) => {
+                if item.ident == "PluginRuntimeEvent" {
                     collect_event_payloads(&item, event_payloads);
                 }
-                if source.includes(&item.ident.to_string()) {
+                if is_public(&item.vis) && source.includes(&item.ident.to_string()) {
                     push_enum_doc(source, items, &item)?;
                 }
             }
@@ -155,7 +155,7 @@ fn push_struct_doc(
     let docs = required_doc_block(source.path, &name, &item.attrs)?;
     if matches!(item.fields, Fields::Unit) {
         require_section(source.path, &name, &docs, "# SDK Notes")?;
-    } else {
+    } else if has_public_fields(item) {
         require_section(source.path, &name, &docs, "# Fields")?;
     }
 
@@ -171,6 +171,14 @@ fn push_struct_doc(
     api_item.fields = fields;
     items.push(api_item);
     Ok(())
+}
+
+fn has_public_fields(item: &ItemStruct) -> bool {
+    match &item.fields {
+        Fields::Named(fields) => fields.named.iter().any(|field| is_public(&field.vis)),
+        Fields::Unnamed(fields) => fields.unnamed.iter().any(|field| is_public(&field.vis)),
+        Fields::Unit => false,
+    }
 }
 
 fn push_enum_doc(
@@ -193,7 +201,7 @@ fn push_enum_doc(
     api_item.signature = Some(format!("pub enum {}", item.ident));
     api_item.variants = variants;
     items.push(api_item);
-    if item.ident == "PluginEventKind" {
+    if item.ident == "PluginEvent" {
         push_event_docs(source, items, item)?;
     }
     Ok(())
@@ -205,7 +213,7 @@ fn push_event_docs(
     item: &ItemEnum,
 ) -> Result<(), XtaskError> {
     for variant in &item.variants {
-        let event_name = format!("PluginEventKind::{}", variant.ident);
+        let event_name = format!("PluginEvent::{}", variant.ident);
         let docs = required_doc_block(source.path, &event_name, &variant.attrs)?;
         items.push(base_item(
             source,
@@ -369,7 +377,7 @@ fn struct_fields(
     item: &ItemStruct,
     docs: &DocBlock,
 ) -> Result<Vec<ApiFieldDoc>, XtaskError> {
-    let descriptions = if matches!(item.fields, Fields::Unit) {
+    let descriptions = if matches!(item.fields, Fields::Unit) || !has_public_fields(item) {
         BTreeMap::new()
     } else {
         section_entries(source_path, item_name, docs, "Fields")?
@@ -500,8 +508,9 @@ fn variant_fields_as_arguments(fields: &Fields) -> Vec<ApiArgumentDoc> {
                 };
                 let ty = tokens(&field.ty);
                 ApiArgumentDoc {
-                    description: optional_doc_summary(&field.attrs)
-                        .unwrap_or_else(|| format!("Typed payload passed to this event as `{}`.", ty)),
+                    description: optional_doc_summary(&field.attrs).unwrap_or_else(|| {
+                        format!("Typed payload passed to this event as `{}`.", ty)
+                    }),
                     name,
                     ty,
                 }

@@ -96,7 +96,8 @@ pub unsafe extern "C" fn onMouseDownCell(
         Err(status) => return status,
     };
     if event.button == 1 && event.has_cell != 0 {
-        if let Some(index) = cell_index(event.cell_x, event.cell_y) {
+        let cell = UVec2::new(event.cell_x, event.cell_y);
+        if let Some(index) = cell_index(cell) {
             plugin.cell_counters[index] = plugin.cell_counters[index].saturating_add(1);
         }
     }
@@ -113,7 +114,7 @@ pub unsafe extern "C" fn onBuildHudForCell(
         Ok(values) => values,
         Err(status) => return status,
     };
-    submit_cell_hud(plugin, event.cell_x, event.cell_y, host)
+    submit_cell_hud(plugin, UVec2::new(event.cell_x, event.cell_y), host)
 }
 
 #[no_mangle]
@@ -130,44 +131,28 @@ pub unsafe extern "C" fn onBuildPanel(
 }
 
 unsafe fn write_counter_chunk(plugin: &FluxPluginHandle, host: &mut FluxRuntimeHost) -> FluxStatus {
-    let Some(write_save_chunk) = host.write_save_chunk else {
-        return FluxStatus::FAILED;
-    };
     let mut payload = Vec::with_capacity(plugin.cell_counters.len() * 4);
     for counter in &plugin.cell_counters {
         payload.extend_from_slice(&counter.to_le_bytes());
     }
-    write_save_chunk(
-        host.context,
-        FluxUtf8Slice::from_str("flux.api_ui_save_demo.save.counter"),
-        1,
-        payload.as_ptr(),
-        payload.len(),
-    )
+    match host.write_save_chunk("flux.api_ui_save_demo.save.counter", 1, &payload) {
+        Ok(_) => FluxStatus::OK,
+        Err(status) => status,
+    }
 }
 
 unsafe fn read_counter_chunk(
     plugin: &mut FluxPluginHandle,
     host: &mut FluxRuntimeHost,
 ) -> FluxStatus {
-    let Some(read_save_chunk) = host.read_save_chunk else {
-        return FluxStatus::FAILED;
-    };
-    let mut version = 0u32;
-    let mut len = 0usize;
-    let mut payload = vec![0u8; plugin.cell_counters.len() * 4];
-    let status = read_save_chunk(
-        host.context,
-        FluxUtf8Slice::from_str("flux.api_ui_save_demo.save.counter"),
-        &mut version,
-        payload.as_mut_ptr(),
-        payload.len(),
-        &mut len,
-    );
-    if status != FluxStatus::OK {
+    let Some((version, payload)) = (match host.read_save_chunk("flux.api_ui_save_demo.save.counter")
+    {
+        Ok(value) => value,
+        Err(status) => return status,
+    }) else {
         return FluxStatus::OK;
-    }
-    if version == 1 && len == payload.len() {
+    };
+    if version == 1 && payload.len() == plugin.cell_counters.len() * 4 {
         for (index, chunk) in payload.chunks_exact(4).enumerate() {
             plugin.cell_counters[index] =
                 u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
@@ -178,28 +163,20 @@ unsafe fn read_counter_chunk(
 
 unsafe fn submit_cell_hud(
     plugin: &FluxPluginHandle,
-    cell_x: u32,
-    cell_y: u32,
+    cell: UVec2,
     host: &mut FluxRuntimeHost,
 ) -> FluxStatus {
-    let Some(submit_hud_block) = host.submit_hud_block else {
-        return FluxStatus::FAILED;
-    };
-    let cell_counter = cell_index(cell_x, cell_y)
+    let cell_counter = cell_index(cell)
         .and_then(|index| plugin.cell_counters.get(index).copied())
         .unwrap_or(0);
     let line = format!(
         "cell left-clicks {}, cell ({}, {})",
-        cell_counter, cell_x, cell_y
+        cell_counter, cell.x, cell.y
     );
-    submit_hud_block(
-        host.context,
-        FluxUtf8Slice::from_str("API UI/Save Demo"),
-        FluxUtf8Slice {
-            ptr: line.as_ptr(),
-            len: line.len(),
-        },
-    )
+    match host.submit_hud_block("API UI/Save Demo", &line) {
+        Ok(_) => FluxStatus::OK,
+        Err(status) => status,
+    }
 }
 
 unsafe fn submit_panel_summary(
@@ -207,24 +184,18 @@ unsafe fn submit_panel_summary(
     panel_id: FluxUtf8Slice,
     host: &mut FluxRuntimeHost,
 ) -> FluxStatus {
-    let Some(submit_hud_block) = host.submit_hud_block else {
-        return FluxStatus::FAILED;
-    };
     let total_clicks: u32 = plugin.cell_counters.iter().copied().sum();
     let panel_name = utf8_slice_or_empty(panel_id);
     let line = format!("panel {}, total left-clicks {}", panel_name, total_clicks);
-    submit_hud_block(
-        host.context,
-        FluxUtf8Slice::from_str("API UI/Save Demo"),
-        FluxUtf8Slice {
-            ptr: line.as_ptr(),
-            len: line.len(),
-        },
-    )
+    match host.submit_hud_block("API UI/Save Demo", &line) {
+        Ok(_) => FluxStatus::OK,
+        Err(status) => status,
+    }
 }
 
-fn cell_index(x: u32, y: u32) -> Option<usize> {
-    (x < WORLD_WIDTH && y < WORLD_HEIGHT).then_some((y * WORLD_WIDTH + x) as usize)
+fn cell_index(cell: UVec2) -> Option<usize> {
+    (cell.x < WORLD_WIDTH && cell.y < WORLD_HEIGHT)
+        .then_some((cell.y * WORLD_WIDTH + cell.x) as usize)
 }
 
 fn utf8_slice_or_empty(value: FluxUtf8Slice) -> String {

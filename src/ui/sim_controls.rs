@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::editor::MainMenuState;
-use crate::plugins::PluginEvent;
+use crate::plugins::PluginRuntimeEvent;
 use crate::save::WorldLoadState;
 use crate::simulation::{SimulationControl, SimulationSpeed};
 use crate::ui::palette;
@@ -144,7 +144,7 @@ pub(crate) fn handle_sim_control_keyboard(
     mut control: ResMut<SimulationControl>,
     world_load_state: Res<WorldLoadState>,
     main_menu: Option<Res<MainMenuState>>,
-    mut plugin_events: EventWriter<PluginEvent>,
+    mut plugin_events: EventWriter<PluginRuntimeEvent>,
 ) {
     if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
         return;
@@ -153,7 +153,7 @@ pub(crate) fn handle_sim_control_keyboard(
         let was_paused = control.paused;
         apply_pause_toggle(&mut control, &world_load_state);
         if was_paused != control.paused {
-            plugin_events.write(PluginEvent::SimulationPausedChanged {
+            plugin_events.write(PluginRuntimeEvent::SimulationPausedChanged {
                 paused: control.paused,
             });
         }
@@ -175,7 +175,7 @@ pub(crate) fn handle_sim_control_buttons(
     mut control: ResMut<SimulationControl>,
     world_load_state: Res<WorldLoadState>,
     main_menu: Option<Res<MainMenuState>>,
-    mut plugin_events: EventWriter<PluginEvent>,
+    mut plugin_events: EventWriter<PluginRuntimeEvent>,
 ) {
     if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
         return;
@@ -191,7 +191,7 @@ pub(crate) fn handle_sim_control_buttons(
                 let was_paused = control.paused;
                 apply_pause_toggle(&mut control, &world_load_state);
                 if was_paused != control.paused {
-                    plugin_events.write(PluginEvent::SimulationPausedChanged {
+                    plugin_events.write(PluginRuntimeEvent::SimulationPausedChanged {
                         paused: control.paused,
                     });
                 }

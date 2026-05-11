@@ -32,7 +32,7 @@ fn handle_main_menu_actions(
     ),
     save_name_input: Single<&TextInputField, With<MainMenuSaveNameInputField>>,
     mut world_changed: EventWriter<WorldCellChanged>,
-    mut plugin_events: EventWriter<PluginEvent>,
+    mut plugin_events: EventWriter<PluginRuntimeEvent>,
     mut exit_writer: EventWriter<AppExit>,
     mut overlay_mode: ResMut<OverlayMode>,
     mut camera_query: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
@@ -127,7 +127,7 @@ fn handle_main_menu_actions(
                         );
                         save_session.mark_persisted(step.0, None);
                         world_load_state.has_world = true;
-                        plugin_events.write(PluginEvent::WorldCreated);
+                        plugin_events.write(PluginRuntimeEvent::WorldCreated);
                         menu_ui.mode = MainMenuMode::Hidden;
                         menu_ui.screen = MainMenuScreen::Root;
                         menu_ui.confirm_state = None;
@@ -184,7 +184,7 @@ fn handle_main_menu_actions(
                 ) {
                     menu_ui.status_text = format!("Exit to main failed: {}", err);
                 } else {
-                    plugin_events.write(PluginEvent::WorldUnloaded);
+                    plugin_events.write(PluginRuntimeEvent::WorldUnloaded);
                 }
             }
             MainMenuButtonAction::ExitApp => {
@@ -210,7 +210,7 @@ fn handle_main_menu_actions(
                 }
                 let name = save_name_input.text.clone();
                 dispatch_plugin_save_event(
-                    PluginEvent::WorldBeforeSave,
+                    PluginRuntimeEvent::WorldBeforeSave,
                     &mut runtime_dll_plugins,
                     &plugin_runtime_registry,
                     &content_registry,
@@ -232,7 +232,7 @@ fn handle_main_menu_actions(
                 ) {
                     Ok(descriptor) => {
                         dispatch_plugin_save_event(
-                            PluginEvent::WorldAfterSave,
+                            PluginRuntimeEvent::WorldAfterSave,
                             &mut runtime_dll_plugins,
                             &plugin_runtime_registry,
                             &content_registry,
@@ -351,7 +351,7 @@ fn handle_main_menu_actions(
                                 save_session
                                     .mark_persisted(step.0, Some(loaded.descriptor.id.clone()));
                                 world_load_state.has_world = true;
-                                plugin_events.write(PluginEvent::WorldLoaded);
+                                plugin_events.write(PluginRuntimeEvent::WorldLoaded);
                                 menu_ui.mode = MainMenuMode::Hidden;
                                 menu_ui.screen = MainMenuScreen::Root;
                                 menu_ui.confirm_state = None;
@@ -378,7 +378,7 @@ fn handle_main_menu_actions(
                 match confirm {
                     Some(MainMenuConfirmState::OverwriteSave(save_id)) => {
                         dispatch_plugin_save_event(
-                            PluginEvent::WorldBeforeSave,
+                            PluginRuntimeEvent::WorldBeforeSave,
                             &mut runtime_dll_plugins,
                             &plugin_runtime_registry,
                             &content_registry,
@@ -400,7 +400,7 @@ fn handle_main_menu_actions(
                         ) {
                             Ok(descriptor) => {
                                 dispatch_plugin_save_event(
-                                    PluginEvent::WorldAfterSave,
+                                    PluginRuntimeEvent::WorldAfterSave,
                                     &mut runtime_dll_plugins,
                                     &plugin_runtime_registry,
                                     &content_registry,
@@ -484,7 +484,7 @@ fn handle_main_menu_actions(
                                 menu_ui.status_text = format!("Exit to main failed: {}", err);
                                 menu_ui.screen = MainMenuScreen::Root;
                             } else {
-                                plugin_events.write(PluginEvent::WorldUnloaded);
+                                plugin_events.write(PluginRuntimeEvent::WorldUnloaded);
                             }
                         }
                         MainMenuDeferredAction::ExitApp => {
@@ -521,7 +521,7 @@ fn handle_save_preview_capture_finished(
     mut save_session: ResMut<SaveSessionState>,
     mut world_load_state: ResMut<WorldLoadState>,
     mut world_changed: EventWriter<WorldCellChanged>,
-    mut plugin_events: EventWriter<PluginEvent>,
+    mut plugin_events: EventWriter<PluginRuntimeEvent>,
     mut exit_writer: EventWriter<AppExit>,
 ) {
     if finished.is_empty() {
@@ -553,7 +553,7 @@ fn handle_save_preview_capture_finished(
                                 menu_ui.status_text = format!("Exit to main failed: {}", err);
                                 menu_ui.screen = MainMenuScreen::Save;
                             } else {
-                                plugin_events.write(PluginEvent::WorldUnloaded);
+                                plugin_events.write(PluginRuntimeEvent::WorldUnloaded);
                             }
                         }
                         MainMenuDeferredAction::ExitApp => {
@@ -675,7 +675,7 @@ fn queue_save_preview_capture(
 }
 
 fn dispatch_plugin_save_event(
-    event: PluginEvent,
+    event: PluginRuntimeEvent,
     runtime_dll_plugins: &mut RuntimeDllPluginRegistry,
     plugin_runtime_registry: &PluginRuntimeRegistry,
     content_registry: &ContentRegistry,

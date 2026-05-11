@@ -104,10 +104,9 @@ FluxEngine/
 - `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
 - `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем, включая новый `plugins`.
 - `src/main.rs`: Точка входа бинаря; запускает приложение.
-- `src/plugins/abi.rs`: Точка входа C-compatible ABI v4: базовые `FluxUtf8Slice`/`FluxStatus`, host/runtime structs, registrar callbacks, runtime host callbacks и export names обязательных DLL-функций с re-export typed event ABI.
-- `src/plugins/abi_events.rs`: Typed event ABI v4: plugin-visible `FluxEventKind`, `FluxEventHandlerDescriptor`, payload-структуры для каждого runtime-события, handler typedef-ы, canonical handler names и mapping между `PluginEventKind` и ABI event kinds.
-- `src/plugins/api/mod.rs`: Public Rust-first plugin API module root and re-exports for world/events/render/UI/save/runtime contracts.
-- `src/plugins/api/world_api.rs`: Plugin-facing world read/mutation API: `get_*` cell/gas/structure queries, material/structure mutation and gas amount+velocity mutation.
+- `src/plugins/abi.rs`: Точка входа C-compatible ABI v4: базовые `FluxUtf8Slice`/`FluxStatus`, method-based wrapper API для `FluxHostApi`/`FluxRegistrar`/`FluxRuntimeHost`, внутренние raw callbacks и export names обязательных DLL-функций с re-export typed event ABI.
+- `src/plugins/abi_events.rs`: Typed event ABI v4: plugin-visible `FluxEventKind`, `FluxEventHandlerDescriptor`, payload-структуры для каждого runtime-события, handler typedef-ы, canonical handler names и mapping между `PluginEvent` и ABI event kinds.
+- `src/plugins/api/mod.rs`: Engine-side shared plugin API module root и re-exports для событий, runtime registry, render/UI/save contracts, которые использует хост plugin-системы.
 - `src/plugins/api/events.rs`: Plugin event kinds and payloads, including simulation lifecycle, save lifecycle, low-level mouse cell input and keyboard events.
 - `src/plugins/api/render_api.rs`: Overlay render contract with `OverlayRenderPolicy`, `OverlayFrame`, per-cell/per-structure/per-gas styles and draw commands.
 - `src/plugins/api/ui_api.rs`: Declarative plugin UI descriptors for tools, panels, HUD blocks and simple UI node trees.

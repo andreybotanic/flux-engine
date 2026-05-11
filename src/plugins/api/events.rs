@@ -31,7 +31,7 @@ use crate::{
 /// - `BuildPanel`: Fired when a plugin-owned panel should be built or refreshed.
 /// - `RenderOverlay`: Fired when a plugin-controlled overlay should produce a frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum PluginEventKind {
+pub enum PluginEvent {
     /// Fired after a new world is created.
     ///
     WorldCreated,
@@ -121,7 +121,7 @@ pub struct InputModifiers {
 /// - `Middle`: Middle or wheel mouse button.
 /// - `Other`: Additional mouse button encoded by its platform-provided numeric id.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MouseCellButton {
+pub enum MouseButton {
     Left,
     Right,
     Middle,
@@ -140,7 +140,7 @@ pub enum MouseCellButton {
 /// - `is_over_ui`: Whether the pointer was over game UI when the event was emitted.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MouseCellEvent {
-    pub button: Option<MouseCellButton>,
+    pub button: Option<MouseButton>,
     pub cell: UVec2,
     pub world_position: Vec2,
     pub screen_position: Vec2,
@@ -162,7 +162,7 @@ pub struct StructureEvent {
     pub cell: UVec2,
 }
 
-/// Runtime event payload sent through the Rust plugin API.
+/// Runtime event payload sent through the engine-side runtime event queue.
 ///
 /// # Variants
 /// - `WorldCreated`: World-lifecycle event with no additional payload.
@@ -188,7 +188,7 @@ pub struct StructureEvent {
 /// - `BuildPanel`: Carries the plugin-owned panel id being requested.
 /// - `RenderOverlay`: Carries the plugin-owned overlay id that should render a frame.
 #[derive(Event, Clone, Debug, PartialEq)]
-pub enum PluginEvent {
+pub(crate) enum PluginRuntimeEvent {
     WorldCreated,
     WorldLoaded,
     WorldBeforeSave,
@@ -262,33 +262,33 @@ pub enum PluginEvent {
     },
 }
 
-impl PluginEvent {
-    /// Returns the subscription category for this event.
+impl PluginRuntimeEvent {
+    /// Returns the subscription category for this runtime event instance.
     ///
-    pub fn kind(&self) -> PluginEventKind {
+    pub(crate) fn kind(&self) -> PluginEvent {
         match self {
-            Self::WorldCreated => PluginEventKind::WorldCreated,
-            Self::WorldLoaded => PluginEventKind::WorldLoaded,
-            Self::WorldBeforeSave => PluginEventKind::WorldBeforeSave,
-            Self::WorldAfterSave => PluginEventKind::WorldAfterSave,
-            Self::WorldUnloaded => PluginEventKind::WorldUnloaded,
-            Self::SimulationPreCellGasStep => PluginEventKind::SimulationPreCellGasStep,
-            Self::SimulationPostCellGasStep => PluginEventKind::SimulationPostCellGasStep,
-            Self::SimulationPausedChanged { .. } => PluginEventKind::SimulationPausedChanged,
-            Self::StructurePlaced(_) => PluginEventKind::StructurePlaced,
-            Self::StructureRemoved(_) => PluginEventKind::StructureRemoved,
-            Self::ToolSelected { .. } => PluginEventKind::ToolSelected,
-            Self::MouseDownCell(_) => PluginEventKind::MouseDownCell,
-            Self::MouseMoveCell(_) => PluginEventKind::MouseMoveCell,
-            Self::MouseUpCell(_) => PluginEventKind::MouseUpCell,
-            Self::MouseEnterCell(_) => PluginEventKind::MouseEnterCell,
-            Self::MouseLeaveCell(_) => PluginEventKind::MouseLeaveCell,
-            Self::KeyPressed { .. } => PluginEventKind::KeyPressed,
-            Self::KeyReleased { .. } => PluginEventKind::KeyReleased,
-            Self::OverlayChanged { .. } => PluginEventKind::OverlayChanged,
-            Self::BuildHudForCell { .. } => PluginEventKind::BuildHudForCell,
-            Self::BuildPanel { .. } => PluginEventKind::BuildPanel,
-            Self::RenderOverlay { .. } => PluginEventKind::RenderOverlay,
+            Self::WorldCreated => PluginEvent::WorldCreated,
+            Self::WorldLoaded => PluginEvent::WorldLoaded,
+            Self::WorldBeforeSave => PluginEvent::WorldBeforeSave,
+            Self::WorldAfterSave => PluginEvent::WorldAfterSave,
+            Self::WorldUnloaded => PluginEvent::WorldUnloaded,
+            Self::SimulationPreCellGasStep => PluginEvent::SimulationPreCellGasStep,
+            Self::SimulationPostCellGasStep => PluginEvent::SimulationPostCellGasStep,
+            Self::SimulationPausedChanged { .. } => PluginEvent::SimulationPausedChanged,
+            Self::StructurePlaced(_) => PluginEvent::StructurePlaced,
+            Self::StructureRemoved(_) => PluginEvent::StructureRemoved,
+            Self::ToolSelected { .. } => PluginEvent::ToolSelected,
+            Self::MouseDownCell(_) => PluginEvent::MouseDownCell,
+            Self::MouseMoveCell(_) => PluginEvent::MouseMoveCell,
+            Self::MouseUpCell(_) => PluginEvent::MouseUpCell,
+            Self::MouseEnterCell(_) => PluginEvent::MouseEnterCell,
+            Self::MouseLeaveCell(_) => PluginEvent::MouseLeaveCell,
+            Self::KeyPressed { .. } => PluginEvent::KeyPressed,
+            Self::KeyReleased { .. } => PluginEvent::KeyReleased,
+            Self::OverlayChanged { .. } => PluginEvent::OverlayChanged,
+            Self::BuildHudForCell { .. } => PluginEvent::BuildHudForCell,
+            Self::BuildPanel { .. } => PluginEvent::BuildPanel,
+            Self::RenderOverlay { .. } => PluginEvent::RenderOverlay,
         }
     }
 }

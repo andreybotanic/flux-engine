@@ -14,14 +14,13 @@ pub mod source;
 pub mod state;
 pub mod substances;
 
+pub(crate) use self::api::PluginRuntimeEvent;
 pub use self::api::{
-    build_plugin_runtime_registry, CellInfo, CellRenderStyle, CellStyleEntry, GasAmount,
-    GasMixture, GasRenderStyle, GasStyleEntry, HudBlock, InputModifiers, MouseCellButton,
-    MouseCellEvent, OverlayDrawCommand, OverlayFrame, OverlayRenderPolicy, PanelDescriptor,
-    PluginEvent, PluginEventKind, PluginRuntimeRegistry, PluginSubscription,
+    build_plugin_runtime_registry, CellRenderStyle, CellStyleEntry, GasRenderStyle, GasStyleEntry,
+    HudBlock, InputModifiers, MouseButton, MouseCellEvent, OverlayDrawCommand, OverlayFrame,
+    OverlayRenderPolicy, PanelDescriptor, PluginEvent, PluginRuntimeRegistry, PluginSubscription,
     RuntimeOverlayDescriptor, SaveChunk, SaveChunkDescriptor, SaveChunkStore, StructureEvent,
-    StructureInfo, StructurePlacement, StructureRenderStyle, StructureStyleEntry, ToolDescriptor,
-    UiNode, WorldApi, WorldApiError, WorldApiMut,
+    StructureRenderStyle, StructureStyleEntry, ToolDescriptor, UiNode,
 };
 pub use self::content::{
     CellContentDescriptor, ContentId, ContentRegistry, LegacyStorageDescriptor,

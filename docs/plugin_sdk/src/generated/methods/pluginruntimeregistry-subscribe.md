@@ -15,7 +15,7 @@ Registers one plugin as a subscriber for the given event kind.
 ## Signature
 
 ```rust
-fn subscribe (& mut self , plugin_id : PluginId , event_kind : PluginEventKind)
+fn subscribe (& mut self , plugin_id : PluginId , event_kind : PluginEvent)
 ```
 
 ## Arguments
@@ -23,7 +23,7 @@ fn subscribe (& mut self , plugin_id : PluginId , event_kind : PluginEventKind)
 | Argument | Type | Description |
 | --- | --- | --- |
 | `plugin_id` | [`PluginId`](../structures/pluginid.md) | `plugin_id` argument passed as `PluginId`. |
-| `event_kind` | [`PluginEventKind`](../enums/plugineventkind.md) | `event_kind` argument passed as `PluginEventKind`. |
+| `event_kind` | [`PluginEvent`](../enums/pluginevent.md) | `event_kind` argument passed as `PluginEvent`. |
 
 ## Return Value
 
@@ -36,7 +36,7 @@ _Source: [`examples/methods/pluginruntimeregistry-subscribe.md`](../../examples/
 ```rust
 let plugin_id = PluginId::parse("flux.demo").expect("plugin id");
 let mut registry = PluginRuntimeRegistry::default();
-registry.subscribe(plugin_id.clone(), PluginEventKind::MouseDownCell);
-assert_eq!(registry.subscribers(PluginEventKind::MouseDownCell), vec![plugin_id]);
+registry.subscribe(plugin_id.clone(), PluginEvent::MouseDownCell);
+assert_eq!(registry.subscribers(PluginEvent::MouseDownCell), vec![plugin_id]);
 ```
 

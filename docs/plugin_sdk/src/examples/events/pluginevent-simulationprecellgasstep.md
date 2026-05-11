@@ -1,0 +1,20 @@
+```rust
+unsafe extern "C" fn on_simulation_pre_cell_gas_step(
+    _plugin: *mut FluxPluginHandle,
+    payload: *const FluxEmptyEventPayload,
+    host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let _payload = unsafe { &*payload };
+    let host = unsafe { &mut *host };
+    let cell = UVec2::new(20, 20);
+    let velocity = Vec2::new(0.0, 1.0);
+    let added = match host.add_gas(cell, "flux.default.gas.oxygen", 25, velocity) {
+        Ok(added) => added,
+        Err(status) => return status,
+    };
+    if added == 0 {
+        return FluxStatus::FAILED;
+    }
+    FluxStatus::OK
+}
+```

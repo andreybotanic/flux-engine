@@ -14,13 +14,10 @@ use crate::{
     plugins::{
         abi::{FluxPluginDestroyFn, FluxPluginHandle, FluxStatus, FluxUtf8Slice},
         api::{
-            events::{PluginEvent, PluginEventKind},
-            render_api::OverlayRenderPolicy,
-            runtime::PluginRuntimeRegistry,
-            save_api::SaveChunkStore,
-            ui_api::HudBlock,
+            events::PluginEvent, render_api::OverlayRenderPolicy, runtime::PluginRuntimeRegistry,
+            save_api::SaveChunkStore, ui_api::HudBlock,
         },
-        ContentId, ContentRegistry, LoadedPluginMetadata, PluginId,
+        ContentId, ContentRegistry, LoadedPluginMetadata, PluginId, PluginRuntimeEvent,
     },
     render::{
         world_view::{PluginOverlayImage, PluginOverlaySprite},
@@ -118,10 +115,10 @@ impl RuntimeDllPluginRegistry {
     }
 
     /// Dispatches one plugin event to every live DLL subscribed to that event kind.
-    pub fn dispatch_event(
+    pub(crate) fn dispatch_event(
         &mut self,
         subscriptions: &PluginRuntimeRegistry,
-        event: &PluginEvent,
+        event: &PluginRuntimeEvent,
         context: &mut RuntimeHostContext,
     ) {
         let event_kind = event.kind();
@@ -151,7 +148,7 @@ pub struct RuntimeDllPlugin {
     pub plugin_id: PluginId,
     pub handle: *mut FluxPluginHandle,
     pub destroy_fn: FluxPluginDestroyFn,
-    pub(crate) event_handlers: BTreeMap<PluginEventKind, RuntimeEventHandler>,
+    pub(crate) event_handlers: BTreeMap<PluginEvent, RuntimeEventHandler>,
     pub cache_root: PathBuf,
     pub library: Library,
 }
@@ -612,7 +609,7 @@ mod tests {
 }
 
 fn dispatch_queued_runtime_plugin_events(
-    mut events: EventReader<PluginEvent>,
+    mut events: EventReader<PluginRuntimeEvent>,
     mut runtime_plugins: ResMut<RuntimeDllPluginRegistry>,
     runtime_registry: Res<PluginRuntimeRegistry>,
     content_registry: Res<ContentRegistry>,
@@ -626,7 +623,7 @@ fn dispatch_queued_runtime_plugin_events(
     for event in events.read() {
         if matches!(
             event.kind(),
-            PluginEventKind::RenderOverlay | PluginEventKind::BuildHudForCell
+            PluginEvent::RenderOverlay | PluginEvent::BuildHudForCell
         ) {
             continue;
         }
@@ -661,7 +658,7 @@ fn dispatch_runtime_plugin_pre_gas_step(
     context.gpu_state = Some(&mut gpu_state);
     runtime_plugins.dispatch_event(
         &runtime_registry,
-        &PluginEvent::SimulationPreCellGasStep,
+        &PluginRuntimeEvent::SimulationPreCellGasStep,
         &mut context,
     );
     flush_changed_cells(&context, &mut world_changed);
@@ -688,7 +685,7 @@ fn dispatch_runtime_plugin_post_gas_step(
     context.gpu_state = Some(&mut gpu_state);
     runtime_plugins.dispatch_event(
         &runtime_registry,
-        &PluginEvent::SimulationPostCellGasStep,
+        &PluginRuntimeEvent::SimulationPostCellGasStep,
         &mut context,
     );
     flush_changed_cells(&context, &mut world_changed);
@@ -738,7 +735,7 @@ fn dispatch_plugin_overlay_render(
         context.overlay_frame = Some(&mut overlay_frame);
         runtime_plugins.dispatch_event(
             &runtime_registry,
-            &PluginEvent::RenderOverlay {
+            &PluginRuntimeEvent::RenderOverlay {
                 overlay_id: overlay_id.clone(),
             },
             &mut context,

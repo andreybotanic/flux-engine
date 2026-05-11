@@ -10,7 +10,10 @@ Source: **ABI v4** (`src/plugins/abi.rs`). Generated group: **Structures**.
 
 ## Description
 
-Runtime host callback table passed to one typed plugin event handler.
+Runtime-facing host API passed to one typed plugin event handler.
+
+Plugins should treat this struct as an opaque capability object and call its
+methods instead of reading the underlying callback table directly.
 
 ## Declaration
 
@@ -18,21 +21,13 @@ Runtime host callback table passed to one typed plugin event handler.
 pub struct FluxRuntimeHost
 ```
 
-## Fields
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `struct_size` | u32 | Size of this struct used for ABI validation. |
-| `api_version` | u32 | ABI version expected by both host and plugin. |
-| `context` | * mut c_void | Opaque host-owned context passed back into callback functions. |
-| `set_cell_material` | Option < [`FluxSetCellMaterialFn`](../methods/fluxsetcellmaterialfn.md) > | Optional callback for changing a world cell material. |
-| `add_gas` | Option < [`FluxAddGasFn`](../methods/fluxaddgasfn.md) > | Optional callback for adding free gas with velocity. |
-| `submit_overlay_frame` | Option < [`FluxSubmitOverlayFrameFn`](../methods/fluxsubmitoverlayframefn.md) > | Optional callback for sending an RGBA8 overlay frame to the host. |
-| `submit_hud_block` | Option < [`FluxSubmitHudBlockFn`](../methods/fluxsubmithudblockfn.md) > | Optional callback for appending one HUD block line. |
-| `write_save_chunk` | Option < [`FluxWriteSaveChunkFn`](../methods/fluxwritesavechunkfn.md) > | Optional callback for writing a plugin-owned save chunk. |
-| `read_save_chunk` | Option < [`FluxReadSaveChunkFn`](../methods/fluxreadsavechunkfn.md) > | Optional callback for reading a plugin-owned save chunk. |
-
 ## Methods
 
-- [`FluxRuntimeHost::new`](../methods/fluxruntimehost-new.md)
+- [`FluxRuntimeHost::add_gas`](../methods/fluxruntimehost-add-gas.md)
+- [`FluxRuntimeHost::is_compatible`](../methods/fluxruntimehost-is-compatible.md)
+- [`FluxRuntimeHost::read_save_chunk`](../methods/fluxruntimehost-read-save-chunk.md)
+- [`FluxRuntimeHost::set_cell_material`](../methods/fluxruntimehost-set-cell-material.md)
+- [`FluxRuntimeHost::submit_hud_block`](../methods/fluxruntimehost-submit-hud-block.md)
+- [`FluxRuntimeHost::submit_overlay_frame`](../methods/fluxruntimehost-submit-overlay-frame.md)
+- [`FluxRuntimeHost::write_save_chunk`](../methods/fluxruntimehost-write-save-chunk.md)
 

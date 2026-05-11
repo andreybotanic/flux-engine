@@ -15,14 +15,14 @@ Returns the stable ABI numeric tag for one engine-side plugin event kind.
 ## Signature
 
 ```rust
-fn event_kind_to_abi (kind : PluginEventKind) -> u32
+fn event_kind_to_abi (kind : PluginEvent) -> u32
 ```
 
 ## Arguments
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `kind` | [`PluginEventKind`](../enums/plugineventkind.md) | `kind` argument passed as `PluginEventKind`. |
+| `kind` | [`PluginEvent`](../enums/pluginevent.md) | `kind` argument passed as `PluginEvent`. |
 
 ## Return Value
 
@@ -33,7 +33,7 @@ u32
 _Source: [`examples/methods/event-kind-to-abi.md`](../../examples/methods/event-kind-to-abi.md)_
 
 ```rust
-let abi_tag = event_kind_to_abi(PluginEventKind::RenderOverlay);
+let abi_tag = event_kind_to_abi(PluginEvent::RenderOverlay);
 assert_eq!(abi_tag, FluxEventKind::RenderOverlay.as_raw());
 ```
 

@@ -27,6 +27,12 @@ impl FluxUtf8Slice {
     }
 }
 
+impl FluxUtf8Slice {
+    fn is_non_empty(self) -> bool {
+        !self.ptr.is_null() && self.len > 0
+    }
+}
+
 /// Integer status code returned by every stage-1 ABI function.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -60,6 +66,19 @@ pub struct FluxHostApi {
     pub error_context: *mut c_void,
 }
 
+impl FluxHostApi {
+    fn is_compatible(&self) -> bool {
+        self.struct_size == std::mem::size_of::<FluxHostApi>() as u32
+            && self.api_version == ENGINE_PLUGIN_API_VERSION
+    }
+
+    fn write_error(&self, message: &str) {
+        if let Some(callback) = self.write_error {
+            let _ = unsafe { callback(self.error_context, FluxUtf8Slice::from_str(message)) };
+        }
+    }
+}
+
 /// Future-proof registrar payload passed into `flux_plugin_register`.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -79,6 +98,13 @@ pub struct FluxRegistrar {
     pub registration_context: *mut c_void,
     pub reserved2: *mut c_void,
     pub reserved3: *mut c_void,
+}
+
+impl FluxRegistrar {
+    fn is_compatible(&self) -> bool {
+        self.struct_size == std::mem::size_of::<FluxRegistrar>() as u32
+            && self.api_version == ENGINE_PLUGIN_API_VERSION
+    }
 }
 
 /// C-compatible gas substance descriptor supported by the v2 registrar.
@@ -154,18 +180,14 @@ pub unsafe extern "C" fn flux_plugin_create(
     }
 
     let host = &*host;
-    if host.struct_size != std::mem::size_of::<FluxHostApi>() as u32 {
-        write_host_error(host, "host struct_size mismatch");
-        return FluxStatus::FAILED;
-    }
-    if host.api_version != ENGINE_PLUGIN_API_VERSION {
-        write_host_error(host, "host api_version mismatch");
+    if !host.is_compatible() {
+        write_host_error(host, "host payload mismatch");
         return FluxStatus::FAILED;
     }
 
     let handle = Box::new(FluxPluginHandle {
-        api_version: host.api_version,
-        saw_non_empty_plugin_root: !host.plugin_root.ptr.is_null() && host.plugin_root.len > 0,
+        api_version: ENGINE_PLUGIN_API_VERSION,
+        saw_non_empty_plugin_root: host.plugin_root.is_non_empty(),
     });
     *out_plugin = Box::into_raw(handle);
     FluxStatus::OK
@@ -183,13 +205,7 @@ pub unsafe extern "C" fn flux_plugin_register(
 
     let plugin = &mut *plugin;
     let registrar = &mut *registrar;
-    if plugin.api_version != ENGINE_PLUGIN_API_VERSION {
-        return FluxStatus::FAILED;
-    }
-    if registrar.struct_size != std::mem::size_of::<FluxRegistrar>() as u32 {
-        return FluxStatus::FAILED;
-    }
-    if registrar.api_version != ENGINE_PLUGIN_API_VERSION {
+    if plugin.api_version != ENGINE_PLUGIN_API_VERSION || !registrar.is_compatible() {
         return FluxStatus::FAILED;
     }
     if !plugin.saw_non_empty_plugin_root {
@@ -210,7 +226,5 @@ pub unsafe extern "C" fn flux_plugin_destroy(plugin: *mut FluxPluginHandle) {
 }
 
 fn write_host_error(host: &FluxHostApi, message: &str) {
-    if let Some(callback) = host.write_error {
-        let _ = unsafe { callback(host.error_context, FluxUtf8Slice::from_str(message)) };
-    }
+    host.write_error(message);
 }

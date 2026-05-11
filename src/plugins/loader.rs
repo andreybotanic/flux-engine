@@ -1040,7 +1040,7 @@ mod tests {
         validate_runtime_registration,
     };
     use crate::plugins::{
-        api::events::PluginEventKind, PluginEventHandlerRegistration, PluginId, PluginManifest,
+        api::events::PluginEvent, PluginEventHandlerRegistration, PluginId, PluginManifest,
         PluginRuntimeRegistration, SubstanceDefinition, SubstanceId,
     };
 
@@ -1205,7 +1205,7 @@ content = false
         .expect("manifest");
         let registration = PluginRuntimeRegistration {
             event_handlers: vec![PluginEventHandlerRegistration {
-                event_kind: PluginEventKind::KeyPressed,
+                event_kind: PluginEvent::KeyPressed,
                 handler_name: "onKeyPressed".to_string(),
             }],
             ..Default::default()
@@ -1231,11 +1231,11 @@ content = false
         let registration = PluginRuntimeRegistration {
             event_handlers: vec![
                 PluginEventHandlerRegistration {
-                    event_kind: PluginEventKind::KeyPressed,
+                    event_kind: PluginEvent::KeyPressed,
                     handler_name: "onKeyPressed".to_string(),
                 },
                 PluginEventHandlerRegistration {
-                    event_kind: PluginEventKind::KeyPressed,
+                    event_kind: PluginEvent::KeyPressed,
                     handler_name: "onOtherKeyPressed".to_string(),
                 },
             ],
@@ -1265,7 +1265,7 @@ content = false
         .expect("manifest");
         let registration = PluginRuntimeRegistration {
             event_handlers: vec![PluginEventHandlerRegistration {
-                event_kind: PluginEventKind::KeyPressed,
+                event_kind: PluginEvent::KeyPressed,
                 handler_name: "123bad".to_string(),
             }],
             ..Default::default()
@@ -1283,7 +1283,7 @@ content = false
         let library = unsafe { Library::new(dll_path) }.expect("load demo plugin dll");
         let registration = PluginRuntimeRegistration {
             event_handlers: vec![PluginEventHandlerRegistration {
-                event_kind: PluginEventKind::SimulationPreCellGasStep,
+                event_kind: PluginEvent::SimulationPreCellGasStep,
                 handler_name: "onMissingHandler".to_string(),
             }],
             ..Default::default()
@@ -1301,7 +1301,7 @@ content = false
         let library = unsafe { Library::new(dll_path) }.expect("load demo plugin dll");
         let registration = PluginRuntimeRegistration {
             event_handlers: vec![PluginEventHandlerRegistration {
-                event_kind: PluginEventKind::SimulationPreCellGasStep,
+                event_kind: PluginEvent::SimulationPreCellGasStep,
                 handler_name: "onSimulationPreCellGasStep".to_string(),
             }],
             ..Default::default()

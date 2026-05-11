@@ -1,5 +1,7 @@
 use std::ffi::c_void;
 
+use bevy::prelude::{UVec2, Vec2};
+
 use crate::plugins::id::ENGINE_PLUGIN_API_VERSION_VALUE;
 
 #[path = "abi_events.rs"]
@@ -35,6 +37,21 @@ impl FluxUtf8Slice {
             len: value.len(),
         }
     }
+
+    /// Copies this ABI UTF-8 slice into an owned Rust string.
+    ///
+    pub fn try_to_string(self) -> Result<String, FluxStatus> {
+        if self.len == 0 {
+            return Ok(String::new());
+        }
+        if self.ptr.is_null() {
+            return Err(FluxStatus::INVALID_ARGUMENT);
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(self.ptr, self.len) };
+        std::str::from_utf8(bytes)
+            .map(str::to_string)
+            .map_err(|_| FluxStatus::INVALID_ARGUMENT)
+    }
 }
 
 /// Status code returned by plugin ABI functions.
@@ -61,11 +78,21 @@ impl FluxStatus {
     pub fn is_ok(self) -> bool {
         self == Self::OK
     }
+
+    /// Converts the raw ABI status into a Rust result.
+    ///
+    pub fn into_result(self) -> Result<(), Self> {
+        if self.is_ok() {
+            Ok(())
+        } else {
+            Err(self)
+        }
+    }
 }
 
 /// Callback used by plugins to write a host-readable error message.
 ///
-pub type FluxWriteErrorFn =
+pub(crate) type FluxWriteErrorFn =
     unsafe extern "C" fn(context: *mut c_void, message: FluxUtf8Slice) -> FluxStatus;
 
 /// C-compatible gas substance descriptor emitted by content plugins.
@@ -92,7 +119,7 @@ pub struct FluxGasSubstanceDescriptor {
 
 /// Callback used by plugins to register one gas-capable substance.
 ///
-pub type FluxRegisterGasSubstanceFn = unsafe extern "C" fn(
+pub(crate) type FluxRegisterGasSubstanceFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxGasSubstanceDescriptor,
 ) -> FluxStatus;
@@ -115,7 +142,7 @@ pub struct FluxToolDescriptor {
 
 /// Callback used by plugins to register one tool descriptor.
 ///
-pub type FluxRegisterToolFn =
+pub(crate) type FluxRegisterToolFn =
     unsafe extern "C" fn(context: *mut c_void, descriptor: *const FluxToolDescriptor) -> FluxStatus;
 
 /// C-compatible overlay descriptor emitted by plugins.
@@ -136,7 +163,7 @@ pub struct FluxOverlayDescriptor {
 
 /// Callback used by plugins to register one overlay descriptor.
 ///
-pub type FluxRegisterOverlayFn = unsafe extern "C" fn(
+pub(crate) type FluxRegisterOverlayFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxOverlayDescriptor,
 ) -> FluxStatus;
@@ -155,14 +182,14 @@ pub struct FluxSaveChunkDescriptor {
 
 /// Callback used by plugins to register one save chunk descriptor.
 ///
-pub type FluxRegisterSaveChunkFn = unsafe extern "C" fn(
+pub(crate) type FluxRegisterSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxSaveChunkDescriptor,
 ) -> FluxStatus;
 
 /// Callback used by plugins to set one world cell material by stable content id.
 ///
-pub type FluxSetCellMaterialFn = unsafe extern "C" fn(
+pub(crate) type FluxSetCellMaterialFn = unsafe extern "C" fn(
     context: *mut c_void,
     x: u32,
     y: u32,
@@ -171,7 +198,7 @@ pub type FluxSetCellMaterialFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to add free gas with a cell velocity.
 ///
-pub type FluxAddGasFn = unsafe extern "C" fn(
+pub(crate) type FluxAddGasFn = unsafe extern "C" fn(
     context: *mut c_void,
     x: u32,
     y: u32,
@@ -184,7 +211,7 @@ pub type FluxAddGasFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to submit one complete RGBA8 overlay frame.
 ///
-pub type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
+pub(crate) type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
     context: *mut c_void,
     width: u32,
     height: u32,
@@ -194,7 +221,7 @@ pub type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to append one HUD block for the hovered cell.
 ///
-pub type FluxSubmitHudBlockFn = unsafe extern "C" fn(
+pub(crate) type FluxSubmitHudBlockFn = unsafe extern "C" fn(
     context: *mut c_void,
     title: FluxUtf8Slice,
     line: FluxUtf8Slice,
@@ -202,7 +229,7 @@ pub type FluxSubmitHudBlockFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to write a plugin-owned save chunk.
 ///
-pub type FluxWriteSaveChunkFn = unsafe extern "C" fn(
+pub(crate) type FluxWriteSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     chunk_id: FluxUtf8Slice,
     version: u32,
@@ -212,7 +239,7 @@ pub type FluxWriteSaveChunkFn = unsafe extern "C" fn(
 
 /// Callback used by plugins to read a plugin-owned save chunk.
 ///
-pub type FluxReadSaveChunkFn = unsafe extern "C" fn(
+pub(crate) type FluxReadSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     chunk_id: FluxUtf8Slice,
     out_version: *mut u32,
@@ -221,76 +248,216 @@ pub type FluxReadSaveChunkFn = unsafe extern "C" fn(
     out_len: *mut usize,
 ) -> FluxStatus;
 
-/// Runtime host callback table passed to one typed plugin event handler.
+/// Runtime-facing host API passed to one typed plugin event handler.
 ///
-/// # Fields
-/// - `struct_size`: Size of this struct used for ABI validation.
-/// - `api_version`: ABI version expected by both host and plugin.
-/// - `context`: Opaque host-owned context passed back into callback functions.
-/// - `set_cell_material`: Optional callback for changing a world cell material.
-/// - `add_gas`: Optional callback for adding free gas with velocity.
-/// - `submit_overlay_frame`: Optional callback for sending an RGBA8 overlay frame to the host.
-/// - `submit_hud_block`: Optional callback for appending one HUD block line.
-/// - `write_save_chunk`: Optional callback for writing a plugin-owned save chunk.
-/// - `read_save_chunk`: Optional callback for reading a plugin-owned save chunk.
+/// Plugins should treat this struct as an opaque capability object and call its
+/// methods instead of reading the underlying callback table directly.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxRuntimeHost {
-    pub struct_size: u32,
-    pub api_version: u32,
-    pub context: *mut c_void,
-    pub set_cell_material: Option<FluxSetCellMaterialFn>,
-    pub add_gas: Option<FluxAddGasFn>,
-    pub submit_overlay_frame: Option<FluxSubmitOverlayFrameFn>,
-    pub submit_hud_block: Option<FluxSubmitHudBlockFn>,
-    pub write_save_chunk: Option<FluxWriteSaveChunkFn>,
-    pub read_save_chunk: Option<FluxReadSaveChunkFn>,
+    struct_size: u32,
+    api_version: u32,
+    context: *mut c_void,
+    set_cell_material_fn: Option<FluxSetCellMaterialFn>,
+    add_gas_fn: Option<FluxAddGasFn>,
+    submit_overlay_frame_fn: Option<FluxSubmitOverlayFrameFn>,
+    submit_hud_block_fn: Option<FluxSubmitHudBlockFn>,
+    write_save_chunk_fn: Option<FluxWriteSaveChunkFn>,
+    read_save_chunk_fn: Option<FluxReadSaveChunkFn>,
 }
 
 impl FluxRuntimeHost {
     /// Creates a runtime host callback table for a single event dispatch.
     ///
-    pub fn new(context: *mut c_void) -> Self {
+    pub(crate) fn new(context: *mut c_void) -> Self {
         Self {
             struct_size: std::mem::size_of::<Self>() as u32,
             api_version: ENGINE_PLUGIN_API_VERSION_VALUE,
             context,
-            set_cell_material: Some(crate::plugins::runtime_dll::set_cell_material_callback),
-            add_gas: Some(crate::plugins::runtime_dll::add_gas_callback),
-            submit_overlay_frame: Some(crate::plugins::runtime_dll::submit_overlay_frame_callback),
-            submit_hud_block: Some(crate::plugins::runtime_dll::submit_hud_block_callback),
-            write_save_chunk: Some(crate::plugins::runtime_dll::write_save_chunk_callback),
-            read_save_chunk: Some(crate::plugins::runtime_dll::read_save_chunk_callback),
+            set_cell_material_fn: Some(crate::plugins::runtime_dll::set_cell_material_callback),
+            add_gas_fn: Some(crate::plugins::runtime_dll::add_gas_callback),
+            submit_overlay_frame_fn: Some(
+                crate::plugins::runtime_dll::submit_overlay_frame_callback,
+            ),
+            submit_hud_block_fn: Some(crate::plugins::runtime_dll::submit_hud_block_callback),
+            write_save_chunk_fn: Some(crate::plugins::runtime_dll::write_save_chunk_callback),
+            read_save_chunk_fn: Some(crate::plugins::runtime_dll::read_save_chunk_callback),
         }
+    }
+
+    /// Returns `true` when this runtime host matches the expected ABI layout.
+    ///
+    pub fn is_compatible(&self) -> bool {
+        self.struct_size == std::mem::size_of::<Self>() as u32
+            && self.api_version == ENGINE_PLUGIN_API_VERSION_VALUE
+    }
+
+    /// Sets one editable world cell to the requested stable material id.
+    ///
+    pub fn set_cell_material(&mut self, cell: UVec2, material_id: &str) -> Result<(), FluxStatus> {
+        let Some(callback) = self.set_cell_material_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe {
+            callback(
+                self.context,
+                cell.x,
+                cell.y,
+                FluxUtf8Slice::from_str(material_id),
+            )
+        }
+        .into_result()
+    }
+
+    /// Adds free gas with the requested velocity and returns the amount the host accepted.
+    ///
+    pub fn add_gas(
+        &mut self,
+        cell: UVec2,
+        substance: &str,
+        amount: u32,
+        velocity: Vec2,
+    ) -> Result<u32, FluxStatus> {
+        let Some(callback) = self.add_gas_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        let mut added = 0u32;
+        unsafe {
+            callback(
+                self.context,
+                cell.x,
+                cell.y,
+                FluxUtf8Slice::from_str(substance),
+                amount,
+                velocity.x,
+                velocity.y,
+                &mut added,
+            )
+        }
+        .into_result()?;
+        Ok(added)
+    }
+
+    /// Submits one complete RGBA8 overlay frame for the active plugin overlay.
+    ///
+    pub fn submit_overlay_frame(
+        &mut self,
+        width: u32,
+        height: u32,
+        rgba8: &[u8],
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.submit_overlay_frame_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.context, width, height, rgba8.as_ptr(), rgba8.len()) }.into_result()
+    }
+
+    /// Appends one HUD block line under the plugin-specific runtime block title.
+    ///
+    pub fn submit_hud_block(&mut self, title: &str, line: &str) -> Result<(), FluxStatus> {
+        let Some(callback) = self.submit_hud_block_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe {
+            callback(
+                self.context,
+                FluxUtf8Slice::from_str(title),
+                FluxUtf8Slice::from_str(line),
+            )
+        }
+        .into_result()
+    }
+
+    /// Writes one plugin-owned save chunk into the host chunk store.
+    ///
+    pub fn write_save_chunk(
+        &mut self,
+        chunk_id: &str,
+        version: u32,
+        bytes: &[u8],
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.write_save_chunk_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe {
+            callback(
+                self.context,
+                FluxUtf8Slice::from_str(chunk_id),
+                version,
+                bytes.as_ptr(),
+                bytes.len(),
+            )
+        }
+        .into_result()
+    }
+
+    /// Reads one plugin-owned save chunk and returns its version plus payload bytes.
+    ///
+    pub fn read_save_chunk(
+        &mut self,
+        chunk_id: &str,
+    ) -> Result<Option<(u32, Vec<u8>)>, FluxStatus> {
+        let Some(callback) = self.read_save_chunk_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        let chunk_id = FluxUtf8Slice::from_str(chunk_id);
+        let mut version = 0u32;
+        let mut required_len = 0usize;
+        let status = unsafe {
+            callback(
+                self.context,
+                chunk_id,
+                &mut version,
+                std::ptr::null_mut(),
+                0,
+                &mut required_len,
+            )
+        };
+        if status.is_ok() {
+            return Ok(Some((version, Vec::new())));
+        }
+        if required_len == 0 {
+            return Ok(None);
+        }
+
+        let mut bytes = vec![0u8; required_len];
+        let mut actual_version = 0u32;
+        let mut actual_len = 0usize;
+        unsafe {
+            callback(
+                self.context,
+                chunk_id,
+                &mut actual_version,
+                bytes.as_mut_ptr(),
+                bytes.len(),
+                &mut actual_len,
+            )
+        }
+        .into_result()?;
+        bytes.truncate(actual_len);
+        Ok(Some((actual_version, bytes)))
     }
 }
 
-/// Host callbacks and runtime paths exposed to one plugin instance.
+/// Creation-time host API exposed to one plugin instance.
 ///
-/// # Fields
-/// - `struct_size`: Size of this struct used for ABI validation.
-/// - `api_version`: ABI version expected by both host and plugin.
-/// - `plugin_root`: Absolute plugin package root visible to the runtime plugin.
-/// - `config_root`: Absolute plugin configuration directory visible to the runtime plugin.
-/// - `assets_root`: Absolute plugin asset directory visible to the runtime plugin.
-/// - `write_error`: Optional callback for reporting host-readable error messages.
-/// - `error_context`: Opaque host-owned context passed back into `write_error`.
+/// Plugins should use these methods for path discovery and startup error reporting.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxHostApi {
-    pub struct_size: u32,
-    pub api_version: u32,
-    pub plugin_root: FluxUtf8Slice,
-    pub config_root: FluxUtf8Slice,
-    pub assets_root: FluxUtf8Slice,
-    pub write_error: Option<FluxWriteErrorFn>,
-    pub error_context: *mut c_void,
+    struct_size: u32,
+    api_version: u32,
+    plugin_root: FluxUtf8Slice,
+    config_root: FluxUtf8Slice,
+    assets_root: FluxUtf8Slice,
+    write_error_fn: Option<FluxWriteErrorFn>,
+    error_context: *mut c_void,
 }
 
 impl FluxHostApi {
     /// Creates the stage-1 host API payload.
     ///
-    pub fn new(
+    pub(crate) fn new(
         plugin_root: FluxUtf8Slice,
         config_root: FluxUtf8Slice,
         assets_root: FluxUtf8Slice,
@@ -303,44 +470,68 @@ impl FluxHostApi {
             plugin_root,
             config_root,
             assets_root,
-            write_error,
+            write_error_fn: write_error,
             error_context,
         }
     }
+
+    /// Returns `true` when this host payload matches the expected ABI layout.
+    ///
+    pub fn is_compatible(&self) -> bool {
+        self.struct_size == std::mem::size_of::<Self>() as u32
+            && self.api_version == ENGINE_PLUGIN_API_VERSION_VALUE
+    }
+
+    /// Returns the absolute plugin package root visible to the runtime plugin.
+    ///
+    pub fn plugin_root(&self) -> Result<String, FluxStatus> {
+        self.plugin_root.try_to_string()
+    }
+
+    /// Returns the absolute plugin configuration directory visible to the runtime plugin.
+    ///
+    pub fn config_root(&self) -> Result<String, FluxStatus> {
+        self.config_root.try_to_string()
+    }
+
+    /// Returns the absolute plugin asset directory visible to the runtime plugin.
+    ///
+    pub fn assets_root(&self) -> Result<String, FluxStatus> {
+        self.assets_root.try_to_string()
+    }
+
+    /// Reports one human-readable startup error message back to the host.
+    ///
+    pub fn write_error(&self, message: &str) -> Result<(), FluxStatus> {
+        let Some(callback) = self.write_error_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.error_context, FluxUtf8Slice::from_str(message)) }.into_result()
+    }
 }
 
-/// Future-proof registrar payload passed into `flux_plugin_register`.
+/// Registration-time host API passed into `flux_plugin_register`.
 ///
-/// # Fields
-/// - `struct_size`: Size of this struct used for ABI validation.
-/// - `api_version`: ABI version expected by both host and plugin.
-/// - `register_gas_substance`: Optional callback for registering gas-capable substances.
-/// - `register_event_handler`: Optional callback for registering named event handlers.
-/// - `register_tool`: Optional callback for registering tool descriptors.
-/// - `register_overlay`: Optional callback for registering overlay descriptors.
-/// - `register_save_chunk`: Optional callback for registering save chunk descriptors.
-/// - `registration_context`: Opaque host-owned context passed back into registrar callbacks.
-/// - `reserved2`: Reserved pointer slot kept for forward-compatible ABI expansion.
-/// - `reserved3`: Reserved pointer slot kept for forward-compatible ABI expansion.
+/// Plugins should use these methods to declare event handlers and plugin-owned content.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxRegistrar {
-    pub struct_size: u32,
-    pub api_version: u32,
-    pub register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
-    pub register_event_handler: Option<FluxRegisterEventHandlerFn>,
-    pub register_tool: Option<FluxRegisterToolFn>,
-    pub register_overlay: Option<FluxRegisterOverlayFn>,
-    pub register_save_chunk: Option<FluxRegisterSaveChunkFn>,
-    pub registration_context: *mut c_void,
-    pub reserved2: *mut c_void,
-    pub reserved3: *mut c_void,
+    struct_size: u32,
+    api_version: u32,
+    register_gas_substance_fn: Option<FluxRegisterGasSubstanceFn>,
+    register_event_handler_fn: Option<FluxRegisterEventHandlerFn>,
+    register_tool_fn: Option<FluxRegisterToolFn>,
+    register_overlay_fn: Option<FluxRegisterOverlayFn>,
+    register_save_chunk_fn: Option<FluxRegisterSaveChunkFn>,
+    registration_context: *mut c_void,
+    reserved2: *mut c_void,
+    reserved3: *mut c_void,
 }
 
 impl FluxRegistrar {
     /// Creates the registrar payload used by `flux_plugin_register`.
     ///
-    pub fn new(
+    pub(crate) fn new(
         register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
         register_event_handler: Option<FluxRegisterEventHandlerFn>,
         register_tool: Option<FluxRegisterToolFn>,
@@ -351,15 +542,82 @@ impl FluxRegistrar {
         Self {
             struct_size: std::mem::size_of::<Self>() as u32,
             api_version: ENGINE_PLUGIN_API_VERSION_VALUE,
-            register_gas_substance,
-            register_event_handler,
-            register_tool,
-            register_overlay,
-            register_save_chunk,
+            register_gas_substance_fn: register_gas_substance,
+            register_event_handler_fn: register_event_handler,
+            register_tool_fn: register_tool,
+            register_overlay_fn: register_overlay,
+            register_save_chunk_fn: register_save_chunk,
             registration_context,
             reserved2: std::ptr::null_mut(),
             reserved3: std::ptr::null_mut(),
         }
+    }
+
+    /// Returns `true` when this registrar payload matches the expected ABI layout.
+    ///
+    pub fn is_compatible(&self) -> bool {
+        self.struct_size == std::mem::size_of::<Self>() as u32
+            && self.api_version == ENGINE_PLUGIN_API_VERSION_VALUE
+    }
+
+    /// Registers one gas-capable substance descriptor for this plugin.
+    ///
+    pub fn register_gas_substance(
+        &mut self,
+        descriptor: &FluxGasSubstanceDescriptor,
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.register_gas_substance_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.registration_context, descriptor) }.into_result()
+    }
+
+    /// Registers one named plugin event handler for the requested event kind.
+    ///
+    pub fn register_event_handler(
+        &mut self,
+        event_kind: FluxEventKind,
+        handler_name: &str,
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.register_event_handler_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        let descriptor =
+            FluxEventHandlerDescriptor::new(event_kind, FluxUtf8Slice::from_str(handler_name));
+        unsafe { callback(self.registration_context, &descriptor) }.into_result()
+    }
+
+    /// Registers one tool descriptor owned by this plugin.
+    ///
+    pub fn register_tool(&mut self, descriptor: &FluxToolDescriptor) -> Result<(), FluxStatus> {
+        let Some(callback) = self.register_tool_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.registration_context, descriptor) }.into_result()
+    }
+
+    /// Registers one overlay descriptor owned by this plugin.
+    ///
+    pub fn register_overlay(
+        &mut self,
+        descriptor: &FluxOverlayDescriptor,
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.register_overlay_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.registration_context, descriptor) }.into_result()
+    }
+
+    /// Registers one save-chunk descriptor owned by this plugin.
+    ///
+    pub fn register_save_chunk(
+        &mut self,
+        descriptor: &FluxSaveChunkDescriptor,
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.register_save_chunk_fn else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.registration_context, descriptor) }.into_result()
     }
 }
 

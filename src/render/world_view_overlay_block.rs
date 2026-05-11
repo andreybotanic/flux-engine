@@ -1,8 +1,8 @@
-pub fn update_overlay_mode(
+pub(crate) fn update_overlay_mode(
     input: Res<ButtonInput<KeyCode>>,
     mut overlay_mode: ResMut<OverlayMode>,
     runtime_overlays: Res<crate::plugins::PluginRuntimeRegistry>,
-    mut plugin_events: EventWriter<crate::plugins::PluginEvent>,
+    mut plugin_events: EventWriter<crate::plugins::PluginRuntimeEvent>,
     main_menu: Option<Res<crate::editor::MainMenuState>>,
 ) {
     if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
@@ -10,7 +10,7 @@ pub fn update_overlay_mode(
     }
     if input.just_pressed(KeyCode::F1) {
         *overlay_mode = OverlayMode::Main;
-        plugin_events.write(crate::plugins::PluginEvent::OverlayChanged {
+        plugin_events.write(crate::plugins::PluginRuntimeEvent::OverlayChanged {
             overlay_id: Some(crate::plugins::default_plugin::overlay_mode_content_id(
                 OverlayMode::Main,
             )),
@@ -18,7 +18,7 @@ pub fn update_overlay_mode(
     }
     if input.just_pressed(KeyCode::F2) {
         *overlay_mode = OverlayMode::Gas;
-        plugin_events.write(crate::plugins::PluginEvent::OverlayChanged {
+        plugin_events.write(crate::plugins::PluginRuntimeEvent::OverlayChanged {
             overlay_id: Some(crate::plugins::default_plugin::overlay_mode_content_id(
                 OverlayMode::Gas,
             )),
@@ -28,7 +28,7 @@ pub fn update_overlay_mode(
         return;
     };
     *overlay_mode = registered_overlay_mode(&id);
-    plugin_events.write(crate::plugins::PluginEvent::OverlayChanged {
+    plugin_events.write(crate::plugins::PluginRuntimeEvent::OverlayChanged {
         overlay_id: Some(id),
     });
 }

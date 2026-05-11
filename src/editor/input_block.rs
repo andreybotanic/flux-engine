@@ -37,7 +37,7 @@ fn handle_editor_mouse_input(
         ResMut<SelectionDragState>,
         ResMut<BrushDragState>,
         EventWriter<WorldCellChanged>,
-        EventWriter<PluginEvent>,
+        EventWriter<PluginRuntimeEvent>,
     ),
 ) {
     let (mouse_buttons, keyboard, window, camera_query) = input_state;
@@ -750,7 +750,7 @@ fn emit_plugin_mouse_cell_events(
     hovered_world_cell: Option<(Vec2, UVec2)>,
     is_over_ui: bool,
     selected_tool: Option<EditorTool>,
-    plugin_events: &mut EventWriter<PluginEvent>,
+    plugin_events: &mut EventWriter<PluginRuntimeEvent>,
 ) {
     let (Some(screen_position), Some((world_position, cell))) =
         (cursor_position, hovered_world_cell)
@@ -765,9 +765,18 @@ fn emit_plugin_mouse_cell_events(
     };
     let active_tool_id = active_tool_content_id(selected_tool);
     for (button, event_builder) in [
-        (MouseButton::Left, PluginEvent::MouseDownCell as fn(MouseCellEvent) -> PluginEvent),
-        (MouseButton::Right, PluginEvent::MouseDownCell as fn(MouseCellEvent) -> PluginEvent),
-        (MouseButton::Middle, PluginEvent::MouseDownCell as fn(MouseCellEvent) -> PluginEvent),
+        (
+            MouseButton::Left,
+            PluginRuntimeEvent::MouseDownCell as fn(MouseCellEvent) -> PluginRuntimeEvent,
+        ),
+        (
+            MouseButton::Right,
+            PluginRuntimeEvent::MouseDownCell as fn(MouseCellEvent) -> PluginRuntimeEvent,
+        ),
+        (
+            MouseButton::Middle,
+            PluginRuntimeEvent::MouseDownCell as fn(MouseCellEvent) -> PluginRuntimeEvent,
+        ),
     ] {
         if mouse_buttons.just_pressed(button) {
             plugin_events.write(event_builder(MouseCellEvent {
@@ -782,9 +791,18 @@ fn emit_plugin_mouse_cell_events(
         }
     }
     for (button, event_builder) in [
-        (MouseButton::Left, PluginEvent::MouseUpCell as fn(MouseCellEvent) -> PluginEvent),
-        (MouseButton::Right, PluginEvent::MouseUpCell as fn(MouseCellEvent) -> PluginEvent),
-        (MouseButton::Middle, PluginEvent::MouseUpCell as fn(MouseCellEvent) -> PluginEvent),
+        (
+            MouseButton::Left,
+            PluginRuntimeEvent::MouseUpCell as fn(MouseCellEvent) -> PluginRuntimeEvent,
+        ),
+        (
+            MouseButton::Right,
+            PluginRuntimeEvent::MouseUpCell as fn(MouseCellEvent) -> PluginRuntimeEvent,
+        ),
+        (
+            MouseButton::Middle,
+            PluginRuntimeEvent::MouseUpCell as fn(MouseCellEvent) -> PluginRuntimeEvent,
+        ),
     ] {
         if mouse_buttons.just_released(button) {
             plugin_events.write(event_builder(MouseCellEvent {
@@ -802,7 +820,7 @@ fn emit_plugin_mouse_cell_events(
         || mouse_buttons.pressed(MouseButton::Right)
         || mouse_buttons.pressed(MouseButton::Middle)
     {
-        plugin_events.write(PluginEvent::MouseMoveCell(MouseCellEvent {
+        plugin_events.write(PluginRuntimeEvent::MouseMoveCell(MouseCellEvent {
             button: None,
             cell,
             world_position,
@@ -814,14 +832,14 @@ fn emit_plugin_mouse_cell_events(
     }
 }
 
-fn mouse_button_to_plugin(button: MouseButton) -> MouseCellButton {
+fn mouse_button_to_plugin(button: MouseButton) -> PluginMouseButton {
     match button {
-        MouseButton::Left => MouseCellButton::Left,
-        MouseButton::Right => MouseCellButton::Right,
-        MouseButton::Middle => MouseCellButton::Middle,
-        MouseButton::Back => MouseCellButton::Other(3),
-        MouseButton::Forward => MouseCellButton::Other(4),
-        MouseButton::Other(value) => MouseCellButton::Other(value),
+        MouseButton::Left => PluginMouseButton::Left,
+        MouseButton::Right => PluginMouseButton::Right,
+        MouseButton::Middle => PluginMouseButton::Middle,
+        MouseButton::Back => PluginMouseButton::Other(3),
+        MouseButton::Forward => PluginMouseButton::Other(4),
+        MouseButton::Other(value) => PluginMouseButton::Other(value),
     }
 }
 
@@ -841,7 +859,7 @@ fn active_tool_content_id(selected_tool: Option<EditorTool>) -> Option<ContentId
 
 fn emit_plugin_keyboard_events(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut plugin_events: EventWriter<PluginEvent>,
+    mut plugin_events: EventWriter<PluginRuntimeEvent>,
 ) {
     let modifiers = InputModifiers {
         shift: keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight),
@@ -849,13 +867,13 @@ fn emit_plugin_keyboard_events(
         alt: keyboard.pressed(KeyCode::AltLeft) || keyboard.pressed(KeyCode::AltRight),
     };
     for key in keyboard.get_just_pressed() {
-        plugin_events.write(PluginEvent::KeyPressed {
+        plugin_events.write(PluginRuntimeEvent::KeyPressed {
             key: format!("{key:?}"),
             modifiers,
         });
     }
     for key in keyboard.get_just_released() {
-        plugin_events.write(PluginEvent::KeyReleased {
+        plugin_events.write(PluginRuntimeEvent::KeyReleased {
             key: format!("{key:?}"),
             modifiers,
         });

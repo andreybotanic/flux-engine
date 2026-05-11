@@ -57,9 +57,6 @@ pub unsafe extern "C" fn onRenderOverlay(
         Err(status) => return status,
     };
     plugin.counter = plugin.counter.wrapping_add(1);
-    let Some(submit_frame) = host.submit_overlay_frame else {
-        return FluxStatus::FAILED;
-    };
     let mut frame = vec![0u8; (OVERLAY_WIDTH as usize) * (OVERLAY_HEIGHT as usize) * 4];
     for y in 0..OVERLAY_HEIGHT {
         for x in 0..OVERLAY_WIDTH {
@@ -74,11 +71,8 @@ pub unsafe extern "C" fn onRenderOverlay(
             frame[index + 3] = (0.48_f32 * 255.0).round() as u8;
         }
     }
-    submit_frame(
-        host.context,
-        OVERLAY_WIDTH,
-        OVERLAY_HEIGHT,
-        frame.as_ptr(),
-        frame.len(),
-    )
+    match host.submit_overlay_frame(OVERLAY_WIDTH, OVERLAY_HEIGHT, &frame) {
+        Ok(_) => FluxStatus::OK,
+        Err(status) => status,
+    }
 }

@@ -49,20 +49,10 @@ pub unsafe extern "C" fn onSimulationPreCellGasStep(
         Err(status) => return status,
     };
     plugin.counter = plugin.counter.wrapping_add(1);
-    let Some(add_gas) = host.add_gas else {
-        return FluxStatus::FAILED;
-    };
-    let x = 50;
-    let y = 50;
-    let mut added = 0u32;
-    add_gas(
-        host.context,
-        x,
-        y,
-        FluxUtf8Slice::from_str("h2"),
-        20,
-        3.0,
-        0.0,
-        &mut added,
-    )
+    let cell = UVec2::new(50, 50);
+    let velocity = Vec2::new(3.0, 0.0);
+    match host.add_gas(cell, "h2", 20, velocity) {
+        Ok(_) => FluxStatus::OK,
+        Err(status) => status,
+    }
 }

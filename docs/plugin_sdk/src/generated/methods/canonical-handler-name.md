@@ -15,14 +15,14 @@ Returns the canonical handler name used in docs and demo plugins for one event k
 ## Signature
 
 ```rust
-fn canonical_handler_name (kind : PluginEventKind) -> & 'static str
+fn canonical_handler_name (kind : PluginEvent) -> & 'static str
 ```
 
 ## Arguments
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `kind` | [`PluginEventKind`](../enums/plugineventkind.md) | `kind` argument passed as `PluginEventKind`. |
+| `kind` | [`PluginEvent`](../enums/pluginevent.md) | `kind` argument passed as `PluginEvent`. |
 
 ## Return Value
 
@@ -33,7 +33,7 @@ fn canonical_handler_name (kind : PluginEventKind) -> & 'static str
 _Source: [`examples/methods/canonical-handler-name.md`](../../examples/methods/canonical-handler-name.md)_
 
 ```rust
-let name = canonical_handler_name(PluginEventKind::MouseDownCell);
+let name = canonical_handler_name(PluginEvent::MouseDownCell);
 let descriptor = FluxEventHandlerDescriptor::new(
     FluxEventKind::MouseDownCell,
     FluxUtf8Slice::from_str(name),

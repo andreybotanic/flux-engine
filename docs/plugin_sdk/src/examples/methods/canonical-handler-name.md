@@ -1,5 +1,5 @@
 ```rust
-let name = canonical_handler_name(PluginEventKind::MouseDownCell);
+let name = canonical_handler_name(PluginEvent::MouseDownCell);
 let descriptor = FluxEventHandlerDescriptor::new(
     FluxEventKind::MouseDownCell,
     FluxUtf8Slice::from_str(name),

@@ -22,7 +22,7 @@ pub struct MouseCellEvent
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `button` | Option < [`MouseCellButton`](../enums/mousecellbutton.md) > | Mouse button associated with the event, if the source event had one. |
+| `button` | Option < [`MouseButton`](../enums/mousebutton.md) > | Mouse button associated with the event, if the source event had one. |
 | `cell` | UVec2 | Target world-cell coordinates under the cursor. |
 | `world_position` | Vec2 | Cursor position in world-space coordinates. |
 | `screen_position` | Vec2 | Cursor position in screen-space coordinates. |

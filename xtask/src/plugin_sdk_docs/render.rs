@@ -161,13 +161,11 @@ fn render_method_page(contents: &mut String, item: &ApiItemDoc, links: &ItemLink
         render_argument_table(contents, item.group, &item.arguments, links);
     }
     contents.push_str("## Return Value\n\n");
-    contents.push_str(
-        &render_type_markdown(
-            item.return_value.as_deref().unwrap_or("()"),
-            item.group,
-            links,
-        ),
-    );
+    contents.push_str(&render_type_markdown(
+        item.return_value.as_deref().unwrap_or("()"),
+        item.group,
+        links,
+    ));
     contents.push_str("\n\n");
     render_extra_sections(contents, item);
     render_example(contents, item);

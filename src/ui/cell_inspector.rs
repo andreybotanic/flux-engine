@@ -10,7 +10,7 @@ use crate::{
     input::camera::MainCamera,
     plugins::{
         default_plugin::pipe_runtime::{PipeFlowVisualState, PipeGasField, PipeSimulationConfig},
-        ContentRegistry, PluginEvent, PluginHudBlockStore, PluginRuntimeRegistry,
+        ContentRegistry, PluginHudBlockStore, PluginRuntimeEvent, PluginRuntimeRegistry,
         RuntimeDllPluginRegistry, RuntimeHostContext,
     },
     save::WorldLoadState,
@@ -194,7 +194,7 @@ pub(crate) fn update_cell_inspector(
         plugin_context.hud_blocks = Some(&mut plugin_hud);
         plugin_runtime.dispatch_event(
             &plugin_registry,
-            &PluginEvent::BuildHudForCell { cell },
+            &PluginRuntimeEvent::BuildHudForCell { cell },
             &mut plugin_context,
         );
     }

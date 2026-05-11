@@ -1,6 +1,6 @@
 use std::ffi::c_void;
 
-use crate::plugins::{api::events::PluginEventKind, id::ENGINE_PLUGIN_API_VERSION_VALUE};
+use crate::plugins::{api::events::PluginEvent, id::ENGINE_PLUGIN_API_VERSION_VALUE};
 
 use super::{FluxPluginHandle, FluxRuntimeHost, FluxStatus, FluxUtf8Slice};
 
@@ -96,57 +96,57 @@ impl FluxEventKind {
         })
     }
 
-    fn from_engine(kind: PluginEventKind) -> Self {
+    fn from_engine(kind: PluginEvent) -> Self {
         match kind {
-            PluginEventKind::WorldCreated => Self::WorldCreated,
-            PluginEventKind::WorldLoaded => Self::WorldLoaded,
-            PluginEventKind::WorldBeforeSave => Self::WorldBeforeSave,
-            PluginEventKind::WorldAfterSave => Self::WorldAfterSave,
-            PluginEventKind::WorldUnloaded => Self::WorldUnloaded,
-            PluginEventKind::SimulationPreCellGasStep => Self::SimulationPreCellGasStep,
-            PluginEventKind::SimulationPostCellGasStep => Self::SimulationPostCellGasStep,
-            PluginEventKind::SimulationPausedChanged => Self::SimulationPausedChanged,
-            PluginEventKind::StructurePlaced => Self::StructurePlaced,
-            PluginEventKind::StructureRemoved => Self::StructureRemoved,
-            PluginEventKind::ToolSelected => Self::ToolSelected,
-            PluginEventKind::MouseDownCell => Self::MouseDownCell,
-            PluginEventKind::MouseMoveCell => Self::MouseMoveCell,
-            PluginEventKind::MouseUpCell => Self::MouseUpCell,
-            PluginEventKind::MouseEnterCell => Self::MouseEnterCell,
-            PluginEventKind::MouseLeaveCell => Self::MouseLeaveCell,
-            PluginEventKind::KeyPressed => Self::KeyPressed,
-            PluginEventKind::KeyReleased => Self::KeyReleased,
-            PluginEventKind::OverlayChanged => Self::OverlayChanged,
-            PluginEventKind::BuildHudForCell => Self::BuildHudForCell,
-            PluginEventKind::BuildPanel => Self::BuildPanel,
-            PluginEventKind::RenderOverlay => Self::RenderOverlay,
+            PluginEvent::WorldCreated => Self::WorldCreated,
+            PluginEvent::WorldLoaded => Self::WorldLoaded,
+            PluginEvent::WorldBeforeSave => Self::WorldBeforeSave,
+            PluginEvent::WorldAfterSave => Self::WorldAfterSave,
+            PluginEvent::WorldUnloaded => Self::WorldUnloaded,
+            PluginEvent::SimulationPreCellGasStep => Self::SimulationPreCellGasStep,
+            PluginEvent::SimulationPostCellGasStep => Self::SimulationPostCellGasStep,
+            PluginEvent::SimulationPausedChanged => Self::SimulationPausedChanged,
+            PluginEvent::StructurePlaced => Self::StructurePlaced,
+            PluginEvent::StructureRemoved => Self::StructureRemoved,
+            PluginEvent::ToolSelected => Self::ToolSelected,
+            PluginEvent::MouseDownCell => Self::MouseDownCell,
+            PluginEvent::MouseMoveCell => Self::MouseMoveCell,
+            PluginEvent::MouseUpCell => Self::MouseUpCell,
+            PluginEvent::MouseEnterCell => Self::MouseEnterCell,
+            PluginEvent::MouseLeaveCell => Self::MouseLeaveCell,
+            PluginEvent::KeyPressed => Self::KeyPressed,
+            PluginEvent::KeyReleased => Self::KeyReleased,
+            PluginEvent::OverlayChanged => Self::OverlayChanged,
+            PluginEvent::BuildHudForCell => Self::BuildHudForCell,
+            PluginEvent::BuildPanel => Self::BuildPanel,
+            PluginEvent::RenderOverlay => Self::RenderOverlay,
         }
     }
 
-    fn into_engine(self) -> PluginEventKind {
+    fn into_engine(self) -> PluginEvent {
         match self {
-            Self::WorldCreated => PluginEventKind::WorldCreated,
-            Self::WorldLoaded => PluginEventKind::WorldLoaded,
-            Self::WorldBeforeSave => PluginEventKind::WorldBeforeSave,
-            Self::WorldAfterSave => PluginEventKind::WorldAfterSave,
-            Self::WorldUnloaded => PluginEventKind::WorldUnloaded,
-            Self::SimulationPreCellGasStep => PluginEventKind::SimulationPreCellGasStep,
-            Self::SimulationPostCellGasStep => PluginEventKind::SimulationPostCellGasStep,
-            Self::SimulationPausedChanged => PluginEventKind::SimulationPausedChanged,
-            Self::StructurePlaced => PluginEventKind::StructurePlaced,
-            Self::StructureRemoved => PluginEventKind::StructureRemoved,
-            Self::ToolSelected => PluginEventKind::ToolSelected,
-            Self::MouseDownCell => PluginEventKind::MouseDownCell,
-            Self::MouseMoveCell => PluginEventKind::MouseMoveCell,
-            Self::MouseUpCell => PluginEventKind::MouseUpCell,
-            Self::MouseEnterCell => PluginEventKind::MouseEnterCell,
-            Self::MouseLeaveCell => PluginEventKind::MouseLeaveCell,
-            Self::KeyPressed => PluginEventKind::KeyPressed,
-            Self::KeyReleased => PluginEventKind::KeyReleased,
-            Self::OverlayChanged => PluginEventKind::OverlayChanged,
-            Self::BuildHudForCell => PluginEventKind::BuildHudForCell,
-            Self::BuildPanel => PluginEventKind::BuildPanel,
-            Self::RenderOverlay => PluginEventKind::RenderOverlay,
+            Self::WorldCreated => PluginEvent::WorldCreated,
+            Self::WorldLoaded => PluginEvent::WorldLoaded,
+            Self::WorldBeforeSave => PluginEvent::WorldBeforeSave,
+            Self::WorldAfterSave => PluginEvent::WorldAfterSave,
+            Self::WorldUnloaded => PluginEvent::WorldUnloaded,
+            Self::SimulationPreCellGasStep => PluginEvent::SimulationPreCellGasStep,
+            Self::SimulationPostCellGasStep => PluginEvent::SimulationPostCellGasStep,
+            Self::SimulationPausedChanged => PluginEvent::SimulationPausedChanged,
+            Self::StructurePlaced => PluginEvent::StructurePlaced,
+            Self::StructureRemoved => PluginEvent::StructureRemoved,
+            Self::ToolSelected => PluginEvent::ToolSelected,
+            Self::MouseDownCell => PluginEvent::MouseDownCell,
+            Self::MouseMoveCell => PluginEvent::MouseMoveCell,
+            Self::MouseUpCell => PluginEvent::MouseUpCell,
+            Self::MouseEnterCell => PluginEvent::MouseEnterCell,
+            Self::MouseLeaveCell => PluginEvent::MouseLeaveCell,
+            Self::KeyPressed => PluginEvent::KeyPressed,
+            Self::KeyReleased => PluginEvent::KeyReleased,
+            Self::OverlayChanged => PluginEvent::OverlayChanged,
+            Self::BuildHudForCell => PluginEvent::BuildHudForCell,
+            Self::BuildPanel => PluginEvent::BuildPanel,
+            Self::RenderOverlay => PluginEvent::RenderOverlay,
         }
     }
 
@@ -205,7 +205,7 @@ impl FluxEventHandlerDescriptor {
 
 /// Callback used by plugins to register one explicit event-handler binding.
 ///
-pub type FluxRegisterEventHandlerFn = unsafe extern "C" fn(
+pub(crate) type FluxRegisterEventHandlerFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxEventHandlerDescriptor,
 ) -> FluxStatus;
@@ -225,7 +225,7 @@ pub struct FluxEmptyEventPayload {
 impl FluxEmptyEventPayload {
     /// Creates one empty event payload for ABI v4 event callbacks.
     ///
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             struct_size: std::mem::size_of::<Self>() as u32,
             api_version: ENGINE_PLUGIN_API_VERSION_VALUE,
@@ -573,19 +573,19 @@ pub type FluxOnRenderOverlayFn = unsafe extern "C" fn(
 
 /// Returns the stable ABI numeric tag for one engine-side plugin event kind.
 ///
-pub fn event_kind_to_abi(kind: PluginEventKind) -> u32 {
+pub fn event_kind_to_abi(kind: PluginEvent) -> u32 {
     FluxEventKind::from_engine(kind).as_raw()
 }
 
 /// Converts one stable ABI numeric tag back into the engine-side event kind.
 ///
-pub fn event_kind_from_abi(value: u32) -> Option<PluginEventKind> {
+pub fn event_kind_from_abi(value: u32) -> Option<PluginEvent> {
     Some(FluxEventKind::from_raw(value)?.into_engine())
 }
 
 /// Returns the canonical handler name used in docs and demo plugins for one event kind.
 ///
-pub fn canonical_handler_name(kind: PluginEventKind) -> &'static str {
+pub fn canonical_handler_name(kind: PluginEvent) -> &'static str {
     FluxEventKind::from_engine(kind).canonical_handler_name()
 }
 
@@ -599,10 +599,10 @@ mod tests {
 
         assert_eq!(kind.as_raw(), 16);
         assert_eq!(FluxEventKind::from_raw(16), Some(kind));
-        assert_eq!(event_kind_to_abi(PluginEventKind::KeyPressed), 16);
-        assert_eq!(event_kind_from_abi(16), Some(PluginEventKind::KeyPressed));
+        assert_eq!(event_kind_to_abi(PluginEvent::KeyPressed), 16);
+        assert_eq!(event_kind_from_abi(16), Some(PluginEvent::KeyPressed));
         assert_eq!(
-            canonical_handler_name(PluginEventKind::KeyPressed),
+            canonical_handler_name(PluginEvent::KeyPressed),
             "onKeyPressed"
         );
     }

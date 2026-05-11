@@ -5,8 +5,8 @@ use crate::{
     debug::{DebugGasMetrics, DebugMode, DebugOverlaySettings},
     input::camera::MainCamera,
     plugins::{
-        ContentId, InputModifiers, MouseCellButton, MouseCellEvent, PluginEvent, PluginId,
-        RuntimeHostContext, SaveChunkStore,
+        ContentId, InputModifiers, MouseButton as PluginMouseButton, MouseCellEvent, PluginId,
+        PluginRuntimeEvent, RuntimeHostContext, SaveChunkStore,
     },
     render::{GasVisualSettings, OverlayMode},
     save::{

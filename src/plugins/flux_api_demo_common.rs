@@ -1,5 +1,7 @@
 use std::ffi::c_void;
 
+use bevy_math::{UVec2, Vec2};
+
 /// ABI version used by the v4 demo plugins.
 pub const ENGINE_PLUGIN_API_VERSION: u32 = 4;
 
@@ -25,6 +27,20 @@ impl FluxUtf8Slice {
             len: value.len(),
         }
     }
+
+    /// Copies this ABI UTF-8 slice into an owned Rust string.
+    pub fn try_to_string(self) -> Result<String, FluxStatus> {
+        if self.len == 0 {
+            return Ok(String::new());
+        }
+        if self.ptr.is_null() {
+            return Err(FluxStatus::INVALID_ARGUMENT);
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(self.ptr, self.len) };
+        std::str::from_utf8(bytes)
+            .map(str::to_string)
+            .map_err(|_| FluxStatus::INVALID_ARGUMENT)
+    }
 }
 
 #[repr(transparent)]
@@ -39,6 +55,16 @@ impl FluxStatus {
     pub const INVALID_ARGUMENT: Self = Self(1);
     /// Generic callback failure result.
     pub const FAILED: Self = Self(2);
+
+    /// Returns `true` when the ABI call succeeded.
+    pub fn is_ok(self) -> bool {
+        self == Self::OK
+    }
+
+    /// Converts the raw ABI status into a Rust result.
+    pub fn into_result(self) -> Result<(), Self> {
+        if self.is_ok() { Ok(()) } else { Err(self) }
+    }
 }
 
 /// Host callback used by plugins to report a textual error.
@@ -56,6 +82,22 @@ pub struct FluxHostApi {
     pub assets_root: FluxUtf8Slice,
     pub write_error: Option<FluxWriteErrorFn>,
     pub error_context: *mut c_void,
+}
+
+impl FluxHostApi {
+    /// Returns `true` when the host payload matches the expected ABI layout.
+    pub fn is_compatible(&self) -> bool {
+        self.struct_size == std::mem::size_of::<FluxHostApi>() as u32
+            && self.api_version == ENGINE_PLUGIN_API_VERSION
+    }
+
+    /// Reports one human-readable startup error back to the engine.
+    pub fn write_error(&self, message: &str) -> Result<(), FluxStatus> {
+        let Some(callback) = self.write_error else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.error_context, FluxUtf8Slice::from_str(message)) }.into_result()
+    }
 }
 
 #[repr(C)]
@@ -194,6 +236,69 @@ pub struct FluxRegistrar {
     pub registration_context: *mut c_void,
     pub reserved2: *mut c_void,
     pub reserved3: *mut c_void,
+}
+
+impl FluxRegistrar {
+    /// Returns `true` when the registrar payload matches the expected ABI layout.
+    pub fn is_compatible(&self) -> bool {
+        self.struct_size == std::mem::size_of::<FluxRegistrar>() as u32
+            && self.api_version == ENGINE_PLUGIN_API_VERSION
+    }
+
+    /// Registers one gas-capable substance descriptor.
+    pub fn register_gas_substance(
+        &mut self,
+        descriptor: &FluxGasSubstanceDescriptor,
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.register_gas_substance else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.registration_context, descriptor) }.into_result()
+    }
+
+    /// Registers one event handler binding by event kind and export name.
+    pub fn register_event_handler(
+        &mut self,
+        event_kind: FluxEventKind,
+        handler_name: &str,
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.register_event_handler else {
+            return Err(FluxStatus::FAILED);
+        };
+        let descriptor =
+            FluxEventHandlerDescriptor::new(event_kind, FluxUtf8Slice::from_str(handler_name));
+        unsafe { callback(self.registration_context, &descriptor) }.into_result()
+    }
+
+    /// Registers one tool descriptor.
+    pub fn register_tool(&mut self, descriptor: &FluxToolDescriptor) -> Result<(), FluxStatus> {
+        let Some(callback) = self.register_tool else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.registration_context, descriptor) }.into_result()
+    }
+
+    /// Registers one overlay descriptor.
+    pub fn register_overlay(
+        &mut self,
+        descriptor: &FluxOverlayDescriptor,
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.register_overlay else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.registration_context, descriptor) }.into_result()
+    }
+
+    /// Registers one save chunk descriptor.
+    pub fn register_save_chunk(
+        &mut self,
+        descriptor: &FluxSaveChunkDescriptor,
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.register_save_chunk else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.registration_context, descriptor) }.into_result()
+    }
 }
 
 #[repr(C)]
@@ -341,6 +446,154 @@ pub struct FluxRuntimeHost {
     pub read_save_chunk: Option<FluxReadSaveChunkFn>,
 }
 
+impl FluxRuntimeHost {
+    /// Returns `true` when the runtime host payload matches the expected ABI layout.
+    pub fn is_compatible(&self) -> bool {
+        self.struct_size == std::mem::size_of::<FluxRuntimeHost>() as u32
+            && self.api_version == ENGINE_PLUGIN_API_VERSION
+    }
+
+    /// Sets one editable world cell to the requested material id.
+    pub fn set_cell_material(
+        &mut self,
+        cell: UVec2,
+        material_id: &str,
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.set_cell_material else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe {
+            callback(
+                self.context,
+                cell.x,
+                cell.y,
+                FluxUtf8Slice::from_str(material_id),
+            )
+        }
+        .into_result()
+    }
+
+    /// Adds free gas with velocity and returns the amount accepted by the host.
+    pub fn add_gas(
+        &mut self,
+        cell: UVec2,
+        substance: &str,
+        amount: u32,
+        velocity: Vec2,
+    ) -> Result<u32, FluxStatus> {
+        let Some(callback) = self.add_gas else {
+            return Err(FluxStatus::FAILED);
+        };
+        let mut added = 0u32;
+        unsafe {
+            callback(
+                self.context,
+                cell.x,
+                cell.y,
+                FluxUtf8Slice::from_str(substance),
+                amount,
+                velocity.x,
+                velocity.y,
+                &mut added,
+            )
+        }
+        .into_result()?;
+        Ok(added)
+    }
+
+    /// Submits one complete RGBA8 overlay frame.
+    pub fn submit_overlay_frame(
+        &mut self,
+        width: u32,
+        height: u32,
+        rgba8: &[u8],
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.submit_overlay_frame else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe { callback(self.context, width, height, rgba8.as_ptr(), rgba8.len()) }.into_result()
+    }
+
+    /// Appends one HUD block line.
+    pub fn submit_hud_block(&mut self, title: &str, line: &str) -> Result<(), FluxStatus> {
+        let Some(callback) = self.submit_hud_block else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe {
+            callback(
+                self.context,
+                FluxUtf8Slice::from_str(title),
+                FluxUtf8Slice::from_str(line),
+            )
+        }
+        .into_result()
+    }
+
+    /// Writes one plugin-owned save chunk.
+    pub fn write_save_chunk(
+        &mut self,
+        chunk_id: &str,
+        version: u32,
+        bytes: &[u8],
+    ) -> Result<(), FluxStatus> {
+        let Some(callback) = self.write_save_chunk else {
+            return Err(FluxStatus::FAILED);
+        };
+        unsafe {
+            callback(
+                self.context,
+                FluxUtf8Slice::from_str(chunk_id),
+                version,
+                bytes.as_ptr(),
+                bytes.len(),
+            )
+        }
+        .into_result()
+    }
+
+    /// Reads one plugin-owned save chunk and returns its version plus payload bytes.
+    pub fn read_save_chunk(&mut self, chunk_id: &str) -> Result<Option<(u32, Vec<u8>)>, FluxStatus> {
+        let Some(callback) = self.read_save_chunk else {
+            return Err(FluxStatus::FAILED);
+        };
+        let chunk_id = FluxUtf8Slice::from_str(chunk_id);
+        let mut version = 0u32;
+        let mut required_len = 0usize;
+        let status = unsafe {
+            callback(
+                self.context,
+                chunk_id,
+                &mut version,
+                std::ptr::null_mut(),
+                0,
+                &mut required_len,
+            )
+        };
+        if status.is_ok() {
+            return Ok(Some((version, Vec::new())));
+        }
+        if required_len == 0 {
+            return Ok(None);
+        }
+        let mut bytes = vec![0u8; required_len];
+        let mut actual_version = 0u32;
+        let mut actual_len = 0usize;
+        unsafe {
+            callback(
+                self.context,
+                chunk_id,
+                &mut actual_version,
+                bytes.as_mut_ptr(),
+                bytes.len(),
+                &mut actual_len,
+            )
+        }
+        .into_result()?;
+        bytes.truncate(actual_len);
+        Ok(Some((actual_version, bytes)))
+    }
+}
+
 /// Declarative event binding used by each small API demo plugin.
 pub struct DemoEventHandler {
     pub event_kind: FluxEventKind,
@@ -364,13 +617,11 @@ pub unsafe fn create(
         return FluxStatus::INVALID_ARGUMENT;
     }
     let host = &*host;
-    if host.struct_size != std::mem::size_of::<FluxHostApi>() as u32
-        || host.api_version != ENGINE_PLUGIN_API_VERSION
-    {
+    if !host.is_compatible() {
         return FluxStatus::FAILED;
     }
     *out_plugin = Box::into_raw(Box::new(FluxPluginHandle {
-        api_version: host.api_version,
+        api_version: ENGINE_PLUGIN_API_VERSION,
         dragging: false,
         last_x: 0,
         last_y: 0,
@@ -391,65 +642,44 @@ pub unsafe fn register(
     }
     let plugin = &mut *plugin;
     let registrar = &mut *registrar;
-    if plugin.api_version != ENGINE_PLUGIN_API_VERSION
-        || registrar.struct_size != std::mem::size_of::<FluxRegistrar>() as u32
-        || registrar.api_version != ENGINE_PLUGIN_API_VERSION
-    {
+    if plugin.api_version != ENGINE_PLUGIN_API_VERSION || !registrar.is_compatible() {
         return FluxStatus::FAILED;
     }
     for handler in spec.event_handlers {
-        let Some(register_event_handler) = registrar.register_event_handler else {
-            return FluxStatus::FAILED;
-        };
-        let descriptor = FluxEventHandlerDescriptor::new(
-            handler.event_kind,
-            FluxUtf8Slice::from_str(handler.handler_name),
-        );
-        let status = register_event_handler(registrar.registration_context, &descriptor);
-        if status != FluxStatus::OK {
+        if let Err(status) =
+            registrar.register_event_handler(handler.event_kind, handler.handler_name)
+        {
             return status;
         }
     }
     if let Some((id, label)) = spec.tool {
-        let Some(register_tool) = registrar.register_tool else {
-            return FluxStatus::FAILED;
-        };
         let descriptor = FluxToolDescriptor {
             id: FluxUtf8Slice::from_str(id),
             label: FluxUtf8Slice::from_str(label),
             icon_path: FluxUtf8Slice::from_str("assets/placeholder.txt"),
             silhouette_path: FluxUtf8Slice::from_str(""),
         };
-        let status = register_tool(registrar.registration_context, &descriptor);
-        if status != FluxStatus::OK {
+        if let Err(status) = registrar.register_tool(&descriptor) {
             return status;
         }
     }
     if let Some((id, label, hotkey, render_policy)) = spec.overlay {
-        let Some(register_overlay) = registrar.register_overlay else {
-            return FluxStatus::FAILED;
-        };
         let descriptor = FluxOverlayDescriptor {
             id: FluxUtf8Slice::from_str(id),
             label: FluxUtf8Slice::from_str(label),
             hotkey: FluxUtf8Slice::from_str(hotkey),
             render_policy,
         };
-        let status = register_overlay(registrar.registration_context, &descriptor);
-        if status != FluxStatus::OK {
+        if let Err(status) = registrar.register_overlay(&descriptor) {
             return status;
         }
     }
     if let Some((id, version)) = spec.save_chunk {
-        let Some(register_save_chunk) = registrar.register_save_chunk else {
-            return FluxStatus::FAILED;
-        };
         let descriptor = FluxSaveChunkDescriptor {
             id: FluxUtf8Slice::from_str(id),
             version,
         };
-        let status = register_save_chunk(registrar.registration_context, &descriptor);
-        if status != FluxStatus::OK {
+        if let Err(status) = registrar.register_save_chunk(&descriptor) {
             return status;
         }
     }
@@ -478,7 +708,7 @@ pub unsafe fn validate_event_call<'a, T>(
     let header = &*(event as *const T).cast::<FluxEventHeader>();
     if plugin.api_version != ENGINE_PLUGIN_API_VERSION
         || header.api_version != ENGINE_PLUGIN_API_VERSION
-        || host.api_version != ENGINE_PLUGIN_API_VERSION
+        || !host.is_compatible()
     {
         return Err(FluxStatus::FAILED);
     }

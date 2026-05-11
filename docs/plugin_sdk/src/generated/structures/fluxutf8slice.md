@@ -28,4 +28,5 @@ pub struct FluxUtf8Slice
 ## Methods
 
 - [`FluxUtf8Slice::from_str`](../methods/fluxutf8slice-from-str.md)
+- [`FluxUtf8Slice::try_to_string`](../methods/fluxutf8slice-try-to-string.md)
 

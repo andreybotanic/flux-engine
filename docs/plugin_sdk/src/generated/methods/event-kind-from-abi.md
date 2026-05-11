@@ -15,7 +15,7 @@ Converts one stable ABI numeric tag back into the engine-side event kind.
 ## Signature
 
 ```rust
-fn event_kind_from_abi (value : u32) -> Option < PluginEventKind >
+fn event_kind_from_abi (value : u32) -> Option < PluginEvent >
 ```
 
 ## Arguments
@@ -26,7 +26,7 @@ fn event_kind_from_abi (value : u32) -> Option < PluginEventKind >
 
 ## Return Value
 
-Option < [`PluginEventKind`](../enums/plugineventkind.md) >
+Option < [`PluginEvent`](../enums/pluginevent.md) >
 
 ## SDK Example
 
@@ -35,6 +35,6 @@ _Source: [`examples/methods/event-kind-from-abi.md`](../../examples/methods/even
 ```rust
 let engine_kind = event_kind_from_abi(FluxEventKind::BuildPanel.as_raw())
     .expect("known ABI event tag");
-assert_eq!(engine_kind, PluginEventKind::BuildPanel);
+assert_eq!(engine_kind, PluginEvent::BuildPanel);
 ```
 

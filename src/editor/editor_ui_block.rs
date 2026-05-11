@@ -101,7 +101,7 @@ fn handle_editor_ui_actions(
     )>,
     mut selection_drag: ResMut<SelectionDragState>,
     mut brush_drag: ResMut<BrushDragState>,
-    mut plugin_events: EventWriter<PluginEvent>,
+    mut plugin_events: EventWriter<PluginRuntimeEvent>,
 ) {
     let mut unfocus_inputs = || {
         let mut gas_input = input_set.p0();
@@ -124,7 +124,7 @@ fn handle_editor_ui_actions(
         match *action {
             EditorUiAction::SelectTool(next_tool) => {
                 active_tool.selected = Some(next_tool);
-                plugin_events.write(PluginEvent::ToolSelected {
+                plugin_events.write(PluginRuntimeEvent::ToolSelected {
                     tool_id: active_tool_content_id(Some(next_tool)),
                 });
                 structure_edit.selected_cell = None;
@@ -140,7 +140,7 @@ fn handle_editor_ui_actions(
                 unfocus_inputs();
                 pipe_settings.selected = next_pipe_tool;
                 active_tool.selected = Some(EditorTool::Gases);
-                plugin_events.write(PluginEvent::ToolSelected {
+                plugin_events.write(PluginRuntimeEvent::ToolSelected {
                     tool_id: active_tool_content_id(Some(EditorTool::Gases)),
                 });
                 structure_edit.selected_cell = None;

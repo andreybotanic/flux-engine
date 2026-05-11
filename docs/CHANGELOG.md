@@ -1,6 +1,8 @@
 ﻿# Changelog
 
 ## 2026-05-11
+- Plugin SDK очищен от двойственной world-ветки: публичная reference-документация больше не показывает `WorldApi`/`WorldApiMut`, а runtime DLL API теперь документируется через wrapper-методы `FluxHostApi`, `FluxRegistrar` и `FluxRuntimeHost` вместо raw callback fields и typedef aliases.
+- Публичные plugin events переименованы в более прямые `PluginEvent` и `MouseButton`, а ergonomic wrapper-методы `FluxRuntimeHost::set_cell_material` и `FluxRuntimeHost::add_gas` теперь принимают `UVec2 cell` и `Vec2 velocity` вместо разрозненных координат и компонент скорости.
 - Plugin SDK reference расширен и ужесточён: generator теперь подтягивает allowlisted SDK-типы из `src/world/*`, `src/config/*` и `src/render/world_view.rs`, требует явные описания для всех публичных SDK-полей и enum-вариантов, а также валится при отсутствии external example-snippet.
 - Все `SDK Example` для Plugin SDK вынесены из Rustdoc в `docs/plugin_sdk/src/examples/{methods,events,constants}/`; generated pages теперь встраивают эти snippets, ссылаются на них напрямую и больше не показывают internal helper aliases `FluxOn*Fn`.
 - Перестроена generated-навигация Plugin SDK: API reference теперь сгруппирован по `Structures`, `Enums`, `Constants`, `Methods` и `Events`, а вторым уровнем меню идут конкретные структуры, enum-ы, константы, методы и события с отдельными страницами.

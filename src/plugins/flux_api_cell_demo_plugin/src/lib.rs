@@ -66,7 +66,7 @@ pub unsafe extern "C" fn onMouseDownCell(
     plugin.dragging = true;
     plugin.last_x = event.cell_x;
     plugin.last_y = event.cell_y;
-    paint_cell(host, event.cell_x, event.cell_y)
+    paint_cell(host, UVec2::new(event.cell_x, event.cell_y))
 }
 
 #[no_mangle]
@@ -84,10 +84,8 @@ pub unsafe extern "C" fn onMouseMoveCell(
     }
     let status = paint_line(
         host,
-        plugin.last_x,
-        plugin.last_y,
-        event.cell_x,
-        event.cell_y,
+        UVec2::new(plugin.last_x, plugin.last_y),
+        UVec2::new(event.cell_x, event.cell_y),
     );
     if status != FluxStatus::OK {
         return status;
@@ -116,43 +114,30 @@ pub unsafe extern "C" fn onMouseUpCell(
     }
     paint_line(
         host,
-        plugin.last_x,
-        plugin.last_y,
-        event.cell_x,
-        event.cell_y,
+        UVec2::new(plugin.last_x, plugin.last_y),
+        UVec2::new(event.cell_x, event.cell_y),
     )
 }
 
-unsafe fn paint_cell(host: &mut FluxRuntimeHost, x: u32, y: u32) -> FluxStatus {
-    let Some(set_cell_material) = host.set_cell_material else {
-        return FluxStatus::FAILED;
-    };
-    set_cell_material(
-        host.context,
-        x,
-        y,
-        FluxUtf8Slice::from_str("flux.default.cell.metal"),
-    )
+unsafe fn paint_cell(host: &mut FluxRuntimeHost, cell: UVec2) -> FluxStatus {
+    match host.set_cell_material(cell, "flux.default.cell.metal") {
+        Ok(_) => FluxStatus::OK,
+        Err(status) => status,
+    }
 }
 
-unsafe fn paint_line(
-    host: &mut FluxRuntimeHost,
-    from_x: u32,
-    from_y: u32,
-    to_x: u32,
-    to_y: u32,
-) -> FluxStatus {
-    let mut x0 = from_x as i32;
-    let mut y0 = from_y as i32;
-    let x1 = to_x as i32;
-    let y1 = to_y as i32;
+unsafe fn paint_line(host: &mut FluxRuntimeHost, from: UVec2, to: UVec2) -> FluxStatus {
+    let mut x0 = from.x as i32;
+    let mut y0 = from.y as i32;
+    let x1 = to.x as i32;
+    let y1 = to.y as i32;
     let dx = (x1 - x0).abs();
     let sx = if x0 < x1 { 1 } else { -1 };
     let dy = -(y1 - y0).abs();
     let sy = if y0 < y1 { 1 } else { -1 };
     let mut err = dx + dy;
     loop {
-        let status = paint_cell(host, x0 as u32, y0 as u32);
+        let status = paint_cell(host, UVec2::new(x0 as u32, y0 as u32));
         if status != FluxStatus::OK {
             return status;
         }

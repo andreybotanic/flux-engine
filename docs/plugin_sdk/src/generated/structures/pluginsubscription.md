@@ -23,5 +23,5 @@ pub struct PluginSubscription
 | Field | Type | Description |
 | --- | --- | --- |
 | `plugin_id` | [`PluginId`](../structures/pluginid.md) | Plugin that subscribed to the runtime event. |
-| `event_kind` | [`PluginEventKind`](../enums/plugineventkind.md) | Event category the plugin asked to receive. |
+| `event_kind` | [`PluginEvent`](../enums/pluginevent.md) | Event category the plugin asked to receive. |
 

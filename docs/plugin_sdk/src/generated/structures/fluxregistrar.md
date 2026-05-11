@@ -10,7 +10,9 @@ Source: **ABI v4** (`src/plugins/abi.rs`). Generated group: **Structures**.
 
 ## Description
 
-Future-proof registrar payload passed into `flux_plugin_register`.
+Registration-time host API passed into `flux_plugin_register`.
+
+Plugins should use these methods to declare event handlers and plugin-owned content.
 
 ## Declaration
 
@@ -18,22 +20,12 @@ Future-proof registrar payload passed into `flux_plugin_register`.
 pub struct FluxRegistrar
 ```
 
-## Fields
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `struct_size` | u32 | Size of this struct used for ABI validation. |
-| `api_version` | u32 | ABI version expected by both host and plugin. |
-| `register_gas_substance` | Option < [`FluxRegisterGasSubstanceFn`](../methods/fluxregistergassubstancefn.md) > | Optional callback for registering gas-capable substances. |
-| `register_event_handler` | Option < [`FluxRegisterEventHandlerFn`](../methods/fluxregistereventhandlerfn.md) > | Optional callback for registering named event handlers. |
-| `register_tool` | Option < [`FluxRegisterToolFn`](../methods/fluxregistertoolfn.md) > | Optional callback for registering tool descriptors. |
-| `register_overlay` | Option < [`FluxRegisterOverlayFn`](../methods/fluxregisteroverlayfn.md) > | Optional callback for registering overlay descriptors. |
-| `register_save_chunk` | Option < [`FluxRegisterSaveChunkFn`](../methods/fluxregistersavechunkfn.md) > | Optional callback for registering save chunk descriptors. |
-| `registration_context` | * mut c_void | Opaque host-owned context passed back into registrar callbacks. |
-| `reserved2` | * mut c_void | Reserved pointer slot kept for forward-compatible ABI expansion. |
-| `reserved3` | * mut c_void | Reserved pointer slot kept for forward-compatible ABI expansion. |
-
 ## Methods
 
-- [`FluxRegistrar::new`](../methods/fluxregistrar-new.md)
+- [`FluxRegistrar::is_compatible`](../methods/fluxregistrar-is-compatible.md)
+- [`FluxRegistrar::register_event_handler`](../methods/fluxregistrar-register-event-handler.md)
+- [`FluxRegistrar::register_gas_substance`](../methods/fluxregistrar-register-gas-substance.md)
+- [`FluxRegistrar::register_overlay`](../methods/fluxregistrar-register-overlay.md)
+- [`FluxRegistrar::register_save_chunk`](../methods/fluxregistrar-register-save-chunk.md)
+- [`FluxRegistrar::register_tool`](../methods/fluxregistrar-register-tool.md)
 

@@ -40,11 +40,6 @@ pub(in crate::plugin_sdk_docs) const SDK_SOURCES: &[SdkSource] = &[
         SdkCategory::EngineSide,
     ),
     SdkSource::new(
-        "World API",
-        "src/plugins/api/world_api.rs",
-        SdkCategory::EngineSide,
-    ),
-    SdkSource::new(
         "Save API",
         "src/plugins/api/save_api.rs",
         SdkCategory::EngineSide,
@@ -309,7 +304,11 @@ impl ApiExampleDoc {
             ApiGroup::Constants => "constants",
             _ => return None,
         };
-        Some(PathBuf::from(EXAMPLES_DIR).join(directory).join(&item.file_name))
+        Some(
+            PathBuf::from(EXAMPLES_DIR)
+                .join(directory)
+                .join(&item.file_name),
+        )
     }
 }
 

@@ -15,14 +15,14 @@ Returns plugin ids subscribed to one event kind.
 ## Signature
 
 ```rust
-fn subscribers (& self , event_kind : PluginEventKind) -> Vec < PluginId >
+fn subscribers (& self , event_kind : PluginEvent) -> Vec < PluginId >
 ```
 
 ## Arguments
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `event_kind` | [`PluginEventKind`](../enums/plugineventkind.md) | `event_kind` argument passed as `PluginEventKind`. |
+| `event_kind` | [`PluginEvent`](../enums/pluginevent.md) | `event_kind` argument passed as `PluginEvent`. |
 
 ## Return Value
 
@@ -33,7 +33,7 @@ Vec < [`PluginId`](../structures/pluginid.md) >
 _Source: [`examples/methods/pluginruntimeregistry-subscribers.md`](../../examples/methods/pluginruntimeregistry-subscribers.md)_
 
 ```rust
-let subscribers = registry.subscribers(PluginEventKind::RenderOverlay);
+let subscribers = registry.subscribers(PluginEvent::RenderOverlay);
 assert!(subscribers.iter().all(|plugin_id| plugin_id.as_str().starts_with("flux.")));
 ```
 

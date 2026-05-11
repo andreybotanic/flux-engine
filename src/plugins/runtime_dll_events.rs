@@ -1,3 +1,4 @@
+use bevy::prelude::UVec2;
 use libloading::Library;
 
 use crate::{
@@ -17,7 +18,7 @@ use crate::{
             FluxToolSelectedEventPayload, FluxUtf8Slice,
         },
         api::events::{
-            InputModifiers, MouseCellButton, MouseCellEvent, PluginEvent, PluginEventKind,
+            InputModifiers, MouseButton, MouseCellEvent, PluginEvent, PluginRuntimeEvent,
         },
         diagnostics::PluginContractError,
     },
@@ -54,158 +55,158 @@ pub(crate) enum RuntimeEventHandler {
 
 pub(crate) fn load_event_handler(
     library: &Library,
-    event_kind: PluginEventKind,
+    event_kind: PluginEvent,
     handler_name: &str,
 ) -> Result<RuntimeEventHandler, PluginContractError> {
     Ok(match event_kind {
-        PluginEventKind::WorldCreated => {
+        PluginEvent::WorldCreated => {
             RuntimeEventHandler::WorldCreated(load_handler::<FluxOnWorldCreatedFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::WorldLoaded => {
+        PluginEvent::WorldLoaded => {
             RuntimeEventHandler::WorldLoaded(load_handler::<FluxOnWorldLoadedFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::WorldBeforeSave => {
+        PluginEvent::WorldBeforeSave => {
             RuntimeEventHandler::WorldBeforeSave(load_handler::<FluxOnWorldBeforeSaveFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::WorldAfterSave => {
+        PluginEvent::WorldAfterSave => {
             RuntimeEventHandler::WorldAfterSave(load_handler::<FluxOnWorldAfterSaveFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::WorldUnloaded => {
+        PluginEvent::WorldUnloaded => {
             RuntimeEventHandler::WorldUnloaded(load_handler::<FluxOnWorldUnloadedFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::SimulationPreCellGasStep => {
+        PluginEvent::SimulationPreCellGasStep => {
             RuntimeEventHandler::SimulationPreCellGasStep(load_handler::<
                 FluxOnSimulationPreCellGasStepFn,
             >(
                 library, handler_name, event_kind
             )?)
         }
-        PluginEventKind::SimulationPostCellGasStep => {
+        PluginEvent::SimulationPostCellGasStep => {
             RuntimeEventHandler::SimulationPostCellGasStep(load_handler::<
                 FluxOnSimulationPostCellGasStepFn,
             >(
                 library, handler_name, event_kind
             )?)
         }
-        PluginEventKind::SimulationPausedChanged => {
+        PluginEvent::SimulationPausedChanged => {
             RuntimeEventHandler::SimulationPausedChanged(load_handler::<
                 FluxOnSimulationPausedChangedFn,
             >(
                 library, handler_name, event_kind
             )?)
         }
-        PluginEventKind::StructurePlaced => {
+        PluginEvent::StructurePlaced => {
             RuntimeEventHandler::StructurePlaced(load_handler::<FluxOnStructurePlacedFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::StructureRemoved => {
+        PluginEvent::StructureRemoved => {
             RuntimeEventHandler::StructureRemoved(load_handler::<FluxOnStructureRemovedFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::ToolSelected => {
+        PluginEvent::ToolSelected => {
             RuntimeEventHandler::ToolSelected(load_handler::<FluxOnToolSelectedFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::MouseDownCell => {
+        PluginEvent::MouseDownCell => {
             RuntimeEventHandler::MouseDownCell(load_handler::<FluxOnMouseDownCellFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::MouseMoveCell => {
+        PluginEvent::MouseMoveCell => {
             RuntimeEventHandler::MouseMoveCell(load_handler::<FluxOnMouseMoveCellFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::MouseUpCell => {
+        PluginEvent::MouseUpCell => {
             RuntimeEventHandler::MouseUpCell(load_handler::<FluxOnMouseUpCellFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::MouseEnterCell => {
+        PluginEvent::MouseEnterCell => {
             RuntimeEventHandler::MouseEnterCell(load_handler::<FluxOnMouseEnterCellFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::MouseLeaveCell => {
+        PluginEvent::MouseLeaveCell => {
             RuntimeEventHandler::MouseLeaveCell(load_handler::<FluxOnMouseLeaveCellFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::KeyPressed => {
+        PluginEvent::KeyPressed => {
             RuntimeEventHandler::KeyPressed(load_handler::<FluxOnKeyPressedFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::KeyReleased => {
+        PluginEvent::KeyReleased => {
             RuntimeEventHandler::KeyReleased(load_handler::<FluxOnKeyReleasedFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::OverlayChanged => {
+        PluginEvent::OverlayChanged => {
             RuntimeEventHandler::OverlayChanged(load_handler::<FluxOnOverlayChangedFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::BuildHudForCell => {
+        PluginEvent::BuildHudForCell => {
             RuntimeEventHandler::BuildHudForCell(load_handler::<FluxOnBuildHudForCellFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::BuildPanel => {
+        PluginEvent::BuildPanel => {
             RuntimeEventHandler::BuildPanel(load_handler::<FluxOnBuildPanelFn>(
                 library,
                 handler_name,
                 event_kind,
             )?)
         }
-        PluginEventKind::RenderOverlay => {
+        PluginEvent::RenderOverlay => {
             RuntimeEventHandler::RenderOverlay(load_handler::<FluxOnRenderOverlayFn>(
                 library,
                 handler_name,
@@ -218,118 +219,126 @@ pub(crate) fn load_event_handler(
 pub(super) fn dispatch_to_plugin(
     handle: *mut FluxPluginHandle,
     handler: &RuntimeEventHandler,
-    event: &PluginEvent,
+    event: &PluginRuntimeEvent,
     context: &mut RuntimeHostContext,
 ) {
     let mut host = FluxRuntimeHost::new((context as *mut RuntimeHostContext).cast());
     unsafe {
         match (handler, event) {
-            (RuntimeEventHandler::WorldCreated(handler), PluginEvent::WorldCreated) => {
+            (RuntimeEventHandler::WorldCreated(handler), PluginRuntimeEvent::WorldCreated) => {
                 let payload = FluxEmptyEventPayload::new();
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::WorldLoaded(handler), PluginEvent::WorldLoaded) => {
+            (RuntimeEventHandler::WorldLoaded(handler), PluginRuntimeEvent::WorldLoaded) => {
                 let payload = FluxEmptyEventPayload::new();
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::WorldBeforeSave(handler), PluginEvent::WorldBeforeSave) => {
+            (
+                RuntimeEventHandler::WorldBeforeSave(handler),
+                PluginRuntimeEvent::WorldBeforeSave,
+            ) => {
                 let payload = FluxEmptyEventPayload::new();
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::WorldAfterSave(handler), PluginEvent::WorldAfterSave) => {
+            (RuntimeEventHandler::WorldAfterSave(handler), PluginRuntimeEvent::WorldAfterSave) => {
                 let payload = FluxEmptyEventPayload::new();
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::WorldUnloaded(handler), PluginEvent::WorldUnloaded) => {
+            (RuntimeEventHandler::WorldUnloaded(handler), PluginRuntimeEvent::WorldUnloaded) => {
                 let payload = FluxEmptyEventPayload::new();
                 let _ = handler(handle, &payload, &mut host);
             }
             (
                 RuntimeEventHandler::SimulationPreCellGasStep(handler),
-                PluginEvent::SimulationPreCellGasStep,
+                PluginRuntimeEvent::SimulationPreCellGasStep,
             ) => {
                 let payload = FluxEmptyEventPayload::new();
                 let _ = handler(handle, &payload, &mut host);
             }
             (
                 RuntimeEventHandler::SimulationPostCellGasStep(handler),
-                PluginEvent::SimulationPostCellGasStep,
+                PluginRuntimeEvent::SimulationPostCellGasStep,
             ) => {
                 let payload = FluxEmptyEventPayload::new();
                 let _ = handler(handle, &payload, &mut host);
             }
             (
                 RuntimeEventHandler::SimulationPausedChanged(handler),
-                PluginEvent::SimulationPausedChanged { paused },
+                PluginRuntimeEvent::SimulationPausedChanged { paused },
             ) => {
                 let payload = build_paused_payload(*paused);
                 let _ = handler(handle, &payload, &mut host);
             }
             (
                 RuntimeEventHandler::StructurePlaced(handler),
-                PluginEvent::StructurePlaced(event),
+                PluginRuntimeEvent::StructurePlaced(event),
             ) => {
-                let payload = build_structure_payload(
-                    event.id,
-                    event.kind.as_str(),
-                    event.cell.x,
-                    event.cell.y,
-                );
+                let payload = build_structure_payload(event.id, event.kind.as_str(), event.cell);
                 let _ = handler(handle, &payload, &mut host);
             }
             (
                 RuntimeEventHandler::StructureRemoved(handler),
-                PluginEvent::StructureRemoved(event),
+                PluginRuntimeEvent::StructureRemoved(event),
             ) => {
-                let payload = build_structure_payload(
-                    event.id,
-                    event.kind.as_str(),
-                    event.cell.x,
-                    event.cell.y,
-                );
+                let payload = build_structure_payload(event.id, event.kind.as_str(), event.cell);
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::ToolSelected(handler), PluginEvent::ToolSelected { tool_id }) => {
+            (
+                RuntimeEventHandler::ToolSelected(handler),
+                PluginRuntimeEvent::ToolSelected { tool_id },
+            ) => {
                 let payload = build_tool_selected_payload(tool_id.as_ref().map(|id| id.as_str()));
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::MouseDownCell(handler), PluginEvent::MouseDownCell(mouse)) => {
+            (
+                RuntimeEventHandler::MouseDownCell(handler),
+                PluginRuntimeEvent::MouseDownCell(mouse),
+            ) => {
                 let payload = build_mouse_payload(mouse);
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::MouseMoveCell(handler), PluginEvent::MouseMoveCell(mouse)) => {
+            (
+                RuntimeEventHandler::MouseMoveCell(handler),
+                PluginRuntimeEvent::MouseMoveCell(mouse),
+            ) => {
                 let payload = build_mouse_payload(mouse);
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::MouseUpCell(handler), PluginEvent::MouseUpCell(mouse)) => {
+            (RuntimeEventHandler::MouseUpCell(handler), PluginRuntimeEvent::MouseUpCell(mouse)) => {
                 let payload = build_mouse_payload(mouse);
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::MouseEnterCell(handler), PluginEvent::MouseEnterCell(mouse)) => {
+            (
+                RuntimeEventHandler::MouseEnterCell(handler),
+                PluginRuntimeEvent::MouseEnterCell(mouse),
+            ) => {
                 let payload = build_mouse_payload(mouse);
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::MouseLeaveCell(handler), PluginEvent::MouseLeaveCell(mouse)) => {
+            (
+                RuntimeEventHandler::MouseLeaveCell(handler),
+                PluginRuntimeEvent::MouseLeaveCell(mouse),
+            ) => {
                 let payload = build_mouse_payload(mouse);
                 let _ = handler(handle, &payload, &mut host);
             }
             (
                 RuntimeEventHandler::KeyPressed(handler),
-                PluginEvent::KeyPressed { key, modifiers },
+                PluginRuntimeEvent::KeyPressed { key, modifiers },
             ) => {
                 let payload = build_key_payload(key, *modifiers);
                 let _ = handler(handle, &payload, &mut host);
             }
             (
                 RuntimeEventHandler::KeyReleased(handler),
-                PluginEvent::KeyReleased { key, modifiers },
+                PluginRuntimeEvent::KeyReleased { key, modifiers },
             ) => {
                 let payload = build_key_payload(key, *modifiers);
                 let _ = handler(handle, &payload, &mut host);
             }
             (
                 RuntimeEventHandler::OverlayChanged(handler),
-                PluginEvent::OverlayChanged { overlay_id },
+                PluginRuntimeEvent::OverlayChanged { overlay_id },
             ) => {
                 let payload =
                     build_overlay_changed_payload(overlay_id.as_ref().map(|id| id.as_str()));
@@ -337,18 +346,21 @@ pub(super) fn dispatch_to_plugin(
             }
             (
                 RuntimeEventHandler::BuildHudForCell(handler),
-                PluginEvent::BuildHudForCell { cell },
+                PluginRuntimeEvent::BuildHudForCell { cell },
             ) => {
-                let payload = build_hud_payload(cell.x, cell.y);
+                let payload = build_hud_payload(*cell);
                 let _ = handler(handle, &payload, &mut host);
             }
-            (RuntimeEventHandler::BuildPanel(handler), PluginEvent::BuildPanel { panel_id }) => {
+            (
+                RuntimeEventHandler::BuildPanel(handler),
+                PluginRuntimeEvent::BuildPanel { panel_id },
+            ) => {
                 let payload = build_panel_payload(panel_id.as_str());
                 let _ = handler(handle, &payload, &mut host);
             }
             (
                 RuntimeEventHandler::RenderOverlay(handler),
-                PluginEvent::RenderOverlay { overlay_id },
+                PluginRuntimeEvent::RenderOverlay { overlay_id },
             ) => {
                 let payload = build_render_overlay_payload(overlay_id.as_str());
                 let _ = handler(handle, &payload, &mut host);
@@ -369,16 +381,15 @@ fn build_paused_payload(paused: bool) -> FluxSimulationPausedChangedEvent {
 fn build_structure_payload(
     id: PlacedStructureId,
     structure_kind: &str,
-    cell_x: u32,
-    cell_y: u32,
+    cell: UVec2,
 ) -> FluxStructureEventPayload {
     FluxStructureEventPayload {
         struct_size: std::mem::size_of::<FluxStructureEventPayload>() as u32,
         api_version: crate::plugins::ENGINE_PLUGIN_API_VERSION_VALUE,
         structure_id: id.0,
         structure_kind: FluxUtf8Slice::from_str(structure_kind),
-        cell_x,
-        cell_y,
+        cell_x: cell.x,
+        cell_y: cell.y,
     }
 }
 
@@ -434,12 +445,12 @@ fn build_overlay_changed_payload(overlay_id: Option<&str>) -> FluxOverlayChanged
     }
 }
 
-fn build_hud_payload(cell_x: u32, cell_y: u32) -> FluxBuildHudForCellEventPayload {
+fn build_hud_payload(cell: UVec2) -> FluxBuildHudForCellEventPayload {
     FluxBuildHudForCellEventPayload {
         struct_size: std::mem::size_of::<FluxBuildHudForCellEventPayload>() as u32,
         api_version: crate::plugins::ENGINE_PLUGIN_API_VERSION_VALUE,
-        cell_x,
-        cell_y,
+        cell_x: cell.x,
+        cell_y: cell.y,
     }
 }
 
@@ -459,12 +470,12 @@ fn build_render_overlay_payload(overlay_id: &str) -> FluxRenderOverlayEventPaylo
     }
 }
 
-fn mouse_button_to_abi(button: MouseCellButton) -> u32 {
+fn mouse_button_to_abi(button: MouseButton) -> u32 {
     match button {
-        MouseCellButton::Left => 1,
-        MouseCellButton::Right => 2,
-        MouseCellButton::Middle => 3,
-        MouseCellButton::Other(value) => 1000 + value as u32,
+        MouseButton::Left => 1,
+        MouseButton::Right => 2,
+        MouseButton::Middle => 3,
+        MouseButton::Other(value) => 1000 + value as u32,
     }
 }
 
@@ -485,7 +496,7 @@ fn modifiers_to_abi(modifiers: InputModifiers) -> u32 {
 fn load_handler<T: Copy>(
     library: &Library,
     handler_name: &str,
-    event_kind: PluginEventKind,
+    event_kind: PluginEvent,
 ) -> Result<T, PluginContractError> {
     let export_name = format!("{handler_name}\0");
     unsafe {
@@ -506,7 +517,7 @@ mod tests {
     use super::{
         build_hud_payload, build_key_payload, build_mouse_payload, build_render_overlay_payload,
     };
-    use crate::plugins::api::events::{InputModifiers, MouseCellButton, MouseCellEvent};
+    use crate::plugins::api::events::{InputModifiers, MouseButton, MouseCellEvent};
     use bevy::prelude::*;
 
     #[test]
@@ -527,7 +538,7 @@ mod tests {
     #[test]
     fn mouse_payload_carries_cell_tool_and_button() {
         let payload = build_mouse_payload(&MouseCellEvent {
-            button: Some(MouseCellButton::Right),
+            button: Some(MouseButton::Right),
             cell: UVec2::new(11, 13),
             world_position: Vec2::new(1.5, 2.5),
             screen_position: Vec2::new(30.0, 40.0),
@@ -552,7 +563,7 @@ mod tests {
 
     #[test]
     fn build_hud_payload_contains_cell_coordinates() {
-        let payload = build_hud_payload(7, 9);
+        let payload = build_hud_payload(UVec2::new(7, 9));
 
         assert_eq!(payload.cell_x, 7);
         assert_eq!(payload.cell_y, 9);

@@ -4,7 +4,7 @@ use bevy::prelude::Resource;
 
 use crate::plugins::{
     api::{
-        events::PluginEventKind,
+        events::PluginEvent,
         render_api::OverlayRenderPolicy,
         ui_api::{PanelDescriptor, ToolDescriptor},
     },
@@ -23,7 +23,7 @@ const OVERLAY_HOTKEY_SLOTS: &[&str] = &[
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PluginSubscription {
     pub plugin_id: PluginId,
-    pub event_kind: PluginEventKind,
+    pub event_kind: PluginEvent,
 }
 
 /// Overlay descriptor registered through the plugin API.
@@ -66,7 +66,7 @@ pub struct SaveChunkDescriptor {
 /// - `save_chunks`: Registered plugin save chunk descriptors keyed by stable content id.
 #[derive(Resource, Clone, Debug, Default)]
 pub struct PluginRuntimeRegistry {
-    subscriptions: BTreeMap<PluginEventKind, BTreeSet<PluginId>>,
+    subscriptions: BTreeMap<PluginEvent, BTreeSet<PluginId>>,
     tools: BTreeMap<ContentId, ToolDescriptor>,
     panels: BTreeMap<ContentId, PanelDescriptor>,
     overlays: BTreeMap<ContentId, RuntimeOverlayDescriptor>,
@@ -76,7 +76,7 @@ pub struct PluginRuntimeRegistry {
 impl PluginRuntimeRegistry {
     /// Registers one plugin as a subscriber for the given event kind.
     ///
-    pub fn subscribe(&mut self, plugin_id: PluginId, event_kind: PluginEventKind) {
+    pub fn subscribe(&mut self, plugin_id: PluginId, event_kind: PluginEvent) {
         self.subscriptions
             .entry(event_kind)
             .or_default()
@@ -85,7 +85,7 @@ impl PluginRuntimeRegistry {
 
     /// Returns plugin ids subscribed to one event kind.
     ///
-    pub fn subscribers(&self, event_kind: PluginEventKind) -> Vec<PluginId> {
+    pub fn subscribers(&self, event_kind: PluginEvent) -> Vec<PluginId> {
         self.subscriptions
             .get(&event_kind)
             .map(|plugins| plugins.iter().cloned().collect())
@@ -194,7 +194,7 @@ fn next_overlay_hotkey(used_hotkeys: &BTreeSet<String>) -> Option<String> {
 mod tests {
     use super::{build_plugin_runtime_registry, PluginRuntimeRegistry};
     use crate::plugins::{
-        api::{events::PluginEventKind, render_api::OverlayRenderPolicy},
+        api::{events::PluginEvent, render_api::OverlayRenderPolicy},
         LoadedPluginMetadata, PluginId, PluginRuntimeRegistration, RuntimeOverlayDescriptor,
     };
 
@@ -202,16 +202,14 @@ mod tests {
     fn subscriptions_are_grouped_by_event_kind() {
         let plugin = PluginId::parse("flux.test").expect("plugin id");
         let mut registry = PluginRuntimeRegistry::default();
-        registry.subscribe(plugin.clone(), PluginEventKind::MouseDownCell);
-        registry.subscribe(plugin.clone(), PluginEventKind::MouseDownCell);
+        registry.subscribe(plugin.clone(), PluginEvent::MouseDownCell);
+        registry.subscribe(plugin.clone(), PluginEvent::MouseDownCell);
 
         assert_eq!(
-            registry.subscribers(PluginEventKind::MouseDownCell),
+            registry.subscribers(PluginEvent::MouseDownCell),
             vec![plugin]
         );
-        assert!(registry
-            .subscribers(PluginEventKind::MouseUpCell)
-            .is_empty());
+        assert!(registry.subscribers(PluginEvent::MouseUpCell).is_empty());
     }
 
     #[test]

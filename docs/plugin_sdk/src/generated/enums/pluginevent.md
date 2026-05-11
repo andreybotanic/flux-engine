@@ -10,7 +10,7 @@ Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Enums**.
 
 ## Description
 
-Runtime event payload sent through the Rust plugin API.
+Plugin-visible event category.
 
 ## Declaration
 
@@ -22,26 +22,26 @@ pub enum PluginEvent
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `WorldCreated` | none | World-lifecycle event with no additional payload. |
-| `WorldLoaded` | none | World-lifecycle event with no additional payload. |
-| `WorldBeforeSave` | none | Save-lifecycle event with no additional payload. |
-| `WorldAfterSave` | none | Save-lifecycle event with no additional payload. |
-| `WorldUnloaded` | none | World-lifecycle event with no additional payload. |
-| `SimulationPreCellGasStep` | none | Simulation tick event emitted before free-gas processing. |
-| `SimulationPostCellGasStep` | none | Simulation tick event emitted after free-gas processing. |
-| `SimulationPausedChanged` | paused: bool | Carries the new pause flag after a pause/resume transition. |
-| `StructurePlaced` | [`StructureEvent`](../structures/structureevent.md) | Carries the placed structure payload. |
-| `StructureRemoved` | [`StructureEvent`](../structures/structureevent.md) | Carries the removed structure payload. |
-| `ToolSelected` | tool_id: Option < [`ContentId`](../structures/contentid.md) > | Carries the newly selected tool id, if any. |
-| `MouseDownCell` | [`MouseCellEvent`](../structures/mousecellevent.md) | Carries the low-level mouse payload for a button press. |
-| `MouseMoveCell` | [`MouseCellEvent`](../structures/mousecellevent.md) | Carries the low-level mouse payload for cursor movement. |
-| `MouseUpCell` | [`MouseCellEvent`](../structures/mousecellevent.md) | Carries the low-level mouse payload for a button release. |
-| `MouseEnterCell` | [`MouseCellEvent`](../structures/mousecellevent.md) | Carries the low-level mouse payload for cell entry. |
-| `MouseLeaveCell` | [`MouseCellEvent`](../structures/mousecellevent.md) | Carries the low-level mouse payload for cell exit. |
-| `KeyPressed` | key: String, modifiers: [`InputModifiers`](../structures/inputmodifiers.md) | Carries the pressed key string and modifier snapshot. |
-| `KeyReleased` | key: String, modifiers: [`InputModifiers`](../structures/inputmodifiers.md) | Carries the released key string and modifier snapshot. |
-| `OverlayChanged` | overlay_id: Option < [`ContentId`](../structures/contentid.md) > | Carries the new overlay id, if the active overlay is plugin-owned. |
-| `BuildHudForCell` | cell: UVec2 | Carries the hovered world cell for HUD augmentation. |
-| `BuildPanel` | panel_id: [`ContentId`](../structures/contentid.md) | Carries the plugin-owned panel id being requested. |
-| `RenderOverlay` | overlay_id: [`ContentId`](../structures/contentid.md) | Carries the plugin-owned overlay id that should render a frame. |
+| `WorldCreated` | none | Fired after a new world is created. |
+| `WorldLoaded` | none | Fired after a save slot has been loaded. |
+| `WorldBeforeSave` | none | Fired synchronously before the current world is saved. |
+| `WorldAfterSave` | none | Fired after a save operation finishes. |
+| `WorldUnloaded` | none | Fired before the current world is unloaded. |
+| `SimulationPreCellGasStep` | none | Fired before the core free-gas simulation step. |
+| `SimulationPostCellGasStep` | none | Fired after the core free-gas simulation step. |
+| `SimulationPausedChanged` | none | Fired when the simulation pause state changes. |
+| `StructurePlaced` | none | Fired after a structure is placed. |
+| `StructureRemoved` | none | Fired after a structure is removed. |
+| `ToolSelected` | none | Fired when the active editor tool changes. |
+| `MouseDownCell` | none | Fired when a mouse button is pressed over a world cell. |
+| `MouseMoveCell` | none | Fired when the cursor moves over world cells. |
+| `MouseUpCell` | none | Fired when a mouse button is released over a world cell. |
+| `MouseEnterCell` | none | Fired when the cursor enters a world cell. |
+| `MouseLeaveCell` | none | Fired when the cursor leaves a world cell. |
+| `KeyPressed` | none | Fired when a key is pressed. |
+| `KeyReleased` | none | Fired when a key is released. |
+| `OverlayChanged` | none | Fired when the active overlay changes. |
+| `BuildHudForCell` | none | Fired when the HUD is built for the hovered cell. |
+| `BuildPanel` | none | Fired when a plugin-owned panel should be built. |
+| `RenderOverlay` | none | Fired when a plugin-controlled overlay should submit a frame. |
 

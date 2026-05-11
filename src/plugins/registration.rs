@@ -1,6 +1,6 @@
 use crate::plugins::{
     api::{
-        events::PluginEventKind,
+        events::PluginEvent,
         runtime::{RuntimeOverlayDescriptor, SaveChunkDescriptor},
         ui_api::ToolDescriptor,
     },
@@ -13,7 +13,7 @@ use crate::plugins::{
 /// Public fields of `PluginEventHandlerRegistration` are part of the engine-side plugin runtime model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PluginEventHandlerRegistration {
-    pub event_kind: PluginEventKind,
+    pub event_kind: PluginEvent,
     pub handler_name: String,
 }
 

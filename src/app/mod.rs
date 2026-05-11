@@ -122,7 +122,7 @@ pub fn run() {
             DEFAULT_PLUGIN_ASSET_SOURCE,
             AssetSourceBuilder::platform_default(&default_plugin_asset_path, None),
         )
-        .add_event::<crate::plugins::PluginEvent>()
+        .add_event::<crate::plugins::PluginRuntimeEvent>()
         .add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {

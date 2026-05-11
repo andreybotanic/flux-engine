@@ -10,7 +10,9 @@ Source: **ABI v4** (`src/plugins/abi.rs`). Generated group: **Structures**.
 
 ## Description
 
-Host callbacks and runtime paths exposed to one plugin instance.
+Creation-time host API exposed to one plugin instance.
+
+Plugins should use these methods for path discovery and startup error reporting.
 
 ## Declaration
 
@@ -18,19 +20,11 @@ Host callbacks and runtime paths exposed to one plugin instance.
 pub struct FluxHostApi
 ```
 
-## Fields
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `struct_size` | u32 | Size of this struct used for ABI validation. |
-| `api_version` | u32 | ABI version expected by both host and plugin. |
-| `plugin_root` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Absolute plugin package root visible to the runtime plugin. |
-| `config_root` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Absolute plugin configuration directory visible to the runtime plugin. |
-| `assets_root` | [`FluxUtf8Slice`](../structures/fluxutf8slice.md) | Absolute plugin asset directory visible to the runtime plugin. |
-| `write_error` | Option < [`FluxWriteErrorFn`](../methods/fluxwriteerrorfn.md) > | Optional callback for reporting host-readable error messages. |
-| `error_context` | * mut c_void | Opaque host-owned context passed back into `write_error`. |
-
 ## Methods
 
-- [`FluxHostApi::new`](../methods/fluxhostapi-new.md)
+- [`FluxHostApi::assets_root`](../methods/fluxhostapi-assets-root.md)
+- [`FluxHostApi::config_root`](../methods/fluxhostapi-config-root.md)
+- [`FluxHostApi::is_compatible`](../methods/fluxhostapi-is-compatible.md)
+- [`FluxHostApi::plugin_root`](../methods/fluxhostapi-plugin-root.md)
+- [`FluxHostApi::write_error`](../methods/fluxhostapi-write-error.md)
 
