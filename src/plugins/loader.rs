@@ -12,10 +12,17 @@ use zip::ZipArchive;
 
 use crate::plugins::{
     abi::{
-        FluxGasSubstanceDescriptor, FluxHostApi, FluxPluginApiVersionFn, FluxPluginCreateFn,
-        FluxPluginDestroyFn, FluxPluginHandle, FluxPluginRegisterFn, FluxRegistrar, FluxStatus,
-        FluxUtf8Slice, FLUX_PLUGIN_API_VERSION_EXPORT_NAME, FLUX_PLUGIN_CREATE_EXPORT_NAME,
+        FluxGasSubstanceDescriptor, FluxHostApi, FluxOverlayDescriptor, FluxPluginApiVersionFn,
+        FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginHandle, FluxPluginRegisterFn,
+        FluxRegistrar, FluxSaveChunkDescriptor, FluxStatus, FluxToolDescriptor, FluxUtf8Slice,
+        FLUX_PLUGIN_API_VERSION_EXPORT_NAME, FLUX_PLUGIN_CREATE_EXPORT_NAME,
         FLUX_PLUGIN_DESTROY_EXPORT_NAME, FLUX_PLUGIN_REGISTER_EXPORT_NAME,
+    },
+    api::{
+        events::PluginEventKind,
+        render_api::OverlayRenderPolicy,
+        runtime::{RuntimeOverlayDescriptor, SaveChunkDescriptor},
+        ui_api::ToolDescriptor,
     },
     diagnostics::PluginContractError,
     id::{PluginApiVersion, ENGINE_PLUGIN_API_VERSION},
@@ -26,7 +33,7 @@ use crate::plugins::{
         resolve_plugin_layout, validate_archive_entry_path, ExpandedPluginSource,
         PackagedPluginSource, PluginSourceFingerprint, MANIFEST_FILE_NAME,
     },
-    PluginId, SubstanceDefinition, SubstanceId, SubstanceRegistry,
+    ContentId, PluginId, SubstanceDefinition, SubstanceId, SubstanceRegistry,
 };
 
 /// Parsed packaged plugin candidate before DLL handshake validation.
@@ -217,7 +224,7 @@ pub fn validate_runtime_registration(
     manifest: &PluginManifest,
     registration: &PluginRuntimeRegistration,
 ) -> Result<(), PluginContractError> {
-    if !manifest.content && !registration.is_empty() {
+    if !manifest.content && !registration.gas_substances.is_empty() {
         return Err(PluginContractError::Abi(format!(
             "plugin '{}' has content = false but registered runtime content",
             manifest.id
@@ -462,6 +469,10 @@ fn validate_plugin_root(
         host_error_message.clear();
         let mut registrar = FluxRegistrar::new(
             Some(register_gas_substance_callback),
+            Some(register_event_subscription_callback),
+            Some(register_tool_callback),
+            Some(register_overlay_callback),
+            Some(register_save_chunk_callback),
             (&mut registration_collector as *mut PluginRegistrationCollector).cast::<c_void>(),
         );
         let register_status = register_fn(plugin_handle, &mut registrar);
@@ -518,6 +529,168 @@ unsafe extern "C" fn register_gas_substance_callback(
             FluxStatus::FAILED
         }
     }
+}
+
+unsafe extern "C" fn register_event_subscription_callback(
+    context: *mut c_void,
+    event_kind: u32,
+) -> FluxStatus {
+    if context.is_null() {
+        return FluxStatus::INVALID_ARGUMENT;
+    }
+
+    let collector = &mut *(context.cast::<PluginRegistrationCollector>());
+    match event_kind_from_abi(event_kind) {
+        Some(kind) => {
+            if !collector.registration.event_subscriptions.contains(&kind) {
+                collector.registration.event_subscriptions.push(kind);
+            }
+            FluxStatus::OK
+        }
+        None => {
+            collector.error_message = Some(format!("unknown plugin event kind {}", event_kind));
+            FluxStatus::FAILED
+        }
+    }
+}
+
+unsafe extern "C" fn register_tool_callback(
+    context: *mut c_void,
+    descriptor: *const FluxToolDescriptor,
+) -> FluxStatus {
+    if context.is_null() || descriptor.is_null() {
+        return FluxStatus::INVALID_ARGUMENT;
+    }
+
+    let collector = &mut *(context.cast::<PluginRegistrationCollector>());
+    match tool_descriptor_from_abi(&*descriptor) {
+        Ok(descriptor) => {
+            collector.registration.tools.push(descriptor);
+            FluxStatus::OK
+        }
+        Err(error) => {
+            collector.error_message = Some(error);
+            FluxStatus::FAILED
+        }
+    }
+}
+
+unsafe extern "C" fn register_overlay_callback(
+    context: *mut c_void,
+    descriptor: *const FluxOverlayDescriptor,
+) -> FluxStatus {
+    if context.is_null() || descriptor.is_null() {
+        return FluxStatus::INVALID_ARGUMENT;
+    }
+
+    let collector = &mut *(context.cast::<PluginRegistrationCollector>());
+    match overlay_descriptor_from_abi(&collector.plugin_id, &*descriptor) {
+        Ok(descriptor) => {
+            collector.registration.overlays.push(descriptor);
+            FluxStatus::OK
+        }
+        Err(error) => {
+            collector.error_message = Some(error);
+            FluxStatus::FAILED
+        }
+    }
+}
+
+unsafe extern "C" fn register_save_chunk_callback(
+    context: *mut c_void,
+    descriptor: *const FluxSaveChunkDescriptor,
+) -> FluxStatus {
+    if context.is_null() || descriptor.is_null() {
+        return FluxStatus::INVALID_ARGUMENT;
+    }
+
+    let collector = &mut *(context.cast::<PluginRegistrationCollector>());
+    match save_chunk_descriptor_from_abi(&collector.plugin_id, &*descriptor) {
+        Ok(descriptor) => {
+            collector.registration.save_chunks.push(descriptor);
+            FluxStatus::OK
+        }
+        Err(error) => {
+            collector.error_message = Some(error);
+            FluxStatus::FAILED
+        }
+    }
+}
+
+fn event_kind_from_abi(value: u32) -> Option<PluginEventKind> {
+    match value {
+        0 => Some(PluginEventKind::WorldCreated),
+        1 => Some(PluginEventKind::WorldLoaded),
+        2 => Some(PluginEventKind::WorldBeforeSave),
+        3 => Some(PluginEventKind::WorldAfterSave),
+        4 => Some(PluginEventKind::WorldUnloaded),
+        5 => Some(PluginEventKind::SimulationPreCellGasStep),
+        6 => Some(PluginEventKind::SimulationPostCellGasStep),
+        7 => Some(PluginEventKind::SimulationPausedChanged),
+        8 => Some(PluginEventKind::StructurePlaced),
+        9 => Some(PluginEventKind::StructureRemoved),
+        10 => Some(PluginEventKind::ToolSelected),
+        11 => Some(PluginEventKind::MouseDownCell),
+        12 => Some(PluginEventKind::MouseMoveCell),
+        13 => Some(PluginEventKind::MouseUpCell),
+        14 => Some(PluginEventKind::MouseEnterCell),
+        15 => Some(PluginEventKind::MouseLeaveCell),
+        16 => Some(PluginEventKind::KeyPressed),
+        17 => Some(PluginEventKind::KeyReleased),
+        18 => Some(PluginEventKind::OverlayChanged),
+        19 => Some(PluginEventKind::BuildHudForCell),
+        20 => Some(PluginEventKind::BuildPanel),
+        21 => Some(PluginEventKind::RenderOverlay),
+        _ => None,
+    }
+}
+
+unsafe fn tool_descriptor_from_abi(
+    descriptor: &FluxToolDescriptor,
+) -> Result<ToolDescriptor, String> {
+    let id = read_abi_utf8(descriptor.id, "tool id")?;
+    let label = read_abi_utf8(descriptor.label, "tool label")?;
+    let icon_path = read_abi_utf8(descriptor.icon_path, "tool icon path")?;
+    let silhouette_path = read_abi_utf8(descriptor.silhouette_path, "tool silhouette path")?;
+    Ok(ToolDescriptor {
+        id: ContentId::parse(&id)?,
+        label,
+        icon_path,
+        silhouette_path: (!silhouette_path.trim().is_empty()).then_some(silhouette_path),
+    })
+}
+
+unsafe fn overlay_descriptor_from_abi(
+    plugin_id: &PluginId,
+    descriptor: &FluxOverlayDescriptor,
+) -> Result<RuntimeOverlayDescriptor, String> {
+    let id = read_abi_utf8(descriptor.id, "overlay id")?;
+    let label = read_abi_utf8(descriptor.label, "overlay label")?;
+    let hotkey = read_abi_utf8(descriptor.hotkey, "overlay hotkey")?;
+    let render_policy = match descriptor.render_policy {
+        0 => OverlayRenderPolicy::CoreDefault,
+        1 => OverlayRenderPolicy::PluginControlled,
+        other => return Err(format!("unknown overlay render policy {}", other)),
+    };
+    Ok(RuntimeOverlayDescriptor {
+        id: ContentId::parse(&id)?,
+        plugin_id: plugin_id.clone(),
+        label,
+        hotkey: (!hotkey.trim().is_empty()).then_some(hotkey),
+        render_policy,
+    })
+}
+
+unsafe fn save_chunk_descriptor_from_abi(
+    plugin_id: &PluginId,
+    descriptor: &FluxSaveChunkDescriptor,
+) -> Result<SaveChunkDescriptor, String> {
+    let id = read_abi_utf8(descriptor.id, "save chunk id")?;
+    Ok(SaveChunkDescriptor {
+        id: ContentId::parse(&id)?,
+        plugin_id: plugin_id.clone(),
+        version: descriptor.version,
+    })
 }
 
 unsafe fn gas_substance_from_abi(
@@ -689,7 +862,7 @@ mod tests {
                 br#"id = "escape.test"
 display_name = "Escape"
 version = "1.0.0"
-api_version = 2
+api_version = 3
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"
@@ -711,7 +884,7 @@ content = false
             r#"id = "sample.plugin"
 display_name = "Sample"
 version = "1.0.0"
-api_version = 2
+api_version = 3
 dll = "bin/sample.dll"
 configs = "config"
 assets = "assets"
@@ -729,6 +902,7 @@ content = false
                 vec!["neon".to_string()],
             )
             .expect("substance")],
+            ..Default::default()
         };
 
         let error = validate_runtime_registration(&manifest, &registration)
@@ -742,7 +916,7 @@ content = false
             r#"id = "sample.plugin"
 display_name = "Sample"
 version = "1.0.0"
-api_version = 2
+api_version = 3
 dll = "bin/sample.dll"
 configs = "config"
 assets = "assets"
@@ -760,6 +934,7 @@ content = true
                 vec!["neon".to_string()],
             )
             .expect("substance")],
+            ..Default::default()
         };
 
         let error = validate_runtime_registration(&manifest, &registration)

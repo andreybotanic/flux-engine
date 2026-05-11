@@ -4,7 +4,7 @@ use crate::{
     config::GasRegistry,
     debug::{DebugGasMetrics, DebugMode, DebugOverlaySettings},
     input::camera::MainCamera,
-    plugins::PluginId,
+    plugins::{ContentId, InputModifiers, MouseCellButton, MouseCellEvent, PluginEvent, PluginId},
     render::{GasVisualSettings, OverlayMode},
     save::{
         apply_loaded_world_preset, create_save, delete_save, emit_full_world_changed, list_saves,
@@ -504,6 +504,7 @@ impl Plugin for EditorPlugin {
             .add_event::<MainMenuActionRequest>()
             .add_systems(Startup, (setup_editor_ui, setup_editor_overlays))
             .add_systems(Update, handle_escape_and_main_menu)
+            .add_systems(Update, emit_plugin_keyboard_events)
             .add_systems(Update, handle_editor_ui_actions)
             .add_systems(Update, refresh_editor_ui)
             .add_systems(

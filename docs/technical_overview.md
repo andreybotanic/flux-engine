@@ -493,3 +493,15 @@
 - Flow-пакеты меньше `5` частиц не рисуются вообще: для текущей модели это считается статистическим шумом, который только засоряет `F3`.
 - Пустые `F3` overlay-слоты труб теперь полностью скрываются; пустой контейнер не должен оставлять даже минимальную точку в клетке.
 - Статичный квадрат газа для bridge-pipe в центральной клетке моста использует то же направление изгиба, что и дуга пакетов; если под мостом есть обычная труба, её квадрат сдвигается в противоположную сторону.
+## Plugin API v3
+
+- Канонический plugin API живет в `src/plugins/api/` и считается Rust-first контрактом ядра. C ABI v3 в `src/plugins/abi.rs` является adapter-слоем для runtime DLL-плагинов.
+- Типы глобальных данных мира, газа, структур, UI и рендера называются без префикса `Plugin*`: например `CellInfo`, `GasMixture`, `StructureInfo`, `WorldApiError`, `StructurePlacement`, `OverlayFrame`, `OverlayRenderPolicy`. Префикс `Plugin*` оставлен только для runtime/registration/event сущностей.
+- Все методы чтения world API имеют форму `get_*`: размер мира, cell info, материал клетки, газовая смесь, количество/скорость газа, структуры в клетке/слое, структура по id, структуры по типу, активный overlay и наведенная клетка.
+- Мутации мира проходят через `WorldApiMut`: установка/удаление материала, registry-driven постановка/удаление структур, удаление структур в клетке, `add_gas`, `set_gas`, `remove_gas`, `remove_all_gas`. `add_gas` и `set_gas` принимают `Vec2` velocity и помечают GPU gas state dirty при изменении.
+- `PlacedStructureMap` получил безопасный generic placement path через descriptor из `ContentRegistry`; default-specific методы остаются compatibility wrapper-ами.
+- Runtime event модель хранит подписки в `PluginRuntimeRegistry`. В API есть события lifecycle/save/simulation/input/UI/render, но нет общих `CellChanged`, `CellGasChanged` и `CellMaterialChanged`.
+- Mouse cell events намеренно низкоуровневые: ядро отправляет только down/move/up/enter/leave по клетке с button, cell, world/screen position, modifiers, active tool id и `is_over_ui`; path/rect/drag-семантика принадлежит плагину.
+- Render API описывает две политики: `CoreDefault`, где ядро рисует мир обычно, и `PluginControlled`, где плагин может вернуть `OverlayFrame` со стилями клеток, структур, газа, draw commands и глобальными параметрами overlay.
+- ABI v3 registrar принимает callbacks для event subscriptions, tool descriptors, overlay descriptors, save chunk descriptors и gas substances. Старые sample DLL plugins обновлены на `api_version = 3`.
+- В `src/plugins/flux_api_*_demo_plugin/` добавлены небольшие runtime DLL fixtures для проверки v3 handshake: tool/cell input descriptor, tick subscriptions, plugin-controlled overlay descriptor и save chunk descriptor.

@@ -30,5 +30,9 @@ plugin_state.toml
 # Tracked exceptions are the built-in default plugin and sample test fixtures.
 src/plugins/*/
 !src/plugins/default_plugin/
+!src/plugins/flux_api_cell_demo_plugin/
+!src/plugins/flux_api_temperature_overlay_plugin/
+!src/plugins/flux_api_tick_demo_plugin/
+!src/plugins/flux_api_ui_save_demo_plugin/
 !src/plugins/flux_stage1_sample_plugin/
 !src/plugins/flux_stage7_sample_content_plugin/

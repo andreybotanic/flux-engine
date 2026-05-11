@@ -37,6 +37,7 @@ fn handle_editor_mouse_input(
         ResMut<SelectionDragState>,
         ResMut<BrushDragState>,
         EventWriter<WorldCellChanged>,
+        EventWriter<PluginEvent>,
     ),
 ) {
     let (mouse_buttons, keyboard, window, camera_query) = input_state;
@@ -62,6 +63,7 @@ fn handle_editor_mouse_input(
         mut selection_drag,
         mut brush_drag,
         mut world_changed,
+        mut plugin_events,
     ) = data_state;
 
     if keyboard.just_pressed(KeyCode::KeyX) && !main_menu.open && world_load_state.has_world {
@@ -101,8 +103,19 @@ fn handle_editor_mouse_input(
         })
         .unwrap_or(false);
 
-    let hovered_cell =
-        cursor_position.and_then(|cursor| viewport_cursor_to_cell(cursor, &camera_query));
+    let hovered_world_cell =
+        cursor_position.and_then(|cursor| viewport_cursor_to_world_cell(cursor, &camera_query));
+    let hovered_cell = hovered_world_cell.map(|(_, cell)| cell);
+
+    emit_plugin_mouse_cell_events(
+        &mouse_buttons,
+        &keyboard,
+        cursor_position,
+        hovered_world_cell,
+        blocked_by_ui,
+        active_tool.selected,
+        &mut plugin_events,
+    );
 
     match active_tool.selected {
         Some(EditorTool::BuildSolid) => {
@@ -730,13 +743,139 @@ fn normalized_rect(a: UVec2, b: UVec2) -> (UVec2, UVec2) {
     (min, max)
 }
 
+fn emit_plugin_mouse_cell_events(
+    mouse_buttons: &ButtonInput<MouseButton>,
+    keyboard: &ButtonInput<KeyCode>,
+    cursor_position: Option<Vec2>,
+    hovered_world_cell: Option<(Vec2, UVec2)>,
+    is_over_ui: bool,
+    selected_tool: Option<EditorTool>,
+    plugin_events: &mut EventWriter<PluginEvent>,
+) {
+    let (Some(screen_position), Some((world_position, cell))) =
+        (cursor_position, hovered_world_cell)
+    else {
+        return;
+    };
+
+    let modifiers = InputModifiers {
+        shift: keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight),
+        ctrl: keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight),
+        alt: keyboard.pressed(KeyCode::AltLeft) || keyboard.pressed(KeyCode::AltRight),
+    };
+    let active_tool_id = active_tool_content_id(selected_tool);
+    for (button, event_builder) in [
+        (MouseButton::Left, PluginEvent::MouseDownCell as fn(MouseCellEvent) -> PluginEvent),
+        (MouseButton::Right, PluginEvent::MouseDownCell as fn(MouseCellEvent) -> PluginEvent),
+        (MouseButton::Middle, PluginEvent::MouseDownCell as fn(MouseCellEvent) -> PluginEvent),
+    ] {
+        if mouse_buttons.just_pressed(button) {
+            plugin_events.write(event_builder(MouseCellEvent {
+                button: Some(mouse_button_to_plugin(button)),
+                cell,
+                world_position,
+                screen_position,
+                modifiers,
+                active_tool_id: active_tool_id.clone(),
+                is_over_ui,
+            }));
+        }
+    }
+    for (button, event_builder) in [
+        (MouseButton::Left, PluginEvent::MouseUpCell as fn(MouseCellEvent) -> PluginEvent),
+        (MouseButton::Right, PluginEvent::MouseUpCell as fn(MouseCellEvent) -> PluginEvent),
+        (MouseButton::Middle, PluginEvent::MouseUpCell as fn(MouseCellEvent) -> PluginEvent),
+    ] {
+        if mouse_buttons.just_released(button) {
+            plugin_events.write(event_builder(MouseCellEvent {
+                button: Some(mouse_button_to_plugin(button)),
+                cell,
+                world_position,
+                screen_position,
+                modifiers,
+                active_tool_id: active_tool_id.clone(),
+                is_over_ui,
+            }));
+        }
+    }
+    if mouse_buttons.pressed(MouseButton::Left)
+        || mouse_buttons.pressed(MouseButton::Right)
+        || mouse_buttons.pressed(MouseButton::Middle)
+    {
+        plugin_events.write(PluginEvent::MouseMoveCell(MouseCellEvent {
+            button: None,
+            cell,
+            world_position,
+            screen_position,
+            modifiers,
+            active_tool_id,
+            is_over_ui,
+        }));
+    }
+}
+
+fn mouse_button_to_plugin(button: MouseButton) -> MouseCellButton {
+    match button {
+        MouseButton::Left => MouseCellButton::Left,
+        MouseButton::Right => MouseCellButton::Right,
+        MouseButton::Middle => MouseCellButton::Middle,
+        MouseButton::Back => MouseCellButton::Other(3),
+        MouseButton::Forward => MouseCellButton::Other(4),
+        MouseButton::Other(value) => MouseCellButton::Other(value),
+    }
+}
+
+fn active_tool_content_id(selected_tool: Option<EditorTool>) -> Option<ContentId> {
+    let raw = match selected_tool? {
+        EditorTool::BuildSolid => "flux.core.tool.build_solid",
+        EditorTool::Gases => "flux.default.tool.gases",
+        EditorTool::EraseSolid => "flux.core.tool.erase_solid",
+        EditorTool::Scissors => "flux.default.tool.scissors",
+        EditorTool::AddGas => "flux.core.tool.add_gas",
+        EditorTool::ClearGas => "flux.core.tool.clear_gas",
+        EditorTool::CreateGasSource => "flux.default.tool.gas_source",
+        EditorTool::CreateGasSink => "flux.default.tool.gas_sink",
+    };
+    ContentId::parse(raw).ok()
+}
+
+fn emit_plugin_keyboard_events(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut plugin_events: EventWriter<PluginEvent>,
+) {
+    let modifiers = InputModifiers {
+        shift: keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight),
+        ctrl: keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight),
+        alt: keyboard.pressed(KeyCode::AltLeft) || keyboard.pressed(KeyCode::AltRight),
+    };
+    for key in keyboard.get_just_pressed() {
+        plugin_events.write(PluginEvent::KeyPressed {
+            key: format!("{key:?}"),
+            modifiers,
+        });
+    }
+    for key in keyboard.get_just_released() {
+        plugin_events.write(PluginEvent::KeyReleased {
+            key: format!("{key:?}"),
+            modifiers,
+        });
+    }
+}
+
 fn viewport_cursor_to_cell(
     cursor: Vec2,
     camera_query: &Single<(&Camera, &GlobalTransform), With<MainCamera>>,
 ) -> Option<UVec2> {
+    viewport_cursor_to_world_cell(cursor, camera_query).map(|(_, cell)| cell)
+}
+
+fn viewport_cursor_to_world_cell(
+    cursor: Vec2,
+    camera_query: &Single<(&Camera, &GlobalTransform), With<MainCamera>>,
+) -> Option<(Vec2, UVec2)> {
     let (camera, camera_transform) = **camera_query;
     let world_pos = camera.viewport_to_world_2d(camera_transform, cursor).ok()?;
-    world_to_cell(world_pos)
+    world_to_cell(world_pos).map(|cell| (world_pos, cell))
 }
 
 pub(crate) fn is_cursor_over_ui(

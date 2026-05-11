@@ -1,5 +1,11 @@
 ﻿# Changelog
 
+## 2026-05-11
+- Расширен Plugin API: добавлен Rust-first слой `src/plugins/api/` для чтения/изменения мира, событий, overlay-рендера, UI descriptors и plugin save chunks.
+- ABI runtime-плагинов повышен до version `3`: registrar принимает подписки на события, tool/overlay/save-chunk descriptors и газовые вещества; `add_gas`/`set_gas` поддерживают передачу скорости газа.
+- Добавлены низкоуровневые plugin input events по клеткам (`MouseDownCell`/`MouseMoveCell`/`MouseUpCell`) без core-семантики path/rect и без общих событий `CellChanged`/`CellGasChanged`/`CellMaterialChanged`.
+- Добавлены runtime DLL demo-плагины для точечной проверки v3 API: cell/tool, tick subscription, plugin-controlled temperature overlay descriptor и UI/save chunk descriptor.
+
 ## 2026-05-10
 - Добавлен CLI-флаг запуска `--plugins-dev`: в этом режиме runtime отдаёт приоритет expanded sources из `plugins_dev/<plugin_id>` перед packaged `.fluxplugin` с тем же ID.
 - `cargo xtask build-plugin <plugin_id> --dev` теперь собирает plugin DLL, валидирует expanded output и обновляет runtime dev-каталог `plugins_dev/<plugin_id>` для последующего `Reload` в игре.

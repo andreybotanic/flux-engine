@@ -23,6 +23,13 @@ impl CellMaterial {
         Self { id }
     }
 
+    /// Builds a cell material id from runtime-registered content.
+    pub fn from_registered_id(id: String) -> Self {
+        Self {
+            id: Box::leak(id.into_boxed_str()),
+        }
+    }
+
     /// Returns the stable content id backing this material.
     pub fn as_str(self) -> &'static str {
         self.id

@@ -71,6 +71,54 @@ pub type FluxRegisterGasSubstanceFn = unsafe extern "C" fn(
     descriptor: *const FluxGasSubstanceDescriptor,
 ) -> FluxStatus;
 
+/// Callback used by plugins to subscribe to one runtime event kind.
+pub type FluxRegisterEventSubscriptionFn =
+    unsafe extern "C" fn(context: *mut c_void, event_kind: u32) -> FluxStatus;
+
+/// C-compatible tool descriptor emitted by plugins.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FluxToolDescriptor {
+    pub id: FluxUtf8Slice,
+    pub label: FluxUtf8Slice,
+    pub icon_path: FluxUtf8Slice,
+    pub silhouette_path: FluxUtf8Slice,
+}
+
+/// Callback used by plugins to register one tool descriptor.
+pub type FluxRegisterToolFn =
+    unsafe extern "C" fn(context: *mut c_void, descriptor: *const FluxToolDescriptor) -> FluxStatus;
+
+/// C-compatible overlay descriptor emitted by plugins.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FluxOverlayDescriptor {
+    pub id: FluxUtf8Slice,
+    pub label: FluxUtf8Slice,
+    pub hotkey: FluxUtf8Slice,
+    pub render_policy: u32,
+}
+
+/// Callback used by plugins to register one overlay descriptor.
+pub type FluxRegisterOverlayFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    descriptor: *const FluxOverlayDescriptor,
+) -> FluxStatus;
+
+/// C-compatible save chunk descriptor emitted by plugins.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FluxSaveChunkDescriptor {
+    pub id: FluxUtf8Slice,
+    pub version: u32,
+}
+
+/// Callback used by plugins to register one save chunk descriptor.
+pub type FluxRegisterSaveChunkFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    descriptor: *const FluxSaveChunkDescriptor,
+) -> FluxStatus;
+
 /// Host callbacks and runtime paths exposed to one plugin instance.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -112,6 +160,10 @@ pub struct FluxRegistrar {
     pub struct_size: u32,
     pub api_version: u32,
     pub register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
+    pub register_event_subscription: Option<FluxRegisterEventSubscriptionFn>,
+    pub register_tool: Option<FluxRegisterToolFn>,
+    pub register_overlay: Option<FluxRegisterOverlayFn>,
+    pub register_save_chunk: Option<FluxRegisterSaveChunkFn>,
     pub registration_context: *mut c_void,
     pub reserved2: *mut c_void,
     pub reserved3: *mut c_void,
@@ -121,12 +173,20 @@ impl FluxRegistrar {
     /// Creates the registrar payload used by `flux_plugin_register`.
     pub fn new(
         register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
+        register_event_subscription: Option<FluxRegisterEventSubscriptionFn>,
+        register_tool: Option<FluxRegisterToolFn>,
+        register_overlay: Option<FluxRegisterOverlayFn>,
+        register_save_chunk: Option<FluxRegisterSaveChunkFn>,
         registration_context: *mut c_void,
     ) -> Self {
         Self {
             struct_size: std::mem::size_of::<Self>() as u32,
             api_version: ENGINE_PLUGIN_API_VERSION_VALUE,
             register_gas_substance,
+            register_event_subscription,
+            register_tool,
+            register_overlay,
+            register_save_chunk,
             registration_context,
             reserved2: std::ptr::null_mut(),
             reserved3: std::ptr::null_mut(),

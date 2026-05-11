@@ -167,6 +167,31 @@ impl GasField {
         self.write[index][gas_index] = clamped;
     }
 
+    /// Sets one gas amount and replaces the cell velocity used by the gas solver.
+    pub fn set_amount_with_velocity(
+        &mut self,
+        x: u32,
+        y: u32,
+        gas_index: usize,
+        amount: u32,
+        velocity: Vec2,
+        world: &WorldGrid,
+    ) -> bool {
+        if gas_index >= self.gas_count || is_boundary(x, y) || world.is_solid(x, y) {
+            return false;
+        }
+        let index = linear_index(x, y);
+        self.read[index][gas_index] = amount;
+        self.write[index][gas_index] = amount;
+        self.total_density[index] = self.read[index].iter().map(|&v| v as f32).sum();
+        self.velocity[index] = if self.total_density[index] > 0.0 {
+            velocity
+        } else {
+            Vec2::ZERO
+        };
+        true
+    }
+
 /// Runs `clear_cell` logic.
     pub fn clear_cell(&mut self, x: u32, y: u32) {
         let index = linear_index(x, y);
@@ -241,6 +266,40 @@ impl GasField {
         self.read[idx][gas_index] = after;
         self.write[idx][gas_index] = after;
         after.saturating_sub(before)
+    }
+
+    /// Adds gas particles and blends the cell velocity using particle-weighted momentum.
+    pub fn add_particles_with_velocity(
+        &mut self,
+        x: u32,
+        y: u32,
+        gas_index: usize,
+        amount: u32,
+        velocity: Vec2,
+        world: &WorldGrid,
+    ) -> u32 {
+        if amount == 0
+            || gas_index >= self.gas_count
+            || is_boundary(x, y)
+            || world.is_solid(x, y)
+        {
+            return 0;
+        }
+        let idx = linear_index(x, y);
+        let previous_total = self.read[idx].iter().map(|&v| v as f32).sum::<f32>();
+        let before = self.read[idx][gas_index];
+        let after = before.saturating_add(amount);
+        let added = after.saturating_sub(before);
+        self.read[idx][gas_index] = after;
+        self.write[idx][gas_index] = after;
+        let next_total = previous_total + added as f32;
+        self.total_density[idx] = next_total;
+        self.velocity[idx] = if next_total > 0.0 {
+            (self.velocity[idx] * previous_total + velocity * added as f32) / next_total
+        } else {
+            Vec2::ZERO
+        };
+        added
     }
 
 /// Runs `remove_particles_proportional` logic.

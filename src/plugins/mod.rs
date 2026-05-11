@@ -1,4 +1,5 @@
 pub mod abi;
+pub mod api;
 pub mod content;
 pub mod default_plugin;
 pub mod diagnostics;
@@ -12,6 +13,15 @@ pub mod source;
 pub mod state;
 pub mod substances;
 
+pub use self::api::{
+    CellInfo, CellRenderStyle, CellStyleEntry, GasAmount, GasMixture, GasRenderStyle,
+    GasStyleEntry, HudBlock, InputModifiers, MouseCellButton, MouseCellEvent, OverlayDrawCommand,
+    OverlayFrame, OverlayRenderPolicy, PanelDescriptor, PluginEvent, PluginEventKind,
+    PluginRuntimeRegistry, PluginSubscription, RuntimeOverlayDescriptor, SaveChunk,
+    SaveChunkDescriptor, SaveChunkStore, StructureEvent, StructureInfo, StructurePlacement,
+    StructureRenderStyle, StructureStyleEntry, ToolDescriptor, UiNode, WorldApi, WorldApiError,
+    WorldApiMut,
+};
 pub use self::content::{
     CellContentDescriptor, ContentId, ContentRegistry, LegacyStorageDescriptor,
     OverlayContentDescriptor, SpriteMetadata, StructureContentDescriptor,

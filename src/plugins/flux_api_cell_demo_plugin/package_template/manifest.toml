@@ -1,0 +1,8 @@
+id = "flux.api_cell_demo"
+display_name = "API Cell Demo"
+version = "0.1.0"
+api_version = 3
+dll = "bin/flux_api_cell_demo_plugin.dll"
+configs = "config"
+assets = "assets"
+content = false

@@ -35,6 +35,8 @@ pub fn run() {
         PluginBootstrapConfig::from_repo_root(repo_root, plugins_dev_mode_requested(&args));
     let plugin_bootstrap = crate::plugins::bootstrap_plugin_registry(&plugin_bootstrap_config);
     plugin_bootstrap.registry_state.log_to_stderr();
+    let plugin_runtime_registry =
+        plugin_runtime_registry_from_loaded_plugins(plugin_bootstrap.loaded_registry.entries());
     let game_config = GameConfig::load_from_default_location_with_content(
         &plugin_bootstrap.content_registry,
     )
@@ -97,6 +99,7 @@ pub fn run() {
         .insert_resource(plugin_bootstrap.loaded_registry)
         .insert_resource(plugin_bootstrap.enabled_set)
         .insert_resource(plugin_bootstrap.content_registry)
+        .insert_resource(plugin_runtime_registry)
         .insert_resource(default_plugin_content)
         .insert_resource(plugin_bootstrap.registry_state)
         .insert_resource(plugin_bootstrap_config)
@@ -108,6 +111,7 @@ pub fn run() {
             DEFAULT_PLUGIN_ASSET_SOURCE,
             AssetSourceBuilder::platform_default(&default_plugin_asset_path, None),
         )
+        .add_event::<crate::plugins::PluginEvent>()
         .add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {
@@ -138,6 +142,27 @@ pub fn run() {
         ));
 
     app.run();
+}
+
+fn plugin_runtime_registry_from_loaded_plugins(
+    loaded_plugins: &[crate::plugins::LoadedPluginMetadata],
+) -> crate::plugins::PluginRuntimeRegistry {
+    let mut registry = crate::plugins::PluginRuntimeRegistry::default();
+    for plugin in loaded_plugins {
+        for event_kind in &plugin.registration.event_subscriptions {
+            registry.subscribe(plugin.plugin_id.clone(), *event_kind);
+        }
+        for tool in &plugin.registration.tools {
+            registry.register_tool(tool.clone());
+        }
+        for overlay in &plugin.registration.overlays {
+            registry.register_overlay(overlay.clone());
+        }
+        for save_chunk in &plugin.registration.save_chunks {
+            registry.register_save_chunk(save_chunk.clone());
+        }
+    }
+    registry
 }
 
 fn gpu_backend_available(width: u32, height: u32) -> bool {

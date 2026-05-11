@@ -1,0 +1,8 @@
+id = "flux.api_tick_demo"
+display_name = "API Tick Demo"
+version = "0.1.0"
+api_version = 3
+dll = "bin/flux_api_tick_demo_plugin.dll"
+configs = "config"
+assets = "assets"
+content = false

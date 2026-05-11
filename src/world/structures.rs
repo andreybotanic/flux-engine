@@ -22,6 +22,13 @@ impl LayerKind {
         Self { id }
     }
 
+    /// Builds a layer id from runtime-registered content.
+    pub fn from_registered_id(id: String) -> Self {
+        Self {
+            id: Box::leak(id.into_boxed_str()),
+        }
+    }
+
     /// Returns the stable id backing this layer.
     pub fn as_str(self) -> &'static str {
         self.id
@@ -41,6 +48,13 @@ impl LayerMarkerKind {
     /// Builds a marker id from a registered static content id.
     pub const fn new(id: &'static str) -> Self {
         Self { id }
+    }
+
+    /// Builds a marker id from runtime-registered content.
+    pub fn from_registered_id(id: String) -> Self {
+        Self {
+            id: Box::leak(id.into_boxed_str()),
+        }
     }
 
     /// Returns the stable id backing this marker.
@@ -131,6 +145,13 @@ impl StructureKind {
         Self { id }
     }
 
+    /// Builds a structure kind from runtime-registered content.
+    pub fn from_registered_id(id: String) -> Self {
+        Self {
+            id: Box::leak(id.into_boxed_str()),
+        }
+    }
+
     /// Returns the stable content id backing this structure kind.
     pub fn as_str(self) -> &'static str {
         self.id
@@ -186,6 +207,7 @@ pub struct PlacedStructure {
     pub origin: UVec2,
     pub rotation: StructureRotation,
     pub params: StructureParams,
+    occupied_cells: Vec<UVec2>,
 }
 
 impl PlacedStructure {
@@ -201,11 +223,7 @@ impl PlacedStructure {
 
     /// Returns every occupied world cell for this structure.
     pub fn occupied_cells(&self) -> Vec<UVec2> {
-        self.descriptor()
-            .occupied_local_cells()
-            .into_iter()
-            .filter_map(|local| offset_world_cell(self.origin, local))
-            .collect()
+        self.occupied_cells.clone()
     }
 }
 
@@ -668,6 +686,22 @@ impl PlacedStructureMap {
             .collect()
     }
 
+    /// Places a generic structure using a descriptor supplied by the content registry.
+    pub fn place_structure_with_descriptor(
+        &mut self,
+        kind: StructureKind,
+        origin: UVec2,
+        rotation: StructureRotation,
+        params: StructureParams,
+        descriptor: &StructureDescriptor,
+        world: &WorldGrid,
+    ) -> Option<PlacedStructureId> {
+        if !self.can_place_structure_with_descriptor(kind, origin, descriptor, world) {
+            return None;
+        }
+        self.insert_structure(kind, origin, rotation, params, descriptor)
+    }
+
     fn place_structure(
         &mut self,
         kind: StructureKind,
@@ -679,6 +713,26 @@ impl PlacedStructureMap {
         if !self.can_place_structure(kind, origin, rotation, world) {
             return None;
         }
+        let descriptor = structure_descriptor(kind, rotation);
+        self.insert_structure(kind, origin, rotation, params, &descriptor)
+    }
+
+    fn insert_structure(
+        &mut self,
+        kind: StructureKind,
+        origin: UVec2,
+        rotation: StructureRotation,
+        params: StructureParams,
+        descriptor: &StructureDescriptor,
+    ) -> Option<PlacedStructureId> {
+        let occupied_cells = descriptor
+            .occupied_local_cells()
+            .into_iter()
+            .filter_map(|local| offset_world_cell(origin, local))
+            .collect::<Vec<_>>();
+        if occupied_cells.is_empty() {
+            return None;
+        }
         let id = PlacedStructureId(self.next_id);
         self.next_id = self.next_id.saturating_add(1);
         let structure = PlacedStructure {
@@ -687,6 +741,7 @@ impl PlacedStructureMap {
             origin,
             rotation,
             params,
+            occupied_cells,
         };
         for cell in structure.occupied_cells() {
             self.cell_index[linear_index(cell.x, cell.y)].push(id);
@@ -786,6 +841,44 @@ impl PlacedStructureMap {
                     crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind)
                 })
             {
+                return false;
+            }
+        }
+
+        for layer in &descriptor.layers {
+            for cell in &layer.cells {
+                if cell.collision != LayerCollisionKind::Special {
+                    continue;
+                }
+                let Some(world_cell) = offset_world_cell(origin, cell.local_cell) else {
+                    return false;
+                };
+                if layer_collision_blocked(self, world, layer.kind, world_cell, kind) {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    fn can_place_structure_with_descriptor(
+        &self,
+        kind: StructureKind,
+        origin: UVec2,
+        descriptor: &StructureDescriptor,
+        world: &WorldGrid,
+    ) -> bool {
+        let occupied_cells = descriptor.occupied_local_cells();
+        if occupied_cells.is_empty() {
+            return false;
+        }
+
+        for local in &occupied_cells {
+            let Some(cell) = offset_world_cell(origin, *local) else {
+                return false;
+            };
+            if !is_editable_cell(cell.x, cell.y) {
                 return false;
             }
         }

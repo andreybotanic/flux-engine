@@ -568,7 +568,7 @@ mod tests {
                 r#"id = "{plugin_id}"
 display_name = "Test Plugin"
 version = "1.0.0"
-api_version = 2
+api_version = 3
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"
