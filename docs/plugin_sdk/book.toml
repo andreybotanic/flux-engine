@@ -1,0 +1,27 @@
+[book]
+title = "FluxEngine Plugin SDK"
+authors = ["FluxEngine"]
+description = "Интерактивная документация по runtime plugin API FluxEngine."
+src = "src"
+language = "ru"
+
+[rust]
+edition = "2021"
+
+[build]
+build-dir = "../../target/plugin_sdk_docs"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+additional-css = ["theme/sdk.css"]
+additional-js = ["theme/sdk.js"]
+
+[output.html.search]
+enable = true
+limit-results = 40
+use-boolean-and = true
+
+[output.html.fold]
+enable = true
+level = 0

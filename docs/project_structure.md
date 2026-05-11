@@ -17,6 +17,7 @@ FluxEngine/
 |   |-- backups/             # Резервные копии конфигов.
 |   `-- simulation.toml      # Core runtime-настройки без default-plugin content.
 |-- docs/                    # Проектная документация.
+|   |-- plugin_sdk/          # mdBook-сайт Plugin SDK с ручными guide-главами и generated API reference.
 |   `-- plans/               # Плановые документы будущих крупных изменений.
 |       `-- plugin_system/   # Roadmap и этапные планы перехода на runtime-плагины.
 |-- plugins/                 # Runtime drop-in каталог packaged plugins (`*.fluxplugin`) рядом с игрой.
@@ -29,6 +30,7 @@ FluxEngine/
 |   |-- editor/              # Инструменты редактирования мира, газа и pipe-сети.
 |   |-- input/               # Обработка пользовательского ввода.
 |   |-- plugins/             # Runtime plugin facade плюс in-project plugin-папки.
+|   |   |-- api/              # Core Rust-first Plugin API contracts used by the generated Plugin SDK reference.
 |   |   |-- default_plugin/   # Built-in locked `flux.default`: код, configs, assets и pipe-runtime.
 |   |   |-- flux_stage1_sample_plugin/        # Tracked sample non-content DLL-плагин для ABI/e2e-тестов.
 |   |   `-- flux_stage7_sample_content_plugin/ # Tracked sample content DLL-плагин с Neon gas.
@@ -47,7 +49,7 @@ FluxEngine/
 
 - `AGENTS.md`: Правила работы агента в этом репозитории.
 - `.cargo/config.toml`: Локальный cargo alias `cargo xtask` для запуска helper-crate-а `xtask`.
-- `.gitignore`: Игнорирует runtime artifacts и новые `src/plugins/*/` in-project plugin-папки; tracked исключения — `default_plugin`, API demo plugins, `flux_stage1_sample_plugin`, `flux_stage7_sample_content_plugin`.
+- `.gitignore`: Игнорирует runtime artifacts и новые `src/plugins/*/` in-project plugin-папки; tracked исключения — core `src/plugins/api/`, `default_plugin`, API demo plugins, `flux_stage1_sample_plugin`, `flux_stage7_sample_content_plugin`.
 - `assets/fonts/ui_main.ttf`: Основной UI-шрифт с поддержкой кириллицы для всех текстовых элементов интерфейса.
 - `assets/shaders/gas_solver.wgsl`: GPU-шейдер газового шага (WGSL), синхронизированный с CPU-эталоном.
 - `assets/sprites/ui/main_menu_background.png`: Отдельный fullscreen-фон главного меню.
@@ -60,6 +62,13 @@ FluxEngine/
 - `config/simulation.toml`: Core-параметры симуляции/free-gas и визуализации газа; pipe-runtime настройки default plugin-а вынесены отдельно.
 - `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
 - `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
+- `docs/plugin_sdk/book.toml`: Конфигурация mdBook-сайта Plugin SDK; build output направлен в `target/plugin_sdk_docs`, а sidebar folding включён для collapsed-by-default generated API групп.
+- `docs/plugin_sdk/src/SUMMARY.md`: Генерируемая навигация Plugin SDK book: guide-главы и generated API reference, сгруппированный по структурам, enum-ам, константам, методам и событиям.
+- `docs/plugin_sdk/src/*.md`: Ручные guide-главы Plugin SDK: обзор, lifecycle, структура package, manifest, сборка и reload.
+- `docs/plugin_sdk/src/generated/*.md`: Детерминированно сгенерированные индексные API-главы Plugin SDK для групп `Structures`, `Enums`, `Constants`, `Methods` и `Events`; обновляются через `cargo xtask generate-plugin-sdk-docs`.
+- `docs/plugin_sdk/src/generated/{structures,enums,constants,methods,events}/*.md`: Детерминированно сгенерированные страницы конкретных Plugin SDK API-сущностей с описаниями полей, вариантов, деклараций, аргументов, возвращаемых значений и event payload.
+- `docs/plugin_sdk/theme/sdk.css`: Кастомные стили интерактивных SDK API-блоков, бейджей и фильтра.
+- `docs/plugin_sdk/theme/sdk.js`: Кастомная интерактивность Plugin SDK book: фильтр API items и copy-кнопки для code blocks.
 - `docs/plans/plugin_system/00_roadmap.md`: Общий roadmap будущей миграции FluxEngine на runtime-плагины.
 - `docs/plans/plugin_system/*.md`: Детальные инструкции по этапам реализации plugin-system миграции.
 - `docs/project_structure.md`: Карта структуры проекта: дерево папок + зоны ответственности файлов.
@@ -205,7 +214,12 @@ FluxEngine/
 - `src/world/grid.rs`: Клеточная сетка мира, generic material ID wrapper, координатные утилиты и тесты.
 - `src/world/mod.rs`: Плагин мира и события изменений клеток.
 - `src/world/structures.rs`: Unified layer/descriptor-модель структур, generic structure/layer ID wrapper-ы, `PlacedStructureMap`, rotation, bridge-footprint compatibility helpers и pipe-cut state.
-- `xtask/Cargo.toml`: Манифест helper-crate-а для сборки и упаковки runtime-плагинов.
-- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>` и безопасная упаковка `.fluxplugin`.
+- `xtask/Cargo.toml`: Манифест helper-crate-а для сборки/упаковки runtime-плагинов и генерации Plugin SDK документации.
+- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, Plugin SDK docs команд, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>` и безопасная упаковка `.fluxplugin`.
+- `xtask/src/plugin_sdk_docs.rs`: Orchestration-модуль Plugin SDK docs команд: собирает generated Markdown, stale-check и mdBook build.
+- `xtask/src/plugin_sdk_docs/collector.rs`: Сбор Plugin SDK API-сущностей из Rust AST через `syn`: структуры, методы, callback-типы, константы и события.
+- `xtask/src/plugin_sdk_docs/model.rs`: Общие модели generated Plugin SDK reference: группы API, item docs, поля, аргументы, варианты и source metadata.
+- `xtask/src/plugin_sdk_docs/parser.rs`: Парсинг SDK-facing Rustdoc через `syn` и строгая валидация обязательных секций.
+- `xtask/src/plugin_sdk_docs/render.rs`: Рендер generated API items в Markdown/HTML-блоки mdBook.
 - `xtask/src/main.rs`: CLI entrypoint, который запускает `xtask::run_from_env()` и возвращает non-zero exit code при ошибке.
 - `tmp_size.rs`: Временный локальный вспомогательный Rust-файл для ручных проверок/черновых экспериментов.

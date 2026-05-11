@@ -1,6 +1,11 @@
 ﻿# Changelog
 
 ## 2026-05-11
+- Перестроена generated-навигация Plugin SDK: API reference теперь сгруппирован по `Structures`, `Enums`, `Constants`, `Methods` и `Events`, а вторым уровнем меню идут конкретные структуры, enum-ы, константы, методы и события с отдельными страницами.
+- Generated-страницы Plugin SDK теперь выводят для структур таблицы полей, для enum-ов таблицы вариантов, для констант декларации, для методов сигнатуры/аргументы/возвращаемые значения/примеры, а для событий условия срабатывания и payload-аргументы.
+- Пункты generated API первого уровня в Plugin SDK sidebar теперь сворачиваемые и закрыты по умолчанию.
+- Добавлена интерактивная Plugin SDK документация на mdBook: ручные guide-главы живут в `docs/plugin_sdk/`, API reference генерируется из строгих Rustdoc-секций через `cargo xtask generate-plugin-sdk-docs`, а сайт собирается в `target/plugin_sdk_docs`.
+- В `xtask` добавлены команды `generate-plugin-sdk-docs`, `check-plugin-sdk-docs` и `build-plugin-sdk-docs`; генерация падает при отсутствующем doc-comment, обязательной секции или устаревших generated-главах.
 - Расширен Plugin API: добавлен Rust-first слой `src/plugins/api/` для чтения/изменения мира, событий, overlay-рендера, UI descriptors и plugin save chunks.
 - ABI runtime-плагинов повышен до version `3`: registrar принимает подписки на события, tool/overlay/save-chunk descriptors и газовые вещества; `add_gas`/`set_gas` поддерживают передачу скорости газа.
 - Добавлен live DLL executor: включённые runtime-плагины остаются загруженными, получают `flux_plugin_on_event` и могут менять мир через host callbacks.

@@ -13,6 +13,8 @@ use flux_engine::plugins::{
 };
 use zip::{write::SimpleFileOptions, ZipWriter};
 
+mod plugin_sdk_docs;
+
 const MANIFEST_RELATIVE: &str = "package_template/manifest.toml";
 const EXPANDED_OUTPUT_ROOT: &str = "target/plugins/expanded";
 const PACKAGE_OUTPUT_ROOT: &str = "target/plugins/packages";
@@ -94,6 +96,21 @@ pub fn run_cli(repo_root: &Path, args: &[String]) -> Result<(), XtaskError> {
             for output in outputs {
                 println!("Packed plugin archive at {}", output.display());
             }
+            Ok(())
+        }
+        "generate-plugin-sdk-docs" => {
+            plugin_sdk_docs::generate_plugin_sdk_docs(repo_root)?;
+            println!("Generated Plugin SDK docs.");
+            Ok(())
+        }
+        "check-plugin-sdk-docs" => {
+            plugin_sdk_docs::check_plugin_sdk_docs(repo_root)?;
+            println!("Plugin SDK docs are up to date.");
+            Ok(())
+        }
+        "build-plugin-sdk-docs" => {
+            let output = plugin_sdk_docs::build_plugin_sdk_docs(repo_root)?;
+            println!("Built Plugin SDK docs at {}", output.display());
             Ok(())
         }
         _ => Err(usage_error()),
@@ -298,7 +315,7 @@ fn parse_build_plugin_args(args: &[String]) -> Result<BuildPluginRequest<'_>, Xt
 
 fn usage_error() -> XtaskError {
     XtaskError::new(
-        "usage: cargo xtask build-plugin <plugin_id> [--dev] | pack-plugin <plugin_id> | build-all-plugins",
+        "usage: cargo xtask build-plugin <plugin_id> [--dev] | pack-plugin <plugin_id> | build-all-plugins | generate-plugin-sdk-docs | check-plugin-sdk-docs | build-plugin-sdk-docs",
     )
 }
 
@@ -586,7 +603,17 @@ content = false
             .iter()
             .map(|project| project.plugin_id.as_str())
             .collect::<Vec<_>>();
-        assert_eq!(ids, vec!["flux.sample_content", "flux.sample_stage1"]);
+        assert_eq!(
+            ids,
+            vec![
+                "flux.api_cell_demo",
+                "flux.api_temperature_overlay",
+                "flux.api_tick_demo",
+                "flux.api_ui_save_demo",
+                "flux.sample_content",
+                "flux.sample_stage1"
+            ]
+        );
     }
 
     #[test]

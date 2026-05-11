@@ -1,8 +1,11 @@
-use std::ffi::c_void;
+﻿use std::ffi::c_void;
 
 use crate::plugins::id::ENGINE_PLUGIN_API_VERSION_VALUE;
 
 /// Opaque UTF-8 string view used by the stable plugin ABI.
+///
+/// # Fields
+/// Public fields of `FluxUtf8Slice` are part of the generated SDK reference.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FluxUtf8Slice {
@@ -12,6 +15,11 @@ pub struct FluxUtf8Slice {
 
 impl FluxUtf8Slice {
     /// Creates a borrowed UTF-8 slice for ABI calls.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `from_str` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn from_str(value: &str) -> Self {
         if value.is_empty() {
             return Self {
@@ -28,6 +36,9 @@ impl FluxUtf8Slice {
 }
 
 /// Status code returned by plugin ABI functions.
+///
+/// # Fields
+/// Public fields of `FluxStatus` are part of the generated SDK reference.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FluxStatus(pub i32);
@@ -38,21 +49,39 @@ impl FluxStatus {
     pub const FAILED: Self = Self(2);
 
     /// Returns the raw numeric status code.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `code` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn code(self) -> i32 {
         self.0
     }
 
     /// Returns `true` when the ABI call succeeded.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `is_ok` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn is_ok(self) -> bool {
         self == Self::OK
     }
 }
 
 /// Callback used by plugins to write a host-readable error message.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxWriteErrorFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxWriteErrorFn =
     unsafe extern "C" fn(context: *mut c_void, message: FluxUtf8Slice) -> FluxStatus;
 
 /// C-compatible gas substance descriptor emitted by content plugins.
+///
+/// # Fields
+/// Public fields of `FluxGasSubstanceDescriptor` are part of the generated SDK reference.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxGasSubstanceDescriptor {
@@ -66,16 +95,29 @@ pub struct FluxGasSubstanceDescriptor {
 }
 
 /// Callback used by plugins to register one gas-capable substance.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxRegisterGasSubstanceFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxRegisterGasSubstanceFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxGasSubstanceDescriptor,
 ) -> FluxStatus;
 
 /// Callback used by plugins to subscribe to one runtime event kind.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxRegisterEventSubscriptionFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxRegisterEventSubscriptionFn =
     unsafe extern "C" fn(context: *mut c_void, event_kind: u32) -> FluxStatus;
 
 /// C-compatible tool descriptor emitted by plugins.
+///
+/// # Fields
+/// Public fields of `FluxToolDescriptor` are part of the generated SDK reference.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxToolDescriptor {
@@ -86,10 +128,18 @@ pub struct FluxToolDescriptor {
 }
 
 /// Callback used by plugins to register one tool descriptor.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxRegisterToolFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxRegisterToolFn =
     unsafe extern "C" fn(context: *mut c_void, descriptor: *const FluxToolDescriptor) -> FluxStatus;
 
 /// C-compatible overlay descriptor emitted by plugins.
+///
+/// # Fields
+/// Public fields of `FluxOverlayDescriptor` are part of the generated SDK reference.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxOverlayDescriptor {
@@ -100,12 +150,20 @@ pub struct FluxOverlayDescriptor {
 }
 
 /// Callback used by plugins to register one overlay descriptor.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxRegisterOverlayFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxRegisterOverlayFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxOverlayDescriptor,
 ) -> FluxStatus;
 
 /// C-compatible save chunk descriptor emitted by plugins.
+///
+/// # Fields
+/// Public fields of `FluxSaveChunkDescriptor` are part of the generated SDK reference.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxSaveChunkDescriptor {
@@ -114,12 +172,20 @@ pub struct FluxSaveChunkDescriptor {
 }
 
 /// Callback used by plugins to register one save chunk descriptor.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxRegisterSaveChunkFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxRegisterSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxSaveChunkDescriptor,
 ) -> FluxStatus;
 
 /// Runtime event payload passed to a live DLL plugin.
+///
+/// # Fields
+/// Public fields of `FluxRuntimeEvent` are part of the generated SDK reference.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxRuntimeEvent {
@@ -142,6 +208,11 @@ pub struct FluxRuntimeEvent {
 
 impl FluxRuntimeEvent {
     /// Creates an empty runtime event payload for one ABI event kind.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `new` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn new(event_kind: u32) -> Self {
         Self {
             struct_size: std::mem::size_of::<Self>() as u32,
@@ -164,6 +235,11 @@ impl FluxRuntimeEvent {
 }
 
 /// Callback used by plugins to set one world cell material by stable content id.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxSetCellMaterialFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxSetCellMaterialFn = unsafe extern "C" fn(
     context: *mut c_void,
     x: u32,
@@ -172,6 +248,11 @@ pub type FluxSetCellMaterialFn = unsafe extern "C" fn(
 ) -> FluxStatus;
 
 /// Callback used by plugins to add free gas with a cell velocity.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxAddGasFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxAddGasFn = unsafe extern "C" fn(
     context: *mut c_void,
     x: u32,
@@ -184,6 +265,11 @@ pub type FluxAddGasFn = unsafe extern "C" fn(
 ) -> FluxStatus;
 
 /// Callback used by plugins to submit one complete RGBA8 overlay frame.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxSubmitOverlayFrameFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
     context: *mut c_void,
     width: u32,
@@ -193,6 +279,11 @@ pub type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
 ) -> FluxStatus;
 
 /// Callback used by plugins to append one HUD block for the hovered cell.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxSubmitHudBlockFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxSubmitHudBlockFn = unsafe extern "C" fn(
     context: *mut c_void,
     title: FluxUtf8Slice,
@@ -200,6 +291,11 @@ pub type FluxSubmitHudBlockFn = unsafe extern "C" fn(
 ) -> FluxStatus;
 
 /// Callback used by plugins to write a plugin-owned save chunk.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxWriteSaveChunkFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxWriteSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     chunk_id: FluxUtf8Slice,
@@ -209,6 +305,11 @@ pub type FluxWriteSaveChunkFn = unsafe extern "C" fn(
 ) -> FluxStatus;
 
 /// Callback used by plugins to read a plugin-owned save chunk.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxReadSaveChunkFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxReadSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     chunk_id: FluxUtf8Slice,
@@ -219,6 +320,9 @@ pub type FluxReadSaveChunkFn = unsafe extern "C" fn(
 ) -> FluxStatus;
 
 /// Runtime host callback table passed to `flux_plugin_on_event`.
+///
+/// # Fields
+/// Public fields of `FluxRuntimeHost` are part of the generated SDK reference.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxRuntimeHost {
@@ -235,6 +339,11 @@ pub struct FluxRuntimeHost {
 
 impl FluxRuntimeHost {
     /// Creates a runtime host callback table for a single event dispatch.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `new` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn new(context: *mut c_void) -> Self {
         Self {
             struct_size: std::mem::size_of::<Self>() as u32,
@@ -251,6 +360,9 @@ impl FluxRuntimeHost {
 }
 
 /// Host callbacks and runtime paths exposed to one plugin instance.
+///
+/// # Fields
+/// Public fields of `FluxHostApi` are part of the generated SDK reference.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxHostApi {
@@ -265,6 +377,11 @@ pub struct FluxHostApi {
 
 impl FluxHostApi {
     /// Creates the stage-1 host API payload.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `new` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn new(
         plugin_root: FluxUtf8Slice,
         config_root: FluxUtf8Slice,
@@ -285,6 +402,9 @@ impl FluxHostApi {
 }
 
 /// Future-proof registrar payload passed into `flux_plugin_register`.
+///
+/// # Fields
+/// Public fields of `FluxRegistrar` are part of the generated SDK reference.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FluxRegistrar {
@@ -302,6 +422,11 @@ pub struct FluxRegistrar {
 
 impl FluxRegistrar {
     /// Creates the registrar payload used by `flux_plugin_register`.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `new` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn new(
         register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
         register_event_subscription: Option<FluxRegisterEventSubscriptionFn>,
@@ -326,6 +451,9 @@ impl FluxRegistrar {
 }
 
 /// Opaque plugin-owned handle shared back to the host across ABI calls.
+///
+/// # Fields
+/// Public fields of `FluxPluginHandle` are part of the generated SDK reference.
 #[repr(C)]
 #[derive(Debug)]
 pub struct FluxPluginHandle {
@@ -333,24 +461,49 @@ pub struct FluxPluginHandle {
 }
 
 /// Function pointer type for `flux_plugin_api_version`.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxPluginApiVersionFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxPluginApiVersionFn = unsafe extern "C" fn() -> u32;
 
 /// Function pointer type for `flux_plugin_create`.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxPluginCreateFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxPluginCreateFn = unsafe extern "C" fn(
     host: *const FluxHostApi,
     out_plugin: *mut *mut FluxPluginHandle,
 ) -> FluxStatus;
 
 /// Function pointer type for `flux_plugin_register`.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxPluginRegisterFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxPluginRegisterFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     registrar: *mut FluxRegistrar,
 ) -> FluxStatus;
 
 /// Function pointer type for `flux_plugin_destroy`.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxPluginDestroyFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxPluginDestroyFn = unsafe extern "C" fn(plugin: *mut FluxPluginHandle);
 
 /// Function pointer type for `flux_plugin_on_event`.
+///
+/// # SDK Example
+/// ```rust
+/// // Store or call the callback through the `FluxPluginOnEventFn` ABI signature supplied by FluxEngine.
+/// ```
 pub type FluxPluginOnEventFn = unsafe extern "C" fn(
     plugin: *mut FluxPluginHandle,
     event: *const FluxRuntimeEvent,
@@ -358,16 +511,41 @@ pub type FluxPluginOnEventFn = unsafe extern "C" fn(
 ) -> FluxStatus;
 
 /// Null-terminated export name for `flux_plugin_api_version`.
+///
+/// # SDK Example
+/// ```rust
+/// // Use `FLUX_PLUGIN_API_VERSION_EXPORT_NAME` when validating the Plugin SDK ABI contract.
+/// ```
 pub const FLUX_PLUGIN_API_VERSION_EXPORT_NAME: &[u8] = b"flux_plugin_api_version\0";
 
 /// Null-terminated export name for `flux_plugin_create`.
+///
+/// # SDK Example
+/// ```rust
+/// // Use `FLUX_PLUGIN_CREATE_EXPORT_NAME` when validating the Plugin SDK ABI contract.
+/// ```
 pub const FLUX_PLUGIN_CREATE_EXPORT_NAME: &[u8] = b"flux_plugin_create\0";
 
 /// Null-terminated export name for `flux_plugin_register`.
+///
+/// # SDK Example
+/// ```rust
+/// // Use `FLUX_PLUGIN_REGISTER_EXPORT_NAME` when validating the Plugin SDK ABI contract.
+/// ```
 pub const FLUX_PLUGIN_REGISTER_EXPORT_NAME: &[u8] = b"flux_plugin_register\0";
 
 /// Null-terminated export name for `flux_plugin_destroy`.
+///
+/// # SDK Example
+/// ```rust
+/// // Use `FLUX_PLUGIN_DESTROY_EXPORT_NAME` when validating the Plugin SDK ABI contract.
+/// ```
 pub const FLUX_PLUGIN_DESTROY_EXPORT_NAME: &[u8] = b"flux_plugin_destroy\0";
 
 /// Null-terminated export name for `flux_plugin_on_event`.
+///
+/// # SDK Example
+/// ```rust
+/// // Use `FLUX_PLUGIN_ON_EVENT_EXPORT_NAME` when validating the Plugin SDK ABI contract.
+/// ```
 pub const FLUX_PLUGIN_ON_EVENT_EXPORT_NAME: &[u8] = b"flux_plugin_on_event\0";

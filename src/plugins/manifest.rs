@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+﻿use std::path::PathBuf;
 
 use serde::Deserialize;
 
@@ -9,6 +9,9 @@ use crate::plugins::{
 };
 
 /// Validated plugin manifest used by the engine runtime.
+///
+/// # Fields
+/// Public fields of `PluginManifest` are part of the generated SDK reference.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PluginManifest {
     pub id: PluginId,
@@ -24,6 +27,11 @@ pub struct PluginManifest {
 
 impl PluginManifest {
     /// Parses and validates a TOML manifest string.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `from_str` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn from_str(value: &str) -> Result<Self, PluginContractError> {
         let raw = toml::from_str::<RawPluginManifest>(value).map_err(|error| {
             PluginContractError::Manifest(format!("failed to parse manifest.toml: {}", error))
@@ -32,6 +40,11 @@ impl PluginManifest {
     }
 
     /// Parses and validates UTF-8 bytes from one `manifest.toml`.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `from_bytes` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn from_bytes(value: &[u8]) -> Result<Self, PluginContractError> {
         let text = std::str::from_utf8(value).map_err(|error| {
             PluginContractError::Manifest(format!("manifest.toml is not valid UTF-8: {}", error))

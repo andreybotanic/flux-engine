@@ -5,4 +5,7 @@ edition = "2021"
 
 [dependencies]
 flux_engine = { path = ".." }
+mdbook-driver = "0.5.2"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
 zip = { version = "2.2", default-features = false, features = ["deflate"] }

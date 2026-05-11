@@ -1,30 +1,56 @@
-use std::fmt;
+﻿use std::fmt;
 
 use semver::Version;
 
 use crate::plugins::diagnostics::PluginContractError;
 
 /// Current engine-side plugin API version.
+///
+/// # SDK Example
+/// ```rust
+/// // Use `ENGINE_PLUGIN_API_VERSION_VALUE` when validating the Plugin SDK ABI contract.
+/// ```
 pub const ENGINE_PLUGIN_API_VERSION_VALUE: u32 = 3;
 
 /// Canonical identifier of the built-in default plugin.
+///
+/// # SDK Notes
+/// `DEFAULT_PLUGIN_ID_VALUE` is a stable constant in the Plugin SDK reference.
 pub const DEFAULT_PLUGIN_ID_VALUE: &str = "flux.default";
 
 /// Current engine-side plugin API version wrapper.
+///
+/// # SDK Example
+/// ```rust
+/// // Use `ENGINE_PLUGIN_API_VERSION` when validating the Plugin SDK ABI contract.
+/// ```
 pub const ENGINE_PLUGIN_API_VERSION: PluginApiVersion =
     PluginApiVersion(ENGINE_PLUGIN_API_VERSION_VALUE);
 
 /// Stable plugin API version wrapper.
+///
+/// # Fields
+/// Public fields of `PluginApiVersion` are part of the generated SDK reference.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PluginApiVersion(u32);
 
 impl PluginApiVersion {
     /// Creates a plugin API version wrapper.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `new` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn new(value: u32) -> Self {
         Self(value)
     }
 
     /// Returns the raw API version number.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `value` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn value(self) -> u32 {
         self.0
     }
@@ -37,11 +63,19 @@ impl fmt::Display for PluginApiVersion {
 }
 
 /// Canonical plugin identifier used across manifests and registries.
+///
+/// # Fields
+/// Public fields of `PluginId` are part of the generated SDK reference.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PluginId(String);
 
 impl PluginId {
     /// Parses and validates one plugin identifier.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `parse` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn parse(raw: &str) -> Result<Self, PluginContractError> {
         if raw.is_empty() {
             return Err(PluginContractError::Manifest(
@@ -88,11 +122,21 @@ impl PluginId {
     }
 
     /// Returns the canonical string value.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `as_str` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Returns the canonical built-in default plugin identifier.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `default_plugin` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn default_plugin() -> Self {
         Self::parse(DEFAULT_PLUGIN_ID_VALUE).expect("default plugin id must stay valid")
     }
@@ -105,11 +149,19 @@ impl fmt::Display for PluginId {
 }
 
 /// Semantic plugin version declared in the manifest.
+///
+/// # Fields
+/// Public fields of `PluginVersion` are part of the generated SDK reference.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PluginVersion(Version);
 
 impl PluginVersion {
     /// Parses a semantic version string.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `parse` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn parse(raw: &str) -> Result<Self, PluginContractError> {
         Version::parse(raw).map(Self).map_err(|error| {
             PluginContractError::Manifest(format!(
@@ -120,6 +172,11 @@ impl PluginVersion {
     }
 
     /// Returns the underlying `semver::Version`.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `as_semver` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn as_semver(&self) -> &Version {
         &self.0
     }

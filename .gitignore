@@ -27,8 +27,9 @@ plugins_dev/*
 plugin_state.toml
 
 # In-project plugin folders are independent plugin repositories by default.
-# Tracked exceptions are the built-in default plugin and sample test fixtures.
+# Tracked exceptions are core plugin modules, the built-in default plugin and sample test fixtures.
 src/plugins/*/
+!src/plugins/api/
 !src/plugins/default_plugin/
 !src/plugins/flux_api_cell_demo_plugin/
 !src/plugins/flux_api_temperature_overlay_plugin/

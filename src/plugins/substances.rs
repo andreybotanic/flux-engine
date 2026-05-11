@@ -1,4 +1,4 @@
-use std::{
+﻿use std::{
     collections::{BTreeMap, HashMap},
     fmt,
 };
@@ -6,22 +6,40 @@ use std::{
 use crate::plugins::PluginId;
 
 /// Canonical identifier of one substance registered by a content plugin.
+///
+/// # Fields
+/// Public fields of `SubstanceId` are part of the generated SDK reference.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SubstanceId(String);
 
 impl SubstanceId {
     /// Parses and validates one substance identifier.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `parse` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn parse(raw: &str) -> Result<Self, String> {
         validate_substance_id(raw)?;
         Ok(Self(raw.to_string()))
     }
 
     /// Returns the canonical string value.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `as_str` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Returns the final id segment, useful for legacy short labels.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `leaf` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn leaf(&self) -> &str {
         self.0.rsplit('.').next().unwrap_or(self.0.as_str())
     }
@@ -34,6 +52,9 @@ impl fmt::Display for SubstanceId {
 }
 
 /// Feature flags declared for a plugin-owned substance.
+///
+/// # Fields
+/// Public fields of `SubstanceFlags` are part of the generated SDK reference.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SubstanceFlags {
     pub gas: bool,
@@ -41,12 +62,20 @@ pub struct SubstanceFlags {
 
 impl SubstanceFlags {
     /// Returns flags for a substance that can participate in gas simulation.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `gas` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn gas() -> Self {
         Self { gas: true }
     }
 }
 
 /// Describes one plugin-owned substance before it is assigned a compact runtime index.
+///
+/// # Fields
+/// Public fields of `SubstanceDefinition` are part of the generated SDK reference.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SubstanceDefinition {
     pub id: SubstanceId,
@@ -60,6 +89,11 @@ pub struct SubstanceDefinition {
 
 impl SubstanceDefinition {
     /// Builds a gas-capable substance definition and validates its data.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `gas` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn gas(
         id: SubstanceId,
         plugin_id: PluginId,
@@ -83,6 +117,9 @@ impl SubstanceDefinition {
 }
 
 /// Registry of plugin-owned substances with deterministic compact runtime order.
+///
+/// # Fields
+/// Public fields of `SubstanceRegistry` are part of the generated SDK reference.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SubstanceRegistry {
     definitions: Vec<SubstanceDefinition>,
@@ -92,6 +129,11 @@ pub struct SubstanceRegistry {
 
 impl SubstanceRegistry {
     /// Builds a registry and assigns compact indices by molecular mass and stable id.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `new` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn new(mut definitions: Vec<SubstanceDefinition>) -> Result<Self, String> {
         if definitions.is_empty() {
             return Err(
@@ -130,21 +172,41 @@ impl SubstanceRegistry {
     }
 
     /// Returns all definitions in compact runtime order.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `all` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn all(&self) -> &[SubstanceDefinition] {
         &self.definitions
     }
 
     /// Returns the number of registered substances.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `count` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn count(&self) -> usize {
         self.definitions.len()
     }
 
     /// Returns a definition by compact runtime index.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `get` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn get(&self, index: usize) -> Option<&SubstanceDefinition> {
         self.definitions.get(index)
     }
 
     /// Returns a definition by stable substance id.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `get_by_id` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn get_by_id(&self, id: &SubstanceId) -> Option<&SubstanceDefinition> {
         self.by_id
             .get(id)
@@ -152,16 +214,31 @@ impl SubstanceRegistry {
     }
 
     /// Returns compact runtime index by stable id or registered alias.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `compact_index` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn compact_index(&self, id_or_alias: &str) -> Option<usize> {
         self.by_lookup.get(id_or_alias).copied()
     }
 
     /// Returns a stable id by compact runtime index.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `stable_id_by_index` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn stable_id_by_index(&self, index: usize) -> Option<&SubstanceId> {
         self.definitions.get(index).map(|definition| &definition.id)
     }
 
     /// Returns molecular masses in compact runtime order.
+    ///
+    /// # SDK Example
+    /// ```rust
+    /// // Call `molecular_masses` from plugin-facing code when this operation is available in context.
+    /// ```
     pub fn molecular_masses(&self) -> Vec<f32> {
         self.definitions
             .iter()
