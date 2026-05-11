@@ -19,7 +19,7 @@ This event does not carry additional payload fields.
 ## SDK Example
 
 ```rust
-if event.event_kind == 2 {
+if event.kind() == PluginEventKind::WorldBeforeSave {
 // Persist plugin-owned state with write_save_chunk.
 }
 ```

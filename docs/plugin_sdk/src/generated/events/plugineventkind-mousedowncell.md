@@ -21,7 +21,7 @@ Fired when a mouse button is pressed over a world cell.
 ## SDK Example
 
 ```rust
-if event.event_kind == 11 && event.has_cell != 0 {
+if event.kind() == PluginEventKind::MouseDownCell && event.has_cell != 0 {
 // Use event.cell_x and event.cell_y as the target cell.
 }
 ```

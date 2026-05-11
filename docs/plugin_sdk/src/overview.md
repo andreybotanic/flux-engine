@@ -7,6 +7,6 @@ FluxEngine поддерживает runtime-плагины, которые об�
 - packaged archives `plugins/*.fluxplugin`;
 - expanded dev directories `plugins_dev/<plugin_id>/`.
 
-Встроенный `flux.default` всегда включён, заблокирован и предоставляет базовый content: клетки, структуры, overlay труб и базовые вещества. Внешние плагины могут регистрировать свои возможности во время ABI handshake: вещества, подписки на события, инструменты, overlay и save chunks.
+Встроенный `flux.default` всегда включён, заблокирован и предоставляет базовый content: клетки, структуры, overlay труб и базовые вещества. Внешние плагины могут регистрировать свои возможности во время ABI handshake: вещества, обработчики событий через `FluxEventKind`, инструменты, overlay и save chunks.
 
-Стабильная внешняя граница сегодня — ABI v3 в `src/plugins/abi.rs`. Rust-first API в `src/plugins/api/` описывает модель движка и используется генератором документации как источник терминов и контрактов.
+Стабильная внешняя граница сегодня — ABI v4 в `src/plugins/abi.rs` и `src/plugins/abi_events.rs`. Rust-first API в `src/plugins/api/` описывает модель движка и используется генератором документации как источник терминов и контрактов.

@@ -21,7 +21,7 @@ Fired when the active editor tool changes.
 ## SDK Example
 
 ```rust
-if event.event_kind == 10 {
+if event.kind() == PluginEventKind::ToolSelected {
 // Read event.active_tool_id from the ABI payload.
 }
 ```

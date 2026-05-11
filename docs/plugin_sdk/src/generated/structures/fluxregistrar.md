@@ -6,7 +6,7 @@
 
 <span class="sdk-badge sdk-badge-ABI">ABI</span> <span class="sdk-kind">struct</span>
 
-Source: **ABI v3** (`src/plugins/abi.rs`). Generated group: **Structures**.
+Source: **ABI v4** (`src/plugins/abi.rs`). Generated group: **Structures**.
 
 ## Description
 
@@ -25,7 +25,7 @@ pub struct FluxRegistrar
 | `struct_size` | `u32` | `struct_size` field stored as `u32`. |
 | `api_version` | `u32` | `api_version` field stored as `u32`. |
 | `register_gas_substance` | `Option < FluxRegisterGasSubstanceFn >` | `register_gas_substance` field stored as `Option < FluxRegisterGasSubstanceFn >`. |
-| `register_event_subscription` | `Option < FluxRegisterEventSubscriptionFn >` | `register_event_subscription` field stored as `Option < FluxRegisterEventSubscriptionFn >`. |
+| `register_event_handler` | `Option < FluxRegisterEventHandlerFn >` | `register_event_handler` field stored as `Option < FluxRegisterEventHandlerFn >`. |
 | `register_tool` | `Option < FluxRegisterToolFn >` | `register_tool` field stored as `Option < FluxRegisterToolFn >`. |
 | `register_overlay` | `Option < FluxRegisterOverlayFn >` | `register_overlay` field stored as `Option < FluxRegisterOverlayFn >`. |
 | `register_save_chunk` | `Option < FluxRegisterSaveChunkFn >` | `register_save_chunk` field stored as `Option < FluxRegisterSaveChunkFn >`. |

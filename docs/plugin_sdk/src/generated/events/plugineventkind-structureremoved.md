@@ -21,7 +21,7 @@ Fired after a structure is removed.
 ## SDK Example
 
 ```rust
-if event.event_kind == 9 {
+if event.kind() == PluginEventKind::StructureRemoved {
 // Remove plugin metadata tied to the deleted structure.
 }
 ```

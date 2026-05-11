@@ -21,7 +21,7 @@ Fired after a structure is placed.
 ## SDK Example
 
 ```rust
-if event.event_kind == 8 {
+if event.kind() == PluginEventKind::StructurePlaced {
 // Update plugin indexes that track structures.
 }
 ```

@@ -3,8 +3,13 @@ include!("../../flux_api_demo_common.rs");
 const OVERLAY_WIDTH: u32 = 102;
 const OVERLAY_HEIGHT: u32 = 102;
 
+const EVENT_HANDLERS: &[DemoEventHandler] = &[DemoEventHandler {
+    event_kind: FluxEventKind::RenderOverlay,
+    handler_name: "onRenderOverlay",
+}];
+
 const SPEC: DemoSpec = DemoSpec {
-    event_kinds: &[18, 21],
+    event_handlers: EVENT_HANDLERS,
     tool: None,
     overlay: Some((
         "flux.api_temperature_overlay.overlay.temperature",
@@ -42,23 +47,15 @@ pub unsafe extern "C" fn flux_plugin_destroy(plugin: *mut FluxPluginHandle) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn flux_plugin_on_event(
+pub unsafe extern "C" fn onRenderOverlay(
     plugin: *mut FluxPluginHandle,
-    event: *const FluxRuntimeEvent,
+    event: *const FluxRenderOverlayEventPayload,
     host: *mut FluxRuntimeHost,
 ) -> FluxStatus {
-    if plugin.is_null() || event.is_null() || host.is_null() {
-        return FluxStatus::INVALID_ARGUMENT;
-    }
-    let plugin = &mut *plugin;
-    let event = &*event;
-    let host = &mut *host;
-    if event.api_version != ENGINE_PLUGIN_API_VERSION || host.api_version != ENGINE_PLUGIN_API_VERSION {
-        return FluxStatus::FAILED;
-    }
-    if event.event_kind != 21 {
-        return FluxStatus::OK;
-    }
+    let (plugin, _event, host) = match validate_event_call(plugin, event, host) {
+        Ok(values) => values,
+        Err(status) => return status,
+    };
     plugin.counter = plugin.counter.wrapping_add(1);
     let Some(submit_frame) = host.submit_overlay_frame else {
         return FluxStatus::FAILED;

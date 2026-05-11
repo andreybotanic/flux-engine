@@ -21,7 +21,7 @@ Fired when the cursor moves over world cells.
 ## SDK Example
 
 ```rust
-if event.event_kind == 12 && event.has_cell != 0 {
+if event.kind() == PluginEventKind::MouseMoveCell && event.has_cell != 0 {
 // Continue a drag operation across cells.
 }
 ```

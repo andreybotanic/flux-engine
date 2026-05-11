@@ -10,7 +10,7 @@ use crate::plugins::diagnostics::PluginContractError;
 /// ```rust
 /// // Use `ENGINE_PLUGIN_API_VERSION_VALUE` when validating the Plugin SDK ABI contract.
 /// ```
-pub const ENGINE_PLUGIN_API_VERSION_VALUE: u32 = 3;
+pub const ENGINE_PLUGIN_API_VERSION_VALUE: u32 = 4;
 
 /// Canonical identifier of the built-in default plugin.
 ///

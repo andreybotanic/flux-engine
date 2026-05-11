@@ -21,7 +21,7 @@ Fired when a plugin-controlled overlay should submit a frame.
 ## SDK Example
 
 ```rust
-if event.event_kind == 21 {
+if event.kind() == PluginEventKind::RenderOverlay {
 // Submit a 102x102 RGBA8 frame with submit_overlay_frame.
 }
 ```

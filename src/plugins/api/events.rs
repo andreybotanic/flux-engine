@@ -15,7 +15,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 0 {
+    /// if event.kind() == PluginEventKind::WorldCreated {
     ///     // Initialize plugin state for a fresh world.
     /// }
     /// ```
@@ -24,7 +24,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 1 {
+    /// if event.kind() == PluginEventKind::WorldLoaded {
     ///     // Read plugin save chunks through the runtime host.
     /// }
     /// ```
@@ -33,7 +33,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 2 {
+    /// if event.kind() == PluginEventKind::WorldBeforeSave {
     ///     // Persist plugin-owned state with write_save_chunk.
     /// }
     /// ```
@@ -42,7 +42,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 3 {
+    /// if event.kind() == PluginEventKind::WorldAfterSave {
     ///     // Clear transient save status after a successful save pass.
     /// }
     /// ```
@@ -51,7 +51,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 4 {
+    /// if event.kind() == PluginEventKind::WorldUnloaded {
     ///     // Drop world-scoped plugin caches.
     /// }
     /// ```
@@ -60,7 +60,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 5 {
+    /// if event.kind() == PluginEventKind::SimulationPreCellGasStep {
     ///     // Inject gas before the simulation step with add_gas.
     /// }
     /// ```
@@ -69,7 +69,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 6 {
+    /// if event.kind() == PluginEventKind::SimulationPostCellGasStep {
     ///     // Observe post-step state or enqueue derived effects.
     /// }
     /// ```
@@ -78,7 +78,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 7 {
+    /// if event.kind() == PluginEventKind::SimulationPausedChanged {
     ///     // Refresh plugin UI state that depends on pause/resume.
     /// }
     /// ```
@@ -87,7 +87,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 8 {
+    /// if event.kind() == PluginEventKind::StructurePlaced {
     ///     // Update plugin indexes that track structures.
     /// }
     /// ```
@@ -96,7 +96,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 9 {
+    /// if event.kind() == PluginEventKind::StructureRemoved {
     ///     // Remove plugin metadata tied to the deleted structure.
     /// }
     /// ```
@@ -105,7 +105,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 10 {
+    /// if event.kind() == PluginEventKind::ToolSelected {
     ///     // Read event.active_tool_id from the ABI payload.
     /// }
     /// ```
@@ -114,7 +114,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 11 && event.has_cell != 0 {
+    /// if event.kind() == PluginEventKind::MouseDownCell && event.has_cell != 0 {
     ///     // Use event.cell_x and event.cell_y as the target cell.
     /// }
     /// ```
@@ -123,7 +123,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 12 && event.has_cell != 0 {
+    /// if event.kind() == PluginEventKind::MouseMoveCell && event.has_cell != 0 {
     ///     // Continue a drag operation across cells.
     /// }
     /// ```
@@ -132,7 +132,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 13 {
+    /// if event.kind() == PluginEventKind::MouseUpCell {
     ///     // Finish a cell drag operation.
     /// }
     /// ```
@@ -141,7 +141,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 14 {
+    /// if event.kind() == PluginEventKind::MouseEnterCell {
     ///     // Start hover-specific plugin state.
     /// }
     /// ```
@@ -150,7 +150,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 15 {
+    /// if event.kind() == PluginEventKind::MouseLeaveCell {
     ///     // Clear hover-specific plugin state.
     /// }
     /// ```
@@ -159,7 +159,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 16 {
+    /// if event.kind() == PluginEventKind::KeyPressed {
     ///     // Read event.key from the ABI payload.
     /// }
     /// ```
@@ -168,7 +168,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 17 {
+    /// if event.kind() == PluginEventKind::KeyReleased {
     ///     // Stop key-held plugin behavior.
     /// }
     /// ```
@@ -177,7 +177,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 18 {
+    /// if event.kind() == PluginEventKind::OverlayChanged {
     ///     // Read event.overlay_id from the ABI payload.
     /// }
     /// ```
@@ -186,7 +186,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 19 && event.has_cell != 0 {
+    /// if event.kind() == PluginEventKind::BuildHudForCell {
     ///     // Add a HUD block with submit_hud_block.
     /// }
     /// ```
@@ -195,7 +195,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 20 {
+    /// if event.kind() == PluginEventKind::BuildPanel {
     ///     // Emit or refresh plugin panel UI state.
     /// }
     /// ```
@@ -204,7 +204,7 @@ pub enum PluginEventKind {
     ///
     /// # SDK Example
     /// ```rust
-    /// if event.event_kind == 21 {
+    /// if event.kind() == PluginEventKind::RenderOverlay {
     ///     // Submit a 102x102 RGBA8 frame with submit_overlay_frame.
     /// }
     /// ```

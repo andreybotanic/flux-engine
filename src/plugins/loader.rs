@@ -12,15 +12,14 @@ use zip::ZipArchive;
 
 use crate::plugins::{
     abi::{
-        FluxGasSubstanceDescriptor, FluxHostApi, FluxOverlayDescriptor, FluxPluginApiVersionFn,
-        FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginHandle, FluxPluginOnEventFn,
-        FluxPluginRegisterFn, FluxRegistrar, FluxSaveChunkDescriptor, FluxStatus,
+        event_kind_from_abi, FluxEventHandlerDescriptor, FluxGasSubstanceDescriptor, FluxHostApi,
+        FluxOverlayDescriptor, FluxPluginApiVersionFn, FluxPluginCreateFn, FluxPluginDestroyFn,
+        FluxPluginHandle, FluxPluginRegisterFn, FluxRegistrar, FluxSaveChunkDescriptor, FluxStatus,
         FluxToolDescriptor, FluxUtf8Slice, FLUX_PLUGIN_API_VERSION_EXPORT_NAME,
         FLUX_PLUGIN_CREATE_EXPORT_NAME, FLUX_PLUGIN_DESTROY_EXPORT_NAME,
-        FLUX_PLUGIN_ON_EVENT_EXPORT_NAME, FLUX_PLUGIN_REGISTER_EXPORT_NAME,
+        FLUX_PLUGIN_REGISTER_EXPORT_NAME,
     },
     api::{
-        events::PluginEventKind,
         render_api::OverlayRenderPolicy,
         runtime::{RuntimeOverlayDescriptor, SaveChunkDescriptor},
         ui_api::ToolDescriptor,
@@ -28,8 +27,8 @@ use crate::plugins::{
     diagnostics::PluginContractError,
     id::{PluginApiVersion, ENGINE_PLUGIN_API_VERSION},
     manifest::PluginManifest,
-    registration::PluginRuntimeRegistration,
-    runtime_dll::RuntimeDllPlugin,
+    registration::{PluginEventHandlerRegistration, PluginRuntimeRegistration},
+    runtime_dll::{load_event_handler, RuntimeDllPlugin},
     source::{
         fingerprint_expanded_plugin_root, fingerprint_packaged_plugin_archive,
         resolve_plugin_layout, validate_archive_entry_path, ExpandedPluginSource,
@@ -226,6 +225,7 @@ pub fn validate_runtime_registration(
     manifest: &PluginManifest,
     registration: &PluginRuntimeRegistration,
 ) -> Result<(), PluginContractError> {
+    validate_event_handler_registration(&registration.event_handlers)?;
     if !manifest.content && !registration.gas_substances.is_empty() {
         return Err(PluginContractError::Abi(format!(
             "plugin '{}' has content = false but registered runtime content",
@@ -241,6 +241,36 @@ pub fn validate_runtime_registration(
             manifest.id, error
         ))
     })?;
+    Ok(())
+}
+
+fn validate_event_handler_registration(
+    handlers: &[PluginEventHandlerRegistration],
+) -> Result<(), PluginContractError> {
+    use std::collections::BTreeSet;
+
+    let mut event_kinds = BTreeSet::new();
+    let mut handler_names = BTreeSet::new();
+    for handler in handlers {
+        if !is_valid_handler_name(&handler.handler_name) {
+            return Err(PluginContractError::Abi(format!(
+                "invalid event handler name '{}'; expected ASCII identifier syntax",
+                handler.handler_name
+            )));
+        }
+        if !event_kinds.insert(handler.event_kind) {
+            return Err(PluginContractError::Abi(format!(
+                "duplicate event handler registration for {:?}",
+                handler.event_kind
+            )));
+        }
+        if !handler_names.insert(handler.handler_name.clone()) {
+            return Err(PluginContractError::Abi(format!(
+                "event handler name '{}' is reused for multiple events",
+                handler.handler_name
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -324,10 +354,6 @@ fn instantiate_runtime_plugin_from_root(
             FLUX_PLUGIN_DESTROY_EXPORT_NAME,
             "flux_plugin_destroy",
         )?;
-        let on_event_fn = library
-            .get::<FluxPluginOnEventFn>(FLUX_PLUGIN_ON_EVENT_EXPORT_NAME)
-            .ok()
-            .map(|symbol| *symbol);
 
         let exported_api_version = PluginApiVersion::new(api_version_fn());
         if exported_api_version != ENGINE_PLUGIN_API_VERSION {
@@ -363,11 +389,21 @@ fn instantiate_runtime_plugin_from_root(
             ));
         }
 
+        let mut event_handlers = std::collections::BTreeMap::new();
+        for registration in &plugin.registration.event_handlers {
+            let handler = load_event_handler(
+                &library,
+                registration.event_kind,
+                &registration.handler_name,
+            )?;
+            event_handlers.insert(registration.event_kind, handler);
+        }
+
         Ok(RuntimeDllPlugin {
             plugin_id: plugin.plugin_id.clone(),
             handle: plugin_handle,
             destroy_fn,
-            on_event_fn,
+            event_handlers,
             cache_root: plugin_root.to_path_buf(),
             library,
         })
@@ -601,15 +637,15 @@ fn validate_plugin_root(
         host_error_message.clear();
         let mut registrar = FluxRegistrar::new(
             Some(register_gas_substance_callback),
-            Some(register_event_subscription_callback),
+            Some(register_event_handler_callback),
             Some(register_tool_callback),
             Some(register_overlay_callback),
             Some(register_save_chunk_callback),
             (&mut registration_collector as *mut PluginRegistrationCollector).cast::<c_void>(),
         );
         let register_status = register_fn(plugin_handle, &mut registrar);
-        destroy_fn(plugin_handle);
         if !register_status.is_ok() {
+            destroy_fn(plugin_handle);
             return Err(status_error(
                 "flux_plugin_register",
                 register_status,
@@ -617,6 +653,8 @@ fn validate_plugin_root(
                 PluginContractError::Abi,
             ));
         }
+        validate_registered_event_handler_exports(&library, &registration_collector.registration)?;
+        destroy_fn(plugin_handle);
     }
 
     if let Some(error) = registration_collector.error_message {
@@ -663,24 +701,46 @@ unsafe extern "C" fn register_gas_substance_callback(
     }
 }
 
-unsafe extern "C" fn register_event_subscription_callback(
+unsafe extern "C" fn register_event_handler_callback(
     context: *mut c_void,
-    event_kind: u32,
+    descriptor: *const FluxEventHandlerDescriptor,
 ) -> FluxStatus {
-    if context.is_null() {
+    if context.is_null() || descriptor.is_null() {
         return FluxStatus::INVALID_ARGUMENT;
     }
 
     let collector = &mut *(context.cast::<PluginRegistrationCollector>());
-    match event_kind_from_abi(event_kind) {
-        Some(kind) => {
-            if !collector.registration.event_subscriptions.contains(&kind) {
-                collector.registration.event_subscriptions.push(kind);
+    match event_handler_registration_from_abi(&*descriptor) {
+        Ok(handler) => {
+            if collector
+                .registration
+                .event_handlers
+                .iter()
+                .any(|registered| registered.event_kind == handler.event_kind)
+            {
+                collector.error_message = Some(format!(
+                    "duplicate event handler registration for {:?}",
+                    handler.event_kind
+                ));
+                return FluxStatus::FAILED;
             }
+            if collector
+                .registration
+                .event_handlers
+                .iter()
+                .any(|registered| registered.handler_name == handler.handler_name)
+            {
+                collector.error_message = Some(format!(
+                    "event handler name '{}' is reused for multiple events",
+                    handler.handler_name
+                ));
+                return FluxStatus::FAILED;
+            }
+            collector.registration.event_handlers.push(handler);
             FluxStatus::OK
         }
-        None => {
-            collector.error_message = Some(format!("unknown plugin event kind {}", event_kind));
+        Err(error) => {
+            collector.error_message = Some(error);
             FluxStatus::FAILED
         }
     }
@@ -749,32 +809,43 @@ unsafe extern "C" fn register_save_chunk_callback(
     }
 }
 
-fn event_kind_from_abi(value: u32) -> Option<PluginEventKind> {
-    match value {
-        0 => Some(PluginEventKind::WorldCreated),
-        1 => Some(PluginEventKind::WorldLoaded),
-        2 => Some(PluginEventKind::WorldBeforeSave),
-        3 => Some(PluginEventKind::WorldAfterSave),
-        4 => Some(PluginEventKind::WorldUnloaded),
-        5 => Some(PluginEventKind::SimulationPreCellGasStep),
-        6 => Some(PluginEventKind::SimulationPostCellGasStep),
-        7 => Some(PluginEventKind::SimulationPausedChanged),
-        8 => Some(PluginEventKind::StructurePlaced),
-        9 => Some(PluginEventKind::StructureRemoved),
-        10 => Some(PluginEventKind::ToolSelected),
-        11 => Some(PluginEventKind::MouseDownCell),
-        12 => Some(PluginEventKind::MouseMoveCell),
-        13 => Some(PluginEventKind::MouseUpCell),
-        14 => Some(PluginEventKind::MouseEnterCell),
-        15 => Some(PluginEventKind::MouseLeaveCell),
-        16 => Some(PluginEventKind::KeyPressed),
-        17 => Some(PluginEventKind::KeyReleased),
-        18 => Some(PluginEventKind::OverlayChanged),
-        19 => Some(PluginEventKind::BuildHudForCell),
-        20 => Some(PluginEventKind::BuildPanel),
-        21 => Some(PluginEventKind::RenderOverlay),
-        _ => None,
+fn event_handler_registration_from_abi(
+    descriptor: &FluxEventHandlerDescriptor,
+) -> Result<PluginEventHandlerRegistration, String> {
+    let event_kind = event_kind_from_abi(descriptor.event_kind)
+        .ok_or_else(|| format!("unknown plugin event kind {}", descriptor.event_kind))?;
+    let handler_name = unsafe { read_abi_utf8(descriptor.handler_name, "event handler name") }?;
+    if !is_valid_handler_name(&handler_name) {
+        return Err(format!(
+            "invalid event handler name '{}'; expected ASCII identifier syntax",
+            handler_name
+        ));
     }
+    Ok(PluginEventHandlerRegistration {
+        event_kind,
+        handler_name,
+    })
+}
+
+fn validate_registered_event_handler_exports(
+    library: &Library,
+    registration: &PluginRuntimeRegistration,
+) -> Result<(), PluginContractError> {
+    for handler in &registration.event_handlers {
+        load_event_handler(library, handler.event_kind, &handler.handler_name)?;
+    }
+    Ok(())
+}
+
+fn is_valid_handler_name(handler_name: &str) -> bool {
+    let mut chars = handler_name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return false;
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 unsafe fn tool_descriptor_from_abi(
@@ -954,16 +1025,23 @@ fn path_to_utf8_string(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use std::{
+        env,
         fs::{self, File},
         io::Write,
-        path::PathBuf,
+        path::{Path, PathBuf},
+        process::Command,
     };
 
+    use libloading::Library;
     use zip::{write::SimpleFileOptions, ZipWriter};
 
+    use super::{
+        read_packaged_plugin_candidate, validate_registered_event_handler_exports,
+        validate_runtime_registration,
+    };
     use crate::plugins::{
-        loader::{read_packaged_plugin_candidate, validate_runtime_registration},
-        PluginId, PluginManifest, PluginRuntimeRegistration, SubstanceDefinition, SubstanceId,
+        api::events::PluginEventKind, PluginEventHandlerRegistration, PluginId, PluginManifest,
+        PluginRuntimeRegistration, SubstanceDefinition, SubstanceId,
     };
 
     fn make_temp_archive_path(prefix: &str) -> PathBuf {
@@ -977,6 +1055,43 @@ mod tests {
                 .as_nanos()
         );
         std::env::temp_dir().join(unique)
+    }
+
+    fn cargo_binary() -> PathBuf {
+        if let Ok(path) = env::var("CARGO") {
+            let path = PathBuf::from(path);
+            if path.exists() {
+                return path;
+            }
+        }
+
+        let fallback = PathBuf::from(r"C:\Users\andreybotanic\.cargo\bin\cargo.exe");
+        if fallback.exists() {
+            return fallback;
+        }
+
+        PathBuf::from("cargo")
+    }
+
+    fn demo_plugin_root(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("plugins")
+            .join(name)
+    }
+
+    fn build_demo_plugin_cdylib(crate_name: &str, dll_name: &str) -> PathBuf {
+        let crate_root = demo_plugin_root(crate_name);
+        let status = Command::new(cargo_binary())
+            .arg("build")
+            .arg("--manifest-path")
+            .arg(crate_root.join("Cargo.toml"))
+            .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))
+            .status()
+            .expect("spawn cargo build for demo plugin");
+        assert!(status.success(), "demo plugin cargo build failed");
+
+        crate_root.join("target").join("debug").join(dll_name)
     }
 
     #[test]
@@ -994,7 +1109,7 @@ mod tests {
                 br#"id = "escape.test"
 display_name = "Escape"
 version = "1.0.0"
-api_version = 3
+api_version = 4
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"
@@ -1016,7 +1131,7 @@ content = false
             r#"id = "sample.plugin"
 display_name = "Sample"
 version = "1.0.0"
-api_version = 3
+api_version = 4
 dll = "bin/sample.dll"
 configs = "config"
 assets = "assets"
@@ -1048,7 +1163,7 @@ content = false
             r#"id = "sample.plugin"
 display_name = "Sample"
 version = "1.0.0"
-api_version = 3
+api_version = 4
 dll = "bin/sample.dll"
 configs = "config"
 assets = "assets"
@@ -1072,5 +1187,127 @@ content = true
         let error = validate_runtime_registration(&manifest, &registration)
             .expect_err("foreign namespace must fail");
         assert!(error.to_string().contains("outside plugin namespace"));
+    }
+
+    #[test]
+    fn plugin_contract_accepts_explicit_event_handler_registration() {
+        let manifest = PluginManifest::from_str(
+            r#"id = "sample.plugin"
+display_name = "Sample"
+version = "1.0.0"
+api_version = 4
+dll = "bin/sample.dll"
+configs = "config"
+assets = "assets"
+content = false
+"#,
+        )
+        .expect("manifest");
+        let registration = PluginRuntimeRegistration {
+            event_handlers: vec![PluginEventHandlerRegistration {
+                event_kind: PluginEventKind::KeyPressed,
+                handler_name: "onKeyPressed".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        validate_runtime_registration(&manifest, &registration).expect("registration must pass");
+    }
+
+    #[test]
+    fn plugin_contract_rejects_duplicate_event_handler_registration() {
+        let manifest = PluginManifest::from_str(
+            r#"id = "sample.plugin"
+display_name = "Sample"
+version = "1.0.0"
+api_version = 4
+dll = "bin/sample.dll"
+configs = "config"
+assets = "assets"
+content = false
+"#,
+        )
+        .expect("manifest");
+        let registration = PluginRuntimeRegistration {
+            event_handlers: vec![
+                PluginEventHandlerRegistration {
+                    event_kind: PluginEventKind::KeyPressed,
+                    handler_name: "onKeyPressed".to_string(),
+                },
+                PluginEventHandlerRegistration {
+                    event_kind: PluginEventKind::KeyPressed,
+                    handler_name: "onOtherKeyPressed".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let error = validate_runtime_registration(&manifest, &registration)
+            .expect_err("duplicate event kind must fail");
+        assert!(error
+            .to_string()
+            .contains("duplicate event handler registration"));
+    }
+
+    #[test]
+    fn plugin_contract_rejects_invalid_event_handler_name() {
+        let manifest = PluginManifest::from_str(
+            r#"id = "sample.plugin"
+display_name = "Sample"
+version = "1.0.0"
+api_version = 4
+dll = "bin/sample.dll"
+configs = "config"
+assets = "assets"
+content = false
+"#,
+        )
+        .expect("manifest");
+        let registration = PluginRuntimeRegistration {
+            event_handlers: vec![PluginEventHandlerRegistration {
+                event_kind: PluginEventKind::KeyPressed,
+                handler_name: "123bad".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let error = validate_runtime_registration(&manifest, &registration)
+            .expect_err("invalid handler name must fail");
+        assert!(error.to_string().contains("invalid event handler name"));
+    }
+
+    #[test]
+    fn plugin_contract_rejects_missing_event_handler_export() {
+        let dll_path =
+            build_demo_plugin_cdylib("flux_api_tick_demo_plugin", "flux_api_tick_demo_plugin.dll");
+        let library = unsafe { Library::new(dll_path) }.expect("load demo plugin dll");
+        let registration = PluginRuntimeRegistration {
+            event_handlers: vec![PluginEventHandlerRegistration {
+                event_kind: PluginEventKind::SimulationPreCellGasStep,
+                handler_name: "onMissingHandler".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let error = validate_registered_event_handler_exports(&library, &registration)
+            .expect_err("missing export must fail");
+        assert!(error.to_string().contains("onMissingHandler"));
+    }
+
+    #[test]
+    fn plugin_contract_accepts_existing_event_handler_export() {
+        let dll_path =
+            build_demo_plugin_cdylib("flux_api_tick_demo_plugin", "flux_api_tick_demo_plugin.dll");
+        let library = unsafe { Library::new(dll_path) }.expect("load demo plugin dll");
+        let registration = PluginRuntimeRegistration {
+            event_handlers: vec![PluginEventHandlerRegistration {
+                event_kind: PluginEventKind::SimulationPreCellGasStep,
+                handler_name: "onSimulationPreCellGasStep".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        validate_registered_event_handler_exports(&library, &registration)
+            .expect("existing export must validate");
     }
 }

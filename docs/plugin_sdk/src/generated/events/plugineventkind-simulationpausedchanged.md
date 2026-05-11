@@ -21,7 +21,7 @@ Fired when the simulation pause state changes.
 ## SDK Example
 
 ```rust
-if event.event_kind == 7 {
+if event.kind() == PluginEventKind::SimulationPausedChanged {
 // Refresh plugin UI state that depends on pause/resume.
 }
 ```

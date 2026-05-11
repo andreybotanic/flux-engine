@@ -6,7 +6,7 @@
 
 <span class="sdk-badge sdk-badge-ABI">ABI</span> <span class="sdk-kind">struct</span>
 
-Source: **ABI v3** (`src/plugins/abi.rs`). Generated group: **Structures**.
+Source: **ABI v4** (`src/plugins/abi.rs`). Generated group: **Structures**.
 
 ## Description
 

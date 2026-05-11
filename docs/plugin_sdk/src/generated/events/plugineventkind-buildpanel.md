@@ -21,7 +21,7 @@ Fired when a plugin-owned panel should be built.
 ## SDK Example
 
 ```rust
-if event.event_kind == 20 {
+if event.kind() == PluginEventKind::BuildPanel {
 // Emit or refresh plugin panel UI state.
 }
 ```

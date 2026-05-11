@@ -21,7 +21,7 @@ Fired when the HUD is built for the hovered cell.
 ## SDK Example
 
 ```rust
-if event.event_kind == 19 && event.has_cell != 0 {
+if event.kind() == PluginEventKind::BuildHudForCell {
 // Add a HUD block with submit_hud_block.
 }
 ```

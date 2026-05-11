@@ -21,7 +21,7 @@ Fired when a mouse button is released over a world cell.
 ## SDK Example
 
 ```rust
-if event.event_kind == 13 {
+if event.kind() == PluginEventKind::MouseUpCell {
 // Finish a cell drag operation.
 }
 ```

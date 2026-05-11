@@ -6,7 +6,7 @@
 id = "flux.example"
 display_name = "Example Plugin"
 version = "0.1.0"
-api_version = 3
+api_version = 4
 dll = "bin/example.dll"
 configs = "config"
 assets = "assets"

@@ -10,7 +10,7 @@ Source: **Runtime Registry** (`src/plugins/api/runtime.rs`). Generated group: **
 
 ## Description
 
-Runtime registry for plugin API descriptors and event subscriptions.
+Runtime registry for plugin API descriptors and event subscriber groups.
 
 ## Declaration
 

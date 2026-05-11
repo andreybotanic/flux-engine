@@ -1,7 +1,7 @@
 id = "flux.api_ui_save_demo"
 display_name = "API UI Save Demo"
 version = "0.1.0"
-api_version = 3
+api_version = 4
 dll = "bin/flux_api_ui_save_demo_plugin.dll"
 configs = "config"
 assets = "assets"

@@ -1,19 +1,19 @@
 use std::ffi::c_void;
 
-/// ABI version used by the v3 demo plugins.
-pub const ENGINE_PLUGIN_API_VERSION: u32 = 3;
+/// ABI version used by the v4 demo plugins.
+pub const ENGINE_PLUGIN_API_VERSION: u32 = 4;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
 /// Borrowed UTF-8 string slice passed across the plugin ABI.
 pub struct FluxUtf8Slice {
-    ptr: *const u8,
-    len: usize,
+    pub ptr: *const u8,
+    pub len: usize,
 }
 
 impl FluxUtf8Slice {
-    /// Builds an ABI slice from a static Rust string.
-    pub fn from_str(value: &'static str) -> Self {
+    /// Builds an ABI slice from a Rust string.
+    pub fn from_str(value: &str) -> Self {
         if value.is_empty() {
             return Self {
                 ptr: std::ptr::null(),
@@ -60,15 +60,15 @@ pub struct FluxHostApi {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-/// Gas substance descriptor accepted by the v3 registrar.
+/// Gas substance descriptor accepted by the v4 registrar.
 pub struct FluxGasSubstanceDescriptor {
-    id: FluxUtf8Slice,
-    label: FluxUtf8Slice,
-    alias: FluxUtf8Slice,
-    molecular_mass: f32,
-    color_r: f32,
-    color_g: f32,
-    color_b: f32,
+    pub id: FluxUtf8Slice,
+    pub label: FluxUtf8Slice,
+    pub alias: FluxUtf8Slice,
+    pub molecular_mass: f32,
+    pub color_r: f32,
+    pub color_g: f32,
+    pub color_b: f32,
 }
 
 /// Registrar callback for plugin-owned gas substance declarations.
@@ -79,12 +79,12 @@ pub type FluxRegisterGasSubstanceFn = unsafe extern "C" fn(
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-/// Tool descriptor accepted by the v3 registrar.
+/// Tool descriptor accepted by the v4 registrar.
 pub struct FluxToolDescriptor {
-    id: FluxUtf8Slice,
-    label: FluxUtf8Slice,
-    icon_path: FluxUtf8Slice,
-    silhouette_path: FluxUtf8Slice,
+    pub id: FluxUtf8Slice,
+    pub label: FluxUtf8Slice,
+    pub icon_path: FluxUtf8Slice,
+    pub silhouette_path: FluxUtf8Slice,
 }
 
 /// Registrar callback for plugin-owned tool declarations.
@@ -93,12 +93,12 @@ pub type FluxRegisterToolFn =
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-/// Overlay descriptor accepted by the v3 registrar.
+/// Overlay descriptor accepted by the v4 registrar.
 pub struct FluxOverlayDescriptor {
-    id: FluxUtf8Slice,
-    label: FluxUtf8Slice,
-    hotkey: FluxUtf8Slice,
-    render_policy: u32,
+    pub id: FluxUtf8Slice,
+    pub label: FluxUtf8Slice,
+    pub hotkey: FluxUtf8Slice,
+    pub render_policy: u32,
 }
 
 /// Registrar callback for plugin-owned overlay declarations.
@@ -109,10 +109,10 @@ pub type FluxRegisterOverlayFn = unsafe extern "C" fn(
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-/// Save chunk descriptor accepted by the v3 registrar.
+/// Save chunk descriptor accepted by the v4 registrar.
 pub struct FluxSaveChunkDescriptor {
-    id: FluxUtf8Slice,
-    version: u32,
+    pub id: FluxUtf8Slice,
+    pub version: u32,
 }
 
 /// Registrar callback for plugin-owned save chunk declarations.
@@ -123,12 +123,71 @@ pub type FluxRegisterSaveChunkFn = unsafe extern "C" fn(
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+/// Stable plugin-visible event kind used by the demo ABI shim.
+pub enum FluxEventKind {
+    WorldCreated = 0,
+    WorldLoaded = 1,
+    WorldBeforeSave = 2,
+    WorldAfterSave = 3,
+    WorldUnloaded = 4,
+    SimulationPreCellGasStep = 5,
+    SimulationPostCellGasStep = 6,
+    SimulationPausedChanged = 7,
+    StructurePlaced = 8,
+    StructureRemoved = 9,
+    ToolSelected = 10,
+    MouseDownCell = 11,
+    MouseMoveCell = 12,
+    MouseUpCell = 13,
+    MouseEnterCell = 14,
+    MouseLeaveCell = 15,
+    KeyPressed = 16,
+    KeyReleased = 17,
+    OverlayChanged = 18,
+    BuildHudForCell = 19,
+    BuildPanel = 20,
+    RenderOverlay = 21,
+}
+
+impl FluxEventKind {
+    /// Returns the raw ABI tag used by the demo registration shim.
+    pub fn as_raw(self) -> u32 {
+        self as u32
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+/// Event-handler descriptor accepted by the v4 registrar.
+pub struct FluxEventHandlerDescriptor {
+    pub event_kind: u32,
+    pub handler_name: FluxUtf8Slice,
+}
+
+impl FluxEventHandlerDescriptor {
+    /// Creates one event-handler descriptor from the typed demo event enum.
+    pub fn new(event_kind: FluxEventKind, handler_name: FluxUtf8Slice) -> Self {
+        Self {
+            event_kind: event_kind.as_raw(),
+            handler_name,
+        }
+    }
+}
+
+/// Registrar callback for plugin-owned event handler declarations.
+pub type FluxRegisterEventHandlerFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    descriptor: *const FluxEventHandlerDescriptor,
+) -> FluxStatus;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 /// ABI registration table passed by the host into `flux_plugin_register`.
 pub struct FluxRegistrar {
     pub struct_size: u32,
     pub api_version: u32,
     pub register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
-    pub register_event_subscription: Option<unsafe extern "C" fn(*mut c_void, u32) -> FluxStatus>,
+    pub register_event_handler: Option<FluxRegisterEventHandlerFn>,
     pub register_tool: Option<FluxRegisterToolFn>,
     pub register_overlay: Option<FluxRegisterOverlayFn>,
     pub register_save_chunk: Option<FluxRegisterSaveChunkFn>,
@@ -140,33 +199,76 @@ pub struct FluxRegistrar {
 #[repr(C)]
 /// Opaque demo plugin instance handle.
 pub struct FluxPluginHandle {
-    api_version: u32,
-    dragging: bool,
-    last_x: u32,
-    last_y: u32,
-    counter: u32,
-    cell_counters: Vec<u32>,
+    pub api_version: u32,
+    pub dragging: bool,
+    pub last_x: u32,
+    pub last_y: u32,
+    pub counter: u32,
+    pub cell_counters: Vec<u32>,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-/// Runtime event payload passed by the host to demo plugins.
-pub struct FluxRuntimeEvent {
+/// Common ABI header shared by all typed demo event payloads.
+pub struct FluxEventHeader {
     pub struct_size: u32,
     pub api_version: u32,
-    pub event_kind: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+/// Empty payload used by lifecycle and tick demo handlers.
+pub struct FluxEmptyEventPayload {
+    pub struct_size: u32,
+    pub api_version: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+/// Mouse-cell payload used by demo handlers.
+pub struct FluxMouseCellEventPayload {
+    pub struct_size: u32,
+    pub api_version: u32,
+    pub button: u32,
     pub has_cell: u8,
     pub cell_x: u32,
     pub cell_y: u32,
-    pub button: u32,
     pub world_x: f32,
     pub world_y: f32,
     pub screen_x: f32,
     pub screen_y: f32,
     pub modifiers: u32,
+    pub has_active_tool_id: u8,
     pub active_tool_id: FluxUtf8Slice,
+    pub is_over_ui: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+/// HUD build payload used by demo handlers.
+pub struct FluxBuildHudForCellEventPayload {
+    pub struct_size: u32,
+    pub api_version: u32,
+    pub cell_x: u32,
+    pub cell_y: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+/// Panel build payload used by demo handlers.
+pub struct FluxBuildPanelEventPayload {
+    pub struct_size: u32,
+    pub api_version: u32,
+    pub panel_id: FluxUtf8Slice,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+/// Overlay render payload used by demo handlers.
+pub struct FluxRenderOverlayEventPayload {
+    pub struct_size: u32,
+    pub api_version: u32,
     pub overlay_id: FluxUtf8Slice,
-    pub key: FluxUtf8Slice,
 }
 
 /// Host callback used by demo plugins to set a world cell material.
@@ -239,15 +341,21 @@ pub struct FluxRuntimeHost {
     pub read_save_chunk: Option<FluxReadSaveChunkFn>,
 }
 
+/// Declarative event binding used by each small API demo plugin.
+pub struct DemoEventHandler {
+    pub event_kind: FluxEventKind,
+    pub handler_name: &'static str,
+}
+
 /// Declarative registration data used by each small API demo plugin.
 pub struct DemoSpec {
-    pub event_kinds: &'static [u32],
+    pub event_handlers: &'static [DemoEventHandler],
     pub tool: Option<(&'static str, &'static str)>,
     pub overlay: Option<(&'static str, &'static str, &'static str, u32)>,
     pub save_chunk: Option<(&'static str, u32)>,
 }
 
-/// Creates a demo plugin handle after validating the v3 host API table.
+/// Creates a demo plugin handle after validating the v4 host API table.
 pub unsafe fn create(
     host: *const FluxHostApi,
     out_plugin: *mut *mut FluxPluginHandle,
@@ -272,7 +380,7 @@ pub unsafe fn create(
     FluxStatus::OK
 }
 
-/// Registers the descriptors and event subscriptions described by `spec`.
+/// Registers the descriptors and event handlers described by `spec`.
 pub unsafe fn register(
     plugin: *mut FluxPluginHandle,
     registrar: *mut FluxRegistrar,
@@ -289,11 +397,15 @@ pub unsafe fn register(
     {
         return FluxStatus::FAILED;
     }
-    for event_kind in spec.event_kinds {
-        let Some(register_event) = registrar.register_event_subscription else {
+    for handler in spec.event_handlers {
+        let Some(register_event_handler) = registrar.register_event_handler else {
             return FluxStatus::FAILED;
         };
-        let status = register_event(registrar.registration_context, *event_kind);
+        let descriptor = FluxEventHandlerDescriptor::new(
+            handler.event_kind,
+            FluxUtf8Slice::from_str(handler.handler_name),
+        );
+        let status = register_event_handler(registrar.registration_context, &descriptor);
         if status != FluxStatus::OK {
             return status;
         }
@@ -349,4 +461,26 @@ pub unsafe fn destroy(plugin: *mut FluxPluginHandle) {
     if !plugin.is_null() {
         let _ = Box::from_raw(plugin);
     }
+}
+
+/// Validates one typed event callback payload and host table.
+pub unsafe fn validate_event_call<'a, T>(
+    plugin: *mut FluxPluginHandle,
+    event: *const T,
+    host: *mut FluxRuntimeHost,
+) -> Result<(&'a mut FluxPluginHandle, &'a T, &'a mut FluxRuntimeHost), FluxStatus> {
+    if plugin.is_null() || event.is_null() || host.is_null() {
+        return Err(FluxStatus::INVALID_ARGUMENT);
+    }
+    let plugin = &mut *plugin;
+    let event = &*event;
+    let host = &mut *host;
+    let header = &*(event as *const T).cast::<FluxEventHeader>();
+    if plugin.api_version != ENGINE_PLUGIN_API_VERSION
+        || header.api_version != ENGINE_PLUGIN_API_VERSION
+        || host.api_version != ENGINE_PLUGIN_API_VERSION
+    {
+        return Err(FluxStatus::FAILED);
+    }
+    Ok((plugin, event, host))
 }

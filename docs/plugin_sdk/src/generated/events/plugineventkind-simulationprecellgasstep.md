@@ -19,7 +19,7 @@ This event does not carry additional payload fields.
 ## SDK Example
 
 ```rust
-if event.event_kind == 5 {
+if event.kind() == PluginEventKind::SimulationPreCellGasStep {
 // Inject gas before the simulation step with add_gas.
 }
 ```

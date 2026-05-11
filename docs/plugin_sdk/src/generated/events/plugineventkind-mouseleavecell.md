@@ -21,7 +21,7 @@ Fired when the cursor leaves a world cell.
 ## SDK Example
 
 ```rust
-if event.event_kind == 15 {
+if event.kind() == PluginEventKind::MouseLeaveCell {
 // Clear hover-specific plugin state.
 }
 ```

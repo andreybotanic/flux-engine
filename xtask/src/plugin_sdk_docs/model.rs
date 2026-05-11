@@ -7,7 +7,12 @@ pub(in crate::plugin_sdk_docs) const DOCS_SRC_ROOT: &str = "docs/plugin_sdk/src"
 pub(in crate::plugin_sdk_docs) const GENERATED_DIR: &str = "generated";
 
 pub(in crate::plugin_sdk_docs) const SDK_SOURCES: &[SdkSource] = &[
-    SdkSource::new("ABI v3", "src/plugins/abi.rs", SdkCategory::Abi),
+    SdkSource::new("ABI v4", "src/plugins/abi.rs", SdkCategory::Abi),
+    SdkSource::new(
+        "ABI v4 Events",
+        "src/plugins/abi_events.rs",
+        SdkCategory::Abi,
+    ),
     SdkSource::new("Manifest", "src/plugins/manifest.rs", SdkCategory::Manifest),
     SdkSource::new("Identifiers", "src/plugins/id.rs", SdkCategory::Manifest),
     SdkSource::new("Content", "src/plugins/content.rs", SdkCategory::Content),

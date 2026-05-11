@@ -2,8 +2,23 @@ include!("../../flux_api_demo_common.rs");
 
 const PAINT_BUTTON: u32 = 2;
 
+const EVENT_HANDLERS: &[DemoEventHandler] = &[
+    DemoEventHandler {
+        event_kind: FluxEventKind::MouseDownCell,
+        handler_name: "onMouseDownCell",
+    },
+    DemoEventHandler {
+        event_kind: FluxEventKind::MouseMoveCell,
+        handler_name: "onMouseMoveCell",
+    },
+    DemoEventHandler {
+        event_kind: FluxEventKind::MouseUpCell,
+        handler_name: "onMouseUpCell",
+    },
+];
+
 const SPEC: DemoSpec = DemoSpec {
-    event_kinds: &[11, 12, 13],
+    event_handlers: EVENT_HANDLERS,
     tool: Some(("flux.api_cell_demo.tool.paint_line", "API Cell Right Paint")),
     overlay: None,
     save_chunk: None,
@@ -36,47 +51,76 @@ pub unsafe extern "C" fn flux_plugin_destroy(plugin: *mut FluxPluginHandle) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn flux_plugin_on_event(
+pub unsafe extern "C" fn onMouseDownCell(
     plugin: *mut FluxPluginHandle,
-    event: *const FluxRuntimeEvent,
+    event: *const FluxMouseCellEventPayload,
     host: *mut FluxRuntimeHost,
 ) -> FluxStatus {
-    if plugin.is_null() || event.is_null() || host.is_null() {
-        return FluxStatus::INVALID_ARGUMENT;
+    let (plugin, event, host) = match validate_event_call(plugin, event, host) {
+        Ok(values) => values,
+        Err(status) => return status,
+    };
+    if event.has_cell == 0 || event.button != PAINT_BUTTON {
+        return FluxStatus::OK;
     }
-    let plugin = &mut *plugin;
-    let event = &*event;
-    let host = &mut *host;
-    if event.api_version != ENGINE_PLUGIN_API_VERSION || host.api_version != ENGINE_PLUGIN_API_VERSION {
-        return FluxStatus::FAILED;
+    plugin.dragging = true;
+    plugin.last_x = event.cell_x;
+    plugin.last_y = event.cell_y;
+    paint_cell(host, event.cell_x, event.cell_y)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn onMouseMoveCell(
+    plugin: *mut FluxPluginHandle,
+    event: *const FluxMouseCellEventPayload,
+    host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let (plugin, event, host) = match validate_event_call(plugin, event, host) {
+        Ok(values) => values,
+        Err(status) => return status,
+    };
+    if !plugin.dragging || event.has_cell == 0 {
+        return FluxStatus::OK;
     }
-    match event.event_kind {
-        11 if event.has_cell != 0 && event.button == PAINT_BUTTON => {
-            plugin.dragging = true;
-            plugin.last_x = event.cell_x;
-            plugin.last_y = event.cell_y;
-            paint_cell(host, event.cell_x, event.cell_y)
-        }
-        12 if plugin.dragging && event.has_cell != 0 => {
-            let status = paint_line(host, plugin.last_x, plugin.last_y, event.cell_x, event.cell_y);
-            if status != FluxStatus::OK {
-                return status;
-            }
-            plugin.last_x = event.cell_x;
-            plugin.last_y = event.cell_y;
-            FluxStatus::OK
-        }
-        13 if plugin.dragging && event.has_cell != 0 => {
-            let status = paint_line(host, plugin.last_x, plugin.last_y, event.cell_x, event.cell_y);
-            plugin.dragging = false;
-            status
-        }
-        13 => {
-            plugin.dragging = false;
-            FluxStatus::OK
-        }
-        _ => FluxStatus::OK,
+    let status = paint_line(
+        host,
+        plugin.last_x,
+        plugin.last_y,
+        event.cell_x,
+        event.cell_y,
+    );
+    if status != FluxStatus::OK {
+        return status;
     }
+    plugin.last_x = event.cell_x;
+    plugin.last_y = event.cell_y;
+    FluxStatus::OK
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn onMouseUpCell(
+    plugin: *mut FluxPluginHandle,
+    event: *const FluxMouseCellEventPayload,
+    host: *mut FluxRuntimeHost,
+) -> FluxStatus {
+    let (plugin, event, host) = match validate_event_call(plugin, event, host) {
+        Ok(values) => values,
+        Err(status) => return status,
+    };
+    if !plugin.dragging {
+        return FluxStatus::OK;
+    }
+    plugin.dragging = false;
+    if event.has_cell == 0 {
+        return FluxStatus::OK;
+    }
+    paint_line(
+        host,
+        plugin.last_x,
+        plugin.last_y,
+        event.cell_x,
+        event.cell_y,
+    )
 }
 
 unsafe fn paint_cell(host: &mut FluxRuntimeHost, x: u32, y: u32) -> FluxStatus {

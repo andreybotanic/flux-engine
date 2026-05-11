@@ -1,19 +1,20 @@
-use std::{ffi::c_void, path::PathBuf, ptr};
+use std::{collections::BTreeMap, ffi::c_void, path::PathBuf, ptr};
 
 use bevy::prelude::*;
 use libloading::Library;
 
+#[path = "runtime_dll_events.rs"]
+mod event_dispatch;
+
+pub(crate) use self::event_dispatch::load_event_handler;
+use self::event_dispatch::{dispatch_to_plugin, RuntimeEventHandler};
+
 use crate::{
     config::GasRegistry,
     plugins::{
-        abi::{
-            FluxPluginDestroyFn, FluxPluginHandle, FluxPluginOnEventFn, FluxRuntimeEvent,
-            FluxRuntimeHost, FluxStatus, FluxUtf8Slice,
-        },
+        abi::{FluxPluginDestroyFn, FluxPluginHandle, FluxStatus, FluxUtf8Slice},
         api::{
-            events::{
-                InputModifiers, MouseCellButton, MouseCellEvent, PluginEvent, PluginEventKind,
-            },
+            events::{PluginEvent, PluginEventKind},
             render_api::OverlayRenderPolicy,
             runtime::PluginRuntimeRegistry,
             save_api::SaveChunkStore,
@@ -123,13 +124,11 @@ impl RuntimeDllPluginRegistry {
         event: &PluginEvent,
         context: &mut RuntimeHostContext,
     ) {
-        let subscribers = subscriptions.subscribers(event.kind());
+        let event_kind = event.kind();
+        let subscribers = subscriptions.subscribers(event_kind);
         if subscribers.is_empty() {
             return;
         }
-        let Some(event_kind) = event_kind_to_abi(event.kind()) else {
-            return;
-        };
 
         for plugin in &mut self.plugins {
             if !subscribers
@@ -138,11 +137,11 @@ impl RuntimeDllPluginRegistry {
             {
                 continue;
             }
-            let Some(on_event) = plugin.on_event_fn else {
+            let Some(handler) = plugin.event_handlers.get(&event_kind) else {
                 continue;
             };
             context.plugin_id = plugin.plugin_id.clone();
-            dispatch_to_plugin(plugin.handle, on_event, event, event_kind, context);
+            dispatch_to_plugin(plugin.handle, handler, event, context);
         }
     }
 }
@@ -152,7 +151,7 @@ pub struct RuntimeDllPlugin {
     pub plugin_id: PluginId,
     pub handle: *mut FluxPluginHandle,
     pub destroy_fn: FluxPluginDestroyFn,
-    pub on_event_fn: Option<FluxPluginOnEventFn>,
+    pub(crate) event_handlers: BTreeMap<PluginEventKind, RuntimeEventHandler>,
     pub cache_root: PathBuf,
     pub library: Library,
 }
@@ -427,144 +426,6 @@ pub unsafe extern "C" fn read_save_chunk_callback(
     FluxStatus::OK
 }
 
-fn dispatch_to_plugin(
-    handle: *mut FluxPluginHandle,
-    on_event: FluxPluginOnEventFn,
-    event: &PluginEvent,
-    event_kind: u32,
-    context: &mut RuntimeHostContext,
-) {
-    let active_tool_id = active_tool_id_for_event(event);
-    let overlay_id = overlay_id_for_event(event);
-    let key = key_for_event(event);
-    let mut abi_event = FluxRuntimeEvent::new(event_kind);
-    abi_event.active_tool_id = FluxUtf8Slice::from_str(&active_tool_id);
-    abi_event.overlay_id = FluxUtf8Slice::from_str(&overlay_id);
-    abi_event.key = FluxUtf8Slice::from_str(&key);
-    apply_event_payload(event, &mut abi_event);
-
-    let mut host = FluxRuntimeHost::new((context as *mut RuntimeHostContext).cast::<c_void>());
-    unsafe {
-        let _ = on_event(handle, &abi_event, &mut host);
-    }
-}
-
-fn apply_event_payload(event: &PluginEvent, abi_event: &mut FluxRuntimeEvent) {
-    match event {
-        PluginEvent::MouseDownCell(mouse)
-        | PluginEvent::MouseMoveCell(mouse)
-        | PluginEvent::MouseUpCell(mouse)
-        | PluginEvent::MouseEnterCell(mouse)
-        | PluginEvent::MouseLeaveCell(mouse) => apply_mouse_payload(mouse, abi_event),
-        PluginEvent::BuildHudForCell { cell } => {
-            abi_event.has_cell = 1;
-            abi_event.cell_x = cell.x;
-            abi_event.cell_y = cell.y;
-        }
-        _ => {}
-    }
-}
-
-fn apply_mouse_payload(mouse: &MouseCellEvent, abi_event: &mut FluxRuntimeEvent) {
-    abi_event.has_cell = 1;
-    abi_event.cell_x = mouse.cell.x;
-    abi_event.cell_y = mouse.cell.y;
-    abi_event.button = mouse.button.map(mouse_button_to_abi).unwrap_or(0);
-    abi_event.world_x = mouse.world_position.x;
-    abi_event.world_y = mouse.world_position.y;
-    abi_event.screen_x = mouse.screen_position.x;
-    abi_event.screen_y = mouse.screen_position.y;
-    abi_event.modifiers = modifiers_to_abi(mouse.modifiers);
-}
-
-fn active_tool_id_for_event(event: &PluginEvent) -> String {
-    match event {
-        PluginEvent::MouseDownCell(mouse)
-        | PluginEvent::MouseMoveCell(mouse)
-        | PluginEvent::MouseUpCell(mouse)
-        | PluginEvent::MouseEnterCell(mouse)
-        | PluginEvent::MouseLeaveCell(mouse) => mouse
-            .active_tool_id
-            .as_ref()
-            .map(|id| id.as_str().to_string())
-            .unwrap_or_default(),
-        PluginEvent::ToolSelected { tool_id } => tool_id
-            .as_ref()
-            .map(|id| id.as_str().to_string())
-            .unwrap_or_default(),
-        _ => String::new(),
-    }
-}
-
-fn overlay_id_for_event(event: &PluginEvent) -> String {
-    match event {
-        PluginEvent::OverlayChanged { overlay_id } => overlay_id
-            .as_ref()
-            .map(|id| id.as_str().to_string())
-            .unwrap_or_default(),
-        PluginEvent::RenderOverlay { overlay_id } => overlay_id.as_str().to_string(),
-        _ => String::new(),
-    }
-}
-
-fn key_for_event(event: &PluginEvent) -> String {
-    match event {
-        PluginEvent::KeyPressed { key, .. } | PluginEvent::KeyReleased { key, .. } => key.clone(),
-        _ => String::new(),
-    }
-}
-
-fn mouse_button_to_abi(button: MouseCellButton) -> u32 {
-    match button {
-        MouseCellButton::Left => 1,
-        MouseCellButton::Right => 2,
-        MouseCellButton::Middle => 3,
-        MouseCellButton::Other(value) => 1000 + value as u32,
-    }
-}
-
-fn modifiers_to_abi(modifiers: InputModifiers) -> u32 {
-    let mut bits = 0u32;
-    if modifiers.shift {
-        bits |= 1;
-    }
-    if modifiers.ctrl {
-        bits |= 2;
-    }
-    if modifiers.alt {
-        bits |= 4;
-    }
-    bits
-}
-
-/// Converts a plugin event kind to the stable v3 ABI numeric tag.
-pub fn event_kind_to_abi(kind: PluginEventKind) -> Option<u32> {
-    Some(match kind {
-        PluginEventKind::WorldCreated => 0,
-        PluginEventKind::WorldLoaded => 1,
-        PluginEventKind::WorldBeforeSave => 2,
-        PluginEventKind::WorldAfterSave => 3,
-        PluginEventKind::WorldUnloaded => 4,
-        PluginEventKind::SimulationPreCellGasStep => 5,
-        PluginEventKind::SimulationPostCellGasStep => 6,
-        PluginEventKind::SimulationPausedChanged => 7,
-        PluginEventKind::StructurePlaced => 8,
-        PluginEventKind::StructureRemoved => 9,
-        PluginEventKind::ToolSelected => 10,
-        PluginEventKind::MouseDownCell => 11,
-        PluginEventKind::MouseMoveCell => 12,
-        PluginEventKind::MouseUpCell => 13,
-        PluginEventKind::MouseEnterCell => 14,
-        PluginEventKind::MouseLeaveCell => 15,
-        PluginEventKind::KeyPressed => 16,
-        PluginEventKind::KeyReleased => 17,
-        PluginEventKind::OverlayChanged => 18,
-        PluginEventKind::BuildHudForCell => 19,
-        PluginEventKind::BuildPanel => 20,
-        PluginEventKind::RenderOverlay => 21,
-    })
-}
-
 unsafe fn read_abi_utf8(slice: FluxUtf8Slice) -> Result<String, ()> {
     if slice.len == 0 {
         return Ok(String::new());
@@ -593,17 +454,13 @@ pub fn overlay_is_plugin_controlled(
 #[cfg(test)]
 mod tests {
     use super::{
-        add_gas_callback, apply_event_payload, read_save_chunk_callback,
-        set_cell_material_callback, submit_hud_block_callback, submit_overlay_frame_callback,
-        write_save_chunk_callback, PluginHudBlockStore, PluginOverlayFrameStore,
-        RuntimeHostContext,
+        add_gas_callback, read_save_chunk_callback, set_cell_material_callback,
+        submit_hud_block_callback, submit_overlay_frame_callback, write_save_chunk_callback,
+        PluginHudBlockStore, PluginOverlayFrameStore, RuntimeHostContext,
     };
     use crate::{
         config::GasRegistry,
-        plugins::{
-            abi::{FluxRuntimeEvent, FluxUtf8Slice},
-            default_plugin, ContentId, PluginEvent, PluginId, SaveChunkStore,
-        },
+        plugins::{abi::FluxUtf8Slice, default_plugin, ContentId, PluginId, SaveChunkStore},
         simulation::gas::GasField,
         world::grid::WorldGrid,
     };
@@ -670,21 +527,6 @@ mod tests {
 
         assert!(status.is_ok());
         assert_eq!(context.changed_cells, vec![UVec2::new(20, 20)]);
-    }
-
-    #[test]
-    fn build_hud_event_payload_contains_cell() {
-        let mut event = FluxRuntimeEvent::new(19);
-        apply_event_payload(
-            &PluginEvent::BuildHudForCell {
-                cell: UVec2::new(7, 9),
-            },
-            &mut event,
-        );
-
-        assert_eq!(event.has_cell, 1);
-        assert_eq!(event.cell_x, 7);
-        assert_eq!(event.cell_y, 9);
     }
 
     #[test]

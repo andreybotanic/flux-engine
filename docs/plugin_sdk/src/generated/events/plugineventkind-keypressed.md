@@ -22,7 +22,7 @@ Fired when a key is pressed.
 ## SDK Example
 
 ```rust
-if event.event_kind == 16 {
+if event.kind() == PluginEventKind::KeyPressed {
 // Read event.key from the ABI payload.
 }
 ```

@@ -790,7 +790,7 @@ mod tests {
             r#"id = "{plugin_id}"
 display_name = "Duplicate Test"
 version = "1.0.0"
-api_version = 3
+api_version = 4
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"

@@ -7,6 +7,7 @@
 | API item | Kind | Source |
 | --- | --- | --- |
 | [`CellRenderStyle`](enums/cellrenderstyle.md) | enum | `src/plugins/api/render_api.rs` |
+| [`FluxEventKind`](enums/fluxeventkind.md) | enum | `src/plugins/abi_events.rs` |
 | [`GasRenderStyle`](enums/gasrenderstyle.md) | enum | `src/plugins/api/render_api.rs` |
 | [`LegacyStorageDescriptor`](enums/legacystoragedescriptor.md) | enum | `src/plugins/content.rs` |
 | [`MouseCellButton`](enums/mousecellbutton.md) | enum | `src/plugins/api/events.rs` |

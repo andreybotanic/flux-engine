@@ -19,7 +19,7 @@ This event does not carry additional payload fields.
 ## SDK Example
 
 ```rust
-if event.event_kind == 3 {
+if event.kind() == PluginEventKind::WorldAfterSave {
 // Clear transient save status after a successful save pass.
 }
 ```

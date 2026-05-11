@@ -19,7 +19,7 @@ This event does not carry additional payload fields.
 ## SDK Example
 
 ```rust
-if event.event_kind == 1 {
+if event.kind() == PluginEventKind::WorldLoaded {
 // Read plugin save chunks through the runtime host.
 }
 ```

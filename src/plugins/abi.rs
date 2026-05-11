@@ -1,6 +1,11 @@
-﻿use std::ffi::c_void;
+use std::ffi::c_void;
 
 use crate::plugins::id::ENGINE_PLUGIN_API_VERSION_VALUE;
+
+#[path = "abi_events.rs"]
+mod events;
+
+pub use self::events::*;
 
 /// Opaque UTF-8 string view used by the stable plugin ABI.
 ///
@@ -105,15 +110,6 @@ pub type FluxRegisterGasSubstanceFn = unsafe extern "C" fn(
     descriptor: *const FluxGasSubstanceDescriptor,
 ) -> FluxStatus;
 
-/// Callback used by plugins to subscribe to one runtime event kind.
-///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxRegisterEventSubscriptionFn` ABI signature supplied by FluxEngine.
-/// ```
-pub type FluxRegisterEventSubscriptionFn =
-    unsafe extern "C" fn(context: *mut c_void, event_kind: u32) -> FluxStatus;
-
 /// C-compatible tool descriptor emitted by plugins.
 ///
 /// # Fields
@@ -181,58 +177,6 @@ pub type FluxRegisterSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxSaveChunkDescriptor,
 ) -> FluxStatus;
-
-/// Runtime event payload passed to a live DLL plugin.
-///
-/// # Fields
-/// Public fields of `FluxRuntimeEvent` are part of the generated SDK reference.
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct FluxRuntimeEvent {
-    pub struct_size: u32,
-    pub api_version: u32,
-    pub event_kind: u32,
-    pub has_cell: u8,
-    pub cell_x: u32,
-    pub cell_y: u32,
-    pub button: u32,
-    pub world_x: f32,
-    pub world_y: f32,
-    pub screen_x: f32,
-    pub screen_y: f32,
-    pub modifiers: u32,
-    pub active_tool_id: FluxUtf8Slice,
-    pub overlay_id: FluxUtf8Slice,
-    pub key: FluxUtf8Slice,
-}
-
-impl FluxRuntimeEvent {
-    /// Creates an empty runtime event payload for one ABI event kind.
-    ///
-    /// # SDK Example
-    /// ```rust
-    /// // Call `new` from plugin-facing code when this operation is available in context.
-    /// ```
-    pub fn new(event_kind: u32) -> Self {
-        Self {
-            struct_size: std::mem::size_of::<Self>() as u32,
-            api_version: ENGINE_PLUGIN_API_VERSION_VALUE,
-            event_kind,
-            has_cell: 0,
-            cell_x: 0,
-            cell_y: 0,
-            button: 0,
-            world_x: 0.0,
-            world_y: 0.0,
-            screen_x: 0.0,
-            screen_y: 0.0,
-            modifiers: 0,
-            active_tool_id: FluxUtf8Slice::from_str(""),
-            overlay_id: FluxUtf8Slice::from_str(""),
-            key: FluxUtf8Slice::from_str(""),
-        }
-    }
-}
 
 /// Callback used by plugins to set one world cell material by stable content id.
 ///
@@ -319,7 +263,7 @@ pub type FluxReadSaveChunkFn = unsafe extern "C" fn(
     out_len: *mut usize,
 ) -> FluxStatus;
 
-/// Runtime host callback table passed to `flux_plugin_on_event`.
+/// Runtime host callback table passed to one typed plugin event handler.
 ///
 /// # Fields
 /// Public fields of `FluxRuntimeHost` are part of the generated SDK reference.
@@ -411,7 +355,7 @@ pub struct FluxRegistrar {
     pub struct_size: u32,
     pub api_version: u32,
     pub register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
-    pub register_event_subscription: Option<FluxRegisterEventSubscriptionFn>,
+    pub register_event_handler: Option<FluxRegisterEventHandlerFn>,
     pub register_tool: Option<FluxRegisterToolFn>,
     pub register_overlay: Option<FluxRegisterOverlayFn>,
     pub register_save_chunk: Option<FluxRegisterSaveChunkFn>,
@@ -429,7 +373,7 @@ impl FluxRegistrar {
     /// ```
     pub fn new(
         register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
-        register_event_subscription: Option<FluxRegisterEventSubscriptionFn>,
+        register_event_handler: Option<FluxRegisterEventHandlerFn>,
         register_tool: Option<FluxRegisterToolFn>,
         register_overlay: Option<FluxRegisterOverlayFn>,
         register_save_chunk: Option<FluxRegisterSaveChunkFn>,
@@ -439,7 +383,7 @@ impl FluxRegistrar {
             struct_size: std::mem::size_of::<Self>() as u32,
             api_version: ENGINE_PLUGIN_API_VERSION_VALUE,
             register_gas_substance,
-            register_event_subscription,
+            register_event_handler,
             register_tool,
             register_overlay,
             register_save_chunk,
@@ -498,18 +442,6 @@ pub type FluxPluginRegisterFn = unsafe extern "C" fn(
 /// ```
 pub type FluxPluginDestroyFn = unsafe extern "C" fn(plugin: *mut FluxPluginHandle);
 
-/// Function pointer type for `flux_plugin_on_event`.
-///
-/// # SDK Example
-/// ```rust
-/// // Store or call the callback through the `FluxPluginOnEventFn` ABI signature supplied by FluxEngine.
-/// ```
-pub type FluxPluginOnEventFn = unsafe extern "C" fn(
-    plugin: *mut FluxPluginHandle,
-    event: *const FluxRuntimeEvent,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus;
-
 /// Null-terminated export name for `flux_plugin_api_version`.
 ///
 /// # SDK Example
@@ -541,11 +473,3 @@ pub const FLUX_PLUGIN_REGISTER_EXPORT_NAME: &[u8] = b"flux_plugin_register\0";
 /// // Use `FLUX_PLUGIN_DESTROY_EXPORT_NAME` when validating the Plugin SDK ABI contract.
 /// ```
 pub const FLUX_PLUGIN_DESTROY_EXPORT_NAME: &[u8] = b"flux_plugin_destroy\0";
-
-/// Null-terminated export name for `flux_plugin_on_event`.
-///
-/// # SDK Example
-/// ```rust
-/// // Use `FLUX_PLUGIN_ON_EVENT_EXPORT_NAME` when validating the Plugin SDK ABI contract.
-/// ```
-pub const FLUX_PLUGIN_ON_EVENT_EXPORT_NAME: &[u8] = b"flux_plugin_on_event\0";

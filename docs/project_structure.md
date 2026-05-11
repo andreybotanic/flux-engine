@@ -103,14 +103,15 @@ FluxEngine/
 - `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
 - `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем, включая новый `plugins`.
 - `src/main.rs`: Точка входа бинаря; запускает приложение.
-- `src/plugins/abi.rs`: C-compatible ABI v3: `FluxUtf8Slice`, `FluxStatus`, host/registrar structs, gas registration callback, event subscriptions, tool/overlay/save-chunk descriptors и export names обязательных DLL-функций.
+- `src/plugins/abi.rs`: Точка входа C-compatible ABI v4: базовые `FluxUtf8Slice`/`FluxStatus`, host/runtime structs, registrar callbacks, runtime host callbacks и export names обязательных DLL-функций с re-export typed event ABI.
+- `src/plugins/abi_events.rs`: Typed event ABI v4: plugin-visible `FluxEventKind`, `FluxEventHandlerDescriptor`, payload-структуры для каждого runtime-события, handler typedef-ы, canonical handler names и mapping между `PluginEventKind` и ABI event kinds.
 - `src/plugins/api/mod.rs`: Public Rust-first plugin API module root and re-exports for world/events/render/UI/save/runtime contracts.
 - `src/plugins/api/world_api.rs`: Plugin-facing world read/mutation API: `get_*` cell/gas/structure queries, material/structure mutation and gas amount+velocity mutation.
 - `src/plugins/api/events.rs`: Plugin event kinds and payloads, including simulation lifecycle, save lifecycle, low-level mouse cell input and keyboard events.
 - `src/plugins/api/render_api.rs`: Overlay render contract with `OverlayRenderPolicy`, `OverlayFrame`, per-cell/per-structure/per-gas styles and draw commands.
 - `src/plugins/api/ui_api.rs`: Declarative plugin UI descriptors for tools, panels, HUD blocks and simple UI node trees.
 - `src/plugins/api/save_api.rs`: In-memory plugin save chunk store and chunk payload contracts.
-- `src/plugins/api/runtime.rs`: Runtime registry for plugin event subscriptions, tool descriptors, overlay descriptors and save chunk descriptors.
+- `src/plugins/api/runtime.rs`: Runtime registry for plugin event subscriber groups, tool descriptors, overlay descriptors and save chunk descriptors.
 - `src/plugins/content.rs`: Content registry runtime-модель: stable `ContentId`, provider plugins, descriptors клеток/структур/overlay, HUD metadata и registered substances.
 - `src/plugins/default_plugin/mod.rs`: Built-in locked `flux.default` content/runtime: default descriptor registration, generic ID facade, legacy numeric save adapters и подключение pipe-runtime модуля.
 - `src/plugins/default_plugin/descriptors_block.rs`: Внутренний блок сборки descriptors default plugin-а: layer/collision rules, footprint, rotations, sprite metadata и HUD blocks.
@@ -134,20 +135,21 @@ FluxEngine/
 - `src/plugins/flux_stage7_sample_content_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample content plugin-а с `content = true`.
 - `src/plugins/flux_stage7_sample_content_plugin/package_template/config/sample.toml`: Минимальный config-файл sample content plugin package.
 - `src/plugins/flux_stage7_sample_content_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample content plugin package.
-- `src/plugins/flux_stage7_sample_content_plugin/src/lib.rs`: ABI v2 sample DLL, регистрирующая внешний газ `flux.sample_content.substance.neon`.
+- `src/plugins/flux_stage7_sample_content_plugin/src/lib.rs`: ABI v4 sample content DLL, регистрирующая внешний газ `flux.sample_content.substance.neon` через современный registrar layout.
 - `src/plugins/diagnostics.rs`: Startup scan packaged archives, дедупликация `PluginId`, resource с результатами проверки и текст для статуса главного меню.
 - `src/plugins/id.rs`: Типизированные `PluginId`, `PluginVersion`, `PluginApiVersion` и проверка канонического формата ID.
 - `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL, ABI handshake `create/register/destroy`, fingerprint source-а и сбор runtime content registration.
 - `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
 - `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API.
 - `src/plugins/reload.rs`: Атомарный manual reload/rescan runtime-плагинов без загруженного мира: rebuild registry, пересборка gas registry, generation/report и сравнение source fingerprints.
-- `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin capabilities/content, включая внешние gas substances, event subscriptions, tools, overlays и save chunks.
-- `src/plugins/runtime_dll.rs`: Live DLL executor, runtime event dispatch, host callbacks для world/gas/UI/overlay/save APIs и stores для plugin HUD/overlay output.
-- `src/plugins/flux_api_demo_common.rs`: Shared v3 C ABI shim used by the API demo DLL plugin crates.
-- `src/plugins/flux_api_cell_demo_plugin/`: Runtime DLL fixture that registers a cell/tool demo and draws metal-cell lines from low-level right-button mouse events.
-- `src/plugins/flux_api_tick_demo_plugin/`: Runtime DLL fixture that registers simulation pre/post gas step subscriptions and injects moving H2 in one fixed cell during pre-step.
-- `src/plugins/flux_api_temperature_overlay_plugin/`: Runtime DLL fixture that registers a plugin-controlled temperature overlay and submits a complete heatmap frame.
-- `src/plugins/flux_api_ui_save_demo_plugin/`: Runtime DLL fixture that registers HUD/panel-oriented subscriptions, shows per-cell left-click HUD counters and writes a plugin save chunk.
+- `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin capabilities/content, включая внешние gas substances, explicit `event_handlers`, tools, overlays и save chunks.
+- `src/plugins/runtime_dll.rs`: Live DLL executor верхнего уровня: lifecycle runtime DLL-плагинов, host callbacks для world/gas/UI/overlay/save APIs и orchestration typed event dispatch.
+- `src/plugins/runtime_dll_events.rs`: Typed runtime event dispatch для ABI v4: загрузка named exports, кеш `RuntimeEventHandler`, сборка payload-структур и вызов конкретных handler-ов.
+- `src/plugins/flux_api_demo_common.rs`: Shared v4 C ABI shim used by the API demo DLL plugin crates, включая plugin-visible `FluxEventKind`, helper-ы для named event handlers и typed payload validation.
+- `src/plugins/flux_api_cell_demo_plugin/`: Runtime DLL fixture that registers a cell/tool demo and handles low-level right-button mouse events through named `onMouse*Cell` exports.
+- `src/plugins/flux_api_tick_demo_plugin/`: Runtime DLL fixture that registers a named simulation pre-step handler and injects moving H2 in one fixed cell during pre-step.
+- `src/plugins/flux_api_temperature_overlay_plugin/`: Runtime DLL fixture that registers a plugin-controlled temperature overlay and submits a complete heatmap frame from `onRenderOverlay`.
+- `src/plugins/flux_api_ui_save_demo_plugin/`: Runtime DLL fixture that registers named world/input/UI handlers, shows per-cell left-click HUD counters and writes a plugin save chunk.
 - `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` и rebuild-helper для menu toggle; content registry создаётся из default descriptors плюс runtime registration включённых content-плагинов.
 - `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics, source fingerprint и resolve plugin layout внутри plugin root.
 - `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses и aggregate `PluginRegistryState`.

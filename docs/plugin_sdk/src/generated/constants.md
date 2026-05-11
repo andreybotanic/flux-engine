@@ -12,6 +12,5 @@
 | [`FLUX_PLUGIN_API_VERSION_EXPORT_NAME`](constants/flux-plugin-api-version-export-name.md) | const | `src/plugins/abi.rs` |
 | [`FLUX_PLUGIN_CREATE_EXPORT_NAME`](constants/flux-plugin-create-export-name.md) | const | `src/plugins/abi.rs` |
 | [`FLUX_PLUGIN_DESTROY_EXPORT_NAME`](constants/flux-plugin-destroy-export-name.md) | const | `src/plugins/abi.rs` |
-| [`FLUX_PLUGIN_ON_EVENT_EXPORT_NAME`](constants/flux-plugin-on-event-export-name.md) | const | `src/plugins/abi.rs` |
 | [`FLUX_PLUGIN_REGISTER_EXPORT_NAME`](constants/flux-plugin-register-export-name.md) | const | `src/plugins/abi.rs` |
 

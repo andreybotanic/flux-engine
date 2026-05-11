@@ -115,7 +115,7 @@ mod tests {
             r#"id = "valid.plugin"
 display_name = "Valid Plugin"
 version = "1.2.3"
-api_version = 3
+api_version = 4
 dll = "bin/valid.dll"
 configs = "config"
 assets = "assets"
@@ -136,7 +136,7 @@ description = "test"
             r#"id = ""
 display_name = "Broken"
 version = "1.2.3"
-api_version = 3
+api_version = 4
 dll = "bin/valid.dll"
 configs = "config"
 assets = "assets"

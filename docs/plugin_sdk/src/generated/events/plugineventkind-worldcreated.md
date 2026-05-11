@@ -19,7 +19,7 @@ This event does not carry additional payload fields.
 ## SDK Example
 
 ```rust
-if event.event_kind == 0 {
+if event.kind() == PluginEventKind::WorldCreated {
 // Initialize plugin state for a fresh world.
 }
 ```

@@ -49,7 +49,7 @@ pub struct SaveChunkDescriptor {
     pub version: u32,
 }
 
-/// Runtime registry for plugin API descriptors and event subscriptions.
+/// Runtime registry for plugin API descriptors and event subscriber groups.
 ///
 /// # Fields
 /// Public fields of `PluginRuntimeRegistry` are part of the generated SDK reference.
@@ -63,7 +63,7 @@ pub struct PluginRuntimeRegistry {
 }
 
 impl PluginRuntimeRegistry {
-    /// Registers a plugin subscription for one event kind.
+    /// Registers one plugin as a subscriber for the given event kind.
     ///
     /// # SDK Example
     /// ```rust
@@ -192,8 +192,8 @@ pub fn build_plugin_runtime_registry(
         });
     }
     for plugin in loaded_plugins {
-        for event_kind in &plugin.registration.event_subscriptions {
-            registry.subscribe(plugin.plugin_id.clone(), *event_kind);
+        for handler in &plugin.registration.event_handlers {
+            registry.subscribe(plugin.plugin_id.clone(), handler.event_kind);
         }
         for tool in &plugin.registration.tools {
             registry.register_tool(tool.clone());

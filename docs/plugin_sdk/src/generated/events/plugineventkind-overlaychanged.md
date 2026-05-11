@@ -21,7 +21,7 @@ Fired when the active overlay changes.
 ## SDK Example
 
 ```rust
-if event.event_kind == 18 {
+if event.kind() == PluginEventKind::OverlayChanged {
 // Read event.overlay_id from the ABI payload.
 }
 ```

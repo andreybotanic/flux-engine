@@ -22,7 +22,7 @@ Fired when a key is released.
 ## SDK Example
 
 ```rust
-if event.event_kind == 17 {
+if event.kind() == PluginEventKind::KeyReleased {
 // Stop key-held plugin behavior.
 }
 ```

@@ -6,7 +6,7 @@
 
 <span class="sdk-badge sdk-badge-ABI">ABI</span> <span class="sdk-kind">method</span>
 
-Source: **ABI v3** (`src/plugins/abi.rs`). Generated group: **Methods**.
+Source: **ABI v4** (`src/plugins/abi.rs`). Generated group: **Methods**.
 
 ## Description
 
@@ -15,7 +15,7 @@ Creates the registrar payload used by `flux_plugin_register`.
 ## Signature
 
 ```rust
-fn new (register_gas_substance : Option < FluxRegisterGasSubstanceFn > , register_event_subscription : Option < FluxRegisterEventSubscriptionFn > , register_tool : Option < FluxRegisterToolFn > , register_overlay : Option < FluxRegisterOverlayFn > , register_save_chunk : Option < FluxRegisterSaveChunkFn > , registration_context : * mut c_void ,) -> Self
+fn new (register_gas_substance : Option < FluxRegisterGasSubstanceFn > , register_event_handler : Option < FluxRegisterEventHandlerFn > , register_tool : Option < FluxRegisterToolFn > , register_overlay : Option < FluxRegisterOverlayFn > , register_save_chunk : Option < FluxRegisterSaveChunkFn > , registration_context : * mut c_void ,) -> Self
 ```
 
 ## Arguments
@@ -23,7 +23,7 @@ fn new (register_gas_substance : Option < FluxRegisterGasSubstanceFn > , registe
 | Argument | Type | Description |
 | --- | --- | --- |
 | `register_gas_substance` | `Option < FluxRegisterGasSubstanceFn >` | `register_gas_substance` argument passed as `Option < FluxRegisterGasSubstanceFn >`. |
-| `register_event_subscription` | `Option < FluxRegisterEventSubscriptionFn >` | `register_event_subscription` argument passed as `Option < FluxRegisterEventSubscriptionFn >`. |
+| `register_event_handler` | `Option < FluxRegisterEventHandlerFn >` | `register_event_handler` argument passed as `Option < FluxRegisterEventHandlerFn >`. |
 | `register_tool` | `Option < FluxRegisterToolFn >` | `register_tool` argument passed as `Option < FluxRegisterToolFn >`. |
 | `register_overlay` | `Option < FluxRegisterOverlayFn >` | `register_overlay` argument passed as `Option < FluxRegisterOverlayFn >`. |
 | `register_save_chunk` | `Option < FluxRegisterSaveChunkFn >` | `register_save_chunk` argument passed as `Option < FluxRegisterSaveChunkFn >`. |

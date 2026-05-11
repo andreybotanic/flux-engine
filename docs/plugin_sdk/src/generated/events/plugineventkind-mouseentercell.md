@@ -21,7 +21,7 @@ Fired when the cursor enters a world cell.
 ## SDK Example
 
 ```rust
-if event.event_kind == 14 {
+if event.kind() == PluginEventKind::MouseEnterCell {
 // Start hover-specific plugin state.
 }
 ```

@@ -10,7 +10,7 @@ Source: **Runtime Registry** (`src/plugins/api/runtime.rs`). Generated group: **
 
 ## Description
 
-Registers a plugin subscription for one event kind.
+Registers one plugin as a subscriber for the given event kind.
 
 ## Signature
 

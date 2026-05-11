@@ -1,6 +1,6 @@
 use std::ffi::c_void;
 
-const ENGINE_PLUGIN_API_VERSION: u32 = 3;
+const ENGINE_PLUGIN_API_VERSION: u32 = 4;
 
 /// Borrowed UTF-8 string view shared across the plugin ABI.
 #[repr(C)]
@@ -86,7 +86,8 @@ pub struct FluxRegistrar {
     pub struct_size: u32,
     pub api_version: u32,
     pub register_gas_substance: Option<FluxRegisterGasSubstanceFn>,
-    pub register_event_subscription: Option<unsafe extern "C" fn(*mut c_void, u32) -> FluxStatus>,
+    pub register_event_handler:
+        Option<unsafe extern "C" fn(*mut c_void, *const FluxEventHandlerDescriptor) -> FluxStatus>,
     pub register_tool:
         Option<unsafe extern "C" fn(*mut c_void, *const FluxToolDescriptor) -> FluxStatus>,
     pub register_overlay:
@@ -98,7 +99,7 @@ pub struct FluxRegistrar {
     pub reserved3: *mut c_void,
 }
 
-/// C-compatible tool descriptor supported by the v3 registrar.
+/// C-compatible tool descriptor supported by the v4 registrar.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct FluxToolDescriptor {
@@ -108,7 +109,7 @@ pub struct FluxToolDescriptor {
     silhouette_path: FluxUtf8Slice,
 }
 
-/// C-compatible overlay descriptor supported by the v3 registrar.
+/// C-compatible overlay descriptor supported by the v4 registrar.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct FluxOverlayDescriptor {
@@ -118,12 +119,20 @@ pub struct FluxOverlayDescriptor {
     render_policy: u32,
 }
 
-/// C-compatible save chunk descriptor supported by the v3 registrar.
+/// C-compatible save chunk descriptor supported by the v4 registrar.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct FluxSaveChunkDescriptor {
     id: FluxUtf8Slice,
     version: u32,
+}
+
+/// C-compatible event handler descriptor supported by the v4 registrar.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FluxEventHandlerDescriptor {
+    event_kind: u32,
+    handler_name: FluxUtf8Slice,
 }
 
 /// Opaque sample plugin handle stored between create/register/destroy.

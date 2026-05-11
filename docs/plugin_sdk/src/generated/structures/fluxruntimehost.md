@@ -6,11 +6,11 @@
 
 <span class="sdk-badge sdk-badge-ABI">ABI</span> <span class="sdk-kind">struct</span>
 
-Source: **ABI v3** (`src/plugins/abi.rs`). Generated group: **Structures**.
+Source: **ABI v4** (`src/plugins/abi.rs`). Generated group: **Structures**.
 
 ## Description
 
-Runtime host callback table passed to `flux_plugin_on_event`.
+Runtime host callback table passed to one typed plugin event handler.
 
 ## Declaration
 
