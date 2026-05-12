@@ -4,13 +4,13 @@
 
 # `PanelDescriptor`
 
-<span class="sdk-badge sdk-badge-engine-side">engine-side</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **UI API** (`src/plugins/api/ui_api.rs`). Generated group: **Structures**.
+Source: **Descriptors** (`crates/flux_plugin_sdk/src/descriptors.rs`). Generated group: **Structures**.
 
 ## Description
 
-Plugin-provided panel description.
+One plugin-owned panel.
 
 ## Declaration
 
@@ -22,7 +22,7 @@ pub struct PanelDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | [`ContentId`](../structures/contentid.md) | Stable content id of the panel. |
-| `title` | String | Human-readable panel title shown by the UI. |
-| `root` | [`UiNode`](../enums/uinode.md) | Root declarative UI node used to build the panel contents. |
+| `id` | [`ContentId`](../structures/contentid.md) | `id` field stored as `ContentId` on `PanelDescriptor`. |
+| `title` | String | `title` field stored as `String` on `PanelDescriptor`. |
+| `root` | [`UiNode`](../enums/uinode.md) | `root` field stored as `UiNode` on `PanelDescriptor`. |
 

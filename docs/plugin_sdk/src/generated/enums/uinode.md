@@ -4,13 +4,13 @@
 
 # `UiNode`
 
-<span class="sdk-badge sdk-badge-engine-side">engine-side</span> <span class="sdk-kind">enum</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">enum</span>
 
-Source: **UI API** (`src/plugins/api/ui_api.rs`). Generated group: **Enums**.
+Source: **Descriptors** (`crates/flux_plugin_sdk/src/descriptors.rs`). Generated group: **Enums**.
 
 ## Description
 
-Declarative UI node exposed by the plugin API.
+One declarative UI node used by plugin panels.
 
 ## Declaration
 
@@ -22,11 +22,11 @@ pub enum UiNode
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `Text` | text: String | Displays static text content. |
-| `Button` | id: [`ContentId`](../structures/contentid.md), label: String | Displays a clickable button identified by a stable content id. |
-| `Checkbox` | id: [`ContentId`](../structures/contentid.md), label: String, checked: bool | Displays a labelled boolean toggle. |
-| `Select` | id: [`ContentId`](../structures/contentid.md), label: String, options: Vec < String >, selected: usize | Displays a labelled option selector with a stable selected index. |
-| `Slider` | id: [`ContentId`](../structures/contentid.md), label: String, value: f32, min: f32, max: f32 | Displays a labelled floating-point slider with explicit bounds. |
-| `Column` | children: Vec < [`UiNode`](../enums/uinode.md) > | Lays out child nodes vertically. |
-| `Row` | children: Vec < [`UiNode`](../enums/uinode.md) > | Lays out child nodes horizontally. |
+| `Text` | text: String | `Text` variant of `UiNode` carrying `text: String`. |
+| `Button` | id: [`ContentId`](../structures/contentid.md), label: String | `Button` variant of `UiNode` carrying `id: ContentId, label: String`. |
+| `Checkbox` | id: [`ContentId`](../structures/contentid.md), label: String, checked: bool | `Checkbox` variant of `UiNode` carrying `id: ContentId, label: String, checked: bool`. |
+| `Select` | id: [`ContentId`](../structures/contentid.md), label: String, options: Vec < String >, selected: usize | `Select` variant of `UiNode` carrying `id: ContentId, label: String, options: Vec < String >, selected: usize`. |
+| `Slider` | id: [`ContentId`](../structures/contentid.md), label: String, value: f32, min: f32, max: f32 | `Slider` variant of `UiNode` carrying `id: ContentId, label: String, value: f32, min: f32, max: f32`. |
+| `Column` | children: Vec < [`UiNode`](../enums/uinode.md) > | `Column` variant of `UiNode` carrying `children: Vec < UiNode >`. |
+| `Row` | children: Vec < [`UiNode`](../enums/uinode.md) > | `Row` variant of `UiNode` carrying `children: Vec < UiNode >`. |
 

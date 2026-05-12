@@ -1,12 +1,9 @@
 ```rust
-unsafe extern "C" fn on_world_unloaded(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxEmptyEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let _payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    plugin.cell_counters.clear();
-    FluxStatus::OK
+impl MyPlugin {
+    fn on_world_unloaded(&mut self, _event: &WorldUnloadedEvent) -> Result<(), PluginError> {
+        self.dragging = false;
+        self.cached_selection = None;
+        Ok(())
+    }
 }
 ```

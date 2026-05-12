@@ -228,7 +228,26 @@ dependencies = [
 name = "flux_api_ui_save_demo_plugin"
 version = "0.1.0"
 dependencies = [
+ "flux_plugin_sdk",
+]
+
+[[package]]
+name = "flux_plugin_abi"
+version = "0.1.0"
+dependencies = [
  "bevy_math",
+]
+
+[[package]]
+name = "flux_plugin_sdk"
+version = "0.1.0"
+dependencies = [
+ "bevy_math",
+ "flux_plugin_abi",
+ "semver",
+ "serde",
+ "serde_json",
+ "smallvec",
 ]
 
 [[package]]

@@ -4,13 +4,13 @@
 
 # `PluginId`
 
-<span class="sdk-badge sdk-badge-manifest">manifest</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **Identifiers** (`src/plugins/id.rs`). Generated group: **Structures**.
+Source: **Identifiers** (`crates/flux_plugin_sdk/src/ids.rs`). Generated group: **Structures**.
 
 ## Description
 
-Canonical plugin identifier used across manifests and registries.
+Canonical plugin identifier.
 
 ## Declaration
 
@@ -21,6 +21,5 @@ pub struct PluginId
 ## Methods
 
 - [`PluginId::as_str`](../methods/pluginid-as-str.md)
-- [`PluginId::default_plugin`](../methods/pluginid-default-plugin.md)
 - [`PluginId::parse`](../methods/pluginid-parse.md)
 

@@ -4,13 +4,13 @@
 
 # `OverlayFrame`
 
-<span class="sdk-badge sdk-badge-engine-side">engine-side</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **Render API** (`src/plugins/api/render_api.rs`). Generated group: **Structures**.
+Source: **Descriptors** (`crates/flux_plugin_sdk/src/descriptors.rs`). Generated group: **Structures**.
 
 ## Description
 
-Render frame returned by a plugin for one overlay refresh.
+One RGBA8 overlay frame.
 
 ## Declaration
 
@@ -22,18 +22,8 @@ pub struct OverlayFrame
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `overlay_id` | [`ContentId`](../structures/contentid.md) | Stable content id of the overlay producing this frame. |
-| `policy` | [`OverlayRenderPolicy`](../enums/overlayrenderpolicy.md) | Rendering ownership mode used for this frame. |
-| `background` | Option < Color > | Optional full-frame background color drawn before cell content. |
-| `world_alpha` | f32 | Alpha multiplier applied to the core world rendering pass. |
-| `show_core_gas` | bool | Whether core gas rendering remains visible underneath plugin styling. |
-| `cell_styles` | Vec < [`CellStyleEntry`](../structures/cellstyleentry.md) > | Per-cell visual overrides emitted by the plugin. |
-| `structure_styles` | Vec < [`StructureStyleEntry`](../structures/structurestyleentry.md) > | Per-structure visual overrides emitted by the plugin. |
-| `gas_styles` | Vec < [`GasStyleEntry`](../structures/gasstyleentry.md) > | Per-cell gas visual overrides emitted by the plugin. |
-| `draw_commands` | Vec < [`OverlayDrawCommand`](../enums/overlaydrawcommand.md) > | Extra draw primitives layered on top of the frame. |
-
-## Methods
-
-- [`OverlayFrame::core_default`](../methods/overlayframe-core-default.md)
-- [`OverlayFrame::plugin_controlled`](../methods/overlayframe-plugin-controlled.md)
+| `overlay_id` | [`OverlayModeId`](../structures/overlaymodeid.md) | `overlay_id` field stored as `OverlayModeId` on `OverlayFrame`. |
+| `width` | u32 | `width` field stored as `u32` on `OverlayFrame`. |
+| `height` | u32 | `height` field stored as `u32` on `OverlayFrame`. |
+| `rgba8` | Vec < u8 > | `rgba8` field stored as `Vec < u8 >` on `OverlayFrame`. |
 

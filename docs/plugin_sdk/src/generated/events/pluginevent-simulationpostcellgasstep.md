@@ -6,11 +6,11 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired after the core free-gas simulation step.
+Fired after one gas-simulation cell step completes.
 
 ## Arguments
 
@@ -21,17 +21,15 @@ This event does not carry additional payload fields.
 _Source: [`examples/events/pluginevent-simulationpostcellgasstep.md`](../../examples/events/pluginevent-simulationpostcellgasstep.md)_
 
 ```rust
-unsafe extern "C" fn on_simulation_post_cell_gas_step(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxEmptyEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    if payload.api_version == ENGINE_PLUGIN_API_VERSION_VALUE {
-        plugin.counter = plugin.counter.saturating_add(1);
+impl MyPlugin {
+    fn on_simulation_post_step(
+        &mut self,
+        _event: &SimulationPostCellGasStepEvent,
+    ) -> Result<(), PluginError> {
+        let pressure = self.gases.pressure_at(self.inject_cell)?;
+        self.last_pressure = pressure;
+        Ok(())
     }
-    FluxStatus::OK
 }
 ```
 

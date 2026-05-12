@@ -6,32 +6,31 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired when the simulation pause state changes.
+Fired when pause state changes.
 
 ## Arguments
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `paused` | bool | New pause flag after the transition completes. |
+| `paused` | bool | `paused` field stored as `bool` on `SimulationPausedChangedEvent`. |
 
 ## SDK Example
 
 _Source: [`examples/events/pluginevent-simulationpausedchanged.md`](../../examples/events/pluginevent-simulationpausedchanged.md)_
 
 ```rust
-unsafe extern "C" fn on_simulation_paused_changed(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxSimulationPausedChangedEvent,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    plugin.dragging = payload.paused == 0 && plugin.dragging;
-    FluxStatus::OK
+impl MyPlugin {
+    fn on_simulation_paused_changed(
+        &mut self,
+        event: &SimulationPausedChangedEvent,
+    ) -> Result<(), PluginError> {
+        self.log.info(format!("simulation paused: {}", event.paused))?;
+        Ok(())
+    }
 }
 ```
 

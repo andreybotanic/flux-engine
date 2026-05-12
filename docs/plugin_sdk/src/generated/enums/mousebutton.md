@@ -4,13 +4,13 @@
 
 # `MouseButton`
 
-<span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">enum</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">enum</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Enums**.
+Source: **Descriptors** (`crates/flux_plugin_sdk/src/descriptors.rs`). Generated group: **Enums**.
 
 ## Description
 
-Mouse button used by plugin cell input events.
+One editor mouse button.
 
 ## Declaration
 
@@ -22,8 +22,8 @@ pub enum MouseButton
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `Left` | none | Primary mouse button. |
-| `Right` | none | Secondary mouse button. |
-| `Middle` | none | Middle or wheel mouse button. |
-| `Other` | u16 | Additional mouse button encoded by its platform-provided numeric id. |
+| `Left` | none | `Left` variant of `MouseButton`. |
+| `Right` | none | `Right` variant of `MouseButton`. |
+| `Middle` | none | `Middle` variant of `MouseButton`. |
+| `Other` | u16 | `Other` variant of `MouseButton` carrying `u16`. |
 

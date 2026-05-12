@@ -1,12 +1,8 @@
 ```rust
-unsafe extern "C" fn on_tool_selected(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxToolSelectedEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    plugin.dragging = payload.has_tool_id != 0;
-    FluxStatus::OK
+impl MyPlugin {
+    fn on_tool_selected(&mut self, event: &ToolSelectedEvent) -> Result<(), PluginError> {
+        self.active_tool = event.tool_id.clone();
+        Ok(())
+    }
 }
 ```

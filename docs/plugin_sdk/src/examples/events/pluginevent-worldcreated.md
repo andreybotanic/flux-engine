@@ -1,13 +1,8 @@
 ```rust
-unsafe extern "C" fn on_world_created(
-    _plugin: *mut FluxPluginHandle,
-    payload: *const FluxEmptyEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    if payload.api_version != ENGINE_PLUGIN_API_VERSION_VALUE {
-        return FluxStatus::FAILED;
+impl MyPlugin {
+    fn on_world_created(&mut self, _event: &WorldCreatedEvent) -> Result<(), PluginError> {
+        self.log.info("plugin observed creation of a new world")?;
+        self.time.set_paused(true)
     }
-    FluxStatus::OK
 }
 ```

@@ -6,11 +6,11 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired after a save operation finishes.
+Fired after the engine has finished saving world state.
 
 ## Arguments
 
@@ -21,17 +21,11 @@ This event does not carry additional payload fields.
 _Source: [`examples/events/pluginevent-worldaftersave.md`](../../examples/events/pluginevent-worldaftersave.md)_
 
 ```rust
-unsafe extern "C" fn on_world_after_save(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxEmptyEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    if payload.struct_size as usize == std::mem::size_of::<FluxEmptyEventPayload>() {
-        plugin.counter = 0;
+impl MyPlugin {
+    fn on_world_after_save(&mut self, _event: &WorldAfterSaveEvent) -> Result<(), PluginError> {
+        self.log.info("plugin data was written into the save slot")?;
+        Ok(())
     }
-    FluxStatus::OK
 }
 ```
 

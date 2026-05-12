@@ -4,13 +4,13 @@
 
 # `HudBlock`
 
-<span class="sdk-badge sdk-badge-engine-side">engine-side</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **UI API** (`src/plugins/api/ui_api.rs`). Generated group: **Structures**.
+Source: **Descriptors** (`crates/flux_plugin_sdk/src/descriptors.rs`). Generated group: **Structures**.
 
 ## Description
 
-Plugin-provided HUD block for a hovered world cell.
+One HUD block appended by a plugin.
 
 ## Declaration
 
@@ -22,8 +22,8 @@ pub struct HudBlock
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | [`ContentId`](../structures/contentid.md) | Stable content id of the HUD block entry. |
-| `title` | String | Block title shown in the HUD. |
-| `lines` | Vec < String > | Text lines rendered inside the HUD block. |
-| `sort_order` | i32 | Ordering key used when multiple HUD blocks are combined. |
+| `id` | [`ContentId`](../structures/contentid.md) | `id` field stored as `ContentId` on `HudBlock`. |
+| `title` | String | `title` field stored as `String` on `HudBlock`. |
+| `lines` | Vec < String > | `lines` field stored as `Vec < String >` on `HudBlock`. |
+| `sort_order` | i32 | `sort_order` field stored as `i32` on `HudBlock`. |
 

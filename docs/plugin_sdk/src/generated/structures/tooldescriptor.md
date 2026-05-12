@@ -4,13 +4,13 @@
 
 # `ToolDescriptor`
 
-<span class="sdk-badge sdk-badge-engine-side">engine-side</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **UI API** (`src/plugins/api/ui_api.rs`). Generated group: **Structures**.
+Source: **Descriptors** (`crates/flux_plugin_sdk/src/descriptors.rs`). Generated group: **Structures**.
 
 ## Description
 
-Plugin-provided tool description.
+One plugin-owned editor tool.
 
 ## Declaration
 
@@ -22,8 +22,8 @@ pub struct ToolDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | [`ContentId`](../structures/contentid.md) | Stable content id of the tool. |
-| `label` | String | Human-readable tool label shown in selectors and toolbars. |
-| `icon_path` | String | Relative asset path to the main tool icon. |
-| `silhouette_path` | Option < String > | Optional relative asset path to the tool silhouette icon. |
+| `id` | [`ContentId`](../structures/contentid.md) | `id` field stored as `ContentId` on `ToolDescriptor`. |
+| `label` | String | `label` field stored as `String` on `ToolDescriptor`. |
+| `icon_path` | String | `icon_path` field stored as `String` on `ToolDescriptor`. |
+| `silhouette_path` | Option < String > | `silhouette_path` field stored as `Option < String >` on `ToolDescriptor`. |
 

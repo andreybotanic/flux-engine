@@ -6,11 +6,11 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired synchronously before the current world is saved.
+Fired right before the engine serializes world state.
 
 ## Arguments
 
@@ -21,27 +21,13 @@ This event does not carry additional payload fields.
 _Source: [`examples/events/pluginevent-worldbeforesave.md`](../../examples/events/pluginevent-worldbeforesave.md)_
 
 ```rust
-unsafe extern "C" fn on_world_before_save(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxEmptyEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let _payload = unsafe { &*payload };
-    let plugin = unsafe { &*plugin };
-    let host = unsafe { &mut *host };
-    let Some(write_save_chunk) = host.write_save_chunk else {
-        return FluxStatus::FAILED;
-    };
-
-    let bytes = plugin.counter.to_le_bytes();
-    unsafe {
-        write_save_chunk(
-            host.context,
-            FluxUtf8Slice::from_str("flux.demo.save.counter"),
-            1,
-            bytes.as_ptr(),
-            bytes.len(),
-        )
+impl MyPlugin {
+    fn on_world_before_save(
+        &mut self,
+        _event: &WorldBeforeSaveEvent,
+    ) -> Result<(), PluginError> {
+        self.save
+            .write_json(self.settings_chunk_id.clone(), 1, &self.settings)
     }
 }
 ```

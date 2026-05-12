@@ -4,9 +4,9 @@
 
 # `SaveChunk`
 
-<span class="sdk-badge sdk-badge-engine-side">engine-side</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **Save API** (`src/plugins/api/save_api.rs`). Generated group: **Structures**.
+Source: **Descriptors** (`crates/flux_plugin_sdk/src/descriptors.rs`). Generated group: **Structures**.
 
 ## Description
 
@@ -22,8 +22,13 @@ pub struct SaveChunk
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `plugin_id` | [`PluginId`](../structures/pluginid.md) | Plugin that owns the save chunk payload. |
-| `chunk_id` | [`ContentId`](../structures/contentid.md) | Stable content id of the save chunk schema. |
-| `version` | u32 | Schema version stored alongside the chunk bytes. |
-| `bytes` | Vec < u8 > | Raw serialized payload bytes written by the plugin. |
+| `plugin_id` | [`PluginId`](../structures/pluginid.md) | `plugin_id` field stored as `PluginId` on `SaveChunk`. |
+| `chunk_id` | [`ContentId`](../structures/contentid.md) | `chunk_id` field stored as `ContentId` on `SaveChunk`. |
+| `version` | u32 | `version` field stored as `u32` on `SaveChunk`. |
+| `bytes` | Vec < u8 > | `bytes` field stored as `Vec < u8 >` on `SaveChunk`. |
+
+## Methods
+
+- [`SaveChunk::from_json`](../methods/savechunk-from-json.md)
+- [`SaveChunk::read_json`](../methods/savechunk-read-json.md)
 

@@ -2339,6 +2339,8 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bytemuck",
+ "flux_plugin_abi",
+ "flux_plugin_sdk",
  "humantime",
  "image",
  "libloading",
@@ -2349,6 +2351,25 @@ dependencies = [
  "toml",
  "wgpu",
  "zip",
+]
+
+[[package]]
+name = "flux_plugin_abi"
+version = "0.1.0"
+dependencies = [
+ "bevy_math",
+]
+
+[[package]]
+name = "flux_plugin_sdk"
+version = "0.1.0"
+dependencies = [
+ "bevy_math",
+ "flux_plugin_abi",
+ "semver",
+ "serde",
+ "serde_json",
+ "smallvec",
 ]
 
 [[package]]

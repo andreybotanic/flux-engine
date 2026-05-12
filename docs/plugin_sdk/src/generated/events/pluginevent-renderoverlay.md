@@ -6,42 +6,35 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired when a plugin-controlled overlay should submit a frame.
+Fired when a plugin-controlled overlay should submit one frame.
 
 ## Arguments
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `overlay_id` | [`ContentId`](../structures/contentid.md) | Plugin-owned overlay id that should submit a frame. |
+| `overlay_id` | [`OverlayModeId`](../structures/overlaymodeid.md) | `overlay_id` field stored as `OverlayModeId` on `RenderOverlayEvent`. |
 
 ## SDK Example
 
 _Source: [`examples/events/pluginevent-renderoverlay.md`](../../examples/events/pluginevent-renderoverlay.md)_
 
 ```rust
-unsafe extern "C" fn on_render_overlay(
-    _plugin: *mut FluxPluginHandle,
-    payload: *const FluxRenderOverlayEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let host = unsafe { &mut *host };
-    let Some(submit_overlay_frame) = host.submit_overlay_frame else {
-        return FluxStatus::FAILED;
-    };
-
-    let width = 2u32;
-    let height = 2u32;
-    let rgba8 = if payload.overlay_id.len == 0 {
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    } else {
-        vec![255, 64, 32, 255, 255, 64, 32, 255, 255, 64, 32, 255, 255, 64, 32, 255]
-    };
-    unsafe { submit_overlay_frame(host.context, width, height, rgba8.as_ptr(), rgba8.len()) }
+impl MyPlugin {
+    fn on_render_overlay(&mut self, event: &RenderOverlayEvent) -> Result<(), PluginError> {
+        let width = 102;
+        let height = 102;
+        let rgba8 = vec![0; (width * height * 4) as usize];
+        self.overlays.submit_frame(OverlayFrame {
+            overlay_id: event.overlay_id.clone(),
+            width,
+            height,
+            rgba8,
+        })
+    }
 }
 ```
 

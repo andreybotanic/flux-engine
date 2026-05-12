@@ -1,58 +1,43 @@
-include!("../../flux_api_demo_common.rs");
-
-const EVENT_HANDLERS: &[DemoEventHandler] = &[DemoEventHandler {
-    event_kind: FluxEventKind::SimulationPreCellGasStep,
-    handler_name: "onSimulationPreCellGasStep",
-}];
-
-const SPEC: DemoSpec = DemoSpec {
-    event_handlers: EVENT_HANDLERS,
-    tool: None,
-    overlay: None,
-    save_chunk: None,
+use bevy_math::Vec2;
+use flux_plugin_sdk::{
+    declare_plugin, GasApi, Plugin, PluginError, PluginEvent, PluginInit, Registrar,
+    SimulationPreCellGasStepEvent, SubstanceId,
 };
 
-#[no_mangle]
-pub extern "C" fn flux_plugin_api_version() -> u32 {
-    ENGINE_PLUGIN_API_VERSION
+const H2_SUBSTANCE_ID: &str = "h2";
+
+pub struct ApiTickDemoPlugin {
+    pub gases: GasApi,
+    h2: SubstanceId,
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn flux_plugin_create(
-    host: *const FluxHostApi,
-    out_plugin: *mut *mut FluxPluginHandle,
-) -> FluxStatus {
-    create(host, out_plugin)
-}
+impl Plugin for ApiTickDemoPlugin {
+    fn new(init: PluginInit) -> Result<Self, PluginError> {
+        Ok(Self {
+            gases: init.gas_api(),
+            h2: SubstanceId::parse(H2_SUBSTANCE_ID).map_err(PluginError::from)?,
+        })
+    }
 
-#[no_mangle]
-pub unsafe extern "C" fn flux_plugin_register(
-    plugin: *mut FluxPluginHandle,
-    registrar: *mut FluxRegistrar,
-) -> FluxStatus {
-    register(plugin, registrar, &SPEC)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn flux_plugin_destroy(plugin: *mut FluxPluginHandle) {
-    destroy(plugin);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn onSimulationPreCellGasStep(
-    plugin: *mut FluxPluginHandle,
-    event: *const FluxEmptyEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let (plugin, _event, host) = match validate_event_call(plugin, event, host) {
-        Ok(values) => values,
-        Err(status) => return status,
-    };
-    plugin.counter = plugin.counter.wrapping_add(1);
-    let cell = UVec2::new(50, 50);
-    let velocity = Vec2::new(3.0, 0.0);
-    match host.add_gas(cell, "h2", 20, velocity) {
-        Ok(_) => FluxStatus::OK,
-        Err(status) => status,
+    fn register(&mut self, registrar: &mut Registrar<Self>) -> Result<(), PluginError> {
+        registrar.subscribe(
+            PluginEvent::SimulationPreCellGasStep,
+            Self::on_simulation_pre_cell_gas_step,
+        )?;
+        Ok(())
     }
 }
+
+impl ApiTickDemoPlugin {
+    fn on_simulation_pre_cell_gas_step(
+        &mut self,
+        _event: &SimulationPreCellGasStepEvent,
+    ) -> Result<(), PluginError> {
+        let _ = self
+            .gases
+            .add_with_velocity((50, 50).into(), self.h2.clone(), 20, Vec2::new(3.0, 0.0))?;
+        Ok(())
+    }
+}
+
+declare_plugin!(ApiTickDemoPlugin);

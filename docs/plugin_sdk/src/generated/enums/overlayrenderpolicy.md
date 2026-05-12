@@ -4,13 +4,13 @@
 
 # `OverlayRenderPolicy`
 
-<span class="sdk-badge sdk-badge-engine-side">engine-side</span> <span class="sdk-kind">enum</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">enum</span>
 
-Source: **Render API** (`src/plugins/api/render_api.rs`). Generated group: **Enums**.
+Source: **Descriptors** (`crates/flux_plugin_sdk/src/descriptors.rs`). Generated group: **Enums**.
 
 ## Description
 
-Defines who controls rendering for one plugin overlay.
+Overlay render ownership mode.
 
 ## Declaration
 
@@ -22,6 +22,6 @@ pub enum OverlayRenderPolicy
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `CoreDefault` | none | The engine keeps its normal overlay rendering behavior. |
-| `PluginControlled` | none | The plugin is responsible for supplying the visible overlay frame. |
+| `CoreDefault` | none | `CoreDefault` variant of `OverlayRenderPolicy`. |
+| `PluginControlled` | none | `PluginControlled` variant of `OverlayRenderPolicy`. |
 

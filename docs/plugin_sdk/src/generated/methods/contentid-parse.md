@@ -4,13 +4,13 @@
 
 # `ContentId::parse`
 
-<span class="sdk-badge sdk-badge-content">content</span> <span class="sdk-kind">method</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">method</span>
 
-Source: **Content** (`src/plugins/content.rs`). Generated group: **Methods**.
+Source: **Identifiers** (`crates/flux_plugin_sdk/src/ids.rs`). Generated group: **Methods**.
 
 ## Description
 
-Parses and validates one content identifier.
+Parses one content identifier.
 
 ## Signature
 

@@ -159,8 +159,11 @@ pub fn build_plugin_runtime_registry(
         });
     }
     for plugin in loaded_plugins {
-        for handler in &plugin.registration.event_handlers {
-            registry.subscribe(plugin.plugin_id.clone(), handler.event_kind);
+        for subscription in &plugin.registration.subscriptions {
+            registry.subscribe(plugin.plugin_id.clone(), subscription.event_kind);
+        }
+        for panel in &plugin.registration.panels {
+            registry.register_panel(panel.clone());
         }
         for tool in &plugin.registration.tools {
             registry.register_tool(tool.clone());

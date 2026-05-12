@@ -4,13 +4,13 @@
 
 # `SubstanceId`
 
-<span class="sdk-badge sdk-badge-content">content</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **Substances** (`src/plugins/substances.rs`). Generated group: **Structures**.
+Source: **Identifiers** (`crates/flux_plugin_sdk/src/ids.rs`). Generated group: **Structures**.
 
 ## Description
 
-Canonical identifier of one substance registered by a content plugin.
+Canonical gas-substance identifier.
 
 ## Declaration
 
@@ -21,6 +21,5 @@ pub struct SubstanceId
 ## Methods
 
 - [`SubstanceId::as_str`](../methods/substanceid-as-str.md)
-- [`SubstanceId::leaf`](../methods/substanceid-leaf.md)
 - [`SubstanceId::parse`](../methods/substanceid-parse.md)
 

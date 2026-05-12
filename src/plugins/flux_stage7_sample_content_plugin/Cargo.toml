@@ -6,4 +6,7 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[dependencies]
+flux_plugin_sdk = { path = "../../../crates/flux_plugin_sdk" }
+
 [workspace]

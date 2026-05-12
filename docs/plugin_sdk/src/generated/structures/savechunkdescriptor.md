@@ -4,13 +4,13 @@
 
 # `SaveChunkDescriptor`
 
-<span class="sdk-badge sdk-badge-engine-side">engine-side</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **Runtime Registry** (`src/plugins/api/runtime.rs`). Generated group: **Structures**.
+Source: **Descriptors** (`crates/flux_plugin_sdk/src/descriptors.rs`). Generated group: **Structures**.
 
 ## Description
 
-Save chunk descriptor registered through the plugin API.
+One plugin-owned save chunk schema.
 
 ## Declaration
 
@@ -22,7 +22,6 @@ pub struct SaveChunkDescriptor
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | [`ContentId`](../structures/contentid.md) | Stable content id of the save chunk. |
-| `plugin_id` | [`PluginId`](../structures/pluginid.md) | Plugin that owns the save chunk namespace. |
-| `version` | u32 | Schema version written into saved chunk payloads. |
+| `id` | [`ContentId`](../structures/contentid.md) | `id` field stored as `ContentId` on `SaveChunkDescriptor`. |
+| `version` | u32 | `version` field stored as `u32` on `SaveChunkDescriptor`. |
 

@@ -1,209 +1,127 @@
-include!("../../flux_api_demo_common.rs");
+use flux_plugin_sdk::{
+    declare_plugin, BuildHudForCellEvent, BuildPanelEvent, ContentId, LoggerApi, MouseButton,
+    MouseCellEvent, PanelApi, PanelDescriptor, Plugin, PluginError, PluginEvent, PluginInit,
+    Registrar, SaveApi, SaveChunkDescriptor, UiApi, UiNode, WorldBeforeSaveEvent,
+    WorldLoadedEvent,
+};
 
 const WORLD_WIDTH: u32 = 102;
 const WORLD_HEIGHT: u32 = 102;
+const SAVE_CHUNK_ID: &str = "flux.api_ui_save_demo.save.counter";
+const PANEL_ID: &str = "flux.api_ui_save_demo.panel.counter";
+const HUD_BLOCK_ID: &str = "flux.api_ui_save_demo.hud.counter";
 
-const EVENT_HANDLERS: &[DemoEventHandler] = &[
-    DemoEventHandler {
-        event_kind: FluxEventKind::WorldLoaded,
-        handler_name: "onWorldLoaded",
-    },
-    DemoEventHandler {
-        event_kind: FluxEventKind::WorldBeforeSave,
-        handler_name: "onWorldBeforeSave",
-    },
-    DemoEventHandler {
-        event_kind: FluxEventKind::MouseDownCell,
-        handler_name: "onMouseDownCell",
-    },
-    DemoEventHandler {
-        event_kind: FluxEventKind::BuildHudForCell,
-        handler_name: "onBuildHudForCell",
-    },
-    DemoEventHandler {
-        event_kind: FluxEventKind::BuildPanel,
-        handler_name: "onBuildPanel",
-    },
-];
-
-const SPEC: DemoSpec = DemoSpec {
-    event_handlers: EVENT_HANDLERS,
-    tool: None,
-    overlay: None,
-    save_chunk: Some(("flux.api_ui_save_demo.save.counter", 1)),
-};
-
-#[no_mangle]
-pub extern "C" fn flux_plugin_api_version() -> u32 {
-    ENGINE_PLUGIN_API_VERSION
+pub struct ApiUiSaveDemoPlugin {
+    pub ui: UiApi,
+    pub panels: PanelApi,
+    pub save: SaveApi,
+    pub log: LoggerApi,
+    cell_counters: Vec<u32>,
+    save_chunk_id: ContentId,
+    panel_id: ContentId,
+    hud_block_id: ContentId,
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn flux_plugin_create(
-    host: *const FluxHostApi,
-    out_plugin: *mut *mut FluxPluginHandle,
-) -> FluxStatus {
-    create(host, out_plugin)
+impl Plugin for ApiUiSaveDemoPlugin {
+    fn new(init: PluginInit) -> Result<Self, PluginError> {
+        Ok(Self {
+            ui: init.ui_api(),
+            panels: init.panel_api(),
+            save: init.save_api(),
+            log: init.logger_api(),
+            cell_counters: vec![0; (WORLD_WIDTH * WORLD_HEIGHT) as usize],
+            save_chunk_id: ContentId::parse(SAVE_CHUNK_ID).map_err(PluginError::from)?,
+            panel_id: ContentId::parse(PANEL_ID).map_err(PluginError::from)?,
+            hud_block_id: ContentId::parse(HUD_BLOCK_ID).map_err(PluginError::from)?,
+        })
+    }
+
+    fn register(&mut self, registrar: &mut Registrar<Self>) -> Result<(), PluginError> {
+        registrar.register_panel(PanelDescriptor {
+            id: self.panel_id.clone(),
+            title: "API Counter".to_string(),
+            root: UiNode::Text {
+                text: "Counter panel is rebuilt from plugin events.".to_string(),
+            },
+        })?;
+        registrar.register_save_chunk(SaveChunkDescriptor {
+            id: self.save_chunk_id.clone(),
+            version: 1,
+        })?;
+        registrar.subscribe(PluginEvent::WorldLoaded, Self::on_world_loaded)?;
+        registrar.subscribe(PluginEvent::WorldBeforeSave, Self::on_world_before_save)?;
+        registrar.subscribe(PluginEvent::MouseDownCell, Self::on_mouse_down)?;
+        registrar.subscribe(PluginEvent::BuildHudForCell, Self::on_build_hud_for_cell)?;
+        registrar.subscribe(PluginEvent::BuildPanel, Self::on_build_panel)?;
+        Ok(())
+    }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn flux_plugin_register(
-    plugin: *mut FluxPluginHandle,
-    registrar: *mut FluxRegistrar,
-) -> FluxStatus {
-    register(plugin, registrar, &SPEC)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn flux_plugin_destroy(plugin: *mut FluxPluginHandle) {
-    destroy(plugin);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn onWorldLoaded(
-    plugin: *mut FluxPluginHandle,
-    event: *const FluxEmptyEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let (plugin, _event, host) = match validate_event_call(plugin, event, host) {
-        Ok(values) => values,
-        Err(status) => return status,
-    };
-    read_counter_chunk(plugin, host)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn onWorldBeforeSave(
-    plugin: *mut FluxPluginHandle,
-    event: *const FluxEmptyEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let (plugin, _event, host) = match validate_event_call(plugin, event, host) {
-        Ok(values) => values,
-        Err(status) => return status,
-    };
-    write_counter_chunk(plugin, host)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn onMouseDownCell(
-    plugin: *mut FluxPluginHandle,
-    event: *const FluxMouseCellEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let (plugin, event, _host) = match validate_event_call(plugin, event, host) {
-        Ok(values) => values,
-        Err(status) => return status,
-    };
-    if event.button == 1 && event.has_cell != 0 {
-        let cell = UVec2::new(event.cell_x, event.cell_y);
-        if let Some(index) = cell_index(cell) {
-            plugin.cell_counters[index] = plugin.cell_counters[index].saturating_add(1);
+impl ApiUiSaveDemoPlugin {
+    fn on_world_loaded(&mut self, _event: &WorldLoadedEvent) -> Result<(), PluginError> {
+        let Some(bytes) = self.save.read_bytes(&self.save_chunk_id)? else {
+            return Ok(());
+        };
+        if bytes.len() != self.cell_counters.len() * 4 {
+            return Ok(());
         }
-    }
-    FluxStatus::OK
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn onBuildHudForCell(
-    plugin: *mut FluxPluginHandle,
-    event: *const FluxBuildHudForCellEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let (plugin, event, host) = match validate_event_call(plugin, event, host) {
-        Ok(values) => values,
-        Err(status) => return status,
-    };
-    submit_cell_hud(plugin, UVec2::new(event.cell_x, event.cell_y), host)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn onBuildPanel(
-    plugin: *mut FluxPluginHandle,
-    event: *const FluxBuildPanelEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let (plugin, event, host) = match validate_event_call(plugin, event, host) {
-        Ok(values) => values,
-        Err(status) => return status,
-    };
-    submit_panel_summary(plugin, event.panel_id, host)
-}
-
-unsafe fn write_counter_chunk(plugin: &FluxPluginHandle, host: &mut FluxRuntimeHost) -> FluxStatus {
-    let mut payload = Vec::with_capacity(plugin.cell_counters.len() * 4);
-    for counter in &plugin.cell_counters {
-        payload.extend_from_slice(&counter.to_le_bytes());
-    }
-    match host.write_save_chunk("flux.api_ui_save_demo.save.counter", 1, &payload) {
-        Ok(_) => FluxStatus::OK,
-        Err(status) => status,
-    }
-}
-
-unsafe fn read_counter_chunk(
-    plugin: &mut FluxPluginHandle,
-    host: &mut FluxRuntimeHost,
-) -> FluxStatus {
-    let Some((version, payload)) = (match host.read_save_chunk("flux.api_ui_save_demo.save.counter")
-    {
-        Ok(value) => value,
-        Err(status) => return status,
-    }) else {
-        return FluxStatus::OK;
-    };
-    if version == 1 && payload.len() == plugin.cell_counters.len() * 4 {
-        for (index, chunk) in payload.chunks_exact(4).enumerate() {
-            plugin.cell_counters[index] =
+        for (index, chunk) in bytes.chunks_exact(4).enumerate() {
+            self.cell_counters[index] =
                 u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         }
+        Ok(())
     }
-    FluxStatus::OK
+
+    fn on_world_before_save(&mut self, _event: &WorldBeforeSaveEvent) -> Result<(), PluginError> {
+        let mut bytes = Vec::with_capacity(self.cell_counters.len() * 4);
+        for value in &self.cell_counters {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        self.save
+            .write_bytes(self.save_chunk_id.clone(), 1, bytes)
+    }
+
+    fn on_mouse_down(&mut self, event: &MouseCellEvent) -> Result<(), PluginError> {
+        if event.button != Some(MouseButton::Left) {
+            return Ok(());
+        }
+        if let Some(index) = cell_index(event.cell.x, event.cell.y) {
+            self.cell_counters[index] = self.cell_counters[index].saturating_add(1);
+        }
+        Ok(())
+    }
+
+    fn on_build_hud_for_cell(
+        &mut self,
+        event: &BuildHudForCellEvent,
+    ) -> Result<(), PluginError> {
+        let counter = cell_index(event.cell.x, event.cell.y)
+            .and_then(|index| self.cell_counters.get(index).copied())
+            .unwrap_or(0);
+        self.ui.add_hud_line(
+            self.hud_block_id.clone(),
+            "API UI/Save Demo".to_string(),
+            format!(
+                "cell left-clicks {}, cell ({}, {})",
+                counter, event.cell.x, event.cell.y
+            ),
+        )
+    }
+
+    fn on_build_panel(&mut self, _event: &BuildPanelEvent) -> Result<(), PluginError> {
+        if let Some(requested) = self.panels.requested_panel() {
+            let total_clicks: u32 = self.cell_counters.iter().copied().sum();
+            let _ = self.log.info(format!(
+                "panel '{}' requested, total left-clicks {}",
+                requested, total_clicks
+            ));
+        }
+        Ok(())
+    }
 }
 
-unsafe fn submit_cell_hud(
-    plugin: &FluxPluginHandle,
-    cell: UVec2,
-    host: &mut FluxRuntimeHost,
-) -> FluxStatus {
-    let cell_counter = cell_index(cell)
-        .and_then(|index| plugin.cell_counters.get(index).copied())
-        .unwrap_or(0);
-    let line = format!(
-        "cell left-clicks {}, cell ({}, {})",
-        cell_counter, cell.x, cell.y
-    );
-    match host.submit_hud_block("API UI/Save Demo", &line) {
-        Ok(_) => FluxStatus::OK,
-        Err(status) => status,
-    }
+fn cell_index(x: u32, y: u32) -> Option<usize> {
+    (x < WORLD_WIDTH && y < WORLD_HEIGHT).then_some((y * WORLD_WIDTH + x) as usize)
 }
 
-unsafe fn submit_panel_summary(
-    plugin: &FluxPluginHandle,
-    panel_id: FluxUtf8Slice,
-    host: &mut FluxRuntimeHost,
-) -> FluxStatus {
-    let total_clicks: u32 = plugin.cell_counters.iter().copied().sum();
-    let panel_name = utf8_slice_or_empty(panel_id);
-    let line = format!("panel {}, total left-clicks {}", panel_name, total_clicks);
-    match host.submit_hud_block("API UI/Save Demo", &line) {
-        Ok(_) => FluxStatus::OK,
-        Err(status) => status,
-    }
-}
-
-fn cell_index(cell: UVec2) -> Option<usize> {
-    (cell.x < WORLD_WIDTH && cell.y < WORLD_HEIGHT)
-        .then_some((cell.y * WORLD_WIDTH + cell.x) as usize)
-}
-
-fn utf8_slice_or_empty(value: FluxUtf8Slice) -> String {
-    if value.len == 0 || value.ptr.is_null() {
-        return String::new();
-    }
-    let bytes = unsafe { std::slice::from_raw_parts(value.ptr, value.len) };
-    std::str::from_utf8(bytes)
-        .map(str::to_string)
-        .unwrap_or_default()
-}
+declare_plugin!(ApiUiSaveDemoPlugin);

@@ -6,11 +6,11 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired before the core free-gas simulation step.
+Fired before one gas-simulation cell step starts.
 
 ## Arguments
 
@@ -21,23 +21,17 @@ This event does not carry additional payload fields.
 _Source: [`examples/events/pluginevent-simulationprecellgasstep.md`](../../examples/events/pluginevent-simulationprecellgasstep.md)_
 
 ```rust
-unsafe extern "C" fn on_simulation_pre_cell_gas_step(
-    _plugin: *mut FluxPluginHandle,
-    payload: *const FluxEmptyEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let _payload = unsafe { &*payload };
-    let host = unsafe { &mut *host };
-    let cell = UVec2::new(20, 20);
-    let velocity = Vec2::new(0.0, 1.0);
-    let added = match host.add_gas(cell, "flux.default.gas.oxygen", 25, velocity) {
-        Ok(added) => added,
-        Err(status) => return status,
-    };
-    if added == 0 {
-        return FluxStatus::FAILED;
+impl MyPlugin {
+    fn on_simulation_pre_step(
+        &mut self,
+        _event: &SimulationPreCellGasStepEvent,
+    ) -> Result<(), PluginError> {
+        if self.time.is_paused()? {
+            return Ok(());
+        }
+        self.gases.add(self.inject_cell, self.neon_id.clone(), 4)
+            .map(|_| ())
     }
-    FluxStatus::OK
 }
 ```
 

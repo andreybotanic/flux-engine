@@ -4,18 +4,18 @@
 
 # `PluginId::parse`
 
-<span class="sdk-badge sdk-badge-manifest">manifest</span> <span class="sdk-kind">method</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">method</span>
 
-Source: **Identifiers** (`src/plugins/id.rs`). Generated group: **Methods**.
+Source: **Identifiers** (`crates/flux_plugin_sdk/src/ids.rs`). Generated group: **Methods**.
 
 ## Description
 
-Parses and validates one plugin identifier.
+Parses one plugin identifier.
 
 ## Signature
 
 ```rust
-fn parse (raw : & str) -> Result < Self , PluginContractError >
+fn parse (raw : & str) -> Result < Self , String >
 ```
 
 ## Arguments
@@ -26,7 +26,7 @@ fn parse (raw : & str) -> Result < Self , PluginContractError >
 
 ## Return Value
 
-Result < Self , PluginContractError >
+Result < Self , String >
 
 ## SDK Example
 

@@ -6,7 +6,7 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
@@ -16,22 +16,18 @@ Fired when the active overlay changes.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `overlay_id` | Option < [`ContentId`](../structures/contentid.md) > | Newly active plugin-owned overlay id, if one is selected. |
+| `overlay_id` | Option < [`OverlayModeId`](../structures/overlaymodeid.md) > | `overlay_id` field stored as `Option < OverlayModeId >` on `OverlayChangedEvent`. |
 
 ## SDK Example
 
 _Source: [`examples/events/pluginevent-overlaychanged.md`](../../examples/events/pluginevent-overlaychanged.md)_
 
 ```rust
-unsafe extern "C" fn on_overlay_changed(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxOverlayChangedEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    plugin.dragging = payload.has_overlay_id != 0;
-    FluxStatus::OK
+impl MyPlugin {
+    fn on_overlay_changed(&mut self, event: &OverlayChangedEvent) -> Result<(), PluginError> {
+        self.last_overlay = event.overlay_id.clone();
+        Ok(())
+    }
 }
 ```
 

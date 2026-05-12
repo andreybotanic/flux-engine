@@ -70,4 +70,12 @@ impl SaveChunkStore {
     pub fn chunks(&self) -> &[SaveChunk] {
         &self.chunks
     }
+
+    /// Deletes one plugin-owned save chunk and returns whether it existed.
+    pub fn delete_plugin_chunk(&mut self, plugin_id: &PluginId, chunk_id: &ContentId) -> bool {
+        let before = self.chunks.len();
+        self.chunks
+            .retain(|chunk| &chunk.plugin_id != plugin_id || &chunk.chunk_id != chunk_id);
+        self.chunks.len() != before
+    }
 }

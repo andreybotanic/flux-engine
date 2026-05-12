@@ -6,7 +6,7 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
@@ -16,26 +16,19 @@ Fired when a key is released.
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `key` | String | Engine-provided key identifier for the released key. |
-| `modifiers` | [`InputModifiers`](../structures/inputmodifiers.md) | Modifier snapshot captured together with the key release. |
+| `key` | String | `key` field stored as `String` on `KeyEvent`. |
+| `modifiers` | [`InputModifiers`](../structures/inputmodifiers.md) | `modifiers` field stored as `InputModifiers` on `KeyEvent`. |
 
 ## SDK Example
 
 _Source: [`examples/events/pluginevent-keyreleased.md`](../../examples/events/pluginevent-keyreleased.md)_
 
 ```rust
-unsafe extern "C" fn on_key_released(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxKeyEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    let key = unsafe { std::slice::from_raw_parts(payload.key.ptr, payload.key.len) };
-    if key == b"Escape" {
-        plugin.dragging = false;
+impl MyPlugin {
+    fn on_key_released(&mut self, event: &KeyEvent) -> Result<(), PluginError> {
+        self.log.debug(format!("key released: {}", event.key))?;
+        Ok(())
     }
-    FluxStatus::OK
 }
 ```
 

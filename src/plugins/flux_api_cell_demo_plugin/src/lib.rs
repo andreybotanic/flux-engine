@@ -1,157 +1,88 @@
-include!("../../flux_api_demo_common.rs");
-
-const PAINT_BUTTON: u32 = 2;
-
-const EVENT_HANDLERS: &[DemoEventHandler] = &[
-    DemoEventHandler {
-        event_kind: FluxEventKind::MouseDownCell,
-        handler_name: "onMouseDownCell",
-    },
-    DemoEventHandler {
-        event_kind: FluxEventKind::MouseMoveCell,
-        handler_name: "onMouseMoveCell",
-    },
-    DemoEventHandler {
-        event_kind: FluxEventKind::MouseUpCell,
-        handler_name: "onMouseUpCell",
-    },
-];
-
-const SPEC: DemoSpec = DemoSpec {
-    event_handlers: EVENT_HANDLERS,
-    tool: Some(("flux.api_cell_demo.tool.paint_line", "API Cell Right Paint")),
-    overlay: None,
-    save_chunk: None,
+use bevy_math::UVec2;
+use flux_plugin_sdk::{
+    declare_plugin, ContentId, EntityApi, EntityPlacement, LoggerApi, MouseButton, MouseCellEvent,
+    Plugin, PluginError, PluginEvent, PluginInit, Registrar, Rotation, WorldApi,
 };
 
-#[no_mangle]
-pub extern "C" fn flux_plugin_api_version() -> u32 {
-    ENGINE_PLUGIN_API_VERSION
+const METAL_ENTITY_ID: &str = "flux.default.cell.metal";
+
+pub struct ApiCellDemoPlugin {
+    pub world: WorldApi,
+    pub entities: EntityApi,
+    pub log: LoggerApi,
+    dragging: bool,
+    last_cell: UVec2,
+    metal_id: ContentId,
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn flux_plugin_create(
-    host: *const FluxHostApi,
-    out_plugin: *mut *mut FluxPluginHandle,
-) -> FluxStatus {
-    create(host, out_plugin)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn flux_plugin_register(
-    plugin: *mut FluxPluginHandle,
-    registrar: *mut FluxRegistrar,
-) -> FluxStatus {
-    register(plugin, registrar, &SPEC)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn flux_plugin_destroy(plugin: *mut FluxPluginHandle) {
-    destroy(plugin);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn onMouseDownCell(
-    plugin: *mut FluxPluginHandle,
-    event: *const FluxMouseCellEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let (plugin, event, host) = match validate_event_call(plugin, event, host) {
-        Ok(values) => values,
-        Err(status) => return status,
-    };
-    if event.has_cell == 0 || event.button != PAINT_BUTTON {
-        return FluxStatus::OK;
+impl Plugin for ApiCellDemoPlugin {
+    fn new(init: PluginInit) -> Result<Self, PluginError> {
+        Ok(Self {
+            world: init.world_api(),
+            entities: init.entity_api(),
+            log: init.logger_api(),
+            dragging: false,
+            last_cell: UVec2::ZERO,
+            metal_id: ContentId::parse(METAL_ENTITY_ID).map_err(PluginError::from)?,
+        })
     }
-    plugin.dragging = true;
-    plugin.last_x = event.cell_x;
-    plugin.last_y = event.cell_y;
-    paint_cell(host, UVec2::new(event.cell_x, event.cell_y))
-}
 
-#[no_mangle]
-pub unsafe extern "C" fn onMouseMoveCell(
-    plugin: *mut FluxPluginHandle,
-    event: *const FluxMouseCellEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let (plugin, event, host) = match validate_event_call(plugin, event, host) {
-        Ok(values) => values,
-        Err(status) => return status,
-    };
-    if !plugin.dragging || event.has_cell == 0 {
-        return FluxStatus::OK;
-    }
-    let status = paint_line(
-        host,
-        UVec2::new(plugin.last_x, plugin.last_y),
-        UVec2::new(event.cell_x, event.cell_y),
-    );
-    if status != FluxStatus::OK {
-        return status;
-    }
-    plugin.last_x = event.cell_x;
-    plugin.last_y = event.cell_y;
-    FluxStatus::OK
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn onMouseUpCell(
-    plugin: *mut FluxPluginHandle,
-    event: *const FluxMouseCellEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let (plugin, event, host) = match validate_event_call(plugin, event, host) {
-        Ok(values) => values,
-        Err(status) => return status,
-    };
-    if !plugin.dragging {
-        return FluxStatus::OK;
-    }
-    plugin.dragging = false;
-    if event.has_cell == 0 {
-        return FluxStatus::OK;
-    }
-    paint_line(
-        host,
-        UVec2::new(plugin.last_x, plugin.last_y),
-        UVec2::new(event.cell_x, event.cell_y),
-    )
-}
-
-unsafe fn paint_cell(host: &mut FluxRuntimeHost, cell: UVec2) -> FluxStatus {
-    match host.set_cell_material(cell, "flux.default.cell.metal") {
-        Ok(_) => FluxStatus::OK,
-        Err(status) => status,
+    fn register(&mut self, registrar: &mut Registrar<Self>) -> Result<(), PluginError> {
+        registrar.subscribe(PluginEvent::MouseDownCell, Self::on_mouse_down)?;
+        registrar.subscribe(PluginEvent::MouseMoveCell, Self::on_mouse_move)?;
+        registrar.subscribe(PluginEvent::MouseUpCell, Self::on_mouse_up)?;
+        Ok(())
     }
 }
 
-unsafe fn paint_line(host: &mut FluxRuntimeHost, from: UVec2, to: UVec2) -> FluxStatus {
-    let mut x0 = from.x as i32;
-    let mut y0 = from.y as i32;
-    let x1 = to.x as i32;
-    let y1 = to.y as i32;
-    let dx = (x1 - x0).abs();
-    let sx = if x0 < x1 { 1 } else { -1 };
-    let dy = -(y1 - y0).abs();
-    let sy = if y0 < y1 { 1 } else { -1 };
-    let mut err = dx + dy;
-    loop {
-        let status = paint_cell(host, UVec2::new(x0 as u32, y0 as u32));
-        if status != FluxStatus::OK {
-            return status;
+impl ApiCellDemoPlugin {
+    fn on_mouse_down(&mut self, event: &MouseCellEvent) -> Result<(), PluginError> {
+        if event.button != Some(MouseButton::Right) || !self.world.is_editable(event.cell) {
+            return Ok(());
         }
-        if x0 == x1 && y0 == y1 {
-            return FluxStatus::OK;
+        self.dragging = true;
+        self.last_cell = event.cell;
+        self.paint_cell(event.cell)
+    }
+
+    fn on_mouse_move(&mut self, event: &MouseCellEvent) -> Result<(), PluginError> {
+        if !self.dragging || !self.world.contains(event.cell) {
+            return Ok(());
         }
-        let e2 = err * 2;
-        if e2 >= dy {
-            err += dy;
-            x0 += sx;
+        for cell in self.world.ray_cells(self.last_cell, event.cell) {
+            self.paint_cell(cell)?;
         }
-        if e2 <= dx {
-            err += dx;
-            y0 += sy;
+        self.last_cell = event.cell;
+        Ok(())
+    }
+
+    fn on_mouse_up(&mut self, event: &MouseCellEvent) -> Result<(), PluginError> {
+        if !self.dragging {
+            return Ok(());
         }
+        self.dragging = false;
+        if !self.world.contains(event.cell) {
+            return Ok(());
+        }
+        for cell in self.world.ray_cells(self.last_cell, event.cell) {
+            self.paint_cell(cell)?;
+        }
+        Ok(())
+    }
+
+    fn paint_cell(&mut self, cell: UVec2) -> Result<(), PluginError> {
+        if !self.world.is_editable(cell) {
+            return Ok(());
+        }
+        let _ = self.entities.place(
+            self.metal_id.clone(),
+            EntityPlacement {
+                origin: cell,
+                rotation: Rotation::Deg0,
+            },
+        )?;
+        Ok(())
     }
 }
+
+declare_plugin!(ApiCellDemoPlugin);

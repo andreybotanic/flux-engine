@@ -51,6 +51,7 @@ pub(super) fn optional_doc_summary(attrs: &[Attribute]) -> Option<String> {
 }
 
 /// Requires a particular markdown heading to exist in a parsed Rustdoc block.
+#[cfg(test)]
 pub(super) fn require_section(
     source_path: &str,
     item_name: &str,
@@ -128,6 +129,19 @@ pub(super) fn impl_owner_name(ty: &Type) -> Option<String> {
 /// Returns `true` when a `syn` visibility is public.
 pub(super) fn is_public(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Public(_))
+}
+
+/// Returns `true` when an item is marked as hidden from generated docs.
+pub(super) fn is_doc_hidden(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| {
+        if !attr.path().is_ident("doc") {
+            return false;
+        }
+        let Meta::List(list) = &attr.meta else {
+            return false;
+        };
+        list.tokens.to_string().replace(' ', "") == "hidden"
+    })
 }
 
 fn doc_lines(attrs: &[Attribute]) -> Vec<String> {

@@ -6,11 +6,11 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">struct</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Structures**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Structures**.
 
 ## Description
 
-Low-level mouse event in a world cell.
+Shared payload for mouse events that target one world cell.
 
 ## Declaration
 
@@ -22,11 +22,11 @@ pub struct MouseCellEvent
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `button` | Option < [`MouseButton`](../enums/mousebutton.md) > | Mouse button associated with the event, if the source event had one. |
-| `cell` | UVec2 | Target world-cell coordinates under the cursor. |
-| `world_position` | Vec2 | Cursor position in world-space coordinates. |
-| `screen_position` | Vec2 | Cursor position in screen-space coordinates. |
-| `modifiers` | [`InputModifiers`](../structures/inputmodifiers.md) | Keyboard modifier snapshot captured with the mouse event. |
-| `active_tool_id` | Option < [`ContentId`](../structures/contentid.md) > | Active editor tool when the event fired, if one is selected. |
-| `is_over_ui` | bool | Whether the pointer was over game UI when the event was emitted. |
+| `button` | Option < [`MouseButton`](../enums/mousebutton.md) > | `button` field stored as `Option < MouseButton >` on `MouseCellEvent`. |
+| `cell` | UVec2 | `cell` field stored as `UVec2` on `MouseCellEvent`. |
+| `world_position` | Vec2 | `world_position` field stored as `Vec2` on `MouseCellEvent`. |
+| `screen_position` | Vec2 | `screen_position` field stored as `Vec2` on `MouseCellEvent`. |
+| `modifiers` | [`InputModifiers`](../structures/inputmodifiers.md) | `modifiers` field stored as `InputModifiers` on `MouseCellEvent`. |
+| `active_tool_id` | Option < [`ContentId`](../structures/contentid.md) > | `active_tool_id` field stored as `Option < ContentId >` on `MouseCellEvent`. |
+| `is_over_ui` | bool | `is_over_ui` field stored as `bool` on `MouseCellEvent`. |
 

@@ -6,44 +6,45 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired when a mouse button is pressed over a world cell.
+Fired when the pointer button is pressed over a world cell.
 
 ## Arguments
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `payload` | [`MouseCellEvent`](../structures/mousecellevent.md) | Low-level mouse payload captured for the button press. |
+| `button` | Option < [`MouseButton`](../enums/mousebutton.md) > | `button` field stored as `Option < MouseButton >` on `MouseCellEvent`. |
+| `cell` | UVec2 | `cell` field stored as `UVec2` on `MouseCellEvent`. |
+| `world_position` | Vec2 | `world_position` field stored as `Vec2` on `MouseCellEvent`. |
+| `screen_position` | Vec2 | `screen_position` field stored as `Vec2` on `MouseCellEvent`. |
+| `modifiers` | [`InputModifiers`](../structures/inputmodifiers.md) | `modifiers` field stored as `InputModifiers` on `MouseCellEvent`. |
+| `active_tool_id` | Option < [`ContentId`](../structures/contentid.md) > | `active_tool_id` field stored as `Option < ContentId >` on `MouseCellEvent`. |
+| `is_over_ui` | bool | `is_over_ui` field stored as `bool` on `MouseCellEvent`. |
 
 ## SDK Example
 
 _Source: [`examples/events/pluginevent-mousedowncell.md`](../../examples/events/pluginevent-mousedowncell.md)_
 
 ```rust
-unsafe extern "C" fn on_mouse_down_cell(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxMouseCellEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    let host = unsafe { &mut *host };
-    if payload.has_cell == 0 || payload.is_over_ui != 0 || payload.button != 1 {
-        return FluxStatus::OK;
+impl MyPlugin {
+    fn on_mouse_down(&mut self, event: &MouseCellEvent) -> Result<(), PluginError> {
+        if event.button != Some(MouseButton::Right) || !self.world.is_editable(event.cell) {
+            return Ok(());
+        }
+        self.dragging = true;
+        self.last_cell = event.cell;
+        self.entities.place(
+            self.metal_id.clone(),
+            EntityPlacement {
+                origin: event.cell,
+                rotation: Rotation::Deg0,
+            },
+        )?;
+        Ok(())
     }
-
-    plugin.dragging = true;
-    plugin.last_x = payload.cell_x;
-    plugin.last_y = payload.cell_y;
-    host.set_cell_material(
-        UVec2::new(payload.cell_x, payload.cell_y),
-        "flux.default.cell.metal",
-    )
-    .map(|()| FluxStatus::OK)
-    .unwrap_or_else(|status| status)
 }
 ```
 

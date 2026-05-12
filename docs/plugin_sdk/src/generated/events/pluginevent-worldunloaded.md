@@ -6,11 +6,11 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired before the current world is unloaded.
+Fired before the current world is discarded.
 
 ## Arguments
 
@@ -21,15 +21,12 @@ This event does not carry additional payload fields.
 _Source: [`examples/events/pluginevent-worldunloaded.md`](../../examples/events/pluginevent-worldunloaded.md)_
 
 ```rust
-unsafe extern "C" fn on_world_unloaded(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxEmptyEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let _payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    plugin.cell_counters.clear();
-    FluxStatus::OK
+impl MyPlugin {
+    fn on_world_unloaded(&mut self, _event: &WorldUnloadedEvent) -> Result<(), PluginError> {
+        self.dragging = false;
+        self.cached_selection = None;
+        Ok(())
+    }
 }
 ```
 

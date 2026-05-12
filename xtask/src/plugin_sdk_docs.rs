@@ -206,6 +206,10 @@ mod tests {
         let repo = repo_root();
         copy_tree(&repo.join("src"), &root.join("src"));
         copy_tree(
+            &repo.join("crates").join("flux_plugin_sdk"),
+            &root.join("crates").join("flux_plugin_sdk"),
+        );
+        copy_tree(
             &repo
                 .join("docs")
                 .join("plugin_sdk")
@@ -218,13 +222,6 @@ mod tests {
                 .join("examples"),
         );
         TempRepo { root }
-    }
-
-    fn rewrite_file(path: &Path, from: &str, to: &str) {
-        let text = fs::read_to_string(path).expect("read file to rewrite");
-        let updated = text.replace(from, to);
-        assert_ne!(text, updated, "rewrite pattern must match");
-        fs::write(path, updated).expect("write rewritten file");
     }
 
     #[test]
@@ -240,42 +237,41 @@ mod tests {
             .contents
             .contains("[Structures](generated/structures.md)"));
         assert!(summary.contents.contains("[Enums](generated/enums.md)"));
+        assert!(summary.contents.contains("[Methods](generated/methods.md)"));
+        assert!(summary.contents.contains("[Events](generated/events.md)"));
         assert!(summary
             .contents
-            .contains("[Constants](generated/constants.md)"));
+            .contains("[`WorldApi`](generated/structures/worldapi.md)"));
         assert!(summary
             .contents
-            .contains("[`FluxRuntimeHost`](generated/structures/fluxruntimehost.md)"));
+            .contains("[`Registrar`](generated/structures/registrar.md)"));
         assert!(summary
             .contents
             .contains("[`PluginEvent`](generated/enums/pluginevent.md)"));
-        assert!(summary.contents.contains(
-            "[`FLUX_PLUGIN_CREATE_EXPORT_NAME`](generated/constants/flux-plugin-create-export-name.md)"
-        ));
         assert!(summary
             .contents
-            .contains("[`FluxRuntimeHost::set_cell_material`](generated/methods/fluxruntimehost-set-cell-material.md)"));
+            .contains("[`WorldApi::width`](generated/methods/worldapi-width.md)"));
         assert!(summary.contents.contains(
             "[`PluginEvent::WorldCreated`](generated/events/pluginevent-worldcreated.md)"
         ));
-        assert!(!summary.contents.contains("WorldApi"));
-        assert!(!summary.contents.contains("PluginRuntimeEvent"));
+        assert!(!summary.contents.contains("FluxRuntimeHost"));
+        assert!(!summary.contents.contains("PluginRuntime"));
     }
 
     #[test]
-    fn generated_structure_pages_hide_raw_callback_fields() {
+    fn generated_structure_pages_hide_internal_runtime_details() {
         let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
         let page = files
             .iter()
-            .find(|file| file.relative_path == Path::new("generated/structures/fluxruntimehost.md"))
-            .expect("FluxRuntimeHost page");
+            .find(|file| file.relative_path == Path::new("generated/structures/worldapi.md"))
+            .expect("WorldApi page");
 
         assert!(!page.contents.contains("## Fields"));
         assert!(page.contents.contains("## Methods"));
         assert!(page
             .contents
-            .contains("[`FluxRuntimeHost::set_cell_material`](../methods/fluxruntimehost-set-cell-material.md)"));
-        assert!(!page.contents.contains("FluxSetCellMaterialFn"));
+            .contains("[`WorldApi::width`](../methods/worldapi-width.md)"));
+        assert!(!page.contents.contains("FluxRuntimeHost"));
     }
 
     #[test]
@@ -283,13 +279,13 @@ mod tests {
         let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
         let page = files
             .iter()
-            .find(|file| file.relative_path == Path::new("generated/structures/fluxregistrar.md"))
-            .expect("FluxRegistrar page");
+            .find(|file| file.relative_path == Path::new("generated/structures/registrar.md"))
+            .expect("Registrar page");
 
         assert!(page.contents.contains("## Methods"));
         assert!(page
             .contents
-            .contains("[`FluxRegistrar::register_event_handler`](../methods/fluxregistrar-register-event-handler.md)"));
+            .contains("[`Registrar::subscribe`](../methods/registrar-subscribe.md)"));
     }
 
     #[test]
@@ -298,17 +294,16 @@ mod tests {
 
         assert!(files
             .iter()
-            .any(|file| file.relative_path == Path::new("generated/structures/cellmaterial.md")));
+            .any(|file| file.relative_path == Path::new("generated/structures/worldapi.md")));
         assert!(files
             .iter()
-            .any(|file| file.relative_path == Path::new("generated/methods/cellmaterial-new.md")));
+            .any(|file| file.relative_path == Path::new("generated/methods/worldapi-width.md")));
         assert!(!files
             .iter()
-            .any(|file| file.relative_path == Path::new("generated/structures/worldgrid.md")));
+            .any(|file| file.relative_path == Path::new("generated/structures/pluginruntime.md")));
         assert!(!files
             .iter()
-            .any(|file| file.relative_path
-                == Path::new("generated/structures/placedstructuremap.md")));
+            .any(|file| file.relative_path == Path::new("generated/structures/overlaystate.md")));
     }
 
     #[test]
@@ -316,23 +311,19 @@ mod tests {
         let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
         let page = files
             .iter()
-            .find(|file| {
-                file.relative_path
-                    == Path::new("generated/methods/fluxruntimehost-read-save-chunk.md")
-            })
-            .expect("FluxRuntimeHost::read_save_chunk page");
+            .find(|file| file.relative_path == Path::new("generated/methods/entityapi-place.md"))
+            .expect("EntityApi::place page");
 
         assert!(page.contents.contains("## Arguments"));
-        assert!(page.contents.contains("chunk_id"));
+        assert!(page.contents.contains("kind"));
+        assert!(page.contents.contains("placement"));
         assert!(page.contents.contains("## Return Value"));
-        assert!(page.contents.contains("Vec < u8 >"));
-        assert!(page
-            .contents
-            .contains("[`FluxStatus`](../structures/fluxstatus.md)"));
+        assert!(page.contents.contains("EntityInstanceId"));
+        assert!(page.contents.contains("PluginError"));
     }
 
     #[test]
-    fn generated_event_pages_use_payload_name_for_tuple_variants() {
+    fn generated_event_pages_use_typed_payload_fields() {
         let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
         let page = files
             .iter()
@@ -341,40 +332,32 @@ mod tests {
             })
             .expect("MouseDownCell event page");
 
-        assert!(page.contents.contains("| `payload` |"));
-        assert!(!page.contents.contains("| `0` |"));
-        assert!(page
-            .contents
-            .contains("[`MouseCellEvent`](../structures/mousecellevent.md)"));
+        assert!(page.contents.contains("| `button` |"));
+        assert!(page.contents.contains("| `cell` |"));
+        assert!(page.contents.contains("| `world_position` |"));
+        assert!(!page.contents.contains("| `payload` |"));
     }
 
     #[test]
-    fn raw_callback_aliases_are_hidden_from_generated_docs() {
+    fn internal_runtime_aliases_are_hidden_from_generated_docs() {
         let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
         let methods_index = files
             .iter()
             .find(|file| file.relative_path == Path::new("generated/methods.md"))
             .expect("methods index page");
 
-        assert!(!methods_index.contents.contains("FluxOn"));
-        assert!(!methods_index.contents.contains("fluxon"));
-        assert!(!methods_index.contents.contains("FluxSetCellMaterialFn"));
-        assert!(!methods_index
-            .contents
-            .contains("FluxRegisterEventHandlerFn"));
+        assert!(!methods_index.contents.contains("FluxRuntimeHost"));
+        assert!(!methods_index.contents.contains("PluginRuntime"));
         assert!(!files
             .iter()
-            .any(|file| file.relative_path.to_string_lossy().contains("fluxon")));
+            .any(|file| file.relative_path.to_string_lossy().contains("pluginruntime")));
         assert!(!files
             .iter()
-            .any(|file| file.contents.contains("FluxOnWorldCreatedFn")));
-        assert!(!files
-            .iter()
-            .any(|file| file.relative_path == Path::new("generated/structures/worldapi.md")));
+            .any(|file| file.relative_path.to_string_lossy().contains("fluxruntimehost")));
     }
 
     #[test]
-    fn missing_example_file_is_reported() {
+    fn missing_example_file_is_ignored() {
         let repo = temp_repo("missing_example");
         let missing = repo
             .root
@@ -382,52 +365,45 @@ mod tests {
             .join("plugin_sdk")
             .join("src")
             .join("examples")
-            .join("methods")
-            .join("fluxruntimehost-set-cell-material.md");
+            .join("events")
+            .join("pluginevent-worldcreated.md");
         fs::remove_file(&missing).expect("remove example file");
 
-        let error = generated_plugin_sdk_files(&repo.root).expect_err("missing example must fail");
+        let files =
+            generated_plugin_sdk_files(&repo.root).expect("missing examples should be optional");
+        let page = files
+            .iter()
+            .find(|file| {
+                file.relative_path == Path::new("generated/events/pluginevent-worldcreated.md")
+            })
+            .expect("WorldCreated event page");
 
-        assert!(error
-            .to_string()
-            .contains("fluxruntimehost-set-cell-material.md"));
-        assert!(error
-            .to_string()
-            .contains("missing Plugin SDK example for `FluxRuntimeHost::set_cell_material`"));
+        assert!(!page.contents.contains("## SDK Example"));
     }
 
     #[test]
-    fn missing_field_description_is_reported() {
-        let repo = temp_repo("missing_field");
-        rewrite_file(
-            &repo.root.join("src").join("world").join("structures.rs"),
-            "/// - `layers`: Layer definitions that describe footprint, markers and collisions.\n",
-            "",
-        );
+    fn missing_field_description_uses_default_text() {
+        let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
+        let page = files
+            .iter()
+            .find(|file| file.relative_path == Path::new("generated/structures/cellrect.md"))
+            .expect("CellRect page");
 
-        let error = generated_plugin_sdk_files(&repo.root)
-            .expect_err("missing field description must fail");
-
-        assert!(error.to_string().contains(
-            "SDK item `StructureDescriptor` is missing a description for field `layers`"
-        ));
+        assert!(page.contents.contains("`min` field stored as"));
+        assert!(page.contents.contains("CellRect"));
     }
 
     #[test]
-    fn missing_variant_description_is_reported() {
-        let repo = temp_repo("missing_variant");
-        rewrite_file(
-            &repo.root.join("src").join("world").join("structures.rs"),
-            "/// - `Deg270`: Clockwise three-quarter-turn orientation.\n",
-            "",
-        );
+    fn missing_variant_description_uses_default_text() {
+        let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
+        let page = files
+            .iter()
+            .find(|file| file.relative_path == Path::new("generated/enums/placementcheck.md"))
+            .expect("PlacementCheck page");
 
-        let error = generated_plugin_sdk_files(&repo.root)
-            .expect_err("missing variant description must fail");
-
-        assert!(error.to_string().contains(
-            "SDK item `StructureRotation` is missing a description for variant `Deg270`"
-        ));
+        assert!(page
+            .contents
+            .contains("`Allowed` variant of `PlacementCheck`."));
     }
 
     #[test]

@@ -6,22 +6,12 @@
 
 | API item | Kind | Source |
 | --- | --- | --- |
-| [`CellRenderStyle`](enums/cellrenderstyle.md) | enum | `src/plugins/api/render_api.rs` |
-| [`ConfiguredPipeNodeKind`](enums/configuredpipenodekind.md) | enum | `src/config/hud.rs` |
-| [`ContainerBacking`](enums/containerbacking.md) | enum | `src/config/hud.rs` |
-| [`FluxEventKind`](enums/fluxeventkind.md) | enum | `src/plugins/abi_events.rs` |
-| [`GasRenderStyle`](enums/gasrenderstyle.md) | enum | `src/plugins/api/render_api.rs` |
-| [`HoverVisibility`](enums/hovervisibility.md) | enum | `src/config/hud.rs` |
-| [`LayerCollisionKind`](enums/layercollisionkind.md) | enum | `src/world/structures.rs` |
-| [`LegacyStorageDescriptor`](enums/legacystoragedescriptor.md) | enum | `src/plugins/content.rs` |
-| [`MouseButton`](enums/mousebutton.md) | enum | `src/plugins/api/events.rs` |
-| [`OverlayDrawCommand`](enums/overlaydrawcommand.md) | enum | `src/plugins/api/render_api.rs` |
-| [`OverlayMode`](enums/overlaymode.md) | enum | `src/render/world_view.rs` |
-| [`OverlayRenderPolicy`](enums/overlayrenderpolicy.md) | enum | `src/plugins/api/render_api.rs` |
-| [`PluginEvent`](enums/pluginevent.md) | enum | `src/plugins/api/events.rs` |
-| [`StructureParams`](enums/structureparams.md) | enum | `src/world/structures.rs` |
-| [`StructureRenderStyle`](enums/structurerenderstyle.md) | enum | `src/plugins/api/render_api.rs` |
-| [`StructureRotation`](enums/structurerotation.md) | enum | `src/world/structures.rs` |
-| [`SubstanceKind`](enums/substancekind.md) | enum | `src/config/hud.rs` |
-| [`UiNode`](enums/uinode.md) | enum | `src/plugins/api/ui_api.rs` |
+| [`MouseButton`](enums/mousebutton.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
+| [`OverlayRenderPolicy`](enums/overlayrenderpolicy.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
+| [`PlacementCheck`](enums/placementcheck.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
+| [`PluginError`](enums/pluginerror.md) | enum | `crates/flux_plugin_sdk/src/error.rs` |
+| [`PluginEvent`](enums/pluginevent.md) | enum | `crates/flux_plugin_sdk/src/events.rs` |
+| [`Rotation`](enums/rotation.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
+| [`SimulationSpeed`](enums/simulationspeed.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
+| [`UiNode`](enums/uinode.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
 

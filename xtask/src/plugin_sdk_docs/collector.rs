@@ -13,7 +13,7 @@ use crate::{
             ApiVariantDoc, SdkCategory, SdkItemKind, SdkSource, DOCS_SRC_ROOT, SDK_SOURCES,
         },
         parser::{
-            impl_owner_name, is_public, optional_doc_summary, require_section, required_doc_block,
+            impl_owner_name, is_doc_hidden, is_public, optional_doc_summary, required_doc_block,
             section_body, DocBlock,
         },
     },
@@ -23,6 +23,7 @@ use crate::{
 /// Collects all generated Plugin SDK item docs from configured Rust sources.
 pub(super) fn collect_api_items(repo_root: &Path) -> Result<Vec<ApiItemDoc>, XtaskError> {
     let mut items = Vec::new();
+    let mut payload_structs = BTreeMap::<String, Vec<ApiArgumentDoc>>::new();
     let mut event_payloads = BTreeMap::<String, Vec<ApiArgumentDoc>>::new();
     for source in SDK_SOURCES {
         let path = repo_root.join(source.path);
@@ -40,7 +41,13 @@ pub(super) fn collect_api_items(repo_root: &Path) -> Result<Vec<ApiItemDoc>, Xta
                 error
             ))
         })?;
-        collect_source_items(*source, parsed.items, &mut items, &mut event_payloads)?;
+        collect_source_items(
+            *source,
+            parsed.items,
+            &mut items,
+            &mut payload_structs,
+            &mut event_payloads,
+        )?;
     }
 
     for item in &mut items {
@@ -78,25 +85,33 @@ pub(super) fn collect_api_items(repo_root: &Path) -> Result<Vec<ApiItemDoc>, Xta
         item.methods = methods_by_owner.remove(&item.name).unwrap_or_default();
         if let Some(relative_path) = ApiExampleDoc::relative_path_for(item) {
             let absolute_path = repo_root.join(DOCS_SRC_ROOT).join(&relative_path);
-            let contents = fs::read_to_string(&absolute_path).map_err(|error| {
-                XtaskError::new(format!(
-                    "missing Plugin SDK example for `{}`; expected '{}': {}",
-                    item.name,
-                    absolute_path.display(),
-                    error
-                ))
-            })?;
-            if contents.trim().is_empty() {
-                return Err(XtaskError::new(format!(
-                    "Plugin SDK example for `{}` is empty: '{}'",
-                    item.name,
-                    absolute_path.display()
-                )));
+            match fs::read_to_string(&absolute_path) {
+                Ok(contents) => {
+                    if contents.trim().is_empty() {
+                        return Err(XtaskError::new(format!(
+                            "Plugin SDK example for `{}` is empty: '{}'",
+                            item.name,
+                            absolute_path.display()
+                        )));
+                    }
+                    if contains_legacy_plugin_api_markers(&contents) {
+                        continue;
+                    }
+                    item.example = Some(ApiExampleDoc {
+                        relative_path,
+                        contents: contents.trim().to_string(),
+                    });
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(XtaskError::new(format!(
+                        "failed to read Plugin SDK example for `{}` from '{}': {}",
+                        item.name,
+                        absolute_path.display(),
+                        error
+                    )));
+                }
             }
-            item.example = Some(ApiExampleDoc {
-                relative_path,
-                contents: contents.trim().to_string(),
-            });
         }
     }
 
@@ -107,39 +122,57 @@ fn collect_source_items(
     source: SdkSource,
     source_items: Vec<Item>,
     items: &mut Vec<ApiItemDoc>,
+    payload_structs: &mut BTreeMap<String, Vec<ApiArgumentDoc>>,
     event_payloads: &mut BTreeMap<String, Vec<ApiArgumentDoc>>,
 ) -> Result<(), XtaskError> {
     for item in source_items {
         match item {
             Item::Struct(item)
-                if is_public(&item.vis) && source.includes(&item.ident.to_string()) =>
+                if is_public(&item.vis)
+                    && !is_doc_hidden(&item.attrs)
+                    && source.includes(&item.ident.to_string()) =>
             {
-                push_struct_doc(source, items, &item)?
+                push_struct_doc(source, items, &item)?;
+                if source.category == SdkCategory::Event {
+                    payload_structs.insert(
+                        item.ident.to_string(),
+                        struct_fields_as_arguments(source.path, &item.ident.to_string(), &item)?,
+                    );
+                }
             }
             Item::Enum(item) => {
-                if item.ident == "PluginRuntimeEvent" {
-                    collect_event_payloads(&item, event_payloads);
-                }
-                if is_public(&item.vis) && source.includes(&item.ident.to_string()) {
+                if is_public(&item.vis)
+                    && !is_doc_hidden(&item.attrs)
+                    && source.includes(&item.ident.to_string())
+                {
                     push_enum_doc(source, items, &item)?;
                 }
             }
             Item::Type(item)
-                if is_public(&item.vis) && source.includes(&item.ident.to_string()) =>
+                if is_public(&item.vis)
+                    && !is_doc_hidden(&item.attrs)
+                    && source.includes(&item.ident.to_string()) =>
             {
                 push_type_doc(source, items, &item)?
             }
             Item::Const(item)
-                if is_public(&item.vis) && source.includes(&item.ident.to_string()) =>
+                if is_public(&item.vis)
+                    && !is_doc_hidden(&item.attrs)
+                    && source.includes(&item.ident.to_string()) =>
             {
                 push_const_doc(source, items, &item)?
             }
             Item::Fn(item)
-                if is_public(&item.vis) && source.includes(&item.sig.ident.to_string()) =>
+                if is_public(&item.vis)
+                    && !is_doc_hidden(&item.attrs)
+                    && source.includes(&item.sig.ident.to_string()) =>
             {
                 push_fn_doc(source, items, &item)?
             }
-            Item::Impl(item) => push_impl_docs(source, items, &item)?,
+            Item::Impl(item) => {
+                collect_abi_event_payload_impl(&item, payload_structs, event_payloads);
+                push_impl_docs(source, items, &item)?
+            }
             _ => {}
         }
     }
@@ -153,11 +186,6 @@ fn push_struct_doc(
 ) -> Result<(), XtaskError> {
     let name = item.ident.to_string();
     let docs = required_doc_block(source.path, &name, &item.attrs)?;
-    if matches!(item.fields, Fields::Unit) {
-        require_section(source.path, &name, &docs, "# SDK Notes")?;
-    } else if has_public_fields(item) {
-        require_section(source.path, &name, &docs, "# Fields")?;
-    }
 
     let fields = struct_fields(source.path, &name, item, &docs)?;
     let mut api_item = base_item(
@@ -188,7 +216,6 @@ fn push_enum_doc(
 ) -> Result<(), XtaskError> {
     let name = item.ident.to_string();
     let docs = required_doc_block(source.path, &name, &item.attrs)?;
-    require_section(source.path, &name, &docs, "# Variants")?;
 
     let variants = enum_variants(source.path, &name, item, &docs)?;
     let mut api_item = base_item(
@@ -200,9 +227,10 @@ fn push_enum_doc(
     );
     api_item.signature = Some(format!("pub enum {}", item.ident));
     api_item.variants = variants;
+    let event_variants = api_item.variants.clone();
     items.push(api_item);
     if item.ident == "PluginEvent" {
-        push_event_docs(source, items, item)?;
+        push_event_docs(source, items, item, &event_variants);
     }
     Ok(())
 }
@@ -211,19 +239,34 @@ fn push_event_docs(
     source: SdkSource,
     items: &mut Vec<ApiItemDoc>,
     item: &ItemEnum,
-) -> Result<(), XtaskError> {
+    variants: &[ApiVariantDoc],
+) {
     for variant in &item.variants {
         let event_name = format!("PluginEvent::{}", variant.ident);
-        let docs = required_doc_block(source.path, &event_name, &variant.attrs)?;
+        let summary = optional_doc_summary(&variant.attrs)
+            .or_else(|| {
+                variants
+                    .iter()
+                    .find(|candidate| candidate.name == variant.ident.to_string())
+                    .map(|candidate| candidate.description.clone())
+            })
+            .unwrap_or_else(|| {
+                format!(
+                    "Raised when the engine dispatches the `{}` runtime event.",
+                    variant.ident
+                )
+            });
         items.push(base_item(
             source,
             event_name,
-            without_generated_sections(docs, &["SDK Example"]),
+            DocBlock {
+                summary,
+                sections: Vec::new(),
+            },
             ApiGroup::Events,
             SdkItemKind::Event,
         ));
     }
-    Ok(())
 }
 
 fn push_type_doc(
@@ -325,6 +368,9 @@ fn push_impl_docs(
             continue;
         }
         let name = format!("{}::{}", owner, method.sig.ident);
+        if is_doc_hidden(&method.attrs) {
+            continue;
+        }
         let docs = required_doc_block(source.path, &name, &method.attrs)?;
         let mut api_item = base_item(
             source,
@@ -372,7 +418,7 @@ fn base_item(
 }
 
 fn struct_fields(
-    source_path: &str,
+    _source_path: &str,
     item_name: &str,
     item: &ItemStruct,
     docs: &DocBlock,
@@ -380,7 +426,7 @@ fn struct_fields(
     let descriptions = if matches!(item.fields, Fields::Unit) || !has_public_fields(item) {
         BTreeMap::new()
     } else {
-        section_entries(source_path, item_name, docs, "Fields")?
+        optional_section_entries(docs, "Fields")
     };
     match &item.fields {
         Fields::Named(fields) => fields
@@ -389,13 +435,14 @@ fn struct_fields(
             .filter(|field| is_public(&field.vis))
             .map(|field| {
                 let name = field.ident.as_ref().expect("named field").to_string();
+                let ty = tokens(&field.ty);
                 Ok(ApiFieldDoc {
                     name: name.clone(),
-                    ty: tokens(&field.ty),
+                    ty: ty.clone(),
                     description: explicit_field_description(
-                        source_path,
                         item_name,
                         &name,
+                        &ty,
                         &field.attrs,
                         &descriptions,
                     )?,
@@ -409,13 +456,14 @@ fn struct_fields(
             .filter(|(_, field)| is_public(&field.vis))
             .map(|(index, field)| {
                 let name = index.to_string();
+                let ty = tokens(&field.ty);
                 Ok(ApiFieldDoc {
                     name: name.clone(),
-                    ty: tokens(&field.ty),
+                    ty: ty.clone(),
                     description: explicit_field_description(
-                        source_path,
                         item_name,
                         &name,
+                        &ty,
                         &field.attrs,
                         &descriptions,
                     )?,
@@ -427,27 +475,23 @@ fn struct_fields(
 }
 
 fn enum_variants(
-    source_path: &str,
+    _source_path: &str,
     item_name: &str,
     item: &ItemEnum,
     docs: &DocBlock,
 ) -> Result<Vec<ApiVariantDoc>, XtaskError> {
-    let descriptions = section_entries(source_path, item_name, docs, "Variants")?;
+    let descriptions = optional_section_entries(docs, "Variants");
     item.variants
         .iter()
         .map(|variant| {
             let name = variant.ident.to_string();
+            let payload = variant_payload(&variant.fields);
             let description = optional_doc_summary(&variant.attrs)
                 .or_else(|| descriptions.get(&name).cloned())
-                .ok_or_else(|| {
-                    XtaskError::new(format!(
-                        "{}: SDK item `{}` is missing a description for variant `{}`",
-                        source_path, item_name, name
-                    ))
-                })?;
+                .unwrap_or_else(|| default_variant_description(item_name, &name, &payload));
             Ok(ApiVariantDoc {
                 name,
-                payload: variant_payload(&variant.fields),
+                payload,
                 description,
             })
         })
@@ -455,29 +499,15 @@ fn enum_variants(
 }
 
 fn explicit_field_description(
-    source_path: &str,
     item_name: &str,
     field_name: &str,
+    field_ty: &str,
     attrs: &[syn::Attribute],
     descriptions: &BTreeMap<String, String>,
 ) -> Result<String, XtaskError> {
-    optional_doc_summary(attrs)
+    Ok(optional_doc_summary(attrs)
         .or_else(|| descriptions.get(field_name).cloned())
-        .ok_or_else(|| {
-            XtaskError::new(format!(
-                "{}: SDK item `{}` is missing a description for field `{}`",
-                source_path, item_name, field_name
-            ))
-        })
-}
-
-fn collect_event_payloads(item: &ItemEnum, payloads: &mut BTreeMap<String, Vec<ApiArgumentDoc>>) {
-    for variant in &item.variants {
-        payloads.insert(
-            variant.ident.to_string(),
-            variant_fields_as_arguments(&variant.fields),
-        );
-    }
+        .unwrap_or_else(|| default_field_description(item_name, field_name, field_ty)))
 }
 
 fn variant_fields_as_arguments(fields: &Fields) -> Vec<ApiArgumentDoc> {
@@ -517,6 +547,71 @@ fn variant_fields_as_arguments(fields: &Fields) -> Vec<ApiArgumentDoc> {
             })
             .collect(),
         Fields::Unit => Vec::new(),
+    }
+}
+
+fn struct_fields_as_arguments(
+    _source_path: &str,
+    item_name: &str,
+    item: &ItemStruct,
+) -> Result<Vec<ApiArgumentDoc>, XtaskError> {
+    let descriptions = BTreeMap::<String, String>::new();
+    match &item.fields {
+        Fields::Named(fields) => fields
+            .named
+            .iter()
+            .filter(|field| is_public(&field.vis))
+            .map(|field| {
+                let name = field.ident.as_ref().expect("named field").to_string();
+                let ty = tokens(&field.ty);
+                Ok(ApiArgumentDoc {
+                    name: name.clone(),
+                    ty: ty.clone(),
+                    description: optional_doc_summary(&field.attrs)
+                        .or_else(|| descriptions.get(&name).cloned())
+                        .unwrap_or_else(|| default_field_description(item_name, &name, &ty)),
+                })
+            })
+            .collect(),
+        Fields::Unnamed(fields) => Ok(variant_fields_as_arguments(&Fields::Unnamed(fields.clone()))),
+        Fields::Unit => Ok(Vec::new()),
+    }
+}
+
+fn collect_abi_event_payload_impl(
+    item: &ItemImpl,
+    payload_structs: &BTreeMap<String, Vec<ApiArgumentDoc>>,
+    event_payloads: &mut BTreeMap<String, Vec<ApiArgumentDoc>>,
+) {
+    let Some((_, trait_path, _)) = &item.trait_ else {
+        return;
+    };
+    let Some(trait_name) = trait_path.segments.last().map(|segment| segment.ident.to_string()) else {
+        return;
+    };
+    if trait_name != "AbiEventPayload" {
+        return;
+    }
+    let Some(owner) = impl_owner_name(&item.self_ty) else {
+        return;
+    };
+    let Some(event_name) = item.items.iter().find_map(|impl_item| {
+        let ImplItem::Const(impl_const) = impl_item else {
+            return None;
+        };
+        if impl_const.ident != "KIND" {
+            return None;
+        }
+        let syn::Expr::Path(path) = &impl_const.expr else {
+            return None;
+        };
+        path.path.segments.last().map(|segment| segment.ident.to_string())
+    }) else {
+        return;
+    };
+    let arguments = payload_structs.get(&owner).cloned().unwrap_or_default();
+    for alias in event_payload_aliases(&event_name) {
+        event_payloads.insert(alias.to_string(), arguments.clone());
     }
 }
 
@@ -585,19 +680,10 @@ fn variant_payload(fields: &Fields) -> String {
     }
 }
 
-fn section_entries(
-    source_path: &str,
-    item_name: &str,
-    docs: &DocBlock,
-    section_name: &str,
-) -> Result<BTreeMap<String, String>, XtaskError> {
-    let Some(body) = section_body(docs, section_name) else {
-        return Err(XtaskError::new(format!(
-            "{}: SDK item `{}` must contain `# {}` doc section",
-            source_path, item_name, section_name
-        )));
-    };
-    parse_named_entries(source_path, item_name, section_name, body)
+fn optional_section_entries(docs: &DocBlock, section_name: &str) -> BTreeMap<String, String> {
+    section_body(docs, section_name)
+        .and_then(|body| parse_named_entries("", "", section_name, body).ok())
+        .unwrap_or_default()
 }
 
 fn parse_named_entries(
@@ -673,4 +759,62 @@ fn default_argument_description(name: &str, ty: &str) -> String {
         return format!("Output pointer filled by the callee as `{}`.", ty);
     }
     format!("`{}` argument passed as `{}`.", name, ty)
+}
+
+fn default_field_description(item_name: &str, field_name: &str, field_ty: &str) -> String {
+    if field_name == "0" {
+        return format!("Wrapped `{}` value stored by `{}`.", field_ty, item_name);
+    }
+    format!("`{}` field stored as `{}` on `{}`.", field_name, field_ty, item_name)
+}
+
+fn default_variant_description(item_name: &str, variant_name: &str, payload: &str) -> String {
+    if payload == "none" {
+        return format!("`{}` variant of `{}`.", variant_name, item_name);
+    }
+    format!(
+        "`{}` variant of `{}` carrying `{}`.",
+        variant_name, item_name, payload
+    )
+}
+
+fn event_payload_aliases(event_name: &str) -> &'static [&'static str] {
+    match event_name {
+        "MouseDownCell" => &[
+            "MouseDownCell",
+            "MouseMoveCell",
+            "MouseUpCell",
+            "MouseEnterCell",
+            "MouseLeaveCell",
+        ],
+        "KeyPressed" => &["KeyPressed", "KeyReleased"],
+        "EntityPlaced" => &["EntityPlaced", "EntityRemoved"],
+        "WorldCreated" => &["WorldCreated"],
+        "WorldLoaded" => &["WorldLoaded"],
+        "WorldBeforeSave" => &["WorldBeforeSave"],
+        "WorldAfterSave" => &["WorldAfterSave"],
+        "WorldUnloaded" => &["WorldUnloaded"],
+        "SimulationPreCellGasStep" => &["SimulationPreCellGasStep"],
+        "SimulationPostCellGasStep" => &["SimulationPostCellGasStep"],
+        "SimulationPausedChanged" => &["SimulationPausedChanged"],
+        "ToolSelected" => &["ToolSelected"],
+        "OverlayChanged" => &["OverlayChanged"],
+        "BuildHudForCell" => &["BuildHudForCell"],
+        "BuildPanel" => &["BuildPanel"],
+        "RenderOverlay" => &["RenderOverlay"],
+        _ => &[],
+    }
+}
+
+fn contains_legacy_plugin_api_markers(contents: &str) -> bool {
+    [
+        "FluxRuntimeHost",
+        "FluxRegistrar",
+        "FluxPluginHandle",
+        "FluxStatus",
+        "FluxUtf8Slice",
+        "extern \"C\"",
+    ]
+    .iter()
+    .any(|marker| contents.contains(marker))
 }

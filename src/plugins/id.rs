@@ -6,7 +6,7 @@ use crate::plugins::diagnostics::PluginContractError;
 
 /// Current engine-side plugin API version.
 ///
-pub const ENGINE_PLUGIN_API_VERSION_VALUE: u32 = 4;
+pub const ENGINE_PLUGIN_API_VERSION_VALUE: u32 = 5;
 
 /// Canonical identifier of the built-in default plugin.
 ///

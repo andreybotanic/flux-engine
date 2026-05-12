@@ -4,13 +4,13 @@
 
 # `PluginApiVersion`
 
-<span class="sdk-badge sdk-badge-manifest">manifest</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **Identifiers** (`src/plugins/id.rs`). Generated group: **Structures**.
+Source: **Identifiers** (`crates/flux_plugin_sdk/src/ids.rs`). Generated group: **Structures**.
 
 ## Description
 
-Stable plugin API version wrapper.
+Strongly typed wrapper around one plugin ABI version.
 
 ## Declaration
 
@@ -18,8 +18,13 @@ Stable plugin API version wrapper.
 pub struct PluginApiVersion
 ```
 
+## Fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `0` | u32 | Wrapped `u32` value stored by `PluginApiVersion`. |
+
 ## Methods
 
-- [`PluginApiVersion::new`](../methods/pluginapiversion-new.md)
 - [`PluginApiVersion::value`](../methods/pluginapiversion-value.md)
 

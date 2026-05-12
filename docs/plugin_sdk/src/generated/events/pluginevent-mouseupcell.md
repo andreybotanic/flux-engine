@@ -6,34 +6,35 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired when a mouse button is released over a world cell.
+Fired when the pointer button is released over a world cell.
 
 ## Arguments
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `payload` | [`MouseCellEvent`](../structures/mousecellevent.md) | Low-level mouse payload captured for the button release. |
+| `button` | Option < [`MouseButton`](../enums/mousebutton.md) > | `button` field stored as `Option < MouseButton >` on `MouseCellEvent`. |
+| `cell` | UVec2 | `cell` field stored as `UVec2` on `MouseCellEvent`. |
+| `world_position` | Vec2 | `world_position` field stored as `Vec2` on `MouseCellEvent`. |
+| `screen_position` | Vec2 | `screen_position` field stored as `Vec2` on `MouseCellEvent`. |
+| `modifiers` | [`InputModifiers`](../structures/inputmodifiers.md) | `modifiers` field stored as `InputModifiers` on `MouseCellEvent`. |
+| `active_tool_id` | Option < [`ContentId`](../structures/contentid.md) > | `active_tool_id` field stored as `Option < ContentId >` on `MouseCellEvent`. |
+| `is_over_ui` | bool | `is_over_ui` field stored as `bool` on `MouseCellEvent`. |
 
 ## SDK Example
 
 _Source: [`examples/events/pluginevent-mouseupcell.md`](../../examples/events/pluginevent-mouseupcell.md)_
 
 ```rust
-unsafe extern "C" fn on_mouse_up_cell(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxMouseCellEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    if payload.button == 1 {
-        plugin.dragging = false;
+impl MyPlugin {
+    fn on_mouse_up(&mut self, event: &MouseCellEvent) -> Result<(), PluginError> {
+        self.dragging = false;
+        self.last_cell = event.cell;
+        Ok(())
     }
-    FluxStatus::OK
 }
 ```
 

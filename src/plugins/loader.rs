@@ -12,23 +12,25 @@ use zip::ZipArchive;
 
 use crate::plugins::{
     abi::{
-        event_kind_from_abi, FluxEventHandlerDescriptor, FluxGasSubstanceDescriptor, FluxHostApi,
-        FluxOverlayDescriptor, FluxPluginApiVersionFn, FluxPluginCreateFn, FluxPluginDestroyFn,
-        FluxPluginHandle, FluxPluginRegisterFn, FluxRegistrar, FluxSaveChunkDescriptor, FluxStatus,
-        FluxToolDescriptor, FluxUtf8Slice, FLUX_PLUGIN_API_VERSION_EXPORT_NAME,
+        build_host_api, build_registrar, event_kind_from_abi, FluxEntityDescriptor,
+        FluxGasSubstanceDescriptor, FluxOverlayDescriptor, FluxPanelDescriptor,
+        FluxPluginApiVersionFn, FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginDispatchFn,
+        FluxPluginHandle, FluxPluginRegisterFn, FluxSaveChunkDescriptor, FluxStatus,
+        FluxSubscriptionDescriptor, FluxToolDescriptor, FluxUtf8Slice,
+        FLUX_PLUGIN_API_VERSION_EXPORT_NAME,
         FLUX_PLUGIN_CREATE_EXPORT_NAME, FLUX_PLUGIN_DESTROY_EXPORT_NAME,
-        FLUX_PLUGIN_REGISTER_EXPORT_NAME,
+        FLUX_PLUGIN_DISPATCH_EXPORT_NAME, FLUX_PLUGIN_REGISTER_EXPORT_NAME,
     },
     api::{
         render_api::OverlayRenderPolicy,
         runtime::{RuntimeOverlayDescriptor, SaveChunkDescriptor},
-        ui_api::ToolDescriptor,
+        ui_api::{PanelDescriptor, ToolDescriptor, UiNode},
     },
     diagnostics::PluginContractError,
     id::{PluginApiVersion, ENGINE_PLUGIN_API_VERSION},
     manifest::PluginManifest,
-    registration::{PluginEventHandlerRegistration, PluginRuntimeRegistration},
-    runtime_dll::{load_event_handler, RuntimeDllPlugin},
+    registration::{PluginRuntimeRegistration, PluginSubscriptionRegistration},
+    runtime_dll::RuntimeDllPlugin,
     source::{
         fingerprint_expanded_plugin_root, fingerprint_packaged_plugin_archive,
         resolve_plugin_layout, validate_archive_entry_path, ExpandedPluginSource,
@@ -225,7 +227,7 @@ pub fn validate_runtime_registration(
     manifest: &PluginManifest,
     registration: &PluginRuntimeRegistration,
 ) -> Result<(), PluginContractError> {
-    validate_event_handler_registration(&registration.event_handlers)?;
+    validate_subscription_registration(&registration.subscriptions)?;
     if !manifest.content && !registration.gas_substances.is_empty() {
         return Err(PluginContractError::Abi(format!(
             "plugin '{}' has content = false but registered runtime content",
@@ -244,30 +246,17 @@ pub fn validate_runtime_registration(
     Ok(())
 }
 
-fn validate_event_handler_registration(
-    handlers: &[PluginEventHandlerRegistration],
+fn validate_subscription_registration(
+    subscriptions: &[PluginSubscriptionRegistration],
 ) -> Result<(), PluginContractError> {
     use std::collections::BTreeSet;
 
     let mut event_kinds = BTreeSet::new();
-    let mut handler_names = BTreeSet::new();
-    for handler in handlers {
-        if !is_valid_handler_name(&handler.handler_name) {
+    for subscription in subscriptions {
+        if !event_kinds.insert(subscription.event_kind) {
             return Err(PluginContractError::Abi(format!(
-                "invalid event handler name '{}'; expected ASCII identifier syntax",
-                handler.handler_name
-            )));
-        }
-        if !event_kinds.insert(handler.event_kind) {
-            return Err(PluginContractError::Abi(format!(
-                "duplicate event handler registration for {:?}",
-                handler.event_kind
-            )));
-        }
-        if !handler_names.insert(handler.handler_name.clone()) {
-            return Err(PluginContractError::Abi(format!(
-                "event handler name '{}' is reused for multiple events",
-                handler.handler_name
+                "duplicate event subscription for {:?}",
+                subscription.event_kind
             )));
         }
     }
@@ -349,6 +338,16 @@ fn instantiate_runtime_plugin_from_root(
             FLUX_PLUGIN_CREATE_EXPORT_NAME,
             "flux_plugin_create",
         )?;
+        let register_fn = load_symbol::<FluxPluginRegisterFn>(
+            &library,
+            FLUX_PLUGIN_REGISTER_EXPORT_NAME,
+            "flux_plugin_register",
+        )?;
+        let dispatch_fn = load_symbol::<FluxPluginDispatchFn>(
+            &library,
+            FLUX_PLUGIN_DISPATCH_EXPORT_NAME,
+            "flux_plugin_dispatch",
+        )?;
         let destroy_fn = load_symbol::<FluxPluginDestroyFn>(
             &library,
             FLUX_PLUGIN_DESTROY_EXPORT_NAME,
@@ -363,11 +362,13 @@ fn instantiate_runtime_plugin_from_root(
             )));
         }
 
-        let host_api = FluxHostApi::new(
+        let host_api = build_host_api(
+            FluxUtf8Slice::from_str(plugin.plugin_id.as_str()),
+            FluxUtf8Slice::from_str(env!("CARGO_PKG_VERSION")),
             FluxUtf8Slice::from_str(&plugin_root_utf8),
             FluxUtf8Slice::from_str(&config_root_utf8),
             FluxUtf8Slice::from_str(&assets_root_utf8),
-            Some(write_host_error_message),
+            Some(write_host_log_message),
             (&mut host_error_message as *mut String).cast::<c_void>(),
         );
         let mut plugin_handle: *mut FluxPluginHandle = ptr::null_mut();
@@ -389,21 +390,32 @@ fn instantiate_runtime_plugin_from_root(
             ));
         }
 
-        let mut event_handlers = std::collections::BTreeMap::new();
-        for registration in &plugin.registration.event_handlers {
-            let handler = load_event_handler(
-                &library,
-                registration.event_kind,
-                &registration.handler_name,
-            )?;
-            event_handlers.insert(registration.event_kind, handler);
+        let mut registrar = build_registrar(
+            Some(register_noop_gas_substance_callback),
+            Some(register_noop_entity_callback),
+            Some(register_noop_tool_callback),
+            Some(register_noop_panel_callback),
+            Some(register_noop_overlay_callback),
+            Some(register_noop_save_chunk_callback),
+            Some(register_noop_subscription_callback),
+            ptr::null_mut(),
+        );
+        let register_status = register_fn(plugin_handle, &mut registrar);
+        if !register_status.is_ok() {
+            destroy_fn(plugin_handle);
+            return Err(status_error(
+                "flux_plugin_register",
+                register_status,
+                &host_error_message,
+                PluginContractError::Abi,
+            ));
         }
 
         Ok(RuntimeDllPlugin {
             plugin_id: plugin.plugin_id.clone(),
             handle: plugin_handle,
+            dispatch_fn,
             destroy_fn,
-            event_handlers,
             cache_root: plugin_root.to_path_buf(),
             library,
         })
@@ -608,11 +620,13 @@ fn validate_plugin_root(
             )));
         }
 
-        let host_api = FluxHostApi::new(
+        let host_api = build_host_api(
+            FluxUtf8Slice::from_str(manifest.id.as_str()),
+            FluxUtf8Slice::from_str(env!("CARGO_PKG_VERSION")),
             FluxUtf8Slice::from_str(&plugin_root_utf8),
             FluxUtf8Slice::from_str(&config_root_utf8),
             FluxUtf8Slice::from_str(&assets_root_utf8),
-            Some(write_host_error_message),
+            Some(write_host_log_message),
             (&mut host_error_message as *mut String).cast::<c_void>(),
         );
         let mut plugin_handle: *mut FluxPluginHandle = ptr::null_mut();
@@ -635,12 +649,14 @@ fn validate_plugin_root(
         }
 
         host_error_message.clear();
-        let mut registrar = FluxRegistrar::new(
+        let mut registrar = build_registrar(
             Some(register_gas_substance_callback),
-            Some(register_event_handler_callback),
+            Some(register_entity_callback),
             Some(register_tool_callback),
+            Some(register_panel_callback),
             Some(register_overlay_callback),
             Some(register_save_chunk_callback),
+            Some(register_subscription_callback),
             (&mut registration_collector as *mut PluginRegistrationCollector).cast::<c_void>(),
         );
         let register_status = register_fn(plugin_handle, &mut registrar);
@@ -653,7 +669,6 @@ fn validate_plugin_root(
                 PluginContractError::Abi,
             ));
         }
-        validate_registered_event_handler_exports(&library, &registration_collector.registration)?;
         destroy_fn(plugin_handle);
     }
 
@@ -701,42 +716,51 @@ unsafe extern "C" fn register_gas_substance_callback(
     }
 }
 
-unsafe extern "C" fn register_event_handler_callback(
+unsafe extern "C" fn register_entity_callback(
     context: *mut c_void,
-    descriptor: *const FluxEventHandlerDescriptor,
+    descriptor: *const FluxEntityDescriptor,
 ) -> FluxStatus {
     if context.is_null() || descriptor.is_null() {
         return FluxStatus::INVALID_ARGUMENT;
     }
 
     let collector = &mut *(context.cast::<PluginRegistrationCollector>());
-    match event_handler_registration_from_abi(&*descriptor) {
-        Ok(handler) => {
+    match entity_descriptor_from_abi(&*descriptor) {
+        Ok(descriptor) => {
             if collector
                 .registration
-                .event_handlers
+                .entities
                 .iter()
-                .any(|registered| registered.event_kind == handler.event_kind)
+                .any(|registered| registered.id == descriptor.id)
             {
                 collector.error_message = Some(format!(
-                    "duplicate event handler registration for {:?}",
-                    handler.event_kind
+                    "duplicate entity registration '{}'",
+                    descriptor.id
                 ));
                 return FluxStatus::FAILED;
             }
-            if collector
-                .registration
-                .event_handlers
-                .iter()
-                .any(|registered| registered.handler_name == handler.handler_name)
-            {
-                collector.error_message = Some(format!(
-                    "event handler name '{}' is reused for multiple events",
-                    handler.handler_name
-                ));
-                return FluxStatus::FAILED;
-            }
-            collector.registration.event_handlers.push(handler);
+            collector.registration.entities.push(descriptor);
+            FluxStatus::OK
+        }
+        Err(error) => {
+            collector.error_message = Some(error);
+            FluxStatus::FAILED
+        }
+    }
+}
+
+unsafe extern "C" fn register_panel_callback(
+    context: *mut c_void,
+    descriptor: *const FluxPanelDescriptor,
+) -> FluxStatus {
+    if context.is_null() || descriptor.is_null() {
+        return FluxStatus::INVALID_ARGUMENT;
+    }
+
+    let collector = &mut *(context.cast::<PluginRegistrationCollector>());
+    match panel_descriptor_from_abi(&*descriptor) {
+        Ok(descriptor) => {
+            collector.registration.panels.push(descriptor);
             FluxStatus::OK
         }
         Err(error) => {
@@ -809,43 +833,151 @@ unsafe extern "C" fn register_save_chunk_callback(
     }
 }
 
-fn event_handler_registration_from_abi(
-    descriptor: &FluxEventHandlerDescriptor,
-) -> Result<PluginEventHandlerRegistration, String> {
+unsafe extern "C" fn register_subscription_callback(
+    context: *mut c_void,
+    descriptor: *const FluxSubscriptionDescriptor,
+) -> FluxStatus {
+    if context.is_null() || descriptor.is_null() {
+        return FluxStatus::INVALID_ARGUMENT;
+    }
+
+    let collector = &mut *(context.cast::<PluginRegistrationCollector>());
+    match subscription_from_abi(&*descriptor) {
+        Ok(subscription) => {
+            if collector
+                .registration
+                .subscriptions
+                .iter()
+                .any(|registered| registered.event_kind == subscription.event_kind)
+            {
+                collector.error_message = Some(format!(
+                    "duplicate event subscription for {:?}",
+                    subscription.event_kind
+                ));
+                return FluxStatus::FAILED;
+            }
+            collector.registration.subscriptions.push(subscription);
+            FluxStatus::OK
+        }
+        Err(error) => {
+            collector.error_message = Some(error);
+            FluxStatus::FAILED
+        }
+    }
+}
+
+fn subscription_from_abi(
+    descriptor: &FluxSubscriptionDescriptor,
+) -> Result<PluginSubscriptionRegistration, String> {
     let event_kind = event_kind_from_abi(descriptor.event_kind)
         .ok_or_else(|| format!("unknown plugin event kind {}", descriptor.event_kind))?;
-    let handler_name = unsafe { read_abi_utf8(descriptor.handler_name, "event handler name") }?;
-    if !is_valid_handler_name(&handler_name) {
-        return Err(format!(
-            "invalid event handler name '{}'; expected ASCII identifier syntax",
-            handler_name
-        ));
+    Ok(PluginSubscriptionRegistration { event_kind })
+}
+
+unsafe extern "C" fn register_noop_gas_substance_callback(
+    _context: *mut c_void,
+    descriptor: *const FluxGasSubstanceDescriptor,
+) -> FluxStatus {
+    if descriptor.is_null() {
+        FluxStatus::INVALID_ARGUMENT
+    } else {
+        FluxStatus::OK
     }
-    Ok(PluginEventHandlerRegistration {
-        event_kind,
-        handler_name,
+}
+
+unsafe extern "C" fn register_noop_entity_callback(
+    _context: *mut c_void,
+    descriptor: *const FluxEntityDescriptor,
+) -> FluxStatus {
+    if descriptor.is_null() {
+        FluxStatus::INVALID_ARGUMENT
+    } else {
+        FluxStatus::OK
+    }
+}
+
+unsafe extern "C" fn register_noop_panel_callback(
+    _context: *mut c_void,
+    descriptor: *const FluxPanelDescriptor,
+) -> FluxStatus {
+    if descriptor.is_null() {
+        FluxStatus::INVALID_ARGUMENT
+    } else {
+        FluxStatus::OK
+    }
+}
+
+unsafe extern "C" fn register_noop_tool_callback(
+    _context: *mut c_void,
+    descriptor: *const FluxToolDescriptor,
+) -> FluxStatus {
+    if descriptor.is_null() {
+        FluxStatus::INVALID_ARGUMENT
+    } else {
+        FluxStatus::OK
+    }
+}
+
+unsafe extern "C" fn register_noop_overlay_callback(
+    _context: *mut c_void,
+    descriptor: *const FluxOverlayDescriptor,
+) -> FluxStatus {
+    if descriptor.is_null() {
+        FluxStatus::INVALID_ARGUMENT
+    } else {
+        FluxStatus::OK
+    }
+}
+
+unsafe extern "C" fn register_noop_save_chunk_callback(
+    _context: *mut c_void,
+    descriptor: *const FluxSaveChunkDescriptor,
+) -> FluxStatus {
+    if descriptor.is_null() {
+        FluxStatus::INVALID_ARGUMENT
+    } else {
+        FluxStatus::OK
+    }
+}
+
+unsafe extern "C" fn register_noop_subscription_callback(
+    _context: *mut c_void,
+    descriptor: *const FluxSubscriptionDescriptor,
+) -> FluxStatus {
+    if descriptor.is_null() {
+        FluxStatus::INVALID_ARGUMENT
+    } else {
+        FluxStatus::OK
+    }
+}
+
+unsafe fn entity_descriptor_from_abi(
+    descriptor: &FluxEntityDescriptor,
+) -> Result<flux_plugin_sdk::EntityDescriptor, String> {
+    let id = read_abi_utf8(descriptor.id, "entity id")?;
+    let label = read_abi_utf8(descriptor.label, "entity label")?;
+    let icon_path = read_abi_utf8(descriptor.icon_path, "entity icon path")?;
+    let silhouette_path = read_abi_utf8(descriptor.silhouette_path, "entity silhouette path")?;
+    Ok(flux_plugin_sdk::EntityDescriptor {
+        id: flux_plugin_sdk::ContentId::parse(&id)?,
+        label,
+        icon_path,
+        silhouette_path: (!silhouette_path.trim().is_empty()).then_some(silhouette_path),
     })
 }
 
-fn validate_registered_event_handler_exports(
-    library: &Library,
-    registration: &PluginRuntimeRegistration,
-) -> Result<(), PluginContractError> {
-    for handler in &registration.event_handlers {
-        load_event_handler(library, handler.event_kind, &handler.handler_name)?;
-    }
-    Ok(())
-}
-
-fn is_valid_handler_name(handler_name: &str) -> bool {
-    let mut chars = handler_name.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if !first.is_ascii_alphabetic() && first != '_' {
-        return false;
-    }
-    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+unsafe fn panel_descriptor_from_abi(
+    descriptor: &FluxPanelDescriptor,
+) -> Result<PanelDescriptor, String> {
+    let id = read_abi_utf8(descriptor.id, "panel id")?;
+    let title = read_abi_utf8(descriptor.title, "panel title")?;
+    Ok(PanelDescriptor {
+        id: ContentId::parse(&id)?,
+        title,
+        root: UiNode::Column {
+            children: Vec::new(),
+        },
+    })
 }
 
 unsafe fn tool_descriptor_from_abi(
@@ -968,8 +1100,9 @@ unsafe fn load_symbol<T: Copy>(
     Ok(*symbol)
 }
 
-unsafe extern "C" fn write_host_error_message(
+unsafe extern "C" fn write_host_log_message(
     context: *mut c_void,
+    _level: u32,
     message: FluxUtf8Slice,
 ) -> FluxStatus {
     if context.is_null() {
@@ -1035,13 +1168,13 @@ mod tests {
     use libloading::Library;
     use zip::{write::SimpleFileOptions, ZipWriter};
 
-    use super::{
-        read_packaged_plugin_candidate, validate_registered_event_handler_exports,
-        validate_runtime_registration,
-    };
+    use super::{read_packaged_plugin_candidate, validate_runtime_registration};
     use crate::plugins::{
-        api::events::PluginEvent, PluginEventHandlerRegistration, PluginId, PluginManifest,
-        PluginRuntimeRegistration, SubstanceDefinition, SubstanceId,
+        abi::{FluxPluginDispatchFn, FLUX_PLUGIN_DISPATCH_EXPORT_NAME},
+        api::events::PluginEvent,
+        id::ENGINE_PLUGIN_API_VERSION_VALUE,
+        PluginId, PluginManifest, PluginRuntimeRegistration, PluginSubscriptionRegistration,
+        SubstanceDefinition, SubstanceId,
     };
 
     fn make_temp_archive_path(prefix: &str) -> PathBuf {
@@ -1094,6 +1227,21 @@ mod tests {
         crate_root.join("target").join("debug").join(dll_name)
     }
 
+    fn sample_manifest(content: bool) -> PluginManifest {
+        PluginManifest::from_str(&format!(
+            r#"id = "sample.plugin"
+display_name = "Sample"
+version = "1.0.0"
+api_version = {ENGINE_PLUGIN_API_VERSION_VALUE}
+dll = "bin/sample.dll"
+configs = "config"
+assets = "assets"
+content = {content}
+"#
+        ))
+        .expect("manifest")
+    }
+
     #[test]
     fn plugin_contract_archive_rejects_parent_escape() {
         let archive_path = make_temp_archive_path("flux_plugin_escape");
@@ -1106,15 +1254,19 @@ mod tests {
             .expect("start escaped manifest");
         writer
             .write_all(
-                br#"id = "escape.test"
+                format!(
+                    r#"id = "escape.test"
 display_name = "Escape"
 version = "1.0.0"
-api_version = 4
+api_version = {}
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"
 content = false
 "#,
+                    ENGINE_PLUGIN_API_VERSION_VALUE
+                )
+                .as_bytes(),
             )
             .expect("write manifest");
         writer.finish().expect("finish archive");
@@ -1127,18 +1279,7 @@ content = false
 
     #[test]
     fn plugin_contract_rejects_content_registration_from_non_content_plugin() {
-        let manifest = PluginManifest::from_str(
-            r#"id = "sample.plugin"
-display_name = "Sample"
-version = "1.0.0"
-api_version = 4
-dll = "bin/sample.dll"
-configs = "config"
-assets = "assets"
-content = false
-"#,
-        )
-        .expect("manifest");
+        let manifest = sample_manifest(false);
         let registration = PluginRuntimeRegistration {
             gas_substances: vec![SubstanceDefinition::gas(
                 SubstanceId::parse("sample.plugin.substance.neon").expect("substance id"),
@@ -1159,18 +1300,7 @@ content = false
 
     #[test]
     fn plugin_contract_rejects_registered_substance_outside_plugin_namespace() {
-        let manifest = PluginManifest::from_str(
-            r#"id = "sample.plugin"
-display_name = "Sample"
-version = "1.0.0"
-api_version = 4
-dll = "bin/sample.dll"
-configs = "config"
-assets = "assets"
-content = true
-"#,
-        )
-        .expect("manifest");
+        let manifest = sample_manifest(true);
         let registration = PluginRuntimeRegistration {
             gas_substances: vec![SubstanceDefinition::gas(
                 SubstanceId::parse("other.plugin.substance.neon").expect("substance id"),
@@ -1190,23 +1320,11 @@ content = true
     }
 
     #[test]
-    fn plugin_contract_accepts_explicit_event_handler_registration() {
-        let manifest = PluginManifest::from_str(
-            r#"id = "sample.plugin"
-display_name = "Sample"
-version = "1.0.0"
-api_version = 4
-dll = "bin/sample.dll"
-configs = "config"
-assets = "assets"
-content = false
-"#,
-        )
-        .expect("manifest");
+    fn plugin_contract_accepts_event_subscription_registration() {
+        let manifest = sample_manifest(false);
         let registration = PluginRuntimeRegistration {
-            event_handlers: vec![PluginEventHandlerRegistration {
+            subscriptions: vec![PluginSubscriptionRegistration {
                 event_kind: PluginEvent::KeyPressed,
-                handler_name: "onKeyPressed".to_string(),
             }],
             ..Default::default()
         };
@@ -1215,28 +1333,15 @@ content = false
     }
 
     #[test]
-    fn plugin_contract_rejects_duplicate_event_handler_registration() {
-        let manifest = PluginManifest::from_str(
-            r#"id = "sample.plugin"
-display_name = "Sample"
-version = "1.0.0"
-api_version = 4
-dll = "bin/sample.dll"
-configs = "config"
-assets = "assets"
-content = false
-"#,
-        )
-        .expect("manifest");
+    fn plugin_contract_rejects_duplicate_event_subscription_registration() {
+        let manifest = sample_manifest(false);
         let registration = PluginRuntimeRegistration {
-            event_handlers: vec![
-                PluginEventHandlerRegistration {
+            subscriptions: vec![
+                PluginSubscriptionRegistration {
                     event_kind: PluginEvent::KeyPressed,
-                    handler_name: "onKeyPressed".to_string(),
                 },
-                PluginEventHandlerRegistration {
+                PluginSubscriptionRegistration {
                     event_kind: PluginEvent::KeyPressed,
-                    handler_name: "onOtherKeyPressed".to_string(),
                 },
             ],
             ..Default::default()
@@ -1244,70 +1349,24 @@ content = false
 
         let error = validate_runtime_registration(&manifest, &registration)
             .expect_err("duplicate event kind must fail");
-        assert!(error
-            .to_string()
-            .contains("duplicate event handler registration"));
+        assert!(error.to_string().contains("duplicate event subscription"));
     }
 
     #[test]
-    fn plugin_contract_rejects_invalid_event_handler_name() {
-        let manifest = PluginManifest::from_str(
-            r#"id = "sample.plugin"
-display_name = "Sample"
-version = "1.0.0"
-api_version = 4
-dll = "bin/sample.dll"
-configs = "config"
-assets = "assets"
-content = false
-"#,
-        )
-        .expect("manifest");
-        let registration = PluginRuntimeRegistration {
-            event_handlers: vec![PluginEventHandlerRegistration {
-                event_kind: PluginEvent::KeyPressed,
-                handler_name: "123bad".to_string(),
-            }],
-            ..Default::default()
-        };
-
-        let error = validate_runtime_registration(&manifest, &registration)
-            .expect_err("invalid handler name must fail");
-        assert!(error.to_string().contains("invalid event handler name"));
-    }
-
-    #[test]
-    fn plugin_contract_rejects_missing_event_handler_export() {
+    fn plugin_contract_requires_unified_dispatch_export() {
         let dll_path =
             build_demo_plugin_cdylib("flux_api_tick_demo_plugin", "flux_api_tick_demo_plugin.dll");
         let library = unsafe { Library::new(dll_path) }.expect("load demo plugin dll");
-        let registration = PluginRuntimeRegistration {
-            event_handlers: vec![PluginEventHandlerRegistration {
-                event_kind: PluginEvent::SimulationPreCellGasStep,
-                handler_name: "onMissingHandler".to_string(),
-            }],
-            ..Default::default()
-        };
-
-        let error = validate_registered_event_handler_exports(&library, &registration)
-            .expect_err("missing export must fail");
-        assert!(error.to_string().contains("onMissingHandler"));
-    }
-
-    #[test]
-    fn plugin_contract_accepts_existing_event_handler_export() {
-        let dll_path =
-            build_demo_plugin_cdylib("flux_api_tick_demo_plugin", "flux_api_tick_demo_plugin.dll");
-        let library = unsafe { Library::new(dll_path) }.expect("load demo plugin dll");
-        let registration = PluginRuntimeRegistration {
-            event_handlers: vec![PluginEventHandlerRegistration {
-                event_kind: PluginEvent::SimulationPreCellGasStep,
-                handler_name: "onSimulationPreCellGasStep".to_string(),
-            }],
-            ..Default::default()
-        };
-
-        validate_registered_event_handler_exports(&library, &registration)
-            .expect("existing export must validate");
+        unsafe {
+            library
+                .get::<FluxPluginDispatchFn>(FLUX_PLUGIN_DISPATCH_EXPORT_NAME)
+                .expect("dispatch export must exist");
+            assert!(
+                library
+                    .get::<unsafe extern "C" fn()>(b"onSimulationPreCellGasStep\0")
+                    .is_err(),
+                "plugin must not expose named v4 event handlers anymore"
+            );
+        }
     }
 }

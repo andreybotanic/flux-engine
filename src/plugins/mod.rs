@@ -38,7 +38,7 @@ pub use self::loader::{
     validate_expanded_plugin_root, validate_packaged_plugin_archive, validate_runtime_registration,
 };
 pub use self::manifest::PluginManifest;
-pub use self::registration::{PluginEventHandlerRegistration, PluginRuntimeRegistration};
+pub use self::registration::{PluginRuntimeRegistration, PluginSubscriptionRegistration};
 pub use self::registry::{
     bootstrap_plugin_registry, rebuild_plugin_registry_from_enabled_set, LoadedPluginMetadata,
     LoadedPluginRegistry, PluginBootstrapConfig, PluginBootstrapOutput, PluginSourceRecord,

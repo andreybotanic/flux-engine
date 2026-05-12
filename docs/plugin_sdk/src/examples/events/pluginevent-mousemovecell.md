@@ -1,15 +1,22 @@
 ```rust
-unsafe extern "C" fn on_mouse_move_cell(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxMouseCellEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    if plugin.dragging && payload.has_cell != 0 {
-        plugin.last_x = payload.cell_x;
-        plugin.last_y = payload.cell_y;
+impl MyPlugin {
+    fn on_mouse_move(&mut self, event: &MouseCellEvent) -> Result<(), PluginError> {
+        if !self.dragging || !self.world.contains(event.cell) {
+            return Ok(());
+        }
+        for cell in self.world.ray_cells(self.last_cell, event.cell) {
+            if self.world.is_editable(cell) {
+                self.entities.place(
+                    self.metal_id.clone(),
+                    EntityPlacement {
+                        origin: cell,
+                        rotation: Rotation::Deg0,
+                    },
+                )?;
+            }
+        }
+        self.last_cell = event.cell;
+        Ok(())
     }
-    FluxStatus::OK
 }
 ```

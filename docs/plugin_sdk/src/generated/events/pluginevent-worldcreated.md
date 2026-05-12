@@ -6,11 +6,11 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired after a new world is created.
+Fired after a new world has been created.
 
 ## Arguments
 
@@ -21,16 +21,11 @@ This event does not carry additional payload fields.
 _Source: [`examples/events/pluginevent-worldcreated.md`](../../examples/events/pluginevent-worldcreated.md)_
 
 ```rust
-unsafe extern "C" fn on_world_created(
-    _plugin: *mut FluxPluginHandle,
-    payload: *const FluxEmptyEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    if payload.api_version != ENGINE_PLUGIN_API_VERSION_VALUE {
-        return FluxStatus::FAILED;
+impl MyPlugin {
+    fn on_world_created(&mut self, _event: &WorldCreatedEvent) -> Result<(), PluginError> {
+        self.log.info("plugin observed creation of a new world")?;
+        self.time.set_paused(true)
     }
-    FluxStatus::OK
 }
 ```
 

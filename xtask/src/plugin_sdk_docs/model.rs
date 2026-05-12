@@ -8,91 +8,24 @@ pub(in crate::plugin_sdk_docs) const GENERATED_DIR: &str = "generated";
 pub(in crate::plugin_sdk_docs) const EXAMPLES_DIR: &str = "examples";
 
 pub(in crate::plugin_sdk_docs) const SDK_SOURCES: &[SdkSource] = &[
-    SdkSource::new("ABI v4", "src/plugins/abi.rs", SdkCategory::Abi),
+    SdkSource::new("SDK Root", "crates/flux_plugin_sdk/src/lib.rs", SdkCategory::Sdk),
     SdkSource::with_excludes(
-        "ABI v4 Events",
-        "src/plugins/abi_events.rs",
-        SdkCategory::Abi,
-        &["FluxOn"],
+        "Plugin",
+        "crates/flux_plugin_sdk/src/plugin.rs",
+        SdkCategory::Sdk,
+        &["PluginRuntime"],
     ),
-    SdkSource::new("Manifest", "src/plugins/manifest.rs", SdkCategory::Manifest),
-    SdkSource::new("Identifiers", "src/plugins/id.rs", SdkCategory::Manifest),
-    SdkSource::new("Content", "src/plugins/content.rs", SdkCategory::Content),
-    SdkSource::new(
-        "Substances",
-        "src/plugins/substances.rs",
-        SdkCategory::Content,
+    SdkSource::new("Registrar", "crates/flux_plugin_sdk/src/registrar.rs", SdkCategory::Sdk),
+    SdkSource::new("Identifiers", "crates/flux_plugin_sdk/src/ids.rs", SdkCategory::Sdk),
+    SdkSource::with_excludes(
+        "Descriptors",
+        "crates/flux_plugin_sdk/src/descriptors.rs",
+        SdkCategory::Sdk,
+        &["PanelState", "OverlayState"],
     ),
-    SdkSource::new("Events", "src/plugins/api/events.rs", SdkCategory::Event),
-    SdkSource::new(
-        "Runtime Registry",
-        "src/plugins/api/runtime.rs",
-        SdkCategory::EngineSide,
-    ),
-    SdkSource::new(
-        "Render API",
-        "src/plugins/api/render_api.rs",
-        SdkCategory::EngineSide,
-    ),
-    SdkSource::new(
-        "UI API",
-        "src/plugins/api/ui_api.rs",
-        SdkCategory::EngineSide,
-    ),
-    SdkSource::new(
-        "Save API",
-        "src/plugins/api/save_api.rs",
-        SdkCategory::EngineSide,
-    ),
-    SdkSource::with_allowlist(
-        "World Grid",
-        "src/world/grid.rs",
-        SdkCategory::EngineSide,
-        &["CellMaterial"],
-    ),
-    SdkSource::with_allowlist(
-        "World Structures",
-        "src/world/structures.rs",
-        SdkCategory::EngineSide,
-        &[
-            "LayerKind",
-            "LayerMarkerKind",
-            "LayerCollisionKind",
-            "LayerCellSpec",
-            "StructureLayer",
-            "StructureDescriptor",
-            "StructureKind",
-            "StructureRotation",
-            "StructureParams",
-            "PlacedStructureId",
-        ],
-    ),
-    SdkSource::with_allowlist(
-        "Config",
-        "src/config/mod.rs",
-        SdkCategory::EngineSide,
-        &["VisualPlacementConfig"],
-    ),
-    SdkSource::with_allowlist(
-        "HUD Config",
-        "src/config/hud.rs",
-        SdkCategory::EngineSide,
-        &[
-            "HudBlockConfig",
-            "SubstanceKind",
-            "ContainerBacking",
-            "ConfiguredPipeNodeKind",
-            "HoverVisibility",
-            "SubstanceContainerConfig",
-            "WorldCellHudConfig",
-        ],
-    ),
-    SdkSource::with_allowlist(
-        "World View",
-        "src/render/world_view.rs",
-        SdkCategory::EngineSide,
-        &["OverlayMode"],
-    ),
+    SdkSource::new("Events", "crates/flux_plugin_sdk/src/events.rs", SdkCategory::Event),
+    SdkSource::new("Runtime APIs", "crates/flux_plugin_sdk/src/api.rs", SdkCategory::Sdk),
+    SdkSource::new("Errors", "crates/flux_plugin_sdk/src/error.rs", SdkCategory::Sdk),
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -113,22 +46,6 @@ impl SdkSource {
             path,
             category,
             allowlist: &[],
-            exclude_prefixes: &[],
-        }
-    }
-
-    /// Creates a source descriptor limited to a known SDK-facing item allowlist.
-    const fn with_allowlist(
-        title: &'static str,
-        path: &'static str,
-        category: SdkCategory,
-        allowlist: &'static [&'static str],
-    ) -> Self {
-        Self {
-            title,
-            path,
-            category,
-            allowlist,
             exclude_prefixes: &[],
         }
     }
@@ -171,22 +88,16 @@ impl SdkSource {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// High-level badge category attached to generated SDK items.
 pub(in crate::plugin_sdk_docs) enum SdkCategory {
-    Abi,
-    Manifest,
-    Content,
+    Sdk,
     Event,
-    EngineSide,
 }
 
 impl SdkCategory {
     /// Returns the CSS badge token used by generated pages.
     pub(in crate::plugin_sdk_docs) fn badge(self) -> &'static str {
         match self {
-            Self::Abi => "ABI",
-            Self::Manifest => "manifest",
-            Self::Content => "content",
+            Self::Sdk => "sdk",
             Self::Event => "event",
-            Self::EngineSide => "engine-side",
         }
     }
 }

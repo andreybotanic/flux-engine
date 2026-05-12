@@ -4,13 +4,13 @@
 
 # `ContentId`
 
-<span class="sdk-badge sdk-badge-content">content</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **Content** (`src/plugins/content.rs`). Generated group: **Structures**.
+Source: **Identifiers** (`crates/flux_plugin_sdk/src/ids.rs`). Generated group: **Structures**.
 
 ## Description
 
-Canonical identifier of one gameplay content item registered by a plugin.
+Canonical gameplay content identifier.
 
 ## Declaration
 

@@ -1,5 +1,16 @@
 ﻿# Changelog
 
+## 2026-05-12
+- Исправлен live runtime dispatch SDK v5: при создании DLL-плагина движок теперь повторно вызывает `flux_plugin_register` на живом plugin handle, поэтому внутренние handler-таблицы SDK реально инициализируются, а подписанные плагины снова реагируют на события в игре.
+- В runtime host для event-dispatch возвращено plugin logging API: `LoggerApi` и ошибки обработчиков теперь пишутся в stderr с plugin id, а не теряются из-за пустого `write_log_fn`.
+- Добавлены end-to-end тесты на живые demo DLL-плагины: `flux.api_tick_demo` теперь проверяется реальным `SimulationPreCellGasStep` dispatch-ом, а `flux.api_ui_save_demo` — цепочкой `MouseDownCell -> BuildHudForCell`.
+- Plugins API полностью переведён на SDK v5: публичный контракт вынесен в `crates/flux_plugin_sdk`, внутренний ABI/glue слой — в `crates/flux_plugin_abi`, а пользовательские runtime-плагины больше не пишут ручной `extern "C"` код.
+- Runtime handshake упрощён до схемы `load -> register -> collect subscriptions -> dispatch subscribed plugins only`: loader теперь использует единый `flux_plugin_dispatch`, подписки хранятся без `handler_name`, а named event exports из v4 удалены из активного контракта.
+- Плагиновые обработчики теперь принимают только typed event, а игровые возможности доступны через proxy API в полях объекта плагина (`WorldApi`, `EntityApi`, `GasApi`, `UiApi`, `PanelApi`, `OverlayApi`, `SaveApi`, `TimeApi`, `InputApi`, `LoggerApi`).
+- Из публичного контракта убрана модель `set_cell_material`; твёрдые клетки и структуры теперь проходят через entity-oriented runtime API.
+- Все tracked sample runtime-плагины, включая `flux_stage1_sample_plugin`, мигрированы на новый SDK v5, а `cargo xtask build-all-plugins` снова собирает и валидирует весь набор packaged plugins.
+- Plugin SDK documentation доведена до SDK v5 end-to-end: `xtask` теперь генерирует reference из `crates/flux_plugin_sdk`, скрывает внутренние runtime helper-ы, строит event payload pages из typed SDK событий и снова успешно собирает mdBook через `cargo xtask build-plugin-sdk-docs`.
+
 ## 2026-05-11
 - Plugin SDK очищен от двойственной world-ветки: публичная reference-документация больше не показывает `WorldApi`/`WorldApiMut`, а runtime DLL API теперь документируется через wrapper-методы `FluxHostApi`, `FluxRegistrar` и `FluxRuntimeHost` вместо raw callback fields и typedef aliases.
 - Публичные plugin events переименованы в более прямые `PluginEvent` и `MouseButton`, а ergonomic wrapper-методы `FluxRuntimeHost::set_cell_material` и `FluxRuntimeHost::add_gas` теперь принимают `UVec2 cell` и `Vec2 velocity` вместо разрозненных координат и компонент скорости.

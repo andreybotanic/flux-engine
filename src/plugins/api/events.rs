@@ -187,6 +187,7 @@ pub struct StructureEvent {
 /// - `BuildHudForCell`: Carries the hovered world cell for HUD augmentation.
 /// - `BuildPanel`: Carries the plugin-owned panel id being requested.
 /// - `RenderOverlay`: Carries the plugin-owned overlay id that should render a frame.
+#[allow(dead_code)]
 #[derive(Event, Clone, Debug, PartialEq)]
 pub(crate) enum PluginRuntimeEvent {
     WorldCreated,

@@ -6,35 +6,48 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired when the cursor moves over world cells.
+Fired when the pointer moves over world cells.
 
 ## Arguments
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `payload` | [`MouseCellEvent`](../structures/mousecellevent.md) | Low-level mouse payload captured for cursor movement. |
+| `button` | Option < [`MouseButton`](../enums/mousebutton.md) > | `button` field stored as `Option < MouseButton >` on `MouseCellEvent`. |
+| `cell` | UVec2 | `cell` field stored as `UVec2` on `MouseCellEvent`. |
+| `world_position` | Vec2 | `world_position` field stored as `Vec2` on `MouseCellEvent`. |
+| `screen_position` | Vec2 | `screen_position` field stored as `Vec2` on `MouseCellEvent`. |
+| `modifiers` | [`InputModifiers`](../structures/inputmodifiers.md) | `modifiers` field stored as `InputModifiers` on `MouseCellEvent`. |
+| `active_tool_id` | Option < [`ContentId`](../structures/contentid.md) > | `active_tool_id` field stored as `Option < ContentId >` on `MouseCellEvent`. |
+| `is_over_ui` | bool | `is_over_ui` field stored as `bool` on `MouseCellEvent`. |
 
 ## SDK Example
 
 _Source: [`examples/events/pluginevent-mousemovecell.md`](../../examples/events/pluginevent-mousemovecell.md)_
 
 ```rust
-unsafe extern "C" fn on_mouse_move_cell(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxMouseCellEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    if plugin.dragging && payload.has_cell != 0 {
-        plugin.last_x = payload.cell_x;
-        plugin.last_y = payload.cell_y;
+impl MyPlugin {
+    fn on_mouse_move(&mut self, event: &MouseCellEvent) -> Result<(), PluginError> {
+        if !self.dragging || !self.world.contains(event.cell) {
+            return Ok(());
+        }
+        for cell in self.world.ray_cells(self.last_cell, event.cell) {
+            if self.world.is_editable(cell) {
+                self.entities.place(
+                    self.metal_id.clone(),
+                    EntityPlacement {
+                        origin: cell,
+                        rotation: Rotation::Deg0,
+                    },
+                )?;
+            }
+        }
+        self.last_cell = event.cell;
+        Ok(())
     }
-    FluxStatus::OK
 }
 ```
 

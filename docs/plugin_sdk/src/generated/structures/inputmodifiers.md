@@ -4,13 +4,13 @@
 
 # `InputModifiers`
 
-<span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">struct</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">struct</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Structures**.
+Source: **Descriptors** (`crates/flux_plugin_sdk/src/descriptors.rs`). Generated group: **Structures**.
 
 ## Description
 
-Keyboard modifier state carried by plugin input events.
+Snapshot of input modifiers.
 
 ## Declaration
 
@@ -22,7 +22,7 @@ pub struct InputModifiers
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `shift` | bool | Whether either Shift key was held when the input event fired. |
-| `ctrl` | bool | Whether either Control key was held when the input event fired. |
-| `alt` | bool | Whether either Alt key was held when the input event fired. |
+| `shift` | bool | `shift` field stored as `bool` on `InputModifiers`. |
+| `ctrl` | bool | `ctrl` field stored as `bool` on `InputModifiers`. |
+| `alt` | bool | `alt` field stored as `bool` on `InputModifiers`. |
 

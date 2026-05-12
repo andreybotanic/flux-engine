@@ -6,11 +6,11 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired after a save slot has been loaded.
+Fired after a world has finished loading.
 
 ## Arguments
 
@@ -21,35 +21,13 @@ This event does not carry additional payload fields.
 _Source: [`examples/events/pluginevent-worldloaded.md`](../../examples/events/pluginevent-worldloaded.md)_
 
 ```rust
-unsafe extern "C" fn on_world_loaded(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxEmptyEventPayload,
-    host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let _payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    let host = unsafe { &mut *host };
-    let Some(read_save_chunk) = host.read_save_chunk else {
-        return FluxStatus::FAILED;
-    };
-
-    let mut version = 0u32;
-    let mut len = 0usize;
-    let mut bytes = vec![0u8; 4];
-    let status = unsafe {
-        read_save_chunk(
-            host.context,
-            FluxUtf8Slice::from_str("flux.demo.save.counter"),
-            &mut version,
-            bytes.as_mut_ptr(),
-            bytes.len(),
-            &mut len,
-        )
-    };
-    if status.is_ok() && version == 1 && len == 4 {
-        plugin.counter = u32::from_le_bytes(bytes.try_into().expect("4 bytes"));
+impl MyPlugin {
+    fn on_world_loaded(&mut self, _event: &WorldLoadedEvent) -> Result<(), PluginError> {
+        if let Some(saved) = self.save.read_json::<PluginSettings>(&self.settings_chunk_id)? {
+            self.settings = saved;
+        }
+        self.log.info("plugin state restored after world load")
     }
-    FluxStatus::OK
 }
 ```
 

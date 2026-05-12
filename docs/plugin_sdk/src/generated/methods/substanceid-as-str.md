@@ -4,13 +4,13 @@
 
 # `SubstanceId::as_str`
 
-<span class="sdk-badge sdk-badge-content">content</span> <span class="sdk-kind">method</span>
+<span class="sdk-badge sdk-badge-sdk">sdk</span> <span class="sdk-kind">method</span>
 
-Source: **Substances** (`src/plugins/substances.rs`). Generated group: **Methods**.
+Source: **Identifiers** (`crates/flux_plugin_sdk/src/ids.rs`). Generated group: **Methods**.
 
 ## Description
 
-Returns the canonical string value.
+Returns the canonical identifier string.
 
 ## Signature
 

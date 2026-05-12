@@ -6,11 +6,11 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">enum</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Enums**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Enums**.
 
 ## Description
 
-Plugin-visible event category.
+Runtime event category used for subscriptions.
 
 ## Declaration
 
@@ -22,26 +22,26 @@ pub enum PluginEvent
 
 | Variant | Payload | Description |
 | --- | --- | --- |
-| `WorldCreated` | none | Fired after a new world is created. |
-| `WorldLoaded` | none | Fired after a save slot has been loaded. |
-| `WorldBeforeSave` | none | Fired synchronously before the current world is saved. |
-| `WorldAfterSave` | none | Fired after a save operation finishes. |
-| `WorldUnloaded` | none | Fired before the current world is unloaded. |
-| `SimulationPreCellGasStep` | none | Fired before the core free-gas simulation step. |
-| `SimulationPostCellGasStep` | none | Fired after the core free-gas simulation step. |
-| `SimulationPausedChanged` | none | Fired when the simulation pause state changes. |
-| `StructurePlaced` | none | Fired after a structure is placed. |
-| `StructureRemoved` | none | Fired after a structure is removed. |
-| `ToolSelected` | none | Fired when the active editor tool changes. |
-| `MouseDownCell` | none | Fired when a mouse button is pressed over a world cell. |
-| `MouseMoveCell` | none | Fired when the cursor moves over world cells. |
-| `MouseUpCell` | none | Fired when a mouse button is released over a world cell. |
-| `MouseEnterCell` | none | Fired when the cursor enters a world cell. |
-| `MouseLeaveCell` | none | Fired when the cursor leaves a world cell. |
+| `WorldCreated` | none | Fired after a new world has been created. |
+| `WorldLoaded` | none | Fired after a world has finished loading. |
+| `WorldBeforeSave` | none | Fired right before the engine serializes world state. |
+| `WorldAfterSave` | none | Fired after the engine has finished saving world state. |
+| `WorldUnloaded` | none | Fired before the current world is discarded. |
+| `SimulationPreCellGasStep` | none | Fired before one gas-simulation cell step starts. |
+| `SimulationPostCellGasStep` | none | Fired after one gas-simulation cell step completes. |
+| `SimulationPausedChanged` | none | Fired when pause state changes. |
+| `EntityPlaced` | none | Fired after one entity has been placed into the world. |
+| `EntityRemoved` | none | Fired after one entity has been removed from the world. |
+| `ToolSelected` | none | Fired when the active tool changes. |
+| `MouseDownCell` | none | Fired when the pointer button is pressed over a world cell. |
+| `MouseMoveCell` | none | Fired when the pointer moves over world cells. |
+| `MouseUpCell` | none | Fired when the pointer button is released over a world cell. |
+| `MouseEnterCell` | none | Fired when the pointer enters a world cell. |
+| `MouseLeaveCell` | none | Fired when the pointer leaves a world cell. |
 | `KeyPressed` | none | Fired when a key is pressed. |
 | `KeyReleased` | none | Fired when a key is released. |
 | `OverlayChanged` | none | Fired when the active overlay changes. |
-| `BuildHudForCell` | none | Fired when the HUD is built for the hovered cell. |
-| `BuildPanel` | none | Fired when a plugin-owned panel should be built. |
-| `RenderOverlay` | none | Fired when a plugin-controlled overlay should submit a frame. |
+| `BuildHudForCell` | none | Fired when the engine asks plugins to contribute HUD lines for one cell. |
+| `BuildPanel` | none | Fired when the engine asks a plugin-owned panel to rebuild itself. |
+| `RenderOverlay` | none | Fired when a plugin-controlled overlay should submit one frame. |
 

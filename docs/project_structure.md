@@ -16,6 +16,9 @@ FluxEngine/
 |-- config/                  # Core TOML-конфиги симуляции/free-gas поведения.
 |   |-- backups/             # Резервные копии конфигов.
 |   `-- simulation.toml      # Core runtime-настройки без default-plugin content.
+|-- crates/                  # Отдельные workspace-crate-ы публичного Plugin SDK и внутреннего ABI.
+|   |-- flux_plugin_abi/     # Внутренний ABI/glue crate для runtime DLL handshake и dispatch.
+|   `-- flux_plugin_sdk/     # Публичный Rust-first SDK для авторов runtime-плагинов.
 |-- docs/                    # Проектная документация.
 |   |-- plugin_sdk/          # mdBook-сайт Plugin SDK с ручными guide-главами и generated API reference.
 |   `-- plans/               # Плановые документы будущих крупных изменений.
@@ -57,15 +60,30 @@ FluxEngine/
 - `assets/sprites/ui/tool_build.png`, `tool_erase.png`, `tool_add_gas.png`, `tool_clear_gas.png`: Core UI-спрайты общих инструментов; content-specific tool icons лежат в default plugin assets.
 - `assets/sprites/world/backdrop_noise.png`: Core фоновая текстура мира; default-owned тайлы/структуры лежат в default plugin assets.
 - `Cargo.lock`: Зафиксированные версии зависимостей Cargo.
-- `Cargo.toml`: Манифест Rust-проекта, workspace и зависимости; основной crate и `xtask` входят в workspace, sample plugin crates живут под `src/plugins/*` и собираются отдельно через `xtask`.
+- `Cargo.toml`: Манифест Rust-проекта, workspace и зависимости; основной crate, `xtask`, `crates/flux_plugin_sdk` и `crates/flux_plugin_abi` входят в workspace, sample plugin crates живут под `src/plugins/*` и собираются отдельно через `xtask`.
+- `crates/flux_plugin_abi/Cargo.toml`: Манифест внутреннего ABI crate-а для runtime plugin handshake.
+- `crates/flux_plugin_abi/src/events.rs`: Внутренние ABI payload-структуры событий и mapping raw event kind values.
+- `crates/flux_plugin_abi/src/ffi.rs`: C-compatible `Flux*` ABI-структуры, callback typedef-ы и export-name константы для скрытого DLL-контракта.
+- `crates/flux_plugin_abi/src/lib.rs`: Точка входа внутреннего ABI crate-а и re-export его модулей.
+- `crates/flux_plugin_sdk/Cargo.toml`: Манифест публичного Rust-first Plugin SDK.
+- `crates/flux_plugin_sdk/src/api.rs`: Публичные proxy API плагина (`WorldApi`, `EntityApi`, `GasApi`, `UiApi`, `PanelApi`, `OverlayApi`, `SaveApi`, `TimeApi`, `InputApi`, `LoggerApi`).
+- `crates/flux_plugin_sdk/src/descriptors.rs`: Typed descriptor-ы SDK для сущностей, газов, overlay, tool, panel и save chunk.
+- `crates/flux_plugin_sdk/src/dispatch_state_builder.rs`: Внутренний builder typed dispatch-state из ABI payload для работы proxy API во время handler-вызова.
+- `crates/flux_plugin_sdk/src/error.rs`: `PluginError` и базовые ошибки публичного SDK.
+- `crates/flux_plugin_sdk/src/events.rs`: Typed runtime events SDK, `PluginEvent` и ABI decode logic, скрытая от plugin author-а за trait-слоем.
+- `crates/flux_plugin_sdk/src/ids.rs`: Typed identifier wrapper-ы SDK и базовые геометрические helper-типы.
+- `crates/flux_plugin_sdk/src/lib.rs`: Публичная точка входа SDK, re-export-ы и macro `declare_plugin!`.
+- `crates/flux_plugin_sdk/src/plugin.rs`: Публичные `Plugin`, `PluginInit` и скрытый `PluginRuntime`, который связывает Rust-плагин с внутренним ABI dispatch.
+- `crates/flux_plugin_sdk/src/registrar.rs`: `Registrar<Self>`, typed `subscribe(...)` и внутренняя таблица зарегистрированных Rust-обработчиков.
+- `crates/flux_plugin_sdk/src/scope.rs`: Внутренний dispatch scope SDK, который временно привязывает proxy API к текущему runtime host.
 - `config/backups/simulation.toml.pre_tuning_20260503_174021.toml`: Резервная копия конфигурации симуляции для отката/сравнения.
 - `config/simulation.toml`: Core-параметры симуляции/free-gas и визуализации газа; pipe-runtime настройки default plugin-а вынесены отдельно.
 - `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
 - `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
 - `docs/plugin_sdk/book.toml`: Конфигурация mdBook-сайта Plugin SDK; build output направлен в `target/plugin_sdk_docs`, а sidebar folding включён для collapsed-by-default generated API групп.
 - `docs/plugin_sdk/src/SUMMARY.md`: Генерируемая навигация Plugin SDK book: guide-главы и generated API reference, сгруппированный по структурам, enum-ам, константам, методам и событиям.
-- `docs/plugin_sdk/src/*.md`: Ручные guide-главы Plugin SDK: обзор, lifecycle, структура package, manifest, сборка и reload.
-- `docs/plugin_sdk/src/examples/{methods,events,constants}/*.md`: Внешние markdown-snippet примеры для generated Plugin SDK страниц; каждая константа, метод/callback и событие берут `SDK Example` отсюда, а не из больших Rustdoc-блоков в коде.
+- `docs/plugin_sdk/src/*.md`: Ручные guide-главы Plugin SDK: обзор, lifecycle, структура package, manifest, сборка и reload для SDK v5.
+- `docs/plugin_sdk/src/examples/{methods,events,constants}/*.md`: Внешние markdown-snippet примеры для generated Plugin SDK страниц; generated reference встраивает их как `SDK Example`, если файл для конкретного item существует и не содержит legacy v4 ABI surface, но отсутствие snippet-а не ломает сборку docs.
 - `docs/plugin_sdk/src/generated/*.md`: Детерминированно сгенерированные индексные API-главы Plugin SDK для групп `Structures`, `Enums`, `Constants`, `Methods` и `Events`; обновляются через `cargo xtask generate-plugin-sdk-docs`.
 - `docs/plugin_sdk/src/generated/{structures,enums,constants,methods,events}/*.md`: Детерминированно сгенерированные страницы конкретных Plugin SDK API-сущностей с описаниями полей, вариантов, деклараций, аргументов, возвращаемых значений, ссылками на связанные SDK-типы, списками методов структур и встраиваемыми external example-snippets.
 - `docs/plugin_sdk/theme/sdk.css`: Кастомные стили интерактивных SDK API-блоков, бейджей и фильтра.
@@ -104,8 +122,7 @@ FluxEngine/
 - `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
 - `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем, включая новый `plugins`.
 - `src/main.rs`: Точка входа бинаря; запускает приложение.
-- `src/plugins/abi.rs`: Точка входа C-compatible ABI v4: базовые `FluxUtf8Slice`/`FluxStatus`, method-based wrapper API для `FluxHostApi`/`FluxRegistrar`/`FluxRuntimeHost`, внутренние raw callbacks и export names обязательных DLL-функций с re-export typed event ABI.
-- `src/plugins/abi_events.rs`: Typed event ABI v4: plugin-visible `FluxEventKind`, `FluxEventHandlerDescriptor`, payload-структуры для каждого runtime-события, handler typedef-ы, canonical handler names и mapping между `PluginEvent` и ABI event kinds.
+- `src/plugins/abi.rs`: Engine-side wrapper над `crates/flux_plugin_abi`: сборка host/registrar payload для loader/runtime и mapping ABI event kinds в внутренние engine events.
 - `src/plugins/api/mod.rs`: Engine-side shared plugin API module root и re-exports для событий, runtime registry, render/UI/save contracts, которые использует хост plugin-системы.
 - `src/plugins/api/events.rs`: Plugin event kinds and payloads, including simulation lifecycle, save lifecycle, low-level mouse cell input and keyboard events.
 - `src/plugins/api/render_api.rs`: Overlay render contract with `OverlayRenderPolicy`, `OverlayFrame`, per-cell/per-structure/per-gas styles and draw commands.
@@ -126,30 +143,29 @@ FluxEngine/
 - `src/plugins/default_plugin/config/gases/*.toml`: Optional data-конфиги default plugin gas substances; при пустой папке базовые `H2/O2/CO2` берутся из built-in default plugin definitions.
 - `src/plugins/default_plugin/config/pipe_runtime.toml`: Runtime-настройки pipe pressure/flux/vent solver default plugin-а.
 - `src/plugins/default_plugin/config/structures/*.toml`: Конфиги appearance и HUD-метаданных встроенных стен и структур (`label`, `draw_priority`, `size_in_cells`, `hud.sort_order` и substance-контейнеры).
-- `src/plugins/flux_stage1_sample_plugin/Cargo.toml`: Отдельный `cdylib` crate минимального рабочего non-content sample plugin-а.
+- `src/plugins/flux_stage1_sample_plugin/Cargo.toml`: Отдельный `cdylib` crate минимального non-content sample plugin-а на `flux_plugin_sdk`.
 - `src/plugins/flux_stage1_sample_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample DLL, используемый позитивным e2e-тестом.
 - `src/plugins/flux_stage1_sample_plugin/package_template/config/sample.toml`: Минимальный config-файл sample plugin package.
 - `src/plugins/flux_stage1_sample_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample plugin package.
-- `src/plugins/flux_stage1_sample_plugin/src/lib.rs`: Реализация sample DLL-плагина с обязательными ABI export-ами `flux_plugin_*`.
+- `src/plugins/flux_stage1_sample_plugin/src/lib.rs`: Минимальный sample runtime-плагин на `Plugin` + `declare_plugin!`, используемый smoke/e2e workflow-ом сборки.
 - `src/plugins/flux_stage7_sample_content_plugin/Cargo.toml`: Отдельный `cdylib` crate sample content plugin-а stage-7.
 - `src/plugins/flux_stage7_sample_content_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample content plugin-а с `content = true`.
 - `src/plugins/flux_stage7_sample_content_plugin/package_template/config/sample.toml`: Минимальный config-файл sample content plugin package.
 - `src/plugins/flux_stage7_sample_content_plugin/package_template/assets/placeholder.txt`: Минимальный asset-файл sample content plugin package.
-- `src/plugins/flux_stage7_sample_content_plugin/src/lib.rs`: ABI v4 sample content DLL, регистрирующая внешний газ `flux.sample_content.substance.neon` через современный registrar layout.
+- `src/plugins/flux_stage7_sample_content_plugin/src/lib.rs`: Sample content plugin на `flux_plugin_sdk`, регистрирующий внешний газ `flux.sample_content.substance.neon`.
 - `src/plugins/diagnostics.rs`: Startup scan packaged archives, дедупликация `PluginId`, resource с результатами проверки и текст для статуса главного меню.
 - `src/plugins/id.rs`: Типизированные `PluginId`, `PluginVersion`, `PluginApiVersion` и проверка канонического формата ID.
-- `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL, ABI handshake `create/register/destroy`, fingerprint source-а и сбор runtime content registration.
+- `src/plugins/loader.rs`: Чтение packaged/dev plugin-кандидатов, cache-копии runtime-root, загрузка DLL, ABI handshake `create/register/dispatch/destroy`, fingerprint source-а и сбор runtime registration/subscription-модели.
 - `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
 - `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API.
 - `src/plugins/reload.rs`: Атомарный manual reload/rescan runtime-плагинов без загруженного мира: rebuild registry, пересборка gas registry, generation/report и сравнение source fingerprints.
-- `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin capabilities/content, включая внешние gas substances, explicit `event_handlers`, tools, overlays и save chunks.
-- `src/plugins/runtime_dll.rs`: Live DLL executor верхнего уровня: lifecycle runtime DLL-плагинов, host callbacks для world/gas/UI/overlay/save APIs и orchestration typed event dispatch.
-- `src/plugins/runtime_dll_events.rs`: Typed runtime event dispatch для ABI v4: загрузка named exports, кеш `RuntimeEventHandler`, сборка payload-структур и вызов конкретных handler-ов.
-- `src/plugins/flux_api_demo_common.rs`: Shared v4 C ABI shim used by the API demo DLL plugin crates, включая plugin-visible `FluxEventKind`, helper-ы для named event handlers и typed payload validation.
-- `src/plugins/flux_api_cell_demo_plugin/`: Runtime DLL fixture that registers a cell/tool demo and handles low-level right-button mouse events through named `onMouse*Cell` exports.
-- `src/plugins/flux_api_tick_demo_plugin/`: Runtime DLL fixture that registers a named simulation pre-step handler and injects moving H2 in one fixed cell during pre-step.
-- `src/plugins/flux_api_temperature_overlay_plugin/`: Runtime DLL fixture that registers a plugin-controlled temperature overlay and submits a complete heatmap frame from `onRenderOverlay`.
-- `src/plugins/flux_api_ui_save_demo_plugin/`: Runtime DLL fixture that registers named world/input/UI handlers, shows per-cell left-click HUD counters and writes a plugin save chunk.
+- `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin capabilities/content, включая сущности, газы, инструменты, панели, overlay, save chunks и event subscriptions без `handler_name`.
+- `src/plugins/runtime_dll.rs`: Live DLL executor верхнего уровня: lifecycle runtime DLL-плагинов, host callbacks для entity/gas/UI/overlay/save/time APIs и orchestration unified dispatch.
+- `src/plugins/runtime_dll_events.rs`: Typed runtime event dispatch для SDK v5: кодирует ABI payload и вызывает единый `flux_plugin_dispatch` у каждого подписанного DLL-плагина.
+- `src/plugins/flux_api_cell_demo_plugin/`: Runtime DLL fixture на `flux_plugin_sdk`, демонстрирующий entity/tool/input path нового SDK.
+- `src/plugins/flux_api_tick_demo_plugin/`: Runtime DLL fixture на `flux_plugin_sdk`, демонстрирующий simulation pre-step handler без named ABI exports.
+- `src/plugins/flux_api_temperature_overlay_plugin/`: Runtime DLL fixture на `flux_plugin_sdk`, регистрирующий plugin-controlled overlay и присылающий готовый frame через unified dispatch.
+- `src/plugins/flux_api_ui_save_demo_plugin/`: Runtime DLL fixture на `flux_plugin_sdk`, демонстрирующий HUD, save chunk и input-driven runtime path.
 - `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` и rebuild-helper для menu toggle; content registry создаётся из default descriptors плюс runtime registration включённых content-плагинов.
 - `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics, source fingerprint и resolve plugin layout внутри plugin root.
 - `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses и aggregate `PluginRegistryState`.
@@ -219,9 +235,9 @@ FluxEngine/
 - `xtask/Cargo.toml`: Манифест helper-crate-а для сборки/упаковки runtime-плагинов и генерации Plugin SDK документации.
 - `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, Plugin SDK docs команд, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>` и безопасная упаковка `.fluxplugin`.
 - `xtask/src/plugin_sdk_docs.rs`: Orchestration-модуль Plugin SDK docs команд: собирает generated Markdown, stale-check и mdBook build.
-- `xtask/src/plugin_sdk_docs/collector.rs`: Сбор Plugin SDK API-сущностей из Rust AST через `syn`: структуры, методы, callback-типы, константы и события, allowlist/exclude-фильтрация source-файлов, валидация описаний полей/вариантов и загрузка external example-snippets.
+- `xtask/src/plugin_sdk_docs/collector.rs`: Сбор Plugin SDK API-сущностей из Rust AST через `syn`: структуры, методы, callback-типы, константы и события, exclude-фильтрация внутренних helper-ов, mapping `PluginEvent -> typed payload` через `AbiEventPayload`, fallback-описания полей/вариантов и загрузка optional external example-snippets с пропуском legacy v4 ABI примеров.
 - `xtask/src/plugin_sdk_docs/model.rs`: Общие модели generated Plugin SDK reference: группы API, item docs, поля, аргументы, варианты, source metadata и схема путей для external examples.
-- `xtask/src/plugin_sdk_docs/parser.rs`: Парсинг SDK-facing Rustdoc через `syn` и строгая валидация summary/обязательных секций без встраивания `# SDK Example` в исходный код.
+- `xtask/src/plugin_sdk_docs/parser.rs`: Парсинг SDK-facing Rustdoc через `syn`, извлечение summary/section-блоков и поддержка `#[doc(hidden)]` для исключения внутренних SDK helper-ов из generated reference.
 - `xtask/src/plugin_sdk_docs/render.rs`: Рендер generated API items в Markdown/HTML-блоки mdBook, включая cross-links на документированные SDK-типы, списки методов структур и подключение external example-snippets.
 - `xtask/src/main.rs`: CLI entrypoint, который запускает `xtask::run_from_env()` и возвращает non-zero exit code при ошибке.
 - `tmp_size.rs`: Временный локальный вспомогательный Rust-файл для ручных проверок/черновых экспериментов.

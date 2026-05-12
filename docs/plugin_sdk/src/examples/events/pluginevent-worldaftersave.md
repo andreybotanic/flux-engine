@@ -1,14 +1,8 @@
 ```rust
-unsafe extern "C" fn on_world_after_save(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxEmptyEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    if payload.struct_size as usize == std::mem::size_of::<FluxEmptyEventPayload>() {
-        plugin.counter = 0;
+impl MyPlugin {
+    fn on_world_after_save(&mut self, _event: &WorldAfterSaveEvent) -> Result<(), PluginError> {
+        self.log.info("plugin data was written into the save slot")?;
+        Ok(())
     }
-    FluxStatus::OK
 }
 ```

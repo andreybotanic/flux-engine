@@ -6,32 +6,28 @@
 
 <span class="sdk-badge sdk-badge-event">event</span> <span class="sdk-kind">event</span>
 
-Source: **Events** (`src/plugins/api/events.rs`). Generated group: **Events**.
+Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **Events**.
 
 ## When It Fires
 
-Fired when the active editor tool changes.
+Fired when the active tool changes.
 
 ## Arguments
 
 | Argument | Type | Description |
 | --- | --- | --- |
-| `tool_id` | Option < [`ContentId`](../structures/contentid.md) > | Newly selected tool id, or `None` when no tool is active. |
+| `tool_id` | Option < [`ContentId`](../structures/contentid.md) > | `tool_id` field stored as `Option < ContentId >` on `ToolSelectedEvent`. |
 
 ## SDK Example
 
 _Source: [`examples/events/pluginevent-toolselected.md`](../../examples/events/pluginevent-toolselected.md)_
 
 ```rust
-unsafe extern "C" fn on_tool_selected(
-    plugin: *mut FluxPluginHandle,
-    payload: *const FluxToolSelectedEventPayload,
-    _host: *mut FluxRuntimeHost,
-) -> FluxStatus {
-    let payload = unsafe { &*payload };
-    let plugin = unsafe { &mut *plugin };
-    plugin.dragging = payload.has_tool_id != 0;
-    FluxStatus::OK
+impl MyPlugin {
+    fn on_tool_selected(&mut self, event: &ToolSelectedEvent) -> Result<(), PluginError> {
+        self.active_tool = event.tool_id.clone();
+        Ok(())
+    }
 }
 ```
 
