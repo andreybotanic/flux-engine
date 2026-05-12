@@ -4,12 +4,7 @@ use bevy::prelude::*;
 
 use crate::{
     config::GasRegistry,
-    save::WorldLoadState,
-    simulation::{
-        backend::{SimulationBackend, SimulationBackendConfig},
-        gas::GasField,
-        GpuRuntimeState, SimulationControl, SimulationPerfStats, SimulationSet,
-    },
+    simulation::gas::GasField,
     world::{
         grid::{WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
         structures::{bridge_center_cell, PlacedStructureMap, StructureParams, StructureRotation},
@@ -20,19 +15,14 @@ pub mod pressure;
 pub mod scenarios;
 mod solver;
 
-/// Registers the built-in default plugin runtime systems for pipe-owned behavior.
-pub struct DefaultPluginRuntimePlugin;
+/// Registers supporting resources required by the built-in default runtime plugin.
+pub struct DefaultPluginSupportPlugin;
 
-impl Plugin for DefaultPluginRuntimePlugin {
+impl Plugin for DefaultPluginSupportPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PipeSimulationConfig>()
             .init_resource::<PipeFlowVisualState>()
-            .add_systems(Startup, initialize_pipe_state_from_registry)
-            .add_systems(Update, clear_stale_pipe_flow_on_pause_transition)
-            .add_systems(
-                FixedUpdate,
-                run_default_plugin_pre_gas_step.in_set(SimulationSet::PluginPreStep),
-            );
+            .add_systems(Startup, initialize_pipe_state_from_registry);
     }
 }
 
@@ -41,63 +31,11 @@ fn initialize_pipe_state_from_registry(mut commands: Commands, registry: Res<Gas
     commands.insert_resource(PipeFluxField::default());
 }
 
+#[cfg(test)]
 pub(crate) fn pipe_flow_reset_needed(previous_paused: Option<bool>, current_paused: bool) -> bool {
     previous_paused
         .map(|previous| previous != current_paused)
         .unwrap_or(false)
-}
-
-fn clear_stale_pipe_flow_on_pause_transition(
-    control: Res<SimulationControl>,
-    mut pipe_flow_visuals: ResMut<PipeFlowVisualState>,
-    mut previous_paused: Local<Option<bool>>,
-) {
-    if pipe_flow_reset_needed(*previous_paused, control.paused) {
-        pipe_flow_visuals.transfers.clear();
-    }
-    *previous_paused = Some(control.paused);
-}
-
-fn run_default_plugin_pre_gas_step(
-    control: Res<SimulationControl>,
-    backend: Res<SimulationBackendConfig>,
-    world_load_state: Res<WorldLoadState>,
-    config: Res<PipeSimulationConfig>,
-    structures: Res<PlacedStructureMap>,
-    mut pipe_gas: ResMut<PipeGasField>,
-    mut pipe_flux: ResMut<PipeFluxField>,
-    mut pipe_flow_visuals: ResMut<PipeFlowVisualState>,
-    mut gas: ResMut<GasField>,
-    world: Res<WorldGrid>,
-    mut perf: ResMut<SimulationPerfStats>,
-    mut gpu_state: ResMut<GpuRuntimeState>,
-) {
-    if !world_load_state.has_world || control.paused {
-        return;
-    }
-
-    let pipe_started_at = std::time::Instant::now();
-    let changed_by_pipes = apply_pipe_network_step(
-        &structures,
-        &mut pipe_gas,
-        &mut pipe_flux,
-        &mut gas,
-        &world,
-        &mut pipe_flow_visuals,
-        &config,
-    );
-    let pipe_elapsed_ms = pipe_started_at.elapsed().as_secs_f32() * 1000.0;
-    perf.last_pipe_step_ms = pipe_elapsed_ms;
-    perf.avg_pipe_step_ms = if perf.avg_pipe_step_ms <= f32::EPSILON {
-        pipe_elapsed_ms
-    } else {
-        perf.avg_pipe_step_ms * 0.9 + pipe_elapsed_ms * 0.1
-    };
-
-    let changed_by_structures = apply_gas_structures_pre_step(&structures, &mut gas, &world);
-    if (changed_by_pipes || changed_by_structures) && backend.backend == SimulationBackend::Gpu {
-        gpu_state.mark_needs_full_upload();
-    }
 }
 
 #[derive(Resource, Clone, Copy)]

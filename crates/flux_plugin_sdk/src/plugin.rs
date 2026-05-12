@@ -3,8 +3,12 @@ use std::marker::PhantomData;
 use flux_plugin_abi::{FluxHostApi, FluxPluginHandle, FluxRegistrar, FluxRuntimeHost, FluxStatus};
 
 use crate::{
-    scope, EntityApi, GasApi, InputApi, LoggerApi, OverlayApi, PluginApiVersion, PluginError,
-    PluginEvent, PluginId, PluginPaths, Registrar, SaveApi, TimeApi, UiApi, WorldApi,
+    runtime_host::{abi_runtime_host_binding, RuntimeHostBinding},
+    registrar::MemoryRegistration,
+    scope,
+    BuiltinEventPayload, EntityApi, GasApi, InputApi, LoggerApi, OverlayApi,
+    PluginApiVersion, PluginError, PluginEvent, PluginId, PluginPaths, Registrar, SaveApi,
+    TimeApi, UiApi, WorldApi,
 };
 
 /// Public runtime plugin contract implemented by plugin authors.
@@ -36,15 +40,29 @@ pub struct PluginInit {
 
 impl PluginInit {
     pub(crate) fn from_host(host: &FluxHostApi) -> Result<Self, PluginError> {
-        Ok(Self {
-            plugin_id: PluginId::parse(&scope::parse_utf8(host.plugin_id, "plugin_id")?)?,
-            engine_version: scope::parse_utf8(host.engine_version, "engine_version")?,
-            engine_api_version: PluginApiVersion(host.api_version),
-            paths: PluginPaths {
+        Ok(Self::new(
+            PluginId::parse(&scope::parse_utf8(host.plugin_id, "plugin_id")?)?,
+            scope::parse_utf8(host.engine_version, "engine_version")?,
+            PluginApiVersion(host.api_version),
+            PluginPaths {
                 plugin_root: scope::parse_utf8_path(host.plugin_root, "plugin_root")?,
                 config_root: scope::parse_utf8_path(host.config_root, "config_root")?,
                 assets_root: scope::parse_utf8_path(host.assets_root, "assets_root")?,
             },
+        ))
+    }
+
+    pub(crate) fn new(
+        plugin_id: PluginId,
+        engine_version: String,
+        engine_api_version: PluginApiVersion,
+        paths: PluginPaths,
+    ) -> Self {
+        Self {
+            plugin_id,
+            engine_version,
+            engine_api_version,
+            paths,
             world: WorldApi,
             entities: EntityApi,
             gases: GasApi,
@@ -54,7 +72,7 @@ impl PluginInit {
             time: TimeApi,
             input: InputApi,
             logger: LoggerApi,
-        })
+        }
     }
 
     /// Returns the plugin id assigned by the host.
@@ -151,7 +169,9 @@ impl PluginInit {
 struct DispatchRegistration<P> {
     event_kind: PluginEvent,
     handler: *const (),
-    dispatch: unsafe fn(&mut P, *const (), *const u8, usize) -> Result<(), PluginError>,
+    abi_dispatch: unsafe fn(&mut P, *const (), *const u8, usize) -> Result<(), PluginError>,
+    builtin_dispatch:
+        unsafe fn(&mut P, *const (), &dyn BuiltinEventPayload) -> Result<(), PluginError>,
 }
 
 /// Hidden runtime wrapper stored behind the opaque ABI handle.
@@ -164,7 +184,10 @@ pub struct PluginRuntime<P: Plugin> {
 
 impl<P: Plugin> PluginRuntime<P> {
     /// Creates one plugin instance through the hidden ABI bridge.
-    pub unsafe fn create(host: *const FluxHostApi, out_plugin: *mut *mut FluxPluginHandle) -> FluxStatus {
+    pub unsafe fn create(
+        host: *const FluxHostApi,
+        out_plugin: *mut *mut FluxPluginHandle,
+    ) -> FluxStatus {
         if host.is_null() || out_plugin.is_null() {
             return FluxStatus::INVALID_ARGUMENT;
         }
@@ -193,7 +216,10 @@ impl<P: Plugin> PluginRuntime<P> {
     }
 
     /// Runs the hidden registration pass and stores the dispatch table.
-    pub unsafe fn register(plugin: *mut FluxPluginHandle, registrar: *mut FluxRegistrar) -> FluxStatus {
+    pub unsafe fn register(
+        plugin: *mut FluxPluginHandle,
+        registrar: *mut FluxRegistrar,
+    ) -> FluxStatus {
         if plugin.is_null() || registrar.is_null() {
             return FluxStatus::INVALID_ARGUMENT;
         }
@@ -208,7 +234,8 @@ impl<P: Plugin> PluginRuntime<P> {
                     .map(|handler| DispatchRegistration {
                         event_kind: handler.event_kind,
                         handler: handler.handler,
-                        dispatch: handler.dispatch,
+                        abi_dispatch: handler.abi_dispatch,
+                        builtin_dispatch: handler.builtin_dispatch,
                     })
                     .collect();
                 FluxStatus::OK
@@ -235,12 +262,19 @@ impl<P: Plugin> PluginRuntime<P> {
         let Some(event_kind) = PluginEvent::from_raw(event_kind) else {
             return FluxStatus::INVALID_ARGUMENT;
         };
-        let Some(handler) = runtime.handlers.iter().find(|handler| handler.event_kind == event_kind) else {
+        let Some(handler) = runtime
+            .handlers
+            .iter()
+            .find(|handler| handler.event_kind == event_kind)
+        else {
             return FluxStatus::OK;
         };
         let state = crate::DispatchStateBuilder::build(event_kind, payload, payload_len);
-        let result = scope::with_runtime_scope(host, state, || {
-            (handler.dispatch)(&mut runtime.plugin, handler.handler, payload, payload_len)
+        let Some(runtime_host) = abi_runtime_host_binding(host) else {
+            return FluxStatus::INVALID_ARGUMENT;
+        };
+        let result = scope::with_runtime_scope(runtime_host, state, || {
+            (handler.abi_dispatch)(&mut runtime.plugin, handler.handler, payload, payload_len)
         });
         match result {
             Ok(()) => FluxStatus::OK,
@@ -257,5 +291,89 @@ impl<P: Plugin> PluginRuntime<P> {
             return;
         }
         let _ = Box::from_raw(plugin.cast::<Self>());
+    }
+}
+
+/// Hidden in-process runtime wrapper used by built-in plugins.
+pub struct BuiltinPluginRuntime<P: Plugin> {
+    plugin_id: PluginId,
+    plugin: P,
+    handlers: Vec<DispatchRegistration<P>>,
+    registration: MemoryRegistration,
+}
+
+unsafe impl<P: Plugin> Send for BuiltinPluginRuntime<P> {}
+unsafe impl<P: Plugin> Sync for BuiltinPluginRuntime<P> {}
+
+impl<P: Plugin> BuiltinPluginRuntime<P> {
+    /// Creates one built-in plugin instance without ABI exports or DLL loading.
+    pub fn create(
+        plugin_id: PluginId,
+        engine_version: String,
+        engine_api_version: PluginApiVersion,
+        paths: PluginPaths,
+    ) -> Result<Self, PluginError> {
+        let init = PluginInit::new(
+            plugin_id.clone(),
+            engine_version,
+            engine_api_version,
+            paths,
+        );
+        let plugin = P::new(init)?;
+        Ok(Self {
+            plugin_id,
+            plugin,
+            handlers: Vec::new(),
+            registration: MemoryRegistration::default(),
+        })
+    }
+
+    /// Runs plugin registration into the in-memory built-in registrar.
+    pub fn register(&mut self) -> Result<(), PluginError> {
+        let mut registration = MemoryRegistration::default();
+        let mut registrar = Registrar::new_memory(self.plugin_id.clone(), &mut registration);
+        self.plugin.register(&mut registrar)?;
+        self.handlers = registrar
+            .finish()
+            .into_iter()
+            .map(|handler| DispatchRegistration {
+                event_kind: handler.event_kind,
+                handler: handler.handler,
+                abi_dispatch: handler.abi_dispatch,
+                builtin_dispatch: handler.builtin_dispatch,
+            })
+            .collect();
+        self.registration = registration;
+        Ok(())
+    }
+
+    /// Returns the stable plugin id owned by this built-in runtime instance.
+    pub fn plugin_id(&self) -> &PluginId {
+        &self.plugin_id
+    }
+
+    /// Returns the built-in registration snapshot collected during `register`.
+    pub fn registration(&self) -> &MemoryRegistration {
+        &self.registration
+    }
+
+    /// Dispatches one typed built-in event into the plugin instance.
+    pub fn dispatch(
+        &mut self,
+        event_kind: PluginEvent,
+        payload: &dyn BuiltinEventPayload,
+        runtime_host: RuntimeHostBinding,
+        state: scope::DispatchState,
+    ) -> Result<(), PluginError> {
+        let Some(handler) = self
+            .handlers
+            .iter()
+            .find(|handler| handler.event_kind == event_kind)
+        else {
+            return Ok(());
+        };
+        scope::with_runtime_scope(runtime_host, state, || unsafe {
+            (handler.builtin_dispatch)(&mut self.plugin, handler.handler, payload)
+        })
     }
 }

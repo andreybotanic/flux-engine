@@ -1,5 +1,5 @@
 pub mod cell_inspector;
-mod cell_inspector_model;
+pub(crate) mod cell_inspector_model;
 pub mod input_field;
 pub mod modal;
 pub mod palette;

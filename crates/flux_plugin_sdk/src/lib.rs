@@ -8,6 +8,7 @@ mod events;
 mod ids;
 mod plugin;
 mod registrar;
+mod runtime_host;
 mod scope;
 
 pub use api::*;
@@ -22,8 +23,13 @@ pub(crate) use dispatch_state_builder::DispatchStateBuilder;
 
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::events::AbiEventPayload;
-    pub use crate::plugin::PluginRuntime;
+    pub use crate::events::{AbiEventPayload, BuiltinEventPayload};
+    pub use crate::plugin::{BuiltinPluginRuntime, PluginRuntime};
+    pub use crate::registrar::MemoryRegistration;
+    pub use crate::runtime_host::{
+        RuntimeHostBinding, RuntimeHostFns, RuntimeSaveChunkData, RuntimeTimeSnapshot,
+    };
+    pub use crate::scope::DispatchState;
     pub use flux_plugin_abi::{
         FluxHostApi, FluxPluginDispatchFn, FluxPluginHandle, FluxPluginRegisterFn, FluxRegistrar,
         FluxRuntimeHost, FluxStatus, FLUX_PLUGIN_API_VERSION_EXPORT_NAME,

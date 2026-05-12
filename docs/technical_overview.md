@@ -56,7 +56,9 @@
 - Toggle записывает новый `EnabledPluginSet` в `plugin_state.toml`, затем вызывает `rebuild_plugin_registry_from_enabled_set(...)` и атомарно заменяет `PluginSourceRegistry`, `LoadedPluginRegistry`, `EnabledPluginSet`, `ContentRegistry` и `PluginRegistryState` без изменения world runtime state.
 - Успешный toggle не пишет служебный статус в `MainMenuUiState.status_text`; строки экрана `Plugins` синхронизируются на месте, а полный rebuild списка выполняется только если после registry rebuild изменился набор plugin entries.
 - `flux.default` всегда показывается как `On / Locked`; broken/missing plugin нельзя включить, но если он уже был enabled в config, UI разрешает выключить его, чтобы очистить состояние.
-- Для enabled runtime DLL-плагинов дополнительно создаётся `RuntimeDllPluginRegistry`: он держит DLL library + plugin handle живыми и dispatch-ит события в единый `flux_plugin_dispatch` только для тех `PluginEvent`, на которые плагин заранее подписался во время `register`.
+- Для runtime-плагинов создаётся единый `RuntimeDllPluginRegistry` с общими endpoint-ами: внутри него живут и built-in `flux.default`, поднятый через in-process SDK runner, и внешние DLL-плагины. Реестр хранит deterministic порядок вызова, единый subscriber map и dispatch-ит события только тем endpoint-ам, которые подписались на нужный `PluginEvent`.
+- Built-in путь не использует `libloading`, export names и ABI payload serialization. Он создаёт обычный `flux_plugin_sdk::Plugin` напрямую в памяти, вызывает `register`, собирает subscriptions и затем получает те же typed runtime events, что и DLL-плагины.
+- `flux_plugin_sdk` больше не завязан внутренностями на `FluxRuntimeHost`: proxy API работают через internal `RuntimeHostBinding`, а ABI-layer и built-in host path являются только двумя разными адаптерами к одному и тому же host-contract.
 - Manifest валидируется отдельно от runtime: проверяются `PluginId`, semver `version`, точное совпадение `api_version` с версией движка и безопасность относительных путей.
 - Перед extraction перечисляются все ZIP entries и запрещаются `..`, absolute roots, `.`-сегменты и Windows drive-prefix; это исключает выход за пределы plugin root.
 - На Windows DLL загружается не из исходного архива и не из исходной dev-папки, а из временной generation-копии в `std::env::temp_dir()/FluxEngine/plugin_cache/...`; после ABI-проверки копия удаляется best-effort.
@@ -221,7 +223,7 @@
 
 ### Pre-step структур default plugin
 
-- `DefaultPluginRuntimePlugin` выполняет pre-step фазу до core gas step:
+- Built-in SDK runtime `flux.default` выполняет pre-step фазу до core gas step через общий plugin dispatch:
   - `Source` добавляет выбранный газ в свою клетку;
   - `Sink` удаляет газ пропорционально долям газов в клетке, с полным удалением при нехватке массы.
 - Пропорциональное удаление реализовано детерминированно целочисленно (largest remainder + стабильный tie-break по индексу газа).
@@ -230,7 +232,7 @@
 
 ### Pipe pre-step в default plugin runtime
 
-- `DefaultPluginRuntimePlugin` выполняет pipe step `apply_pipe_network_step(...)` до основного шага свободного газа.
+- `flux.default` выполняет pipe step `apply_pipe_network_step(...)` до основного шага свободного газа, но уже не как отдельный special-case Bevy runtime plugin. Core system только эмитит общий `SimulationPreCellGasStep`, после чего unified runtime registry dispatch-ит событие в built-in SDK plugin instance.
 - Этот шаг одинаково вызывается:
   - в runtime CPU backend;
   - в runtime GPU backend до upload состояния;
@@ -248,6 +250,7 @@
   - `vent_choked_pressure_ratio`,
   - `pressure_epsilon_pa`.
 - `SimulationPerfStats` дополнительно хранит `last_pipe_step_ms` и `avg_pipe_step_ms`, а debug-панель показывает отдельное время расчёта труб рядом с общим временем simulation step.
+- `DefaultPluginSupportPlugin` после миграции оставлен только как lightweight support-plugin для инициализации `PipeSimulationConfig`, `PipeGasField`, `PipeFluxField` и `PipeFlowVisualState`; сам runtime execution `flux.default` через него больше не идёт.
 - Debug Panel использует стандартный panel-режим `AutoHalfScreen`: её общая высота ограничивается половиной доступной высоты окна с учётом верхнего/нижнего отступа, а при превышении этого лимита включается общий scrollbar.
 - Editor-панели используют общий `ui::panels::DEFAULT_PANEL_STACK_GAP`, поэтому расстояние между stacked-панелями семантически относится ко всей panel-системе, а не к конкретной паре `Debug/Gas`.
 - Для самых долгих канонических pipe-сценариев в `src/plugins/default_plugin/pipe_runtime/tests.rs` есть быстрые `_smoke` версии: они проверяют раннее сокращение pressure-gap и факт потока по ключевым веткам, а полные acceptance-сценарии запускаются только после успешного smoke-gate.
@@ -509,6 +512,7 @@
 - Внутренний ABI слой полностью вынесен в `crates/flux_plugin_abi`. Все `extern "C"`, `#[repr(C)]`, `Flux*`-структуры, export names и dispatch glue скрыты от пользовательского кода плагина.
 - DLL по-прежнему экспортирует обязательные `flux_plugin_api_version`, `flux_plugin_create`, `flux_plugin_register`, `flux_plugin_dispatch` и `flux_plugin_destroy`, но эти entrypoints создаются SDK автоматически. Плагин больше не экспортирует пользовательские named handlers.
 - Loader работает по пайплайну `api_version -> create -> register -> dispatch -> destroy`. Во время `register` движок получает зарегистрированный content и список `PluginSubscriptionRegistration`, строит subscriber map по `PluginEvent`, а в runtime вызывает только подписанные плагины.
+- Помимо DLL-path у SDK теперь есть built-in execution backend: `flux.default` поднимается через `flux_plugin_sdk::BuiltinPluginRuntime`, но для ядра это тот же runtime endpoint с теми же subscriptions, typed events и host APIs, что и у внешних ABI-плагинов.
 - В отличие от v4, подписка не хранит `handler_name`. На стороне ABI существует один общий `dispatch`, а маршрутизация к конкретному Rust-методу выполняется внутри SDK по сохранённой таблице `event_kind -> handler`.
 - Обработчики событий имеют форму `fn(&mut self, &TypedEvent) -> Result<(), PluginError>`. Объект события обязателен, а `FluxPluginHandle` и `FluxRuntimeHost` больше не участвуют в публичной сигнатуре.
 - Игровые API доступны через сам объект плагина. `PluginInit` выдаёт долгоживущие proxy-объекты `WorldApi`, `EntityApi`, `GasApi`, `UiApi`, `OverlayApi`, `SaveApi`, `TimeApi`, `InputApi` и `LoggerApi`, которые плагин хранит у себя в полях.

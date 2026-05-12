@@ -1,6 +1,6 @@
 use bevy::{prelude::*, window::PrimaryWindow};
 
-use super::cell_inspector_model::{build_cell_inspector_blocks, CellInspectorBlockView};
+use super::cell_inspector_model::CellInspectorBlockView;
 use crate::{
     config::{
         CellVisualPlacementConfigMap, GasRegistry, StructureHudConfigMap, StructureVisualConfigMap,
@@ -98,19 +98,19 @@ pub(crate) fn update_cell_inspector(
         Res<PanelManager>,
     ),
     gas_state: (
-        Res<GasField>,
         Res<PipeSimulationConfig>,
         Res<GasRegistry>,
         Res<WorldCellHudConfig>,
         Res<CellVisualPlacementConfigMap>,
         Res<StructureHudConfigMap>,
         Res<StructureVisualConfigMap>,
-        Res<WorldGrid>,
+        ResMut<GasField>,
+        ResMut<WorldGrid>,
     ),
     pipe_state: (
-        Res<PlacedStructureMap>,
-        Res<PipeGasField>,
-        Res<PipeFlowVisualState>,
+        ResMut<PlacedStructureMap>,
+        ResMut<PipeGasField>,
+        ResMut<PipeFlowVisualState>,
     ),
     mut plugin_runtime: ResMut<RuntimeDllPluginRegistry>,
     plugin_registry: Res<PluginRuntimeRegistry>,
@@ -125,16 +125,16 @@ pub(crate) fn update_cell_inspector(
 ) {
     let (active_tool, main_menu, world_load_state, debug_mode, panel_manager) = ui_state;
     let (
-        gas,
         pipe_config,
         gas_registry,
         world_cell_hud,
         cell_visual_layouts,
         structure_hud,
         structure_visuals,
-        world,
+        mut gas,
+        mut world,
     ) = gas_state;
-    let (structures, pipe_gas, flow_state) = pipe_state;
+    let (mut structures, mut pipe_gas, mut flow_state) = pipe_state;
     let (camera, camera_transform) = *camera_query;
     if !world_load_state.has_world {
         let (_, visibility) = &mut *ui_queries.p0();
@@ -173,40 +173,34 @@ pub(crate) fn update_cell_inspector(
         return;
     };
 
-    let mut blocks = build_cell_inspector_blocks(
-        cell,
-        &world,
-        &gas,
-        &pipe_config,
-        &gas_registry,
-        &world_cell_hud,
-        &cell_visual_layouts,
-        &structure_hud,
-        &structure_visuals,
-        &structures,
-        &pipe_gas,
-        &flow_state,
-        false,
-    );
     plugin_hud.clear();
     {
         let mut plugin_context = RuntimeHostContext::new(&content_registry, &gas_registry);
+        plugin_context.world = Some(&mut world);
+        plugin_context.structures = Some(&mut structures);
+        plugin_context.gas = Some(&mut gas);
         plugin_context.hud_blocks = Some(&mut plugin_hud);
+        plugin_context.pipe_config = Some(&pipe_config);
+        plugin_context.pipe_gas = Some(&mut pipe_gas);
+        plugin_context.pipe_flow_visuals = Some(&mut flow_state);
+        plugin_context.world_cell_hud = Some(&world_cell_hud);
+        plugin_context.cell_visual_layouts = Some(&cell_visual_layouts);
+        plugin_context.structure_hud = Some(&structure_hud);
+        plugin_context.structure_visuals = Some(&structure_visuals);
         plugin_runtime.dispatch_event(
             &plugin_registry,
             &PluginRuntimeEvent::BuildHudForCell { cell },
             &mut plugin_context,
         );
     }
-    blocks.extend(
-        plugin_hud
-            .blocks
-            .iter()
-            .map(|block| CellInspectorBlockView {
-                title: block.title.clone(),
-                lines: block.lines.clone(),
-            }),
-    );
+    let blocks = plugin_hud
+        .blocks
+        .iter()
+        .map(|block| CellInspectorBlockView {
+            title: block.title.clone(),
+            lines: block.lines.clone(),
+        })
+        .collect::<Vec<_>>();
     let panel_height = estimate_cell_inspector_height(&blocks);
     let panel_position = compute_hud_position(
         cursor_position,

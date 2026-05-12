@@ -13,6 +13,7 @@ use crate::plugins::{
         PluginSourceFingerprint, PluginSourceKind, RejectedPluginSource,
     },
     state::{EnabledPluginSet, PluginRegistryEntry, PluginRegistryState, PluginRuntimeStatus},
+    runtime_builtin::default_builtin_runtime_registration,
     PluginId, PluginManifest, PluginRuntimeRegistration, PluginVersion, SubstanceRegistry,
 };
 
@@ -388,7 +389,8 @@ fn default_loaded_plugin() -> LoadedPluginMetadata {
         source_name: "builtin".to_string(),
         source_path: None,
         manifest: None,
-        registration: PluginRuntimeRegistration::default(),
+        registration: default_builtin_runtime_registration()
+            .expect("default built-in runtime registration must stay valid"),
     }
 }
 

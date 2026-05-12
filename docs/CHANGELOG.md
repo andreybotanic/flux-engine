@@ -1,6 +1,11 @@
 ﻿# Changelog
 
 ## 2026-05-12
+- Исправлена сборка plugin HUD-блоков: строки, добавленные через `UiApi::add_hud_block`, снова объединяются в один блок по `block_id`, поэтому инспектор клетки больше не распадается на несколько одинаковых карточек `Cell`.
+- `flux.default` переведён на тот же runtime layer, что и ABI-плагины, но без DLL: движок теперь поднимает built-in SDK plugin instance через in-process runner, строит для него те же subscriptions и dispatch-ит те же typed runtime events через общий host abstraction.
+- Прямой special-case runtime path для `flux.default` убран из pre-gas-step и HUD: pipe pre-step, pause-cleanup и `BuildHudForCell` теперь идут через общий plugin dispatch, а `DefaultPluginSupportPlugin` оставлен только для инициализации pipe-ресурсов.
+- SDK runtime internals отвязаны от ABI-only `FluxRuntimeHost`: proxy API (`WorldApi`, `EntityApi`, `GasApi`, `UiApi`, `OverlayApi`, `SaveApi`, `TimeApi`, `InputApi`, `LoggerApi`) теперь работают через внутренний `RuntimeHostBinding`, который одинаково обслуживает и DLL-плагины, и built-in runtime plugins.
+- Добавлены engine-side built-in runtime endpoint и адаптер host-контекста для `flux.default`, а также regression-тесты на общий runtime dispatch, smoke pipe pre-step и save roundtrip после этой миграции.
 - Из SDK v5 и engine-side runtime временно убран весь pipeline plugin-owned панелей: больше нет `PanelApi`, `PanelDescriptor`, `BuildPanelEvent`, `Registrar::register_panel` и связанных `UiApi` методов, а `flux.api_ui_save_demo` теперь демонстрирует только HUD/save/input path без мёртвого panel-contract.
 - Исправлен live runtime dispatch SDK v5: при создании DLL-плагина движок теперь повторно вызывает `flux_plugin_register` на живом plugin handle, поэтому внутренние handler-таблицы SDK реально инициализируются, а подписанные плагины снова реагируют на события в игре.
 - В runtime host для event-dispatch возвращено plugin logging API: `LoggerApi` и ошибки обработчиков теперь пишутся в stderr с plugin id, а не теряются из-за пустого `write_log_fn`.

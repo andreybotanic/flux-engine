@@ -1,5 +1,4 @@
 use bevy_math::{UVec2, Vec2};
-use flux_plugin_abi::{FluxStatus, FluxTimeSnapshot, FluxUtf8Slice};
 use smallvec::SmallVec;
 
 use crate::{
@@ -170,23 +169,13 @@ impl EntityApi {
         placement: EntityPlacement,
     ) -> Result<EntityInstanceId, PluginError> {
         scope::with_runtime_host("entities.place", |host| {
-            let callback = host
-                .entity_place_fn
-                .ok_or(PluginError::Unsupported("entities.place"))?;
-            let mut entity_id = 0u32;
-            unsafe {
-                callback(
-                    host.context,
-                    FluxUtf8Slice::from_str(kind.as_str()),
-                    placement.origin.x,
-                    placement.origin.y,
-                    encode_rotation(placement.rotation),
-                    &mut entity_id,
-                )
-            }
-            .into_result()
-            .map_err(status_error)?;
-            Ok(EntityInstanceId(entity_id))
+            host.entity_place(
+                kind.as_str(),
+                placement.origin.x,
+                placement.origin.y,
+                encode_rotation(placement.rotation),
+            )
+            .map(EntityInstanceId)
         })
     }
 
@@ -203,14 +192,7 @@ impl EntityApi {
 
     /// Removes one entity by runtime id.
     pub fn remove(&mut self, id: EntityInstanceId) -> Result<(), PluginError> {
-        scope::with_runtime_host("entities.remove", |host| {
-            let callback = host
-                .entity_remove_fn
-                .ok_or(PluginError::Unsupported("entities.remove"))?;
-            unsafe { callback(host.context, id.0) }
-                .into_result()
-                .map_err(status_error)
-        })
+        scope::with_runtime_host("entities.remove", |host| host.entity_remove(id.0))
     }
 
     /// Removes one entity at the requested cell and layer.
@@ -220,22 +202,8 @@ impl EntityApi {
         layer: ContentId,
     ) -> Result<Option<EntityInstanceId>, PluginError> {
         scope::with_runtime_host("entities.remove_at", |host| {
-            let callback = host
-                .entity_remove_at_fn
-                .ok_or(PluginError::Unsupported("entities.remove_at"))?;
-            let mut removed = 0u32;
-            unsafe {
-                callback(
-                    host.context,
-                    cell.x,
-                    cell.y,
-                    FluxUtf8Slice::from_str(layer.as_str()),
-                    &mut removed,
-                )
-            }
-            .into_result()
-            .map_err(status_error)?;
-            Ok((removed != 0).then_some(EntityInstanceId(removed)))
+            host.entity_remove_at(cell.x, cell.y, layer.as_str())
+                .map(|removed| removed.map(EntityInstanceId))
         })
     }
 
@@ -284,12 +252,7 @@ impl EntityApi {
     /// Updates one entity rotation.
     pub fn set_rotation(&mut self, id: EntityInstanceId, rotation: Rotation) -> Result<(), PluginError> {
         scope::with_runtime_host("entities.set_rotation", |host| {
-            let callback = host
-                .entity_set_rotation_fn
-                .ok_or(PluginError::Unsupported("entities.set_rotation"))?;
-            unsafe { callback(host.context, id.0, encode_rotation(rotation)) }
-                .into_result()
-                .map_err(status_error)
+            host.entity_set_rotation(id.0, encode_rotation(rotation))
         })
     }
 
@@ -307,24 +270,14 @@ impl EntityApi {
     /// Enables or disables one entity.
     pub fn set_enabled(&mut self, id: EntityInstanceId, enabled: bool) -> Result<(), PluginError> {
         scope::with_runtime_host("entities.set_enabled", |host| {
-            let callback = host
-                .entity_set_enabled_fn
-                .ok_or(PluginError::Unsupported("entities.set_enabled"))?;
-            unsafe { callback(host.context, id.0, enabled as u8) }
-                .into_result()
-                .map_err(status_error)
+            host.entity_set_enabled(id.0, enabled)
         })
     }
 
     /// Sets one human-readable entity label.
     pub fn set_label(&mut self, id: EntityInstanceId, label: String) -> Result<(), PluginError> {
         scope::with_runtime_host("entities.set_label", |host| {
-            let callback = host
-                .entity_set_label_fn
-                .ok_or(PluginError::Unsupported("entities.set_label"))?;
-            unsafe { callback(host.context, id.0, FluxUtf8Slice::from_str(&label)) }
-                .into_result()
-                .map_err(status_error)
+            host.entity_set_label(id.0, &label)
         })
     }
 }
@@ -343,36 +296,14 @@ impl GasApi {
     /// Returns gas pressure for one cell.
     pub fn pressure_at(&self, cell: CellPos) -> Result<f32, PluginError> {
         scope::with_runtime_host("gases.pressure_at", |host| {
-            let callback = host
-                .gas_pressure_at_fn
-                .ok_or(PluginError::Unsupported("gases.pressure_at"))?;
-            let mut pressure = 0.0f32;
-            unsafe { callback(host.context, cell.x, cell.y, &mut pressure) }
-                .into_result()
-                .map_err(status_error)?;
-            Ok(pressure)
+            host.gas_pressure_at(cell.x, cell.y)
         })
     }
 
     /// Returns the requested substance amount for one cell.
     pub fn amount_at(&self, cell: CellPos, substance: &SubstanceId) -> Result<u32, PluginError> {
         scope::with_runtime_host("gases.amount_at", |host| {
-            let callback = host
-                .gas_amount_at_fn
-                .ok_or(PluginError::Unsupported("gases.amount_at"))?;
-            let mut amount = 0u32;
-            unsafe {
-                callback(
-                    host.context,
-                    cell.x,
-                    cell.y,
-                    FluxUtf8Slice::from_str(substance.as_str()),
-                    &mut amount,
-                )
-            }
-            .into_result()
-            .map_err(status_error)?;
-            Ok(amount)
+            host.gas_amount_at(cell.x, cell.y, substance.as_str())
         })
     }
 
@@ -390,60 +321,21 @@ impl GasApi {
         velocity: Vec2,
     ) -> Result<u32, PluginError> {
         scope::with_runtime_host("gases.add", |host| {
-            let callback = host
-                .gas_add_fn
-                .ok_or(PluginError::Unsupported("gases.add"))?;
-            let mut added = 0u32;
-            unsafe {
-                callback(
-                    host.context,
-                    cell.x,
-                    cell.y,
-                    FluxUtf8Slice::from_str(substance.as_str()),
-                    amount,
-                    velocity.x,
-                    velocity.y,
-                    &mut added,
-                )
-            }
-            .into_result()
-            .map_err(status_error)?;
-            Ok(added)
+            host.gas_add(cell.x, cell.y, substance.as_str(), amount, velocity)
         })
     }
 
     /// Removes free gas from one cell.
     pub fn remove(&mut self, cell: CellPos, substance: SubstanceId, amount: u32) -> Result<u32, PluginError> {
         scope::with_runtime_host("gases.remove", |host| {
-            let callback = host
-                .gas_remove_fn
-                .ok_or(PluginError::Unsupported("gases.remove"))?;
-            let mut removed = 0u32;
-            unsafe {
-                callback(
-                    host.context,
-                    cell.x,
-                    cell.y,
-                    FluxUtf8Slice::from_str(substance.as_str()),
-                    amount,
-                    &mut removed,
-                )
-            }
-            .into_result()
-            .map_err(status_error)?;
-            Ok(removed)
+            host.gas_remove(cell.x, cell.y, substance.as_str(), amount)
         })
     }
 
     /// Clears all free gas from one cell.
     pub fn clear_cell(&mut self, cell: CellPos) -> Result<(), PluginError> {
         scope::with_runtime_host("gases.clear_cell", |host| {
-            let callback = host
-                .gas_clear_cell_fn
-                .ok_or(PluginError::Unsupported("gases.clear_cell"))?;
-            unsafe { callback(host.context, cell.x, cell.y) }
-                .into_result()
-                .map_err(status_error)
+            host.gas_clear_cell(cell.x, cell.y)
         })
     }
 }
@@ -451,10 +343,17 @@ impl GasApi {
 impl UiApi {
     /// Adds one complete HUD block.
     pub fn add_hud_block(&mut self, block: HudBlock) -> Result<(), PluginError> {
-        for line in &block.lines {
-            self.add_hud_line(block.id.clone(), block.title.clone(), line.clone())?;
-        }
-        Ok(())
+        scope::with_runtime_host("ui.add_hud_block", |host| {
+            for line in &block.lines {
+                host.submit_hud_line(
+                    block.id.as_str(),
+                    &block.title,
+                    line,
+                    block.sort_order,
+                )?;
+            }
+            Ok(())
+        })
     }
 
     /// Adds one HUD line.
@@ -465,20 +364,7 @@ impl UiApi {
         line: String,
     ) -> Result<(), PluginError> {
         scope::with_runtime_host("ui.add_hud_line", |host| {
-            let callback = host
-                .submit_hud_block_fn
-                .ok_or(PluginError::Unsupported("ui.add_hud_line"))?;
-            unsafe {
-                callback(
-                    host.context,
-                    FluxUtf8Slice::from_str(block_id.as_str()),
-                    FluxUtf8Slice::from_str(&title),
-                    FluxUtf8Slice::from_str(&line),
-                    1000,
-                )
-            }
-            .into_result()
-            .map_err(status_error)
+            host.submit_hud_line(block_id.as_str(), &title, &line, 1000)
         })
     }
 
@@ -490,17 +376,7 @@ impl UiApi {
     /// Selects the active tool by stable id.
     pub fn set_active_tool(&mut self, tool_id: Option<ContentId>) -> Result<(), PluginError> {
         scope::with_runtime_host("ui.set_active_tool", |host| {
-            let callback = host
-                .set_active_tool_fn
-                .ok_or(PluginError::Unsupported("ui.set_active_tool"))?;
-            unsafe {
-                callback(
-                    host.context,
-                    FluxUtf8Slice::from_str(tool_id.as_ref().map(|id| id.as_str()).unwrap_or("")),
-                )
-            }
-            .into_result()
-            .map_err(status_error)
+            host.set_active_tool(tool_id.as_ref())
         })
     }
 }
@@ -524,20 +400,7 @@ impl OverlayApi {
     /// Submits one complete RGBA8 frame.
     pub fn submit_frame(&mut self, frame: OverlayFrame) -> Result<(), PluginError> {
         scope::with_runtime_host("overlays.submit_frame", |host| {
-            let callback = host
-                .submit_overlay_frame_fn
-                .ok_or(PluginError::Unsupported("overlays.submit_frame"))?;
-            unsafe {
-                callback(
-                    host.context,
-                    frame.width,
-                    frame.height,
-                    frame.rgba8.as_ptr(),
-                    frame.rgba8.len(),
-                )
-            }
-            .into_result()
-            .map_err(status_error)
+            host.submit_overlay_frame(frame.width, frame.height, &frame.rgba8)
         })
     }
 
@@ -551,43 +414,14 @@ impl SaveApi {
     /// Reads one raw save chunk.
     pub fn read_chunk(&self, chunk_id: &ContentId) -> Result<Option<SaveChunk>, PluginError> {
         scope::with_runtime_host("save.read_chunk", |host| {
-            let callback = host
-                .read_save_chunk_fn
-                .ok_or(PluginError::Unsupported("save.read_chunk"))?;
-            let mut version = 0u32;
-            let mut len = 0usize;
-            let status = unsafe {
-                callback(
-                    host.context,
-                    FluxUtf8Slice::from_str(chunk_id.as_str()),
-                    &mut version,
-                    std::ptr::null_mut(),
-                    0,
-                    &mut len,
-                )
-            };
-            if status == FluxStatus::FAILED {
+            let Some(chunk) = host.read_save_chunk(chunk_id.as_str())? else {
                 return Ok(None);
-            }
-            status.into_result().map_err(status_error)?;
-            let mut bytes = vec![0u8; len];
-            unsafe {
-                callback(
-                    host.context,
-                    FluxUtf8Slice::from_str(chunk_id.as_str()),
-                    &mut version,
-                    bytes.as_mut_ptr(),
-                    bytes.len(),
-                    &mut len,
-                )
-            }
-            .into_result()
-            .map_err(status_error)?;
+            };
             Ok(Some(SaveChunk {
                 plugin_id: crate::PluginId::parse("flux.runtime").expect("static plugin id"),
                 chunk_id: chunk_id.clone(),
-                version,
-                bytes,
+                version: chunk.version,
+                bytes: chunk.bytes,
             }))
         })
     }
@@ -623,20 +457,7 @@ impl SaveApi {
         bytes: Vec<u8>,
     ) -> Result<(), PluginError> {
         scope::with_runtime_host("save.write_bytes", |host| {
-            let callback = host
-                .write_save_chunk_fn
-                .ok_or(PluginError::Unsupported("save.write_bytes"))?;
-            unsafe {
-                callback(
-                    host.context,
-                    FluxUtf8Slice::from_str(chunk_id.as_str()),
-                    version,
-                    bytes.as_ptr(),
-                    bytes.len(),
-                )
-            }
-            .into_result()
-            .map_err(status_error)
+            host.write_save_chunk(chunk_id.as_str(), version, &bytes)
         })
     }
 
@@ -655,12 +476,7 @@ impl SaveApi {
     /// Deletes one chunk.
     pub fn delete_chunk(&mut self, chunk_id: &ContentId) -> Result<(), PluginError> {
         scope::with_runtime_host("save.delete_chunk", |host| {
-            let callback = host
-                .delete_save_chunk_fn
-                .ok_or(PluginError::Unsupported("save.delete_chunk"))?;
-            unsafe { callback(host.context, FluxUtf8Slice::from_str(chunk_id.as_str())) }
-                .into_result()
-                .map_err(status_error)
+            host.delete_save_chunk(chunk_id.as_str())
         })
     }
 }
@@ -688,54 +504,27 @@ impl TimeApi {
 
     /// Sets the pause flag.
     pub fn set_paused(&mut self, paused: bool) -> Result<(), PluginError> {
-        scope::with_runtime_host("time.set_paused", |host| {
-            let callback = host
-                .set_paused_fn
-                .ok_or(PluginError::Unsupported("time.set_paused"))?;
-            unsafe { callback(host.context, paused as u8) }
-                .into_result()
-                .map_err(status_error)
-        })
+        scope::with_runtime_host("time.set_paused", |host| host.set_paused(paused))
     }
 
     /// Toggles pause and returns the new pause flag.
     pub fn toggle_pause(&mut self) -> Result<bool, PluginError> {
-        scope::with_runtime_host("time.toggle_pause", |host| {
-            let callback = host
-                .toggle_pause_fn
-                .ok_or(PluginError::Unsupported("time.toggle_pause"))?;
-            let mut paused = 0u8;
-            unsafe { callback(host.context, &mut paused) }
-                .into_result()
-                .map_err(status_error)?;
-            Ok(paused != 0)
-        })
+        scope::with_runtime_host("time.toggle_pause", |host| host.toggle_pause())
     }
 
     /// Sets the current simulation speed.
     pub fn set_speed(&mut self, speed: SimulationSpeed) -> Result<(), PluginError> {
         scope::with_runtime_host("time.set_speed", |host| {
-            let callback = host
-                .set_speed_fn
-                .ok_or(PluginError::Unsupported("time.set_speed"))?;
-            unsafe { callback(host.context, encode_speed(speed)) }
-                .into_result()
-                .map_err(status_error)
+            host.set_speed(encode_speed(speed))
         })
     }
 
     fn snapshot(&self) -> Result<DecodedTimeSnapshot, PluginError> {
         scope::with_runtime_host("time.snapshot", |host| {
-            let callback = host
-                .get_time_snapshot_fn
-                .ok_or(PluginError::Unsupported("time.snapshot"))?;
-            let mut snapshot = FluxTimeSnapshot::default();
-            unsafe { callback(host.context, &mut snapshot) }
-                .into_result()
-                .map_err(status_error)?;
+            let snapshot = host.time_snapshot()?;
             Ok(DecodedTimeSnapshot {
                 tick: snapshot.tick,
-                paused: snapshot.paused != 0,
+                paused: snapshot.paused,
                 speed: decode_speed(snapshot.speed),
                 delta_seconds: snapshot.delta_seconds,
             })
@@ -797,15 +586,6 @@ struct DecodedTimeSnapshot {
     paused: bool,
     speed: SimulationSpeed,
     delta_seconds: f32,
-}
-
-fn status_error(status: FluxStatus) -> PluginError {
-    match status {
-        FluxStatus::INVALID_ARGUMENT => PluginError::InvalidArgument("host rejected arguments".to_string()),
-        FluxStatus::API_UNAVAILABLE => PluginError::ApiUnavailable("runtime"),
-        FluxStatus::UNSUPPORTED => PluginError::Unsupported("runtime"),
-        _ => PluginError::message(format!("host call failed with status {}", status.code())),
-    }
 }
 
 fn encode_rotation(rotation: Rotation) -> u32 {

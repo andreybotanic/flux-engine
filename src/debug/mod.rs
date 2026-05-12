@@ -1,19 +1,22 @@
 use bevy::prelude::*;
 
 use crate::{
+    config::GasRegistry,
     input::camera::MainCamera,
-    plugins::default_plugin::pipe_runtime::{
-        apply_gas_structures_pre_step, apply_pipe_network_step, PipeFlowVisualState, PipeFluxField,
-        PipeGasField, PipeSimulationConfig,
+    plugins::{
+        default_plugin::pipe_runtime::{PipeFlowVisualState, PipeFluxField, PipeGasField, PipeSimulationConfig},
+        ContentRegistry, PluginRuntimeEvent, RuntimeDllPluginRegistry, RuntimeHostContext,
     },
     simulation::{
-        do_one_substep, gas::GasField, BlockSyncState, GasSimulationConfig, SimulationControl,
-        SimulationStep,
+        do_one_substep, gas::GasField, BlockSyncState, GasSimulationConfig, GpuRuntimeState,
+        SimulationControl, SimulationPerfStats, SimulationStep,
     },
     world::{
         grid::{cell_center, is_boundary, WorldGrid, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH},
         structures::PlacedStructureMap,
+        WorldCellChanged,
     },
+    editor::ActiveEditorTool,
 };
 
 #[derive(Resource, Default)]
@@ -92,19 +95,54 @@ fn configure_momentum_gizmo_line_width(
 fn handle_debug_keys(
     keys: Res<ButtonInput<KeyCode>>,
     mut debug_mode: ResMut<DebugMode>,
-    mut control: ResMut<SimulationControl>,
-    config: Res<GasSimulationConfig>,
-    pipe_config: Res<PipeSimulationConfig>,
-    mut block_state: ResMut<BlockSyncState>,
-    mut gas: ResMut<GasField>,
-    structures: Res<PlacedStructureMap>,
-    mut pipe_gas: ResMut<PipeGasField>,
-    mut pipe_flux: ResMut<PipeFluxField>,
-    mut pipe_flow_visuals: ResMut<PipeFlowVisualState>,
-    world: Res<WorldGrid>,
-    mut step: ResMut<SimulationStep>,
+    runtime_resources: (
+        ResMut<SimulationControl>,
+        Res<GasSimulationConfig>,
+        Res<ContentRegistry>,
+        Res<GasRegistry>,
+        Res<crate::plugins::PluginRuntimeRegistry>,
+        ResMut<RuntimeDllPluginRegistry>,
+    ),
+    world_resources: (
+        Res<PipeSimulationConfig>,
+        ResMut<BlockSyncState>,
+        ResMut<GasField>,
+        ResMut<PlacedStructureMap>,
+        ResMut<PipeGasField>,
+        ResMut<PipeFluxField>,
+        ResMut<PipeFlowVisualState>,
+        ResMut<GpuRuntimeState>,
+        ResMut<SimulationPerfStats>,
+        ResMut<ActiveEditorTool>,
+        ResMut<WorldGrid>,
+        ResMut<SimulationStep>,
+    ),
+    mut world_changed: EventWriter<WorldCellChanged>,
     main_menu: Option<Res<crate::editor::MainMenuState>>,
 ) {
+    let (
+        mut control,
+        config,
+        content_registry,
+        gas_registry,
+        runtime_registry,
+        mut runtime_plugins,
+    ) = runtime_resources;
+    let (
+        pipe_config,
+        mut block_state,
+        mut gas,
+        mut structures,
+        mut pipe_gas,
+        mut pipe_flux,
+        mut pipe_flow_visuals,
+        mut gpu_state,
+        mut perf,
+        mut active_tool,
+        mut world,
+        mut step,
+    ) = world_resources;
+
     if main_menu.as_ref().map(|menu| menu.open).unwrap_or(false) {
         return;
     }
@@ -116,16 +154,27 @@ fn handle_debug_keys(
     }
 
     if debug_mode.active && keys.just_pressed(KeyCode::Enter) {
-        let _ = apply_pipe_network_step(
-            &structures,
-            &mut pipe_gas,
-            &mut pipe_flux,
-            &mut gas,
-            &world,
-            &mut pipe_flow_visuals,
-            &pipe_config,
+        let mut context = RuntimeHostContext::new(&content_registry, &gas_registry);
+        context.world = Some(&mut world);
+        context.structures = Some(&mut structures);
+        context.gas = Some(&mut gas);
+        context.gpu_state = Some(&mut gpu_state);
+        context.simulation_control = Some(&mut control);
+        context.simulation_step = step.0;
+        context.active_tool = Some(&mut active_tool);
+        context.pipe_config = Some(&pipe_config);
+        context.pipe_gas = Some(&mut pipe_gas);
+        context.pipe_flux = Some(&mut pipe_flux);
+        context.pipe_flow_visuals = Some(&mut pipe_flow_visuals);
+        context.simulation_perf = Some(&mut perf);
+        runtime_plugins.dispatch_event(
+            &runtime_registry,
+            &PluginRuntimeEvent::SimulationPreCellGasStep,
+            &mut context,
         );
-        let _ = apply_gas_structures_pre_step(&structures, &mut gas, &world);
+        for cell in &context.changed_cells {
+            world_changed.write(WorldCellChanged { cell: *cell });
+        }
         do_one_substep(&mut block_state, &mut gas, &world, &config, &mut step);
     }
 }

@@ -9,6 +9,10 @@ mod event_dispatch;
 use self::event_dispatch::dispatch_to_plugin;
 
 use crate::{
+    config::{
+        CellVisualPlacementConfigMap, StructureHudConfigMap, StructureVisualConfigMap,
+        WorldCellHudConfig,
+    },
     config::GasRegistry,
     editor::{ActiveEditorTool, EditorTool},
     plugins::{
@@ -18,6 +22,9 @@ use crate::{
             save_api::SaveChunkStore, ui_api::HudBlock,
         },
         default_plugin,
+        default_plugin::pipe_runtime::{
+            PipeFlowVisualState, PipeFluxField, PipeGasField, PipeSimulationConfig,
+        },
         ContentId, ContentRegistry, LoadedPluginMetadata, PluginId, PluginRuntimeEvent,
     },
     render::{
@@ -25,13 +32,17 @@ use crate::{
         OverlayMode,
     },
     save::WorldLoadState,
-    simulation::{gas::GasField, GpuRuntimeState, SimulationControl, SimulationSet, SimulationSpeed, SimulationStep},
+    simulation::{
+        gas::GasField, GpuRuntimeState, SimulationControl, SimulationPerfStats, SimulationSet,
+        SimulationSpeed, SimulationStep,
+    },
     world::{
         grid::{is_editable_cell, CellKind, CellMaterial, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
         structures::{PlacedStructureId, PlacedStructureMap, StructureRotation},
         WorldCellChanged,
     },
 };
+use super::runtime_builtin::{default_builtin_runtime_endpoint, RuntimePluginEndpoint};
 
 /// One complete overlay frame submitted by a runtime plugin.
 #[derive(Resource, Clone, Debug, Default, PartialEq)]
@@ -71,7 +82,7 @@ impl PluginHudBlockStore {
 /// Live runtime DLL plugins that can receive subscribed events.
 #[derive(Resource, Default)]
 pub struct RuntimeDllPluginRegistry {
-    plugins: Vec<RuntimeDllPlugin>,
+    plugins: Vec<Box<dyn RuntimePluginEndpoint>>,
     errors: Vec<String>,
 }
 
@@ -97,17 +108,26 @@ impl RuntimeDllPluginRegistry {
     /// Loads live DLL instances for every enabled non-builtin plugin that has a manifest.
     pub fn from_loaded_plugins(loaded_plugins: &[LoadedPluginMetadata]) -> Self {
         let mut registry = Self::default();
+        match default_builtin_runtime_endpoint() {
+            Ok(runtime_plugin) => registry.plugins.push(runtime_plugin),
+            Err(error) => registry.errors.push(format!("flux.default: {error}")),
+        }
         for plugin in loaded_plugins {
-            if plugin.manifest.is_none() {
+            if plugin.plugin_id == PluginId::default_plugin() || plugin.manifest.is_none() {
                 continue;
             }
             match crate::plugins::loader::instantiate_runtime_plugin(plugin) {
-                Ok(runtime_plugin) => registry.plugins.push(runtime_plugin),
+                Ok(runtime_plugin) => registry.plugins.push(Box::new(runtime_plugin)),
                 Err(error) => registry
                     .errors
                     .push(format!("{}: {}", plugin.plugin_id, error)),
             }
         }
+        registry.plugins.sort_by(|left, right| {
+            left.group_order()
+                .cmp(&right.group_order())
+                .then_with(|| left.plugin_id().cmp(right.plugin_id()))
+        });
         registry
     }
 
@@ -132,12 +152,14 @@ impl RuntimeDllPluginRegistry {
         for plugin in &mut self.plugins {
             if !subscribers
                 .iter()
-                .any(|plugin_id| plugin_id == &plugin.plugin_id)
+                .any(|plugin_id| plugin_id == plugin.plugin_id())
             {
                 continue;
             }
-            context.plugin_id = plugin.plugin_id.clone();
-            dispatch_to_plugin(plugin.handle, plugin.dispatch_fn, event, context);
+            context.plugin_id = plugin.plugin_id().clone();
+            if let Err(error) = plugin.dispatch(event, context) {
+                eprintln!("Runtime plugin dispatch error ({}): {}", plugin.plugin_id(), error);
+            }
         }
     }
 }
@@ -167,6 +189,25 @@ impl Drop for RuntimeDllPlugin {
     }
 }
 
+impl RuntimePluginEndpoint for RuntimeDllPlugin {
+    fn plugin_id(&self) -> &PluginId {
+        &self.plugin_id
+    }
+
+    fn group_order(&self) -> u8 {
+        1
+    }
+
+    fn dispatch(
+        &mut self,
+        event: &PluginRuntimeEvent,
+        context: &mut RuntimeHostContext,
+    ) -> Result<(), String> {
+        dispatch_to_plugin(self.handle, self.dispatch_fn, event, context);
+        Ok(())
+    }
+}
+
 /// Mutable host context exposed to plugin ABI callbacks during one dispatch.
 pub struct RuntimeHostContext<'a> {
     pub plugin_id: PluginId,
@@ -182,6 +223,15 @@ pub struct RuntimeHostContext<'a> {
     pub simulation_control: Option<&'a mut SimulationControl>,
     pub simulation_step: u64,
     pub active_tool: Option<&'a mut ActiveEditorTool>,
+    pub pipe_config: Option<&'a PipeSimulationConfig>,
+    pub pipe_gas: Option<&'a mut PipeGasField>,
+    pub pipe_flux: Option<&'a mut PipeFluxField>,
+    pub pipe_flow_visuals: Option<&'a mut PipeFlowVisualState>,
+    pub simulation_perf: Option<&'a mut SimulationPerfStats>,
+    pub world_cell_hud: Option<&'a WorldCellHudConfig>,
+    pub cell_visual_layouts: Option<&'a CellVisualPlacementConfigMap>,
+    pub structure_hud: Option<&'a StructureHudConfigMap>,
+    pub structure_visuals: Option<&'a StructureVisualConfigMap>,
     pub changed_cells: Vec<UVec2>,
 }
 
@@ -202,6 +252,15 @@ impl<'a> RuntimeHostContext<'a> {
             simulation_control: None,
             simulation_step: 0,
             active_tool: None,
+            pipe_config: None,
+            pipe_gas: None,
+            pipe_flux: None,
+            pipe_flow_visuals: None,
+            simulation_perf: None,
+            world_cell_hud: None,
+            cell_visual_layouts: None,
+            structure_hud: None,
+            structure_visuals: None,
             changed_cells: Vec::new(),
         }
     }
@@ -595,12 +654,18 @@ pub unsafe extern "C" fn submit_hud_block_callback(
         Ok(id) => id,
         Err(_) => return FluxStatus::FAILED,
     };
-    store.blocks.push(HudBlock {
-        id,
-        title,
-        lines: vec![line],
-        sort_order,
-    });
+    if let Some(existing) = store.blocks.iter_mut().find(|block| block.id == id) {
+        existing.title = title;
+        existing.sort_order = sort_order;
+        existing.lines.push(line);
+    } else {
+        store.blocks.push(HudBlock {
+            id,
+            title,
+            lines: vec![line],
+            sort_order,
+        });
+    }
     FluxStatus::OK
 }
 
@@ -928,14 +993,14 @@ mod tests {
         RuntimeHostContext,
     };
     use crate::{
-        config::GasRegistry,
+        config::{GasRegistry, GameConfig},
         editor::ActiveEditorTool,
         plugins::{
             abi::FluxUtf8Slice, build_plugin_runtime_registry, default_plugin, ContentId,
-            LoadedPluginMetadata, PluginId, PluginSourceKind,
-            SaveChunkStore,
+            runtime_builtin::default_builtin_runtime_registration, LoadedPluginMetadata, PluginId,
+            PluginSourceKind, PluginVersion, SaveChunkStore,
         },
-        simulation::SimulationControl,
+        simulation::{GpuRuntimeState, SimulationControl, SimulationPerfStats, SimulationStep},
         simulation::gas::GasField,
         world::{
             grid::WorldGrid,
@@ -1156,6 +1221,16 @@ mod tests {
         }
         .is_ok());
         assert!(unsafe {
+            submit_hud_block_callback(
+                context_ptr,
+                FluxUtf8Slice::from_str("flux.api_ui_save_demo.hud.counter"),
+                FluxUtf8Slice::from_str("Demo"),
+                FluxUtf8Slice::from_str("cell (55, 29)"),
+                10,
+            )
+        }
+        .is_ok());
+        assert!(unsafe {
             write_save_chunk_callback(
                 context_ptr,
                 FluxUtf8Slice::from_str("flux.api_ui_save_demo.save.counter"),
@@ -1184,7 +1259,14 @@ mod tests {
             context.overlay_frame.as_ref().expect("overlay").rgba8,
             overlay_bytes
         );
-        assert_eq!(context.hud_blocks.as_ref().expect("hud").blocks.len(), 1);
+        let hud = context.hud_blocks.as_ref().expect("hud");
+        assert_eq!(hud.blocks.len(), 1);
+        assert_eq!(hud.blocks[0].title, "Demo");
+        assert_eq!(hud.blocks[0].sort_order, 10);
+        assert_eq!(
+            hud.blocks[0].lines,
+            vec!["counter 1".to_string(), "cell (55, 29)".to_string()]
+        );
         let chunk_id = ContentId::parse("flux.api_ui_save_demo.save.counter").expect("chunk id");
         let chunk = context
             .save_chunks
@@ -1284,24 +1366,160 @@ mod tests {
         drop(runtime_plugins);
         let _ = fs::remove_dir_all(plugin_root);
     }
+
+    #[test]
+    fn runtime_dispatches_builtin_default_plugin_pre_gas_step() {
+        let loaded = LoadedPluginMetadata {
+            plugin_id: PluginId::default_plugin(),
+            display_name: "Flux Default".to_string(),
+            version: PluginVersion::parse(env!("CARGO_PKG_VERSION")).expect("version"),
+            source_kind: PluginSourceKind::Builtin,
+            content: true,
+            locked: true,
+            source_name: "builtin".to_string(),
+            source_path: None,
+            manifest: None,
+            registration: default_builtin_runtime_registration().expect("default registration"),
+        };
+        let runtime_registry = build_plugin_runtime_registry(&[loaded.clone()]);
+        let mut runtime_plugins = RuntimeDllPluginRegistry::from_loaded_plugins(&[loaded]);
+        assert!(runtime_plugins.errors().is_empty());
+
+        let content = default_plugin::default_content_registry();
+        let game_config =
+            GameConfig::load_from_default_location_with_content(&content).expect("game config");
+        let mut world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        let mut gas = GasField::from_registry(&game_config.gas_registry);
+        let mut pipe_gas = default_plugin::pipe_runtime::PipeGasField::from_registry(
+            &game_config.gas_registry,
+        );
+        let mut pipe_flux = default_plugin::pipe_runtime::PipeFluxField::default();
+        let mut pipe_flow_visuals =
+            default_plugin::pipe_runtime::PipeFlowVisualState::default();
+        let mut gpu_state = GpuRuntimeState::default();
+        let mut simulation_control = SimulationControl::default();
+        simulation_control.paused = false;
+        let mut perf = SimulationPerfStats::default();
+        let mut active_tool = ActiveEditorTool::default();
+        assert!(structures.place_gas_source(10, 10, 0, 100, &world).is_some());
+
+        let mut context = RuntimeHostContext::new(&content, &game_config.gas_registry);
+        context.world = Some(&mut world);
+        context.structures = Some(&mut structures);
+        context.gas = Some(&mut gas);
+        context.gpu_state = Some(&mut gpu_state);
+        context.simulation_control = Some(&mut simulation_control);
+        context.simulation_step = SimulationStep(1).0;
+        context.active_tool = Some(&mut active_tool);
+        context.pipe_config = Some(&game_config.pipe_simulation);
+        context.pipe_gas = Some(&mut pipe_gas);
+        context.pipe_flux = Some(&mut pipe_flux);
+        context.pipe_flow_visuals = Some(&mut pipe_flow_visuals);
+        context.simulation_perf = Some(&mut perf);
+        runtime_plugins.dispatch_event(
+            &runtime_registry,
+            &crate::plugins::PluginRuntimeEvent::SimulationPreCellGasStep,
+            &mut context,
+        );
+
+        assert!(gas.amount_rounded(10, 10, 0) > 0);
+    }
+
+    #[test]
+    fn runtime_dispatches_builtin_default_plugin_hud_blocks() {
+        let loaded = LoadedPluginMetadata {
+            plugin_id: PluginId::default_plugin(),
+            display_name: "Flux Default".to_string(),
+            version: PluginVersion::parse(env!("CARGO_PKG_VERSION")).expect("version"),
+            source_kind: PluginSourceKind::Builtin,
+            content: true,
+            locked: true,
+            source_name: "builtin".to_string(),
+            source_path: None,
+            manifest: None,
+            registration: default_builtin_runtime_registration().expect("default registration"),
+        };
+        let runtime_registry = build_plugin_runtime_registry(&[loaded.clone()]);
+        let mut runtime_plugins = RuntimeDllPluginRegistry::from_loaded_plugins(&[loaded]);
+        assert!(runtime_plugins.errors().is_empty());
+
+        let content = default_plugin::default_content_registry();
+        let game_config =
+            GameConfig::load_from_default_location_with_content(&content).expect("game config");
+        let mut world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        let mut gas = GasField::from_registry(&game_config.gas_registry);
+        let mut pipe_gas = default_plugin::pipe_runtime::PipeGasField::from_registry(
+            &game_config.gas_registry,
+        );
+        let mut pipe_flow_visuals =
+            default_plugin::pipe_runtime::PipeFlowVisualState::default();
+        let mut hud = PluginHudBlockStore::default();
+
+        let mut context = RuntimeHostContext::new(&content, &game_config.gas_registry);
+        context.world = Some(&mut world);
+        context.structures = Some(&mut structures);
+        context.gas = Some(&mut gas);
+        context.hud_blocks = Some(&mut hud);
+        context.pipe_config = Some(&game_config.pipe_simulation);
+        context.pipe_gas = Some(&mut pipe_gas);
+        context.pipe_flow_visuals = Some(&mut pipe_flow_visuals);
+        context.world_cell_hud = Some(&game_config.world_cell_hud);
+        context.cell_visual_layouts = Some(&game_config.cell_visual_layouts);
+        context.structure_hud = Some(&game_config.structure_hud);
+        context.structure_visuals = Some(&game_config.structure_visuals);
+        runtime_plugins.dispatch_event(
+            &runtime_registry,
+            &crate::plugins::PluginRuntimeEvent::BuildHudForCell {
+                cell: UVec2::new(10, 10),
+            },
+            &mut context,
+        );
+
+        assert!(!hud.blocks.is_empty());
+        assert!(hud.blocks.iter().any(|block| block.title == "Cell"));
+    }
 }
 
 fn dispatch_queued_runtime_plugin_events(
     mut events: EventReader<PluginRuntimeEvent>,
-    mut runtime_plugins: ResMut<RuntimeDllPluginRegistry>,
-    runtime_registry: Res<PluginRuntimeRegistry>,
-    content_registry: Res<ContentRegistry>,
-    gas_registry: Res<GasRegistry>,
-    mut world: ResMut<WorldGrid>,
-    mut structures: ResMut<PlacedStructureMap>,
-    mut gas: ResMut<GasField>,
-    mut gpu_state: ResMut<GpuRuntimeState>,
-    mut simulation_control: ResMut<SimulationControl>,
-    simulation_step: Res<SimulationStep>,
-    mut active_tool: ResMut<ActiveEditorTool>,
-    mut save_chunks: ResMut<SaveChunkStore>,
+    runtime_resources: (
+        ResMut<RuntimeDllPluginRegistry>,
+        Res<PluginRuntimeRegistry>,
+        Res<ContentRegistry>,
+        Res<GasRegistry>,
+    ),
+    world_resources: (
+        ResMut<WorldGrid>,
+        ResMut<PlacedStructureMap>,
+        ResMut<GasField>,
+        ResMut<GpuRuntimeState>,
+        ResMut<SimulationControl>,
+        Res<SimulationStep>,
+        ResMut<ActiveEditorTool>,
+        ResMut<SaveChunkStore>,
+        ResMut<PipeGasField>,
+        ResMut<PipeFluxField>,
+        ResMut<PipeFlowVisualState>,
+    ),
     mut world_changed: EventWriter<WorldCellChanged>,
 ) {
+    let (mut runtime_plugins, runtime_registry, content_registry, gas_registry) =
+        runtime_resources;
+    let (
+        mut world,
+        mut structures,
+        mut gas,
+        mut gpu_state,
+        mut simulation_control,
+        simulation_step,
+        mut active_tool,
+        mut save_chunks,
+        mut pipe_gas,
+        mut pipe_flux,
+        mut pipe_flow_visuals,
+    ) = world_resources;
     for event in events.read() {
         if matches!(
             event.kind(),
@@ -1318,26 +1536,59 @@ fn dispatch_queued_runtime_plugin_events(
         context.simulation_step = simulation_step.0;
         context.active_tool = Some(&mut active_tool);
         context.save_chunks = Some(&mut save_chunks);
+        context.pipe_gas = Some(&mut pipe_gas);
+        context.pipe_flux = Some(&mut pipe_flux);
+        context.pipe_flow_visuals = Some(&mut pipe_flow_visuals);
         runtime_plugins.dispatch_event(&runtime_registry, event, &mut context);
         flush_changed_cells(&context, &mut world_changed);
     }
 }
 
 fn dispatch_runtime_plugin_pre_gas_step(
-    world_load_state: Res<WorldLoadState>,
-    mut control: ResMut<SimulationControl>,
-    mut runtime_plugins: ResMut<RuntimeDllPluginRegistry>,
-    runtime_registry: Res<PluginRuntimeRegistry>,
-    content_registry: Res<ContentRegistry>,
-    gas_registry: Res<GasRegistry>,
-    mut world: ResMut<WorldGrid>,
-    mut structures: ResMut<PlacedStructureMap>,
-    mut gas: ResMut<GasField>,
-    mut gpu_state: ResMut<GpuRuntimeState>,
-    simulation_step: Res<SimulationStep>,
-    mut active_tool: ResMut<ActiveEditorTool>,
+    runtime_resources: (
+        Res<WorldLoadState>,
+        ResMut<SimulationControl>,
+        ResMut<RuntimeDllPluginRegistry>,
+        Res<PluginRuntimeRegistry>,
+        Res<ContentRegistry>,
+        Res<GasRegistry>,
+    ),
+    world_resources: (
+        ResMut<WorldGrid>,
+        ResMut<PlacedStructureMap>,
+        ResMut<GasField>,
+        ResMut<GpuRuntimeState>,
+        Res<SimulationStep>,
+        ResMut<ActiveEditorTool>,
+        Res<PipeSimulationConfig>,
+        ResMut<PipeGasField>,
+        ResMut<PipeFluxField>,
+        ResMut<PipeFlowVisualState>,
+        ResMut<SimulationPerfStats>,
+    ),
     mut world_changed: EventWriter<WorldCellChanged>,
 ) {
+    let (
+        world_load_state,
+        mut control,
+        mut runtime_plugins,
+        runtime_registry,
+        content_registry,
+        gas_registry,
+    ) = runtime_resources;
+    let (
+        mut world,
+        mut structures,
+        mut gas,
+        mut gpu_state,
+        simulation_step,
+        mut active_tool,
+        pipe_config,
+        mut pipe_gas,
+        mut pipe_flux,
+        mut pipe_flow_visuals,
+        mut perf,
+    ) = world_resources;
     if !world_load_state.has_world || control.paused {
         return;
     }
@@ -1349,6 +1600,11 @@ fn dispatch_runtime_plugin_pre_gas_step(
     context.simulation_control = Some(&mut control);
     context.simulation_step = simulation_step.0;
     context.active_tool = Some(&mut active_tool);
+    context.pipe_config = Some(&pipe_config);
+    context.pipe_gas = Some(&mut pipe_gas);
+    context.pipe_flux = Some(&mut pipe_flux);
+    context.pipe_flow_visuals = Some(&mut pipe_flow_visuals);
+    context.simulation_perf = Some(&mut perf);
     runtime_plugins.dispatch_event(
         &runtime_registry,
         &PluginRuntimeEvent::SimulationPreCellGasStep,
@@ -1358,20 +1614,46 @@ fn dispatch_runtime_plugin_pre_gas_step(
 }
 
 fn dispatch_runtime_plugin_post_gas_step(
-    world_load_state: Res<WorldLoadState>,
-    mut control: ResMut<SimulationControl>,
-    mut runtime_plugins: ResMut<RuntimeDllPluginRegistry>,
-    runtime_registry: Res<PluginRuntimeRegistry>,
-    content_registry: Res<ContentRegistry>,
-    gas_registry: Res<GasRegistry>,
-    mut world: ResMut<WorldGrid>,
-    mut structures: ResMut<PlacedStructureMap>,
-    mut gas: ResMut<GasField>,
-    mut gpu_state: ResMut<GpuRuntimeState>,
-    simulation_step: Res<SimulationStep>,
-    mut active_tool: ResMut<ActiveEditorTool>,
+    runtime_resources: (
+        Res<WorldLoadState>,
+        ResMut<SimulationControl>,
+        ResMut<RuntimeDllPluginRegistry>,
+        Res<PluginRuntimeRegistry>,
+        Res<ContentRegistry>,
+        Res<GasRegistry>,
+    ),
+    world_resources: (
+        ResMut<WorldGrid>,
+        ResMut<PlacedStructureMap>,
+        ResMut<GasField>,
+        ResMut<GpuRuntimeState>,
+        Res<SimulationStep>,
+        ResMut<ActiveEditorTool>,
+        ResMut<PipeGasField>,
+        ResMut<PipeFluxField>,
+        ResMut<PipeFlowVisualState>,
+    ),
     mut world_changed: EventWriter<WorldCellChanged>,
 ) {
+    let (
+        world_load_state,
+        mut control,
+        mut runtime_plugins,
+        runtime_registry,
+        content_registry,
+        gas_registry,
+    ) = runtime_resources;
+    let (
+        mut world,
+        mut structures,
+        mut gas,
+        mut gpu_state,
+        simulation_step,
+        mut active_tool,
+        mut pipe_gas,
+        mut pipe_flux,
+        mut pipe_flow_visuals,
+    ) = world_resources;
     if !world_load_state.has_world || control.paused {
         return;
     }
@@ -1383,6 +1665,9 @@ fn dispatch_runtime_plugin_post_gas_step(
     context.simulation_control = Some(&mut control);
     context.simulation_step = simulation_step.0;
     context.active_tool = Some(&mut active_tool);
+    context.pipe_gas = Some(&mut pipe_gas);
+    context.pipe_flux = Some(&mut pipe_flux);
+    context.pipe_flow_visuals = Some(&mut pipe_flow_visuals);
     runtime_plugins.dispatch_event(
         &runtime_registry,
         &PluginRuntimeEvent::SimulationPostCellGasStep,

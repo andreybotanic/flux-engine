@@ -14,7 +14,7 @@ use crate::{
     plugins::{
         build_plugin_runtime_registry,
         default_plugin::{
-            asset_root, pipe_runtime::DefaultPluginRuntimePlugin, DEFAULT_PLUGIN_ASSET_SOURCE,
+            asset_root, pipe_runtime::DefaultPluginSupportPlugin, DEFAULT_PLUGIN_ASSET_SOURCE,
         },
         DefaultPluginContent, PluginBootstrapConfig, PluginHudBlockStore, PluginOverlayFrameStore,
         RuntimeDllHostPlugin, RuntimeDllPluginRegistry, SaveChunkStore,
@@ -144,7 +144,7 @@ pub fn run() {
         .add_plugins((
             WorldPlugin,
             GasSimulationPlugin,
-            DefaultPluginRuntimePlugin,
+            DefaultPluginSupportPlugin,
             RenderPlugin,
             InputPlugin,
             UiPlugin,

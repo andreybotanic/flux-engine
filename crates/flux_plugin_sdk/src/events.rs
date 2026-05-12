@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use bevy_math::{UVec2, Vec2};
 use flux_plugin_abi::{
     FluxBuildHudForCellEventPayload, FluxEmptyEventPayload, FluxEntityEventPayload,
@@ -121,6 +123,12 @@ pub trait AbiEventPayload: Sized + 'static {
     unsafe fn decode(payload: *const u8, payload_len: usize) -> Result<Self, PluginError>;
 }
 
+/// Internal trait used by the in-process built-in runner.
+pub trait BuiltinEventPayload: Any + 'static {
+    /// Returns the event payload as `Any` for typed downcasts.
+    fn as_any(&self) -> &dyn Any;
+}
+
 /// Event fired after a new world has been created.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct WorldCreatedEvent;
@@ -210,6 +218,12 @@ macro_rules! impl_empty_event {
                 Ok(Self)
             }
         }
+
+        impl BuiltinEventPayload for $ty {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
     };
 }
 
@@ -232,6 +246,12 @@ impl AbiEventPayload for SimulationPausedChangedEvent {
     }
 }
 
+impl BuiltinEventPayload for SimulationPausedChangedEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 impl AbiEventPayload for EntityEvent {
     const KIND: PluginEvent = PluginEvent::EntityPlaced;
 
@@ -242,6 +262,12 @@ impl AbiEventPayload for EntityEvent {
             kind: ContentId::parse(&read_utf8(payload.entity_kind)?)?,
             cell: UVec2::new(payload.cell_x, payload.cell_y),
         })
+    }
+}
+
+impl BuiltinEventPayload for EntityEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -266,6 +292,12 @@ impl AbiEventPayload for MouseCellEvent {
     }
 }
 
+impl BuiltinEventPayload for MouseCellEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 impl AbiEventPayload for KeyEvent {
     const KIND: PluginEvent = PluginEvent::KeyPressed;
 
@@ -275,6 +307,12 @@ impl AbiEventPayload for KeyEvent {
             key: read_utf8(payload.key)?,
             modifiers: decode_modifiers(payload.modifiers),
         })
+    }
+}
+
+impl BuiltinEventPayload for KeyEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -293,6 +331,12 @@ impl AbiEventPayload for ToolSelectedEvent {
     }
 }
 
+impl BuiltinEventPayload for ToolSelectedEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 impl AbiEventPayload for OverlayChangedEvent {
     const KIND: PluginEvent = PluginEvent::OverlayChanged;
 
@@ -308,6 +352,12 @@ impl AbiEventPayload for OverlayChangedEvent {
     }
 }
 
+impl BuiltinEventPayload for OverlayChangedEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 impl AbiEventPayload for BuildHudForCellEvent {
     const KIND: PluginEvent = PluginEvent::BuildHudForCell;
 
@@ -319,6 +369,12 @@ impl AbiEventPayload for BuildHudForCellEvent {
     }
 }
 
+impl BuiltinEventPayload for BuildHudForCellEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 impl AbiEventPayload for RenderOverlayEvent {
     const KIND: PluginEvent = PluginEvent::RenderOverlay;
 
@@ -327,6 +383,12 @@ impl AbiEventPayload for RenderOverlayEvent {
         Ok(Self {
             overlay_id: ContentId::parse(&read_utf8(payload.overlay_id)?)?,
         })
+    }
+}
+
+impl BuiltinEventPayload for RenderOverlayEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

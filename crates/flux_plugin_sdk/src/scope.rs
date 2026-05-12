@@ -1,8 +1,9 @@
-use std::{cell::RefCell, ffi::c_void, path::PathBuf, ptr};
+use std::{cell::RefCell, ffi::c_void, path::PathBuf};
 
 use bevy_math::Vec2;
-use flux_plugin_abi::{FluxHostApi, FluxRuntimeHost, FluxUtf8Slice, FluxWriteLogFn};
+use flux_plugin_abi::{FluxHostApi, FluxUtf8Slice, FluxWriteLogFn};
 
+use crate::runtime_host::RuntimeHostBinding;
 use crate::{ContentId, InputModifiers, OverlayModeId, PluginError};
 
 #[derive(Clone, Copy)]
@@ -12,7 +13,7 @@ pub(crate) struct InitLogScope {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct DispatchState {
+pub struct DispatchState {
     pub modifiers: InputModifiers,
     pub active_tool_id: Option<ContentId>,
     pub cursor_world: Option<Vec2>,
@@ -24,13 +25,13 @@ pub(crate) struct DispatchState {
 
 #[derive(Clone, Copy)]
 struct Scope {
-    host: *mut FluxRuntimeHost,
+    runtime_host: Option<RuntimeHostBinding>,
     init_log: Option<InitLogScope>,
 }
 
 thread_local! {
     static CURRENT_SCOPE: RefCell<Scope> = const { RefCell::new(Scope {
-        host: ptr::null_mut(),
+        runtime_host: None,
         init_log: None,
     }) };
     static CURRENT_DISPATCH_STATE: RefCell<DispatchState> = RefCell::new(DispatchState::default());
@@ -38,13 +39,14 @@ thread_local! {
 
 pub(crate) fn with_runtime_host<T>(
     api_name: &'static str,
-    f: impl FnOnce(&FluxRuntimeHost) -> Result<T, PluginError>,
+    f: impl FnOnce(&RuntimeHostBinding) -> Result<T, PluginError>,
 ) -> Result<T, PluginError> {
     CURRENT_SCOPE.with(|scope| {
         let scope = scope.borrow();
-        let host = unsafe { scope.host.as_ref() }
+        let host = scope
+            .runtime_host
             .ok_or(PluginError::ApiUnavailable(api_name))?;
-        f(host)
+        f(&host)
     })
 }
 
@@ -60,7 +62,7 @@ pub(crate) fn with_init_scope<T>(host: &FluxHostApi, f: impl FnOnce() -> T) -> T
     CURRENT_SCOPE.with(|scope| {
         let previous = *scope.borrow();
         *scope.borrow_mut() = Scope {
-            host: ptr::null_mut(),
+            runtime_host: None,
             init_log: Some(InitLogScope {
                 callback: host.write_log_fn,
                 context: host.log_context,
@@ -73,14 +75,14 @@ pub(crate) fn with_init_scope<T>(host: &FluxHostApi, f: impl FnOnce() -> T) -> T
 }
 
 pub(crate) fn with_runtime_scope<T>(
-    host: *mut FluxRuntimeHost,
+    runtime_host: RuntimeHostBinding,
     state: DispatchState,
     f: impl FnOnce() -> T,
 ) -> T {
     CURRENT_SCOPE.with(|scope| {
         let previous = *scope.borrow();
         *scope.borrow_mut() = Scope {
-            host,
+            runtime_host: Some(runtime_host),
             init_log: None,
         };
         set_dispatch_state(state);
@@ -93,12 +95,7 @@ pub(crate) fn with_runtime_scope<T>(
 
 pub(crate) fn write_log(level: u32, message: &str) -> Result<(), PluginError> {
     let runtime_result = with_runtime_host("logger", |host| {
-        let Some(callback) = host.write_log_fn else {
-            return Err(PluginError::Unsupported("logger"));
-        };
-        unsafe { callback(host.context, level, FluxUtf8Slice::from_str(message)) }
-            .into_result()
-            .map_err(|_| PluginError::message("host log callback failed"))
+        host.write_log(level, message)
     });
     if runtime_result.is_ok() {
         return runtime_result;
