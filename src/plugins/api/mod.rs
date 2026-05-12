@@ -15,4 +15,4 @@ pub use runtime::{
     RuntimeOverlayDescriptor, SaveChunkDescriptor,
 };
 pub use save_api::{SaveChunk, SaveChunkStore};
-pub use ui_api::{HudBlock, PanelDescriptor, ToolDescriptor, UiNode};
+pub use ui_api::{HudBlock, ToolDescriptor};

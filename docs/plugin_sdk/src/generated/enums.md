@@ -13,5 +13,4 @@
 | [`PluginEvent`](enums/pluginevent.md) | enum | `crates/flux_plugin_sdk/src/events.rs` |
 | [`Rotation`](enums/rotation.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
 | [`SimulationSpeed`](enums/simulationspeed.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
-| [`UiNode`](enums/uinode.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
 

@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 use flux_plugin_abi::{FluxHostApi, FluxPluginHandle, FluxRegistrar, FluxRuntimeHost, FluxStatus};
 
 use crate::{
-    scope, EntityApi, GasApi, InputApi, LoggerApi, OverlayApi, PanelApi, PluginApiVersion,
-    PluginError, PluginEvent, PluginId, PluginPaths, Registrar, SaveApi, TimeApi, UiApi, WorldApi,
+    scope, EntityApi, GasApi, InputApi, LoggerApi, OverlayApi, PluginApiVersion, PluginError,
+    PluginEvent, PluginId, PluginPaths, Registrar, SaveApi, TimeApi, UiApi, WorldApi,
 };
 
 /// Public runtime plugin contract implemented by plugin authors.
@@ -27,7 +27,6 @@ pub struct PluginInit {
     entities: EntityApi,
     gases: GasApi,
     ui: UiApi,
-    panels: PanelApi,
     overlays: OverlayApi,
     save: SaveApi,
     time: TimeApi,
@@ -50,7 +49,6 @@ impl PluginInit {
             entities: EntityApi,
             gases: GasApi,
             ui: UiApi,
-            panels: PanelApi,
             overlays: OverlayApi,
             save: SaveApi,
             time: TimeApi,
@@ -107,11 +105,6 @@ impl PluginInit {
     /// Returns a UI API proxy.
     pub fn ui_api(&self) -> UiApi {
         self.ui
-    }
-
-    /// Returns a panel API proxy.
-    pub fn panel_api(&self) -> PanelApi {
-        self.panels
     }
 
     /// Returns an overlay API proxy.

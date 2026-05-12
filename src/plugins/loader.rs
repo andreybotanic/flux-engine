@@ -13,10 +13,10 @@ use zip::ZipArchive;
 use crate::plugins::{
     abi::{
         build_host_api, build_registrar, event_kind_from_abi, FluxEntityDescriptor,
-        FluxGasSubstanceDescriptor, FluxOverlayDescriptor, FluxPanelDescriptor,
-        FluxPluginApiVersionFn, FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginDispatchFn,
-        FluxPluginHandle, FluxPluginRegisterFn, FluxSaveChunkDescriptor, FluxStatus,
-        FluxSubscriptionDescriptor, FluxToolDescriptor, FluxUtf8Slice,
+        FluxGasSubstanceDescriptor, FluxOverlayDescriptor, FluxPluginApiVersionFn,
+        FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginDispatchFn, FluxPluginHandle,
+        FluxPluginRegisterFn, FluxSaveChunkDescriptor, FluxStatus, FluxSubscriptionDescriptor,
+        FluxToolDescriptor, FluxUtf8Slice,
         FLUX_PLUGIN_API_VERSION_EXPORT_NAME,
         FLUX_PLUGIN_CREATE_EXPORT_NAME, FLUX_PLUGIN_DESTROY_EXPORT_NAME,
         FLUX_PLUGIN_DISPATCH_EXPORT_NAME, FLUX_PLUGIN_REGISTER_EXPORT_NAME,
@@ -24,7 +24,7 @@ use crate::plugins::{
     api::{
         render_api::OverlayRenderPolicy,
         runtime::{RuntimeOverlayDescriptor, SaveChunkDescriptor},
-        ui_api::{PanelDescriptor, ToolDescriptor, UiNode},
+        ui_api::ToolDescriptor,
     },
     diagnostics::PluginContractError,
     id::{PluginApiVersion, ENGINE_PLUGIN_API_VERSION},
@@ -394,7 +394,7 @@ fn instantiate_runtime_plugin_from_root(
             Some(register_noop_gas_substance_callback),
             Some(register_noop_entity_callback),
             Some(register_noop_tool_callback),
-            Some(register_noop_panel_callback),
+            None,
             Some(register_noop_overlay_callback),
             Some(register_noop_save_chunk_callback),
             Some(register_noop_subscription_callback),
@@ -653,7 +653,7 @@ fn validate_plugin_root(
             Some(register_gas_substance_callback),
             Some(register_entity_callback),
             Some(register_tool_callback),
-            Some(register_panel_callback),
+            None,
             Some(register_overlay_callback),
             Some(register_save_chunk_callback),
             Some(register_subscription_callback),
@@ -740,27 +740,6 @@ unsafe extern "C" fn register_entity_callback(
                 return FluxStatus::FAILED;
             }
             collector.registration.entities.push(descriptor);
-            FluxStatus::OK
-        }
-        Err(error) => {
-            collector.error_message = Some(error);
-            FluxStatus::FAILED
-        }
-    }
-}
-
-unsafe extern "C" fn register_panel_callback(
-    context: *mut c_void,
-    descriptor: *const FluxPanelDescriptor,
-) -> FluxStatus {
-    if context.is_null() || descriptor.is_null() {
-        return FluxStatus::INVALID_ARGUMENT;
-    }
-
-    let collector = &mut *(context.cast::<PluginRegistrationCollector>());
-    match panel_descriptor_from_abi(&*descriptor) {
-        Ok(descriptor) => {
-            collector.registration.panels.push(descriptor);
             FluxStatus::OK
         }
         Err(error) => {
@@ -896,17 +875,6 @@ unsafe extern "C" fn register_noop_entity_callback(
     }
 }
 
-unsafe extern "C" fn register_noop_panel_callback(
-    _context: *mut c_void,
-    descriptor: *const FluxPanelDescriptor,
-) -> FluxStatus {
-    if descriptor.is_null() {
-        FluxStatus::INVALID_ARGUMENT
-    } else {
-        FluxStatus::OK
-    }
-}
-
 unsafe extern "C" fn register_noop_tool_callback(
     _context: *mut c_void,
     descriptor: *const FluxToolDescriptor,
@@ -963,20 +931,6 @@ unsafe fn entity_descriptor_from_abi(
         label,
         icon_path,
         silhouette_path: (!silhouette_path.trim().is_empty()).then_some(silhouette_path),
-    })
-}
-
-unsafe fn panel_descriptor_from_abi(
-    descriptor: &FluxPanelDescriptor,
-) -> Result<PanelDescriptor, String> {
-    let id = read_abi_utf8(descriptor.id, "panel id")?;
-    let title = read_abi_utf8(descriptor.title, "panel title")?;
-    Ok(PanelDescriptor {
-        id: ContentId::parse(&id)?,
-        title,
-        root: UiNode::Column {
-            children: Vec::new(),
-        },
     })
 }
 

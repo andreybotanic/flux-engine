@@ -7,7 +7,6 @@
 | API item | Kind | Source |
 | --- | --- | --- |
 | [`BuildHudForCellEvent`](structures/buildhudforcellevent.md) | struct | `crates/flux_plugin_sdk/src/events.rs` |
-| [`BuildPanelEvent`](structures/buildpanelevent.md) | struct | `crates/flux_plugin_sdk/src/events.rs` |
 | [`CellPos`](structures/cellpos.md) | callback | `crates/flux_plugin_sdk/src/ids.rs` |
 | [`CellRect`](structures/cellrect.md) | struct | `crates/flux_plugin_sdk/src/ids.rs` |
 | [`CellSnapshot`](structures/cellsnapshot.md) | struct | `crates/flux_plugin_sdk/src/descriptors.rs` |
@@ -37,8 +36,6 @@
 | [`OverlayDescriptor`](structures/overlaydescriptor.md) | struct | `crates/flux_plugin_sdk/src/descriptors.rs` |
 | [`OverlayFrame`](structures/overlayframe.md) | struct | `crates/flux_plugin_sdk/src/descriptors.rs` |
 | [`OverlayModeId`](structures/overlaymodeid.md) | callback | `crates/flux_plugin_sdk/src/ids.rs` |
-| [`PanelApi`](structures/panelapi.md) | struct | `crates/flux_plugin_sdk/src/api.rs` |
-| [`PanelDescriptor`](structures/paneldescriptor.md) | struct | `crates/flux_plugin_sdk/src/descriptors.rs` |
 | [`PluginApiVersion`](structures/pluginapiversion.md) | struct | `crates/flux_plugin_sdk/src/ids.rs` |
 | [`PluginId`](structures/pluginid.md) | struct | `crates/flux_plugin_sdk/src/ids.rs` |
 | [`PluginInit`](structures/plugininit.md) | struct | `crates/flux_plugin_sdk/src/plugin.rs` |
@@ -58,7 +55,6 @@
 | [`ToolDescriptor`](structures/tooldescriptor.md) | struct | `crates/flux_plugin_sdk/src/descriptors.rs` |
 | [`ToolSelectedEvent`](structures/toolselectedevent.md) | struct | `crates/flux_plugin_sdk/src/events.rs` |
 | [`UiApi`](structures/uiapi.md) | struct | `crates/flux_plugin_sdk/src/api.rs` |
-| [`UiPatch`](structures/uipatch.md) | struct | `crates/flux_plugin_sdk/src/descriptors.rs` |
 | [`WorldAfterSaveEvent`](structures/worldaftersaveevent.md) | struct | `crates/flux_plugin_sdk/src/events.rs` |
 | [`WorldApi`](structures/worldapi.md) | struct | `crates/flux_plugin_sdk/src/api.rs` |
 | [`WorldBeforeSaveEvent`](structures/worldbeforesaveevent.md) | struct | `crates/flux_plugin_sdk/src/events.rs` |

@@ -7,7 +7,6 @@
 | API item | Kind | Source |
 | --- | --- | --- |
 | [`PluginEvent::BuildHudForCell`](events/pluginevent-buildhudforcell.md) | event | `crates/flux_plugin_sdk/src/events.rs` |
-| [`PluginEvent::BuildPanel`](events/pluginevent-buildpanel.md) | event | `crates/flux_plugin_sdk/src/events.rs` |
 | [`PluginEvent::EntityPlaced`](events/pluginevent-entityplaced.md) | event | `crates/flux_plugin_sdk/src/events.rs` |
 | [`PluginEvent::EntityRemoved`](events/pluginevent-entityremoved.md) | event | `crates/flux_plugin_sdk/src/events.rs` |
 | [`PluginEvent::KeyPressed`](events/pluginevent-keypressed.md) | event | `crates/flux_plugin_sdk/src/events.rs` |

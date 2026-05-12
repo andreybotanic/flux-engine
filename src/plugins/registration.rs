@@ -2,7 +2,7 @@ use crate::plugins::{
     api::{
         events::PluginEvent,
         runtime::{RuntimeOverlayDescriptor, SaveChunkDescriptor},
-        ui_api::{PanelDescriptor, ToolDescriptor},
+        ui_api::ToolDescriptor,
     },
     SubstanceDefinition,
 };
@@ -21,7 +21,6 @@ pub struct PluginRuntimeRegistration {
     pub entities: Vec<flux_plugin_sdk::EntityDescriptor>,
     pub subscriptions: Vec<PluginSubscriptionRegistration>,
     pub tools: Vec<ToolDescriptor>,
-    pub panels: Vec<PanelDescriptor>,
     pub overlays: Vec<RuntimeOverlayDescriptor>,
     pub save_chunks: Vec<SaveChunkDescriptor>,
 }
@@ -33,7 +32,6 @@ impl PluginRuntimeRegistration {
             && self.entities.is_empty()
             && self.subscriptions.is_empty()
             && self.tools.is_empty()
-            && self.panels.is_empty()
             && self.overlays.is_empty()
             && self.save_chunks.is_empty()
     }

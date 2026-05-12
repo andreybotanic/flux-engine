@@ -1,7 +1,7 @@
 use bevy_math::Vec2;
 use flux_plugin_abi::{
-    FluxBuildPanelEventPayload, FluxKeyEventPayload, FluxMouseCellEventPayload,
-    FluxOverlayChangedEventPayload, FluxRenderOverlayEventPayload,
+    FluxKeyEventPayload, FluxMouseCellEventPayload, FluxOverlayChangedEventPayload,
+    FluxRenderOverlayEventPayload,
     FluxToolSelectedEventPayload,
 };
 
@@ -47,11 +47,6 @@ impl DispatchStateBuilder {
                         } else {
                             ContentId::parse(&read_utf8(payload.tool_id)).ok()
                         };
-                    }
-                }
-                PluginEvent::BuildPanel => {
-                    if let Some(payload) = payload_ref::<FluxBuildPanelEventPayload>(payload, payload_len) {
-                        state.requested_panel = ContentId::parse(&read_utf8(payload.panel_id)).ok();
                     }
                 }
                 PluginEvent::OverlayChanged => {

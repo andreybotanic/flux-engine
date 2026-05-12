@@ -18,7 +18,6 @@ pub(crate) struct DispatchState {
     pub cursor_world: Option<Vec2>,
     pub cursor_screen: Option<Vec2>,
     pub is_pointer_over_ui: bool,
-    pub requested_panel: Option<ContentId>,
     pub requested_overlay: Option<OverlayModeId>,
     pub active_overlay: Option<OverlayModeId>,
 }

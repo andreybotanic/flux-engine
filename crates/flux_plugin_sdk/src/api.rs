@@ -6,7 +6,7 @@ use crate::{
     scope, CellPos, CellRect, CellSnapshot, ContentId, EntityFilter, EntityInstanceId,
     EntityKindId, EntityPlacement, EntitySnapshot, EntitySpawnRequest, GasMixture, HudBlock,
     InputModifiers, OverlayFrame, OverlayModeId, PlacementCheck, PluginError, Rotation, SaveChunk,
-    SimulationSpeed, SubstanceId, SubstanceRegistryView, UiNode, UiPatch, WorldBounds,
+    SimulationSpeed, SubstanceId, SubstanceRegistryView, WorldBounds,
 };
 
 /// Read-only world query API exposed to runtime plugins.
@@ -21,9 +21,6 @@ pub struct GasApi;
 /// Basic UI and tool-selection API exposed to runtime plugins.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct UiApi;
-/// Panel-oriented UI API exposed to runtime plugins.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct PanelApi;
 /// Overlay rendering API exposed to runtime plugins.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OverlayApi;
@@ -490,16 +487,6 @@ impl UiApi {
         Err(PluginError::Unsupported("ui.clear_hud_block"))
     }
 
-    /// Opens one panel when the host supports it.
-    pub fn open_panel(&mut self, _panel_id: ContentId) -> Result<(), PluginError> {
-        Err(PluginError::Unsupported("ui.open_panel"))
-    }
-
-    /// Closes one panel when the host supports it.
-    pub fn close_panel(&mut self, _panel_id: &ContentId) -> Result<(), PluginError> {
-        Err(PluginError::Unsupported("ui.close_panel"))
-    }
-
     /// Selects the active tool by stable id.
     pub fn set_active_tool(&mut self, tool_id: Option<ContentId>) -> Result<(), PluginError> {
         scope::with_runtime_host("ui.set_active_tool", |host| {
@@ -515,38 +502,6 @@ impl UiApi {
             .into_result()
             .map_err(status_error)
         })
-    }
-}
-
-impl PanelApi {
-    /// Returns the panel requested by the current `BuildPanel` dispatch.
-    pub fn requested_panel(&self) -> Option<ContentId> {
-        scope::with_dispatch_state(|state| state.requested_panel.clone())
-    }
-
-    /// Returns whether the requested panel matches the given id.
-    pub fn is_open(&self, panel_id: &ContentId) -> bool {
-        self.requested_panel().as_ref() == Some(panel_id)
-    }
-
-    /// Sets the panel root. The current host does not support this yet.
-    pub fn set_root(&mut self, _panel_id: &ContentId, _root: UiNode) -> Result<(), PluginError> {
-        Err(PluginError::Unsupported("panels.set_root"))
-    }
-
-    /// Applies one panel patch. The current host does not support this yet.
-    pub fn patch_root(&mut self, _panel_id: &ContentId, _patch: UiPatch) -> Result<(), PluginError> {
-        Err(PluginError::Unsupported("panels.patch_root"))
-    }
-
-    /// Sets one panel title. The current host does not support this yet.
-    pub fn set_title(&mut self, _panel_id: &ContentId, _title: String) -> Result<(), PluginError> {
-        Err(PluginError::Unsupported("panels.set_title"))
-    }
-
-    /// Requests one panel rebuild. The current host does not support this yet.
-    pub fn request_rebuild(&mut self, _panel_id: &ContentId) -> Result<(), PluginError> {
-        Err(PluginError::Unsupported("panels.request_rebuild"))
     }
 }
 

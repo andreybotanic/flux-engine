@@ -18,9 +18,9 @@ pub(crate) use self::api::PluginRuntimeEvent;
 pub use self::api::{
     build_plugin_runtime_registry, CellRenderStyle, CellStyleEntry, GasRenderStyle, GasStyleEntry,
     HudBlock, InputModifiers, MouseButton, MouseCellEvent, OverlayDrawCommand, OverlayFrame,
-    OverlayRenderPolicy, PanelDescriptor, PluginEvent, PluginRuntimeRegistry, PluginSubscription,
+    OverlayRenderPolicy, PluginEvent, PluginRuntimeRegistry, PluginSubscription,
     RuntimeOverlayDescriptor, SaveChunk, SaveChunkDescriptor, SaveChunkStore, StructureEvent,
-    StructureRenderStyle, StructureStyleEntry, ToolDescriptor, UiNode,
+    StructureRenderStyle, StructureStyleEntry, ToolDescriptor,
 };
 pub use self::content::{
     CellContentDescriptor, ContentId, ContentRegistry, LegacyStorageDescriptor,

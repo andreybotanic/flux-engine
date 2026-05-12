@@ -1,7 +1,7 @@
 use bevy_math::{UVec2, Vec2};
 use flux_plugin_abi::{
-    FluxBuildHudForCellEventPayload, FluxBuildPanelEventPayload, FluxEmptyEventPayload,
-    FluxEntityEventPayload, FluxEventKind, FluxKeyEventPayload, FluxMouseCellEventPayload,
+    FluxBuildHudForCellEventPayload, FluxEmptyEventPayload, FluxEntityEventPayload,
+    FluxEventKind, FluxKeyEventPayload, FluxMouseCellEventPayload,
     FluxOverlayChangedEventPayload, FluxRenderOverlayEventPayload,
     FluxSimulationPausedChangedEvent, FluxToolSelectedEventPayload, FluxUtf8Slice,
 };
@@ -51,8 +51,6 @@ pub enum PluginEvent {
     OverlayChanged,
     /// Fired when the engine asks plugins to contribute HUD lines for one cell.
     BuildHudForCell,
-    /// Fired when the engine asks a plugin-owned panel to rebuild itself.
-    BuildPanel,
     /// Fired when a plugin-controlled overlay should submit one frame.
     RenderOverlay,
 }
@@ -81,7 +79,6 @@ impl PluginEvent {
             Self::KeyReleased => FluxEventKind::KeyReleased,
             Self::OverlayChanged => FluxEventKind::OverlayChanged,
             Self::BuildHudForCell => FluxEventKind::BuildHudForCell,
-            Self::BuildPanel => FluxEventKind::BuildPanel,
             Self::RenderOverlay => FluxEventKind::RenderOverlay,
         }
     }
@@ -109,7 +106,7 @@ impl PluginEvent {
             FluxEventKind::KeyReleased => Self::KeyReleased,
             FluxEventKind::OverlayChanged => Self::OverlayChanged,
             FluxEventKind::BuildHudForCell => Self::BuildHudForCell,
-            FluxEventKind::BuildPanel => Self::BuildPanel,
+            FluxEventKind::BuildPanel => return None,
             FluxEventKind::RenderOverlay => Self::RenderOverlay,
         })
     }
@@ -195,12 +192,6 @@ pub struct OverlayChangedEvent {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BuildHudForCellEvent {
     pub cell: UVec2,
-}
-
-/// Event fired when the engine asks a plugin-owned panel to rebuild itself.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BuildPanelEvent {
-    pub panel_id: ContentId,
 }
 
 /// Event fired when a plugin-controlled overlay should submit one frame.
@@ -324,17 +315,6 @@ impl AbiEventPayload for BuildHudForCellEvent {
         let payload = validate_payload::<FluxBuildHudForCellEventPayload>(payload, payload_len)?;
         Ok(Self {
             cell: UVec2::new(payload.cell_x, payload.cell_y),
-        })
-    }
-}
-
-impl AbiEventPayload for BuildPanelEvent {
-    const KIND: PluginEvent = PluginEvent::BuildPanel;
-
-    unsafe fn decode(payload: *const u8, payload_len: usize) -> Result<Self, PluginError> {
-        let payload = validate_payload::<FluxBuildPanelEventPayload>(payload, payload_len)?;
-        Ok(Self {
-            panel_id: ContentId::parse(&read_utf8(payload.panel_id)?)?,
         })
     }
 }

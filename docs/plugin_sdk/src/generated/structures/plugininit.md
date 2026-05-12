@@ -32,7 +32,6 @@ pub struct PluginInit
 - [`PluginInit::log_warn`](../methods/plugininit-log-warn.md)
 - [`PluginInit::logger_api`](../methods/plugininit-logger-api.md)
 - [`PluginInit::overlay_api`](../methods/plugininit-overlay-api.md)
-- [`PluginInit::panel_api`](../methods/plugininit-panel-api.md)
 - [`PluginInit::plugin_id`](../methods/plugininit-plugin-id.md)
 - [`PluginInit::plugin_root`](../methods/plugininit-plugin-root.md)
 - [`PluginInit::save_api`](../methods/plugininit-save-api.md)

@@ -46,12 +46,6 @@
 | [`OverlayApi::requested_overlay`](methods/overlayapi-requested-overlay.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`OverlayApi::submit_frame`](methods/overlayapi-submit-frame.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`OverlayApi::viewport_size`](methods/overlayapi-viewport-size.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
-| [`PanelApi::is_open`](methods/panelapi-is-open.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
-| [`PanelApi::patch_root`](methods/panelapi-patch-root.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
-| [`PanelApi::request_rebuild`](methods/panelapi-request-rebuild.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
-| [`PanelApi::requested_panel`](methods/panelapi-requested-panel.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
-| [`PanelApi::set_root`](methods/panelapi-set-root.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
-| [`PanelApi::set_title`](methods/panelapi-set-title.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`PluginApiVersion::value`](methods/pluginapiversion-value.md) | method | `crates/flux_plugin_sdk/src/ids.rs` |
 | [`PluginError::message`](methods/pluginerror-message.md) | method | `crates/flux_plugin_sdk/src/error.rs` |
 | [`PluginEvent::abi_kind`](methods/pluginevent-abi-kind.md) | method | `crates/flux_plugin_sdk/src/events.rs` |
@@ -70,7 +64,6 @@
 | [`PluginInit::log_warn`](methods/plugininit-log-warn.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
 | [`PluginInit::logger_api`](methods/plugininit-logger-api.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
 | [`PluginInit::overlay_api`](methods/plugininit-overlay-api.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
-| [`PluginInit::panel_api`](methods/plugininit-panel-api.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
 | [`PluginInit::plugin_id`](methods/plugininit-plugin-id.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
 | [`PluginInit::plugin_root`](methods/plugininit-plugin-root.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
 | [`PluginInit::save_api`](methods/plugininit-save-api.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
@@ -85,7 +78,6 @@
 | [`Registrar::plugin_id`](methods/registrar-plugin-id.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
 | [`Registrar::register_entity`](methods/registrar-register-entity.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
 | [`Registrar::register_overlay`](methods/registrar-register-overlay.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
-| [`Registrar::register_panel`](methods/registrar-register-panel.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
 | [`Registrar::register_save_chunk`](methods/registrar-register-save-chunk.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
 | [`Registrar::register_substance`](methods/registrar-register-substance.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
 | [`Registrar::register_tool`](methods/registrar-register-tool.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
@@ -112,8 +104,6 @@
 | [`UiApi::add_hud_block`](methods/uiapi-add-hud-block.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`UiApi::add_hud_line`](methods/uiapi-add-hud-line.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`UiApi::clear_hud_block`](methods/uiapi-clear-hud-block.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
-| [`UiApi::close_panel`](methods/uiapi-close-panel.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
-| [`UiApi::open_panel`](methods/uiapi-open-panel.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`UiApi::set_active_tool`](methods/uiapi-set-active-tool.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`WorldApi::bounds`](methods/worldapi-bounds.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`WorldApi::cell`](methods/worldapi-cell.md) | method | `crates/flux_plugin_sdk/src/api.rs` |

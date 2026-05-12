@@ -28,7 +28,6 @@ use crate::{
 /// - `KeyReleased`: Fired when a keyboard key is released.
 /// - `OverlayChanged`: Fired when the active overlay mode changes.
 /// - `BuildHudForCell`: Fired when plugins can append HUD blocks for the hovered cell.
-/// - `BuildPanel`: Fired when a plugin-owned panel should be built or refreshed.
 /// - `RenderOverlay`: Fired when a plugin-controlled overlay should produce a frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PluginEvent {
@@ -92,9 +91,6 @@ pub enum PluginEvent {
     /// Fired when the HUD is built for the hovered cell.
     ///
     BuildHudForCell,
-    /// Fired when a plugin-owned panel should be built.
-    ///
-    BuildPanel,
     /// Fired when a plugin-controlled overlay should submit a frame.
     ///
     RenderOverlay,
@@ -185,7 +181,6 @@ pub struct StructureEvent {
 /// - `KeyReleased`: Carries the released key string and modifier snapshot.
 /// - `OverlayChanged`: Carries the new overlay id, if the active overlay is plugin-owned.
 /// - `BuildHudForCell`: Carries the hovered world cell for HUD augmentation.
-/// - `BuildPanel`: Carries the plugin-owned panel id being requested.
 /// - `RenderOverlay`: Carries the plugin-owned overlay id that should render a frame.
 #[allow(dead_code)]
 #[derive(Event, Clone, Debug, PartialEq)]
@@ -253,10 +248,6 @@ pub(crate) enum PluginRuntimeEvent {
         /// Hovered world cell that the plugin can augment in the HUD.
         cell: UVec2,
     },
-    BuildPanel {
-        /// Plugin-owned panel id being requested by the UI.
-        panel_id: ContentId,
-    },
     RenderOverlay {
         /// Plugin-owned overlay id that should submit a frame.
         overlay_id: ContentId,
@@ -288,7 +279,6 @@ impl PluginRuntimeEvent {
             Self::KeyReleased { .. } => PluginEvent::KeyReleased,
             Self::OverlayChanged { .. } => PluginEvent::OverlayChanged,
             Self::BuildHudForCell { .. } => PluginEvent::BuildHudForCell,
-            Self::BuildPanel { .. } => PluginEvent::BuildPanel,
             Self::RenderOverlay { .. } => PluginEvent::RenderOverlay,
         }
     }

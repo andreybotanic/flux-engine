@@ -25,7 +25,6 @@ pub struct Registrar
 - [`Registrar::plugin_id`](../methods/registrar-plugin-id.md)
 - [`Registrar::register_entity`](../methods/registrar-register-entity.md)
 - [`Registrar::register_overlay`](../methods/registrar-register-overlay.md)
-- [`Registrar::register_panel`](../methods/registrar-register-panel.md)
 - [`Registrar::register_save_chunk`](../methods/registrar-register-save-chunk.md)
 - [`Registrar::register_substance`](../methods/registrar-register-substance.md)
 - [`Registrar::register_tool`](../methods/registrar-register-tool.md)

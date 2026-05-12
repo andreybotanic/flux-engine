@@ -1,11 +1,11 @@
 use crate::{
     plugins::{
         abi::{
-            FluxBuildHudForCellEventPayload, FluxBuildPanelEventPayload, FluxEmptyEventPayload,
-            FluxEntityEventPayload, FluxKeyEventPayload, FluxMouseCellEventPayload,
-            FluxOverlayChangedEventPayload, FluxPluginDispatchFn, FluxPluginHandle,
-            FluxRenderOverlayEventPayload, FluxRuntimeHost, FluxSimulationPausedChangedEvent,
-            FluxToolSelectedEventPayload, FluxUtf8Slice,
+            FluxBuildHudForCellEventPayload, FluxEmptyEventPayload, FluxEntityEventPayload,
+            FluxKeyEventPayload, FluxMouseCellEventPayload, FluxOverlayChangedEventPayload,
+            FluxPluginDispatchFn, FluxPluginHandle, FluxRenderOverlayEventPayload,
+            FluxRuntimeHost, FluxSimulationPausedChangedEvent, FluxToolSelectedEventPayload,
+            FluxUtf8Slice,
         },
         api::events::{InputModifiers, MouseButton, MouseCellEvent, PluginRuntimeEvent},
     },
@@ -133,14 +133,6 @@ pub(super) fn dispatch_to_plugin(
                     cell_y: cell.y,
                 };
                 let _ = dispatch_fn(handle, 19, (&payload as *const FluxBuildHudForCellEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
-            }
-            PluginRuntimeEvent::BuildPanel { panel_id } => {
-                let payload = FluxBuildPanelEventPayload {
-                    struct_size: std::mem::size_of::<FluxBuildPanelEventPayload>() as u32,
-                    api_version: crate::plugins::ENGINE_PLUGIN_API_VERSION_VALUE,
-                    panel_id: FluxUtf8Slice::from_str(panel_id.as_str()),
-                };
-                let _ = dispatch_fn(handle, 20, (&payload as *const FluxBuildPanelEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
             }
             PluginRuntimeEvent::RenderOverlay { overlay_id } => {
                 let payload = FluxRenderOverlayEventPayload {

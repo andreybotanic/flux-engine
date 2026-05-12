@@ -66,8 +66,8 @@ FluxEngine/
 - `crates/flux_plugin_abi/src/ffi.rs`: C-compatible `Flux*` ABI-структуры, callback typedef-ы и export-name константы для скрытого DLL-контракта.
 - `crates/flux_plugin_abi/src/lib.rs`: Точка входа внутреннего ABI crate-а и re-export его модулей.
 - `crates/flux_plugin_sdk/Cargo.toml`: Манифест публичного Rust-first Plugin SDK.
-- `crates/flux_plugin_sdk/src/api.rs`: Публичные proxy API плагина (`WorldApi`, `EntityApi`, `GasApi`, `UiApi`, `PanelApi`, `OverlayApi`, `SaveApi`, `TimeApi`, `InputApi`, `LoggerApi`).
-- `crates/flux_plugin_sdk/src/descriptors.rs`: Typed descriptor-ы SDK для сущностей, газов, overlay, tool, panel и save chunk.
+- `crates/flux_plugin_sdk/src/api.rs`: Публичные proxy API плагина (`WorldApi`, `EntityApi`, `GasApi`, `UiApi`, `OverlayApi`, `SaveApi`, `TimeApi`, `InputApi`, `LoggerApi`).
+- `crates/flux_plugin_sdk/src/descriptors.rs`: Typed descriptor-ы SDK для сущностей, газов, overlay, tool и save chunk.
 - `crates/flux_plugin_sdk/src/dispatch_state_builder.rs`: Внутренний builder typed dispatch-state из ABI payload для работы proxy API во время handler-вызова.
 - `crates/flux_plugin_sdk/src/error.rs`: `PluginError` и базовые ошибки публичного SDK.
 - `crates/flux_plugin_sdk/src/events.rs`: Typed runtime events SDK, `PluginEvent` и ABI decode logic, скрытая от plugin author-а за trait-слоем.
@@ -159,7 +159,7 @@ FluxEngine/
 - `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
 - `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API.
 - `src/plugins/reload.rs`: Атомарный manual reload/rescan runtime-плагинов без загруженного мира: rebuild registry, пересборка gas registry, generation/report и сравнение source fingerprints.
-- `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin capabilities/content, включая сущности, газы, инструменты, панели, overlay, save chunks и event subscriptions без `handler_name`.
+- `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin capabilities/content, включая сущности, газы, инструменты, overlay, save chunks и event subscriptions без `handler_name`.
 - `src/plugins/runtime_dll.rs`: Live DLL executor верхнего уровня: lifecycle runtime DLL-плагинов, host callbacks для entity/gas/UI/overlay/save/time APIs и orchestration unified dispatch.
 - `src/plugins/runtime_dll_events.rs`: Typed runtime event dispatch для SDK v5: кодирует ABI payload и вызывает единый `flux_plugin_dispatch` у каждого подписанного DLL-плагина.
 - `src/plugins/flux_api_cell_demo_plugin/`: Runtime DLL fixture на `flux_plugin_sdk`, демонстрирующий entity/tool/input path нового SDK.

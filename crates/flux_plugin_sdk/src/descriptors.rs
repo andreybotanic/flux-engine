@@ -31,14 +31,6 @@ pub struct ToolDescriptor {
     pub silhouette_path: Option<String>,
 }
 
-/// One plugin-owned panel.
-#[derive(Clone, Debug, PartialEq)]
-pub struct PanelDescriptor {
-    pub id: ContentId,
-    pub title: String,
-    pub root: UiNode,
-}
-
 /// One plugin-owned overlay mode.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OverlayDescriptor {
@@ -88,33 +80,6 @@ impl SaveChunk {
         })
     }
 }
-
-/// One declarative UI node used by plugin panels.
-#[derive(Clone, Debug, PartialEq)]
-pub enum UiNode {
-    Text { text: String },
-    Button { id: ContentId, label: String },
-    Checkbox { id: ContentId, label: String, checked: bool },
-    Select {
-        id: ContentId,
-        label: String,
-        options: Vec<String>,
-        selected: usize,
-    },
-    Slider {
-        id: ContentId,
-        label: String,
-        value: f32,
-        min: f32,
-        max: f32,
-    },
-    Column { children: Vec<UiNode> },
-    Row { children: Vec<UiNode> },
-}
-
-/// A future UI patch placeholder used by panel APIs.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct UiPatch;
 
 /// One HUD block appended by a plugin.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -249,12 +214,6 @@ pub enum MouseButton {
     Right,
     Middle,
     Other(u16),
-}
-
-/// One lightweight panel patch request placeholder.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct PanelState {
-    pub panel_id: Option<ContentId>,
 }
 
 /// Extra overlay runtime state placeholder.

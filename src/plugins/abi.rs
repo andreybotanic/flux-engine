@@ -76,7 +76,7 @@ pub fn event_kind_from_abi(raw: u32) -> Option<PluginEvent> {
         FluxEventKind::KeyReleased => PluginEvent::KeyReleased,
         FluxEventKind::OverlayChanged => PluginEvent::OverlayChanged,
         FluxEventKind::BuildHudForCell => PluginEvent::BuildHudForCell,
-        FluxEventKind::BuildPanel => PluginEvent::BuildPanel,
+        FluxEventKind::BuildPanel => return None,
         FluxEventKind::RenderOverlay => PluginEvent::RenderOverlay,
     })
 }

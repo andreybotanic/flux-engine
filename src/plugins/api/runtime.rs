@@ -6,7 +6,7 @@ use crate::plugins::{
     api::{
         events::PluginEvent,
         render_api::OverlayRenderPolicy,
-        ui_api::{PanelDescriptor, ToolDescriptor},
+        ui_api::ToolDescriptor,
     },
     default_plugin, ContentId, LoadedPluginMetadata, PluginId,
 };
@@ -61,14 +61,12 @@ pub struct SaveChunkDescriptor {
 /// # Fields
 /// - `subscriptions`: Plugins grouped by event kind for runtime dispatch.
 /// - `tools`: Registered plugin tool descriptors keyed by stable content id.
-/// - `panels`: Registered plugin panel descriptors keyed by stable content id.
 /// - `overlays`: Registered plugin overlay descriptors keyed by stable content id.
 /// - `save_chunks`: Registered plugin save chunk descriptors keyed by stable content id.
 #[derive(Resource, Clone, Debug, Default)]
 pub struct PluginRuntimeRegistry {
     subscriptions: BTreeMap<PluginEvent, BTreeSet<PluginId>>,
     tools: BTreeMap<ContentId, ToolDescriptor>,
-    panels: BTreeMap<ContentId, PanelDescriptor>,
     overlays: BTreeMap<ContentId, RuntimeOverlayDescriptor>,
     save_chunks: BTreeMap<ContentId, SaveChunkDescriptor>,
 }
@@ -98,12 +96,6 @@ impl PluginRuntimeRegistry {
         self.tools.insert(descriptor.id.clone(), descriptor);
     }
 
-    /// Registers a plugin-owned panel descriptor.
-    ///
-    pub fn register_panel(&mut self, descriptor: PanelDescriptor) {
-        self.panels.insert(descriptor.id.clone(), descriptor);
-    }
-
     /// Registers a plugin-owned overlay descriptor.
     ///
     pub fn register_overlay(&mut self, descriptor: RuntimeOverlayDescriptor) {
@@ -120,12 +112,6 @@ impl PluginRuntimeRegistry {
     ///
     pub fn tools(&self) -> &BTreeMap<ContentId, ToolDescriptor> {
         &self.tools
-    }
-
-    /// Returns registered panel descriptors.
-    ///
-    pub fn panels(&self) -> &BTreeMap<ContentId, PanelDescriptor> {
-        &self.panels
     }
 
     /// Returns registered overlay descriptors.
@@ -161,9 +147,6 @@ pub fn build_plugin_runtime_registry(
     for plugin in loaded_plugins {
         for subscription in &plugin.registration.subscriptions {
             registry.subscribe(plugin.plugin_id.clone(), subscription.event_kind);
-        }
-        for panel in &plugin.registration.panels {
-            registry.register_panel(panel.clone());
         }
         for tool in &plugin.registration.tools {
             registry.register_tool(tool.clone());

@@ -23,7 +23,5 @@ pub struct UiApi
 - [`UiApi::add_hud_block`](../methods/uiapi-add-hud-block.md)
 - [`UiApi::add_hud_line`](../methods/uiapi-add-hud-line.md)
 - [`UiApi::clear_hud_block`](../methods/uiapi-clear-hud-block.md)
-- [`UiApi::close_panel`](../methods/uiapi-close-panel.md)
-- [`UiApi::open_panel`](../methods/uiapi-open-panel.md)
 - [`UiApi::set_active_tool`](../methods/uiapi-set-active-tool.md)
 

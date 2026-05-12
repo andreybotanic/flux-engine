@@ -2,13 +2,13 @@ use std::marker::PhantomData;
 
 use flux_plugin_abi::{
     FluxEntityDescriptor, FluxGasSubstanceDescriptor, FluxOverlayDescriptor,
-    FluxPanelDescriptor, FluxRegistrar, FluxSaveChunkDescriptor, FluxStatus,
-    FluxSubscriptionDescriptor, FluxToolDescriptor, FluxUtf8Slice,
+    FluxRegistrar, FluxSaveChunkDescriptor, FluxStatus, FluxSubscriptionDescriptor,
+    FluxToolDescriptor, FluxUtf8Slice,
 };
 
 use crate::{
-    AbiEventPayload, EntityDescriptor, OverlayDescriptor, OverlayRenderPolicy, PanelDescriptor,
-    PluginError, PluginEvent, SaveChunkDescriptor, SubstanceDescriptor, ToolDescriptor,
+    AbiEventPayload, EntityDescriptor, OverlayDescriptor, OverlayRenderPolicy, PluginError,
+    PluginEvent, SaveChunkDescriptor, SubstanceDescriptor, ToolDescriptor,
 };
 
 /// One typed plugin event handler.
@@ -127,23 +127,6 @@ impl<'a, P> Registrar<'a, P> {
             label: FluxUtf8Slice::from_str(&descriptor.label),
             icon_path: FluxUtf8Slice::from_str(&descriptor.icon_path),
             silhouette_path: FluxUtf8Slice::from_str(descriptor.silhouette_path.as_deref().unwrap_or("")),
-        };
-        unsafe { callback(self.raw.registration_context, &abi) }
-            .into_result()
-            .map_err(status_error)?;
-        self.registered_ids.push(descriptor.id);
-        Ok(())
-    }
-
-    /// Registers one panel descriptor.
-    pub fn register_panel(&mut self, descriptor: PanelDescriptor) -> Result<(), PluginError> {
-        let callback = self
-            .raw
-            .register_panel_fn
-            .ok_or(PluginError::Unsupported("registrar.register_panel"))?;
-        let abi = FluxPanelDescriptor {
-            id: FluxUtf8Slice::from_str(descriptor.id.as_str()),
-            title: FluxUtf8Slice::from_str(&descriptor.title),
         };
         unsafe { callback(self.raw.registration_context, &abi) }
             .into_result()
