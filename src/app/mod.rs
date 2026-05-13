@@ -7,6 +7,7 @@ use bevy::{
 };
 
 use crate::{
+    bgm::BgmPlugin,
     config::GameConfig,
     debug::DebugPlugin,
     editor::EditorPlugin,
@@ -151,6 +152,7 @@ pub fn run() {
             RuntimeDllHostPlugin,
             EditorPlugin,
             DebugPlugin,
+            BgmPlugin,
         ));
 
     app.run();

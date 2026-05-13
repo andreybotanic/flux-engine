@@ -1,4 +1,5 @@
 pub mod app;
+pub mod bgm;
 pub mod config;
 pub mod debug;
 pub mod editor;

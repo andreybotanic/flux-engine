@@ -7,8 +7,11 @@
 ```text
 FluxEngine/
 |-- .cargo/                  # Локальные cargo alias-ы проекта, включая обычную/глубокую очистку target и релизную сборку через xtask.
-|-- assets/                  # Core-графика и шейдерные ресурсы приложения.
+|-- assets/                  # Core-графика, музыка и шейдерные ресурсы приложения.
 |   |-- fonts/               # UI-шрифты, загружаемые через AssetServer.
+|   |-- music/               # Фоновая музыка игры.
+|   |   |-- game/            # MP3-треки игрового контекста (мир загружен / Game Menu).
+|   |   `-- menu/            # MP3-треки контекста главного меню.
 |   |-- shaders/             # Core WGSL-шейдеры вычислений.
 |   `-- sprites/             # Спрайты UI и мира.
 |       |-- ui/              # Core UI-элементы меню/селектов/общих инструментов.
@@ -25,6 +28,7 @@ FluxEngine/
 |-- plugins_dev/             # Runtime dev-каталог expanded plugin-папок `plugins_dev/<plugin_id>/`.
 |-- src/                     # Исходный код Rust.
 |   |-- app/                 # Сборка и запуск Bevy-приложения.
+|   |-- bgm/                 # Runtime-подсистема фоновой музыки (menu/game контексты).
 |   |-- bin/                 # Вспомогательные бинарники (перф, утилиты).
 |   |-- config/              # Загрузка/валидация конфигов в коде.
 |   |-- debug/               # Диагностические режимы и метрики.
@@ -56,6 +60,8 @@ FluxEngine/
 - `assets/sprites/ui/select_arrow.png`: UI-спрайт стрелки для выпадающих списков.
 - `assets/sprites/ui/tool_build.png`, `tool_erase.png`, `tool_add_gas.png`, `tool_clear_gas.png`: Core UI-спрайты общих инструментов; content-specific tool icons лежат в default plugin assets.
 - `assets/sprites/world/backdrop_noise.png`: Core фоновая текстура мира; default-owned тайлы/структуры лежат в default plugin assets.
+- `assets/music/menu/*.mp3`: Набор треков фоновой музыки для `Main Menu`; сканируется один раз на старте и проигрывается в случайном цикле с fade и паузами.
+- `assets/music/game/*.mp3`: Набор треков фоновой музыки для режима загруженного мира (`игра` + `Game Menu`) с тем же циклом воспроизведения.
 - `Cargo.lock`: Зафиксированные версии зависимостей Cargo.
 - `Cargo.toml`: Манифест Rust-проекта, workspace и зависимости; основной crate, `xtask`, `crates/flux_plugin_sdk` и `crates/flux_plugin_abi` входят в workspace, sample plugin crates живут под `src/plugins/*` и собираются отдельно через `xtask`.
 - `crates/flux_plugin_abi/Cargo.toml`: Манифест внутреннего ABI crate-а для runtime plugin handshake.
@@ -94,6 +100,7 @@ FluxEngine/
 - `plugins/.gitkeep`: Фиксирует пустой runtime-каталог для packaged plugins; реальные `.fluxplugin` игнорируются через `.gitignore`.
 - `plugins_dev/.gitkeep`: Фиксирует пустой runtime-каталог expanded dev plugins; реальные папки плагинов игнорируются через `.gitignore`.
 - `src/app/mod.rs`: Сборка Bevy-приложения, plugin bootstrap/config resource, CLI-флаги запуска включая `--plugins-dev`, backend-инициализация, запуск и подключение общего runtime host-пути для built-in/DLL plugin dispatch.
+- `src/bgm/mod.rs`: Отдельный runtime-plugin фоновой музыки: одноразовый startup-скан `assets/music/menu|game`, state machine `fade-in -> play -> fade-out -> pause`, случайный независимый выбор следующего трека и мгновенное переключение контекста `menu <-> game`.
 - `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
 - `src/config/hud.rs`: Публичные типы runtime-конфигов HUD, включая substance-контейнеры и режимы видимости по hover, без встроенных entity-label/fallback-конфигов.
@@ -118,7 +125,7 @@ FluxEngine/
 - `src/editor/ui_setup_structure_buttons_block.rs`: Вспомогательные фабрики кнопок инструментов/материалов.
 - `src/input/camera.rs`: Управление камерой, зум/пан и тесты корректности якоря.
 - `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
-- `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем, включая новый `plugins`.
+- `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем, включая `plugins` и подсистему фоновой музыки `bgm`.
 - `src/main.rs`: Точка входа бинаря; запускает приложение.
 - `src/plugins/abi.rs`: Engine-side wrapper над `crates/flux_plugin_abi`: сборка host/registrar payload для loader/runtime и mapping ABI event kinds в внутренние engine events.
 - `src/plugins/api/mod.rs`: Engine-side shared plugin API module root и re-exports для событий, runtime registry, render/UI/save contracts, которые использует хост plugin-системы.
