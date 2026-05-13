@@ -13,13 +13,13 @@ use zip::ZipArchive;
 use crate::plugins::{
     abi::{
         build_host_api, build_registrar, event_kind_from_abi, FluxEntityDescriptor,
-        FluxGasSubstanceDescriptor, FluxOverlayDescriptor, FluxPluginApiVersionFn,
-        FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginDispatchFn, FluxPluginHandle,
-        FluxPluginRegisterFn, FluxSaveChunkDescriptor, FluxStatus, FluxSubscriptionDescriptor,
-        FluxToolDescriptor, FluxUtf8Slice,
-        FLUX_PLUGIN_API_VERSION_EXPORT_NAME,
-        FLUX_PLUGIN_CREATE_EXPORT_NAME, FLUX_PLUGIN_DESTROY_EXPORT_NAME,
-        FLUX_PLUGIN_DISPATCH_EXPORT_NAME, FLUX_PLUGIN_REGISTER_EXPORT_NAME,
+        FluxGasSubstanceDescriptor, FluxOverlayDescriptor, FluxOverlayMaterialDescriptor,
+        FluxPluginApiVersionFn, FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginDispatchFn,
+        FluxPluginHandle, FluxPluginRegisterFn, FluxSaveChunkDescriptor, FluxStatus,
+        FluxSubscriptionDescriptor, FluxToolDescriptor, FluxUtf8Slice,
+        FLUX_PLUGIN_API_VERSION_EXPORT_NAME, FLUX_PLUGIN_CREATE_EXPORT_NAME,
+        FLUX_PLUGIN_DESTROY_EXPORT_NAME, FLUX_PLUGIN_DISPATCH_EXPORT_NAME,
+        FLUX_PLUGIN_REGISTER_EXPORT_NAME,
     },
     api::{
         render_api::OverlayRenderPolicy,
@@ -396,6 +396,7 @@ fn instantiate_runtime_plugin_from_root(
             Some(register_noop_tool_callback),
             None,
             Some(register_noop_overlay_callback),
+            Some(register_noop_overlay_material_callback),
             Some(register_noop_save_chunk_callback),
             Some(register_noop_subscription_callback),
             ptr::null_mut(),
@@ -655,6 +656,7 @@ fn validate_plugin_root(
             Some(register_tool_callback),
             None,
             Some(register_overlay_callback),
+            Some(register_overlay_material_callback),
             Some(register_save_chunk_callback),
             Some(register_subscription_callback),
             (&mut registration_collector as *mut PluginRegistrationCollector).cast::<c_void>(),
@@ -733,10 +735,8 @@ unsafe extern "C" fn register_entity_callback(
                 .iter()
                 .any(|registered| registered.id == descriptor.id)
             {
-                collector.error_message = Some(format!(
-                    "duplicate entity registration '{}'",
-                    descriptor.id
-                ));
+                collector.error_message =
+                    Some(format!("duplicate entity registration '{}'", descriptor.id));
                 return FluxStatus::FAILED;
             }
             collector.registration.entities.push(descriptor);
@@ -782,6 +782,27 @@ unsafe extern "C" fn register_overlay_callback(
     match overlay_descriptor_from_abi(&collector.plugin_id, &*descriptor) {
         Ok(descriptor) => {
             collector.registration.overlays.push(descriptor);
+            FluxStatus::OK
+        }
+        Err(error) => {
+            collector.error_message = Some(error);
+            FluxStatus::FAILED
+        }
+    }
+}
+
+unsafe extern "C" fn register_overlay_material_callback(
+    context: *mut c_void,
+    descriptor: *const FluxOverlayMaterialDescriptor,
+) -> FluxStatus {
+    if context.is_null() || descriptor.is_null() {
+        return FluxStatus::INVALID_ARGUMENT;
+    }
+
+    let collector = &mut *(context.cast::<PluginRegistrationCollector>());
+    match overlay_material_descriptor_from_abi(&*descriptor) {
+        Ok(descriptor) => {
+            collector.registration.overlay_materials.push(descriptor);
             FluxStatus::OK
         }
         Err(error) => {
@@ -897,6 +918,17 @@ unsafe extern "C" fn register_noop_overlay_callback(
     }
 }
 
+unsafe extern "C" fn register_noop_overlay_material_callback(
+    _context: *mut c_void,
+    descriptor: *const FluxOverlayMaterialDescriptor,
+) -> FluxStatus {
+    if descriptor.is_null() {
+        FluxStatus::INVALID_ARGUMENT
+    } else {
+        FluxStatus::OK
+    }
+}
+
 unsafe extern "C" fn register_noop_save_chunk_callback(
     _context: *mut c_void,
     descriptor: *const FluxSaveChunkDescriptor,
@@ -931,6 +963,7 @@ unsafe fn entity_descriptor_from_abi(
         label,
         icon_path,
         silhouette_path: (!silhouette_path.trim().is_empty()).then_some(silhouette_path),
+        tags: Vec::new(),
     })
 }
 
@@ -967,6 +1000,20 @@ unsafe fn overlay_descriptor_from_abi(
         label,
         hotkey: (!hotkey.trim().is_empty()).then_some(hotkey),
         render_policy,
+        graph: None,
+    })
+}
+
+unsafe fn overlay_material_descriptor_from_abi(
+    descriptor: &FluxOverlayMaterialDescriptor,
+) -> Result<flux_plugin_sdk::OverlayMaterialDescriptor, String> {
+    let id = read_abi_utf8(descriptor.id, "overlay material id")?;
+    let label = read_abi_utf8(descriptor.label, "overlay material label")?;
+    let shader_path = read_abi_utf8(descriptor.shader_path, "overlay material shader path")?;
+    Ok(flux_plugin_sdk::OverlayMaterialDescriptor {
+        id: flux_plugin_sdk::ContentId::parse(&id)?,
+        label,
+        shader_path,
     })
 }
 

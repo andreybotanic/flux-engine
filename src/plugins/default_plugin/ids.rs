@@ -30,6 +30,13 @@ pub const OVERLAY_MAIN_ID: &str = "flux.default.overlay.main";
 pub const OVERLAY_GAS_ID: &str = "flux.default.overlay.gas";
 /// Stable content id for the default pipes overlay mode.
 pub const OVERLAY_PIPES_ID: &str = "flux.default.overlay.pipes";
+/// Stable image id for the generic white square used by overlay graphs.
+pub const OVERLAY_IMAGE_WHITE_ID: &str = "flux.default.overlay.image.white";
+/// Stable image id for the vent/bridge port overlay icon used by `F3`.
+pub const OVERLAY_IMAGE_VENT_ICON_ID: &str = "flux.default.overlay.image.vent_icon";
+/// Stable material id for the pipe highlight shader used by `F3`.
+pub const OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID: &str =
+    "flux.default.overlay.material.pipe_highlight";
 /// Stable substance id for default hydrogen gas.
 pub const SUBSTANCE_H2_ID: &str = "flux.default.substance.h2";
 /// Stable substance id for default oxygen gas.

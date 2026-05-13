@@ -228,6 +228,7 @@ dependencies = [
 name = "flux_api_temperature_overlay_plugin"
 version = "0.1.0"
 dependencies = [
+ "bevy_math",
  "flux_plugin_sdk",
 ]
 

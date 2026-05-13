@@ -28,7 +28,6 @@ use crate::{
         ContentId, ContentRegistry, LoadedPluginMetadata, PluginId, PluginRuntimeEvent,
     },
     render::{
-        world_view::{PluginOverlayImage, PluginOverlaySprite},
         OverlayMode,
     },
     save::WorldLoadState,
@@ -66,6 +65,24 @@ impl PluginOverlayFrameStore {
     }
 }
 
+/// One declarative overlay graph submitted by a runtime plugin.
+#[derive(Resource, Clone, Debug, Default, PartialEq)]
+pub struct PluginOverlayGraphStore {
+    pub graph: Option<flux_plugin_sdk::OverlayGraph>,
+}
+
+impl PluginOverlayGraphStore {
+    /// Removes the currently submitted overlay graph.
+    pub fn clear(&mut self) {
+        self.graph = None;
+    }
+
+    /// Returns true when a plugin submitted one graph this frame.
+    pub fn has_graph(&self) -> bool {
+        self.graph.is_some()
+    }
+}
+
 /// HUD blocks submitted by runtime plugins for the current hovered cell.
 #[derive(Resource, Clone, Debug, Default, PartialEq)]
 pub struct PluginHudBlockStore {
@@ -89,10 +106,28 @@ pub struct RuntimeDllPluginRegistry {
 /// Bevy plugin that dispatches subscribed runtime events into live DLL plugins.
 pub struct RuntimeDllHostPlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum RuntimeDllOverlaySet {
+    Dispatch,
+    Sync,
+}
+
 impl Plugin for RuntimeDllHostPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, dispatch_queued_runtime_plugin_events)
-            .add_systems(Update, dispatch_plugin_overlay_render)
+            .configure_sets(
+                Update,
+                RuntimeDllOverlaySet::Sync.after(RuntimeDllOverlaySet::Dispatch),
+            )
+            .add_systems(
+                Update,
+                dispatch_plugin_overlay_render.in_set(RuntimeDllOverlaySet::Dispatch),
+            )
+            .add_systems(
+                Update,
+                crate::render::overlay_graph_runtime::sync_overlay_graph_visuals
+                    .in_set(RuntimeDllOverlaySet::Sync),
+            )
             .add_systems(
                 FixedUpdate,
                 dispatch_runtime_plugin_pre_gas_step.in_set(SimulationSet::PluginPreStep),
@@ -218,6 +253,7 @@ pub struct RuntimeHostContext<'a> {
     pub gas: Option<&'a mut GasField>,
     pub gpu_state: Option<&'a mut GpuRuntimeState>,
     pub overlay_frame: Option<&'a mut PluginOverlayFrameStore>,
+    pub overlay_graph: Option<&'a mut PluginOverlayGraphStore>,
     pub hud_blocks: Option<&'a mut PluginHudBlockStore>,
     pub save_chunks: Option<&'a mut SaveChunkStore>,
     pub simulation_control: Option<&'a mut SimulationControl>,
@@ -247,6 +283,7 @@ impl<'a> RuntimeHostContext<'a> {
             gas: None,
             gpu_state: None,
             overlay_frame: None,
+            overlay_graph: None,
             hud_blocks: None,
             save_chunks: None,
             simulation_control: None,
@@ -628,6 +665,27 @@ pub unsafe extern "C" fn submit_overlay_frame_callback(
     frame
         .rgba8
         .extend_from_slice(std::slice::from_raw_parts(rgba8, len));
+    FluxStatus::OK
+}
+
+/// ABI callback that submits one declarative overlay graph for the active plugin overlay.
+pub unsafe extern "C" fn submit_overlay_graph_callback(
+    context: *mut c_void,
+    graph_json: FluxUtf8Slice,
+) -> FluxStatus {
+    let Some(context) = context.cast::<RuntimeHostContext>().as_mut() else {
+        return FluxStatus::INVALID_ARGUMENT;
+    };
+    let Ok(graph_json) = read_abi_utf8(graph_json) else {
+        return FluxStatus::INVALID_ARGUMENT;
+    };
+    let Ok(graph) = serde_json::from_str::<flux_plugin_sdk::OverlayGraph>(&graph_json) else {
+        return FluxStatus::INVALID_ARGUMENT;
+    };
+    let Some(store) = context.overlay_graph.as_deref_mut() else {
+        return FluxStatus::FAILED;
+    };
+    store.graph = Some(graph);
     FluxStatus::OK
 }
 
@@ -1685,42 +1743,80 @@ fn flush_changed_cells(
     }
 }
 
-fn dispatch_plugin_overlay_render(
-    overlay_mode: Res<OverlayMode>,
-    world_load_state: Res<WorldLoadState>,
-    mut runtime_plugins: ResMut<RuntimeDllPluginRegistry>,
-    runtime_registry: Res<PluginRuntimeRegistry>,
-    content_registry: Res<ContentRegistry>,
-    gas_registry: Res<GasRegistry>,
-    mut simulation_control: ResMut<SimulationControl>,
-    simulation_step: Res<SimulationStep>,
-    mut active_tool: ResMut<ActiveEditorTool>,
-    mut overlay_frame: ResMut<PluginOverlayFrameStore>,
-    overlay_image: Res<PluginOverlayImage>,
-    mut images: ResMut<Assets<Image>>,
-    mut overlay_sprites: Query<&mut Visibility, With<PluginOverlaySprite>>,
+pub(crate) fn dispatch_plugin_overlay_render(
+    mode_resources: (Res<OverlayMode>, Res<WorldLoadState>),
+    runtime_resources: (
+        ResMut<RuntimeDllPluginRegistry>,
+        Res<PluginRuntimeRegistry>,
+        Res<ContentRegistry>,
+        Res<GasRegistry>,
+    ),
+    world_resources: (
+        ResMut<WorldGrid>,
+        ResMut<PlacedStructureMap>,
+        ResMut<GasField>,
+        ResMut<GpuRuntimeState>,
+        Res<PipeSimulationConfig>,
+        ResMut<PipeGasField>,
+        ResMut<PipeFluxField>,
+        ResMut<PipeFlowVisualState>,
+    ),
+    dispatch_resources: (
+        ResMut<SimulationControl>,
+        Res<SimulationStep>,
+        ResMut<ActiveEditorTool>,
+        ResMut<PluginOverlayFrameStore>,
+        ResMut<PluginOverlayGraphStore>,
+    ),
 ) {
+    let (overlay_mode, world_load_state) = mode_resources;
+    let (mut runtime_plugins, runtime_registry, content_registry, gas_registry) =
+        runtime_resources;
+    let (
+        mut world,
+        mut structures,
+        mut gas,
+        mut gpu_state,
+        pipe_config,
+        mut pipe_gas,
+        mut pipe_flux,
+        mut pipe_flow_visuals,
+    ) = world_resources;
+    let (
+        mut simulation_control,
+        simulation_step,
+        mut active_tool,
+        mut overlay_frame,
+        mut overlay_graph,
+    ) = dispatch_resources;
+
     overlay_frame.clear();
+    overlay_graph.clear();
     if !world_load_state.has_world {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
         return;
     }
     let OverlayMode::Plugin(raw_overlay_id) = *overlay_mode else {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
         return;
     };
     let Ok(overlay_id) = ContentId::parse(raw_overlay_id) else {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
         return;
     };
     if !overlay_is_plugin_controlled(&runtime_registry, &overlay_id) {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
         return;
     }
 
     {
         let mut context = RuntimeHostContext::new(&content_registry, &gas_registry);
+        context.world = Some(&mut world);
+        context.structures = Some(&mut structures);
+        context.gas = Some(&mut gas);
+        context.gpu_state = Some(&mut gpu_state);
+        context.pipe_config = Some(&pipe_config);
+        context.pipe_gas = Some(&mut pipe_gas);
+        context.pipe_flux = Some(&mut pipe_flux);
+        context.pipe_flow_visuals = Some(&mut pipe_flow_visuals);
         context.overlay_frame = Some(&mut overlay_frame);
+        context.overlay_graph = Some(&mut overlay_graph);
         context.simulation_control = Some(&mut simulation_control);
         context.simulation_step = simulation_step.0;
         context.active_tool = Some(&mut active_tool);
@@ -1731,26 +1827,5 @@ fn dispatch_plugin_overlay_render(
             },
             &mut context,
         );
-    }
-
-    if overlay_frame.has_frame() {
-        if let Some(image) = images.get_mut(&overlay_image.texture) {
-            if let Some(data) = image.data.as_mut() {
-                data.clear();
-                data.extend_from_slice(&overlay_frame.rgba8);
-            }
-        }
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Visible);
-    } else {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
-    }
-}
-
-fn set_plugin_overlay_visibility(
-    overlay_sprites: &mut Query<&mut Visibility, With<PluginOverlaySprite>>,
-    visibility: Visibility,
-) {
-    for mut sprite_visibility in overlay_sprites.iter_mut() {
-        *sprite_visibility = visibility;
     }
 }

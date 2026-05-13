@@ -3,6 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use serde::{Deserialize, Serialize};
+
 /// Strongly typed wrapper around one plugin ABI version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PluginApiVersion(pub u32);
@@ -21,7 +23,7 @@ impl fmt::Display for PluginApiVersion {
 }
 
 /// Canonical plugin identifier.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct PluginId(String);
 
 impl PluginId {
@@ -44,7 +46,7 @@ impl fmt::Display for PluginId {
 }
 
 /// Canonical gameplay content identifier.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ContentId(String);
 
 impl ContentId {
@@ -66,8 +68,31 @@ impl fmt::Display for ContentId {
     }
 }
 
+/// Canonical gameplay content tag used by cross-plugin selectors.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct ContentTag(String);
+
+impl ContentTag {
+    /// Parses one content tag.
+    pub fn parse(raw: &str) -> Result<Self, String> {
+        validate_stable_id(raw, "content tag")?;
+        Ok(Self(raw.to_string()))
+    }
+
+    /// Returns the canonical tag string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ContentTag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// Canonical gas-substance identifier.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct SubstanceId(String);
 
 impl SubstanceId {
@@ -90,7 +115,7 @@ impl fmt::Display for SubstanceId {
 }
 
 /// Runtime entity instance identifier.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct EntityInstanceId(pub u32);
 
 /// Stable entity-kind identifier.
@@ -103,21 +128,21 @@ pub type OverlayModeId = ContentId;
 pub type CellPos = bevy_math::UVec2;
 
 /// One inclusive cell rectangle.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CellRect {
     pub min: CellPos,
     pub max: CellPos,
 }
 
 /// World bounds in cells.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorldBounds {
     pub width: u32,
     pub height: u32,
 }
 
 /// Engine paths visible to the plugin during creation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginPaths {
     pub plugin_root: PathBuf,
     pub config_root: PathBuf,
@@ -167,4 +192,18 @@ fn validate_stable_id(raw: &str, label: &str) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_tag_uses_stable_id_validation() {
+        let tag = ContentTag::parse("flux.default.pipe-network").expect("valid tag");
+        assert_eq!(tag.as_str(), "flux.default.pipe-network");
+
+        let error = ContentTag::parse("Flux.Default.Pipe").expect_err("invalid tag");
+        assert!(error.contains("content tag"));
+    }
 }

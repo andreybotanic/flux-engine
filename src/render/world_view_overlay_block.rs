@@ -81,6 +81,7 @@ fn registered_overlay_mode(id: &crate::plugins::ContentId) -> OverlayMode {
 pub(crate) fn apply_overlay_mode(
     overlay_mode: Res<OverlayMode>,
     world_load_state: Res<WorldLoadState>,
+    graph_scene: Option<Res<super::overlay_graph_runtime::OverlayGraphSceneState>>,
     mut visuals: ParamSet<(
         Query<
             '_,
@@ -195,6 +196,9 @@ pub(crate) fn apply_overlay_mode(
     )>,
 ) {
     let show_world = world_load_state.has_world;
+    let pipes_overlay_mode = crate::plugins::default_plugin::is_pipes_overlay_mode(*overlay_mode);
+    let pipes_overlay_authoritative = pipes_overlay_mode;
+    let legacy_pipes = legacy_pipes_overlay_active(*overlay_mode, graph_scene.as_deref());
     let (board_color, backdrop_color) = match *overlay_mode {
         OverlayMode::Main => (
             BOARD_MAIN_COLOR,
@@ -213,11 +217,19 @@ pub(crate) fn apply_overlay_mode(
 
     for (mut board, mut visibility) in &mut visuals.p0() {
         board.color = board_color;
-        *visibility = world_layer_visibility(show_world);
+        *visibility = if pipes_overlay_authoritative {
+            Visibility::Hidden
+        } else {
+            world_layer_visibility(show_world)
+        };
     }
     for (mut backdrop, mut visibility) in &mut visuals.p1() {
         backdrop.color = backdrop_color;
-        *visibility = world_layer_visibility(show_world);
+        *visibility = if pipes_overlay_authoritative {
+            Visibility::Hidden
+        } else {
+            world_layer_visibility(show_world)
+        };
     }
     for (wall_visual, mut sprite, mut visibility) in &mut visuals.p2() {
         sprite.color = match *overlay_mode {
@@ -228,7 +240,11 @@ pub(crate) fn apply_overlay_mode(
             }
             OverlayMode::Plugin(_) => wall_visual.main_tint,
         };
-        *visibility = world_layer_visibility(show_world);
+        *visibility = if pipes_overlay_authoritative {
+            Visibility::Hidden
+        } else {
+            world_layer_visibility(show_world)
+        };
     }
     for (outer_border_visual, mut sprite, mut visibility) in &mut visuals.p3() {
         sprite.color = match *overlay_mode {
@@ -239,19 +255,35 @@ pub(crate) fn apply_overlay_mode(
             }
             OverlayMode::Plugin(_) => outer_border_visual.main_tint,
         };
-        *visibility = world_layer_visibility(show_world);
+        *visibility = if pipes_overlay_authoritative {
+            Visibility::Hidden
+        } else {
+            world_layer_visibility(show_world)
+        };
     }
     for (pipe_visual, mut sprite, mut visibility, mut transform) in &mut visuals.p4() {
-        sprite.color = pipe_sprite_tint(*overlay_mode, pipe_visual);
+        sprite.color = pipe_sprite_tint(*overlay_mode, pipe_visual, legacy_pipes || pipes_overlay_mode);
         transform.translation.z = pipe_visual.appearance_z;
-        *visibility = world_layer_visibility(show_world);
+        *visibility = if pipes_overlay_authoritative {
+            Visibility::Hidden
+        } else {
+            world_layer_visibility(show_world)
+        };
     }
     for (mut visibility, mut transform) in &mut visuals.p5() {
         transform.translation.z = pipe_highlight_z();
-        *visibility = pipe_highlight_visibility(show_world, *overlay_mode);
+        *visibility = if pipes_overlay_authoritative {
+            Visibility::Hidden
+        } else {
+            pipe_highlight_visibility(show_world, *overlay_mode, legacy_pipes || pipes_overlay_mode)
+        };
     }
     for (mut visibility, mut sprite) in &mut visuals.p6() {
-        *visibility = vent_world_visibility(show_world, *overlay_mode);
+        *visibility = if pipes_overlay_authoritative {
+            Visibility::Hidden
+        } else {
+            vent_world_visibility(show_world, *overlay_mode)
+        };
         sprite.color = Color::WHITE;
     }
 }
@@ -260,6 +292,7 @@ pub(crate) fn apply_overlay_mode(
 pub(crate) fn apply_overlay_visibility_mode(
     overlay_mode: Res<OverlayMode>,
     world_load_state: Res<WorldLoadState>,
+    graph_scene: Option<Res<super::overlay_graph_runtime::OverlayGraphSceneState>>,
     mut visuals: ParamSet<(
         Query<
             '_,
@@ -312,14 +345,9 @@ pub(crate) fn apply_overlay_visibility_mode(
     )>,
 ) {
     let show_world = world_load_state.has_world;
-    let (gas_visibility, gas_main_mode_visibility) = match *overlay_mode {
-        OverlayMode::Main => (Visibility::Hidden, Visibility::Visible),
-        OverlayMode::Gas => (Visibility::Visible, Visibility::Hidden),
-        mode if crate::plugins::default_plugin::is_pipes_overlay_mode(mode) => {
-            (Visibility::Hidden, Visibility::Hidden)
-        }
-        OverlayMode::Plugin(_) => (Visibility::Hidden, Visibility::Visible),
-    };
+    let graph_overlay_active = active_graph_overlay_for_mode(*overlay_mode, graph_scene.as_deref());
+    let (gas_visibility, gas_main_mode_visibility) =
+        overlay_gas_visibility(*overlay_mode, graph_overlay_active);
 
     for mut visibility in &mut visuals.p0() {
         *visibility = if show_world {
@@ -341,6 +369,33 @@ pub(crate) fn apply_overlay_visibility_mode(
         } else {
             Visibility::Hidden
         };
+    }
+}
+
+fn active_graph_overlay_for_mode(
+    overlay_mode: OverlayMode,
+    graph_scene: Option<&super::overlay_graph_runtime::OverlayGraphSceneState>,
+) -> bool {
+    let OverlayMode::Plugin(id) = overlay_mode else {
+        return false;
+    };
+    graph_scene
+        .map(|state| state.renders_overlay(id))
+        .unwrap_or(false)
+}
+
+fn overlay_gas_visibility(
+    overlay_mode: OverlayMode,
+    graph_overlay_active: bool,
+) -> (Visibility, Visibility) {
+    match overlay_mode {
+        OverlayMode::Main => (Visibility::Hidden, Visibility::Visible),
+        OverlayMode::Gas => (Visibility::Visible, Visibility::Hidden),
+        mode if crate::plugins::default_plugin::is_pipes_overlay_mode(mode) => {
+            (Visibility::Hidden, Visibility::Hidden)
+        }
+        OverlayMode::Plugin(_) if graph_overlay_active => (Visibility::Hidden, Visibility::Hidden),
+        OverlayMode::Plugin(_) => (Visibility::Hidden, Visibility::Visible),
     }
 }
 
@@ -545,6 +600,7 @@ fn grid_fade(distance_cells: f32, fade_radius_cells: f32) -> f32 {
 pub(crate) fn sync_pipe_overlay_visuals(
     overlay_mode: Res<OverlayMode>,
     world_load_state: Res<WorldLoadState>,
+    graph_scene: Option<Res<super::overlay_graph_runtime::OverlayGraphSceneState>>,
     structures: Res<PlacedStructureMap>,
     pipe_gas: Res<PipeGasField>,
     flow_state: Res<PipeFlowVisualState>,
@@ -586,8 +642,8 @@ pub(crate) fn sync_pipe_overlay_visuals(
         >,
     )>,
 ) {
-    let show_pipe_overlay =
-        world_load_state.has_world && crate::plugins::default_plugin::is_pipes_overlay_mode(*overlay_mode);
+    let show_pipe_overlay = world_load_state.has_world
+        && legacy_pipes_overlay_active(*overlay_mode, graph_scene.as_deref());
 
     for ((x, y), overlay_entities) in &pipe_entities.gas_overlays {
         let Some(border_entities) = pipe_entities.gas_overlay_borders.get(&(*x, *y)) else {
@@ -742,6 +798,7 @@ pub(crate) fn sync_pipe_flow_packets(
     mut commands: Commands,
     overlay_mode: Res<OverlayMode>,
     world_load_state: Res<WorldLoadState>,
+    graph_scene: Option<Res<super::overlay_graph_runtime::OverlayGraphSceneState>>,
     structures: Res<PlacedStructureMap>,
     flow_state: Res<PipeFlowVisualState>,
     control: Res<crate::simulation::SimulationControl>,
@@ -757,6 +814,7 @@ pub(crate) fn sync_pipe_flow_packets(
     if !pipe_flow_packets_enabled(
         world_load_state.has_world,
         *overlay_mode,
+        graph_scene.as_deref(),
         control.paused,
         structures.is_changed(),
     ) {
@@ -816,11 +874,12 @@ pub(crate) fn sync_pipe_flow_packets(
 fn pipe_flow_packets_enabled(
     has_world: bool,
     overlay_mode: OverlayMode,
+    graph_scene: Option<&super::overlay_graph_runtime::OverlayGraphSceneState>,
     paused: bool,
     structures_changed: bool,
 ) -> bool {
     has_world
-        && crate::plugins::default_plugin::is_pipes_overlay_mode(overlay_mode)
+        && legacy_pipes_overlay_active(overlay_mode, graph_scene)
         && !paused
         && !structures_changed
 }
@@ -982,5 +1041,15 @@ fn pipe_pressure_visual_ratio(
 fn pipe_square_inner_size(outer_size: f32) -> f32 {
     const PIPE_SQUARE_BORDER_THICKNESS: f32 = CELL_SIZE / 64.0;
     (outer_size - PIPE_SQUARE_BORDER_THICKNESS * 2.0).max(0.0)
+}
+
+fn legacy_pipes_overlay_active(
+    overlay_mode: OverlayMode,
+    graph_scene: Option<&super::overlay_graph_runtime::OverlayGraphSceneState>,
+) -> bool {
+    crate::plugins::default_plugin::is_pipes_overlay_mode(overlay_mode)
+        && !graph_scene
+            .map(|state| state.renders_overlay(crate::plugins::default_plugin::OVERLAY_PIPES_ID))
+            .unwrap_or(false)
 }
 

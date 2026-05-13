@@ -1,13 +1,9 @@
-﻿use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use bevy::prelude::Resource;
 
 use crate::plugins::{
-    api::{
-        events::PluginEvent,
-        render_api::OverlayRenderPolicy,
-        ui_api::ToolDescriptor,
-    },
+    api::{events::PluginEvent, render_api::OverlayRenderPolicy, ui_api::ToolDescriptor},
     default_plugin, ContentId, LoadedPluginMetadata, PluginId,
 };
 
@@ -34,13 +30,15 @@ pub struct PluginSubscription {
 /// - `label`: Human-readable overlay label shown in UI.
 /// - `hotkey`: Optional hotkey assigned to activate the overlay.
 /// - `render_policy`: Whether the overlay is rendered by core systems or by the plugin itself.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// - `graph`: Optional declarative overlay graph registered by an in-process SDK plugin.
+#[derive(Clone, Debug, PartialEq)]
 pub struct RuntimeOverlayDescriptor {
     pub id: ContentId,
     pub plugin_id: PluginId,
     pub label: String,
     pub hotkey: Option<String>,
     pub render_policy: OverlayRenderPolicy,
+    pub graph: Option<flux_plugin_sdk::OverlayGraph>,
 }
 
 /// Save chunk descriptor registered through the plugin API.
@@ -62,12 +60,14 @@ pub struct SaveChunkDescriptor {
 /// - `subscriptions`: Plugins grouped by event kind for runtime dispatch.
 /// - `tools`: Registered plugin tool descriptors keyed by stable content id.
 /// - `overlays`: Registered plugin overlay descriptors keyed by stable content id.
+/// - `overlay_materials`: Registered overlay material descriptors keyed by stable content id.
 /// - `save_chunks`: Registered plugin save chunk descriptors keyed by stable content id.
 #[derive(Resource, Clone, Debug, Default)]
 pub struct PluginRuntimeRegistry {
     subscriptions: BTreeMap<PluginEvent, BTreeSet<PluginId>>,
     tools: BTreeMap<ContentId, ToolDescriptor>,
     overlays: BTreeMap<ContentId, RuntimeOverlayDescriptor>,
+    overlay_materials: BTreeMap<ContentId, flux_plugin_sdk::OverlayMaterialDescriptor>,
     save_chunks: BTreeMap<ContentId, SaveChunkDescriptor>,
 }
 
@@ -102,6 +102,17 @@ impl PluginRuntimeRegistry {
         self.overlays.insert(descriptor.id.clone(), descriptor);
     }
 
+    /// Registers one plugin-owned overlay material descriptor.
+    ///
+    pub fn register_overlay_material(
+        &mut self,
+        descriptor: flux_plugin_sdk::OverlayMaterialDescriptor,
+    ) {
+        let id = crate::plugins::ContentId::parse(descriptor.id.as_str())
+            .expect("SDK material ids are valid engine content ids");
+        self.overlay_materials.insert(id, descriptor);
+    }
+
     /// Registers a plugin-owned save chunk descriptor.
     ///
     pub fn register_save_chunk(&mut self, descriptor: SaveChunkDescriptor) {
@@ -118,6 +129,14 @@ impl PluginRuntimeRegistry {
     ///
     pub fn overlays(&self) -> &BTreeMap<ContentId, RuntimeOverlayDescriptor> {
         &self.overlays
+    }
+
+    /// Returns registered overlay material descriptors.
+    ///
+    pub fn overlay_materials(
+        &self,
+    ) -> &BTreeMap<ContentId, flux_plugin_sdk::OverlayMaterialDescriptor> {
+        &self.overlay_materials
     }
 
     /// Returns registered save chunk descriptors.
@@ -142,6 +161,7 @@ pub fn build_plugin_runtime_registry(
             label: descriptor.label.to_string(),
             hotkey: Some(descriptor.hotkey.to_string()),
             render_policy: OverlayRenderPolicy::CoreDefault,
+            graph: None,
         });
     }
     for plugin in loaded_plugins {
@@ -150,6 +170,9 @@ pub fn build_plugin_runtime_registry(
         }
         for tool in &plugin.registration.tools {
             registry.register_tool(tool.clone());
+        }
+        for material in &plugin.registration.overlay_materials {
+            registry.register_overlay_material(material.clone());
         }
         for overlay in &plugin.registration.overlays {
             let mut overlay = overlay.clone();
@@ -182,6 +205,11 @@ mod tests {
     use crate::plugins::{
         api::{events::PluginEvent, render_api::OverlayRenderPolicy},
         LoadedPluginMetadata, PluginId, PluginRuntimeRegistration, RuntimeOverlayDescriptor,
+    };
+    use bevy::prelude::{Vec2, Vec4};
+    use flux_plugin_sdk::{
+        OverlayGraph, OverlayImageInstance, OverlayNode, OverlayNodeId, OverlayNodeKind,
+        OverlayPlacement, RenderImageNode,
     };
 
     #[test]
@@ -220,6 +248,7 @@ mod tests {
                     label: "Temperature".to_string(),
                     hotkey: None,
                     render_policy: OverlayRenderPolicy::PluginControlled,
+                    graph: None,
                 }],
                 ..Default::default()
             },
@@ -233,6 +262,102 @@ mod tests {
                 .hotkey
                 .as_deref(),
             Some("F4")
+        );
+    }
+
+    #[test]
+    fn runtime_registry_preserves_registered_overlay_graph() {
+        let plugin_id = PluginId::parse("flux.test").expect("plugin id");
+        let overlay_id =
+            crate::plugins::ContentId::parse("flux.test.overlay.graph").expect("overlay id");
+        let output = OverlayNodeId::parse("temperature").expect("node id");
+        let graph = OverlayGraph {
+            nodes: vec![OverlayNode {
+                id: output.clone(),
+                depends_on: Vec::new(),
+                kind: OverlayNodeKind::RenderImage(RenderImageNode {
+                    instances: vec![OverlayImageInstance {
+                        image: flux_plugin_sdk::OverlayImageSource::Asset(
+                            flux_plugin_sdk::ContentId::parse("flux.test.image")
+                                .expect("image id"),
+                        ),
+                        placement: OverlayPlacement::GridLocal {
+                            position_in_grid: Vec2::ZERO,
+                            size_in_grid: Vec2::ONE,
+                            rotation: 0.0,
+                            origin: Vec2::ZERO,
+                        },
+                        tint: Vec4::ONE,
+                    }],
+                }),
+            }],
+            output,
+        };
+        let registry = build_plugin_runtime_registry(&[LoadedPluginMetadata {
+            plugin_id: plugin_id.clone(),
+            display_name: "Test".to_string(),
+            version: crate::plugins::PluginVersion::parse("0.1.0").expect("version"),
+            source_kind: crate::plugins::PluginSourceKind::Dev,
+            content: false,
+            locked: false,
+            source_name: "flux.test".to_string(),
+            source_path: None,
+            manifest: None,
+            registration: PluginRuntimeRegistration {
+                overlays: vec![RuntimeOverlayDescriptor {
+                    id: overlay_id.clone(),
+                    plugin_id,
+                    label: "Graph".to_string(),
+                    hotkey: None,
+                    render_policy: OverlayRenderPolicy::PluginControlled,
+                    graph: Some(graph.clone()),
+                }],
+                ..Default::default()
+            },
+        }]);
+
+        assert_eq!(
+            registry
+                .overlays()
+                .get(&overlay_id)
+                .and_then(|descriptor| descriptor.graph.as_ref()),
+            Some(&graph)
+        );
+    }
+
+    #[test]
+    fn runtime_registry_preserves_registered_overlay_materials() {
+        let plugin_id = PluginId::parse("flux.test").expect("plugin id");
+        let material_id = flux_plugin_sdk::ContentId::parse("flux.test.material.pipe_highlight")
+            .expect("material id");
+        let registry = build_plugin_runtime_registry(&[LoadedPluginMetadata {
+            plugin_id,
+            display_name: "Test".to_string(),
+            version: crate::plugins::PluginVersion::parse("0.1.0").expect("version"),
+            source_kind: crate::plugins::PluginSourceKind::Dev,
+            content: false,
+            locked: false,
+            source_name: "flux.test".to_string(),
+            source_path: None,
+            manifest: None,
+            registration: PluginRuntimeRegistration {
+                overlay_materials: vec![flux_plugin_sdk::OverlayMaterialDescriptor {
+                    id: material_id.clone(),
+                    label: "Pipe Highlight".to_string(),
+                    shader_path: "shaders/pipe_highlight.wgsl".to_string(),
+                }],
+                ..Default::default()
+            },
+        }]);
+
+        let engine_material_id =
+            crate::plugins::ContentId::parse(material_id.as_str()).expect("engine material id");
+        assert_eq!(
+            registry
+                .overlay_materials()
+                .get(&engine_material_id)
+                .map(|descriptor| descriptor.shader_path.as_str()),
+            Some("shaders/pipe_highlight.wgsl")
         );
     }
 }

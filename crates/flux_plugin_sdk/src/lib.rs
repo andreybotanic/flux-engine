@@ -6,6 +6,7 @@ mod dispatch_state_builder;
 mod error;
 mod events;
 mod ids;
+mod overlay_graph;
 mod plugin;
 mod registrar;
 mod runtime_host;
@@ -16,6 +17,7 @@ pub use descriptors::*;
 pub use error::PluginError;
 pub use events::*;
 pub use ids::*;
+pub use overlay_graph::*;
 pub use plugin::{Plugin, PluginInit};
 pub use registrar::{Handler, Registrar};
 
@@ -32,10 +34,10 @@ pub mod __private {
     pub use crate::scope::DispatchState;
     pub use flux_plugin_abi::{
         FluxHostApi, FluxPluginDispatchFn, FluxPluginHandle, FluxPluginRegisterFn, FluxRegistrar,
-        FluxRuntimeHost, FluxStatus, FLUX_PLUGIN_API_VERSION_EXPORT_NAME,
-        FLUX_PLUGIN_CREATE_EXPORT_NAME, FLUX_PLUGIN_DESTROY_EXPORT_NAME,
-        FLUX_PLUGIN_DISPATCH_EXPORT_NAME, FLUX_PLUGIN_REGISTER_EXPORT_NAME,
-        ENGINE_PLUGIN_API_VERSION_VALUE,
+        FluxRuntimeHost, FluxStatus, ENGINE_PLUGIN_API_VERSION_VALUE,
+        FLUX_PLUGIN_API_VERSION_EXPORT_NAME, FLUX_PLUGIN_CREATE_EXPORT_NAME,
+        FLUX_PLUGIN_DESTROY_EXPORT_NAME, FLUX_PLUGIN_DISPATCH_EXPORT_NAME,
+        FLUX_PLUGIN_REGISTER_EXPORT_NAME,
     };
 }
 

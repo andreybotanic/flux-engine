@@ -1,5 +1,13 @@
 ﻿use bevy::prelude::*;
 
+pub use flux_plugin_sdk::{
+    BlendNode, MaterialNode, OverlayBlendMode, OverlayEntitySpriteOverride, OverlayEntityStyle,
+    OverlayGraph, OverlayGraphError, OverlayImageInstance, OverlayMaterialDescriptor,
+    OverlayMaterialId, OverlayMaterialParam, OverlayMaterialParamValue, OverlayNode,
+    OverlayNodeId, OverlayNodeKind, OverlayOutput, OverlayPlacement, OverlaySelectorExpr,
+    RenderEntitiesNode, RenderFreeGasNode, RenderImageNode, Selector,
+};
+
 use crate::{
     plugins::ContentId,
     world::structures::{PlacedStructureId, StructureKind},

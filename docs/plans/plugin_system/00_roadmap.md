@@ -34,6 +34,7 @@
 6. [Save schema и проверка загрузки мира](06_save_schema_and_world_load_gate.md): сохранять content IDs и блокировать загрузку при отсутствующем обязательном content.
 7. [Сборка плагинов через xtask](07_xtask_plugin_build.md): добавить рабочий процесс сборки и упаковки плагинов из этого репозитория.
 8. [Dev mode и hot reload](08_dev_mode_and_hot_reload.md): грузить expanded dev-плагины и безопасно перезагружать их без загруженного мира.
+9. [Plugin overlay scene graph и compositing](09_overlay_scene_graph_and_compositor.md): перевести plugin overlay rendering на named DAG с селекторами по `ContentId`/`ContentTag`, универсальным `RenderImageNode` и compositing-узлами `BlendNode`/`MaterialNode`.
 
 ## Как выполнять этапы
 

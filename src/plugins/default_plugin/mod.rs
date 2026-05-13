@@ -2,11 +2,13 @@ use std::collections::BTreeMap;
 
 use bevy::prelude::{IVec2, Resource, UVec2};
 
+mod overlay_graph;
 pub mod pipe_runtime;
 pub mod runtime_sdk;
 
 mod ids;
 pub use ids::*;
+pub(crate) use overlay_graph::build_pipes_overlay_graph;
 
 use crate::{
     config::{

@@ -11,6 +11,7 @@ mod tests {
         pipe_overlay_block_offset, pipe_overlay_block_visible,
         quadratic_bezier_point, straight_packet_position,
         pipe_highlight_visibility, vent_world_visibility, world_fade_alpha,
+        overlay_gas_visibility,
         OverlayMode,
     };
     use crate::config::{
@@ -253,19 +254,27 @@ mod tests {
     #[test]
     fn pipe_highlight_filter_is_visible_only_in_f3() {
         assert_eq!(
-            pipe_highlight_visibility(true, OverlayMode::Main),
+            pipe_highlight_visibility(true, OverlayMode::Main, true),
             Visibility::Hidden
         );
         assert_eq!(
-            pipe_highlight_visibility(true, OverlayMode::Gas),
+            pipe_highlight_visibility(true, OverlayMode::Gas, true),
             Visibility::Hidden
         );
         assert_eq!(
-            pipe_highlight_visibility(true, crate::plugins::default_plugin::pipes_overlay_mode()),
+            pipe_highlight_visibility(
+                true,
+                crate::plugins::default_plugin::pipes_overlay_mode(),
+                true,
+            ),
             Visibility::Visible
         );
         assert_eq!(
-            pipe_highlight_visibility(false, crate::plugins::default_plugin::pipes_overlay_mode()),
+            pipe_highlight_visibility(
+                false,
+                crate::plugins::default_plugin::pipes_overlay_mode(),
+                true,
+            ),
             Visibility::Hidden
         );
     }
@@ -305,6 +314,18 @@ mod tests {
             vent_world_visibility(false, crate::plugins::default_plugin::pipes_overlay_mode()),
             Visibility::Hidden
         );
+    }
+
+    #[test]
+    fn plugin_graph_overlay_hides_core_gas_main_sprite() {
+        let (_, gas_main) = overlay_gas_visibility(OverlayMode::plugin("flux.default.overlay.pipes"), true);
+        assert_eq!(gas_main, Visibility::Hidden);
+    }
+
+    #[test]
+    fn pipes_overlay_hides_core_gas_main_sprite_even_without_graph() {
+        let (_, gas_main) = overlay_gas_visibility(OverlayMode::plugin("flux.default.overlay.pipes"), false);
+        assert_eq!(gas_main, Visibility::Hidden);
     }
 
     #[test]

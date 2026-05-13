@@ -329,10 +329,10 @@ pub(crate) struct WorldVisualAssets {
     source: Handle<Image>,
     sink: Handle<Image>,
     bridge: Handle<Image>,
-    pipe_masks: Vec<Handle<Image>>,
+    pub(crate) pipe_masks: Vec<Handle<Image>>,
     vent_world: Handle<Image>,
-    vent_overlay: Handle<Image>,
-    pipe_highlight: PipeHighlightRenderAssets,
+    pub(crate) vent_overlay: Handle<Image>,
+    pub(crate) pipe_highlight: PipeHighlightRenderAssets,
 }
 
 #[derive(Resource, Default)]

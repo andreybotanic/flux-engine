@@ -37,6 +37,7 @@ pub(super) fn dispatch_to_plugin(
         gas_amount_at_fn: Some(super::gas_amount_at_callback),
         submit_hud_block_fn: Some(super::submit_hud_block_callback),
         submit_overlay_frame_fn: Some(super::submit_overlay_frame_callback),
+        submit_overlay_graph_fn: Some(super::submit_overlay_graph_callback),
         write_save_chunk_fn: Some(super::write_save_chunk_callback),
         read_save_chunk_fn: Some(super::read_save_chunk_callback),
         delete_save_chunk_fn: Some(super::delete_save_chunk_callback),

@@ -114,6 +114,14 @@ pub struct FluxOverlayDescriptor {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
+pub struct FluxOverlayMaterialDescriptor {
+    pub id: FluxUtf8Slice,
+    pub label: FluxUtf8Slice,
+    pub shader_path: FluxUtf8Slice,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
 pub struct FluxSaveChunkDescriptor {
     pub id: FluxUtf8Slice,
     pub version: u32,
@@ -150,6 +158,11 @@ pub(crate) type FluxRegisterOverlayFn = unsafe extern "C" fn(
     descriptor: *const FluxOverlayDescriptor,
 ) -> FluxStatus;
 
+pub(crate) type FluxRegisterOverlayMaterialFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    descriptor: *const FluxOverlayMaterialDescriptor,
+) -> FluxStatus;
+
 pub(crate) type FluxRegisterSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     descriptor: *const FluxSaveChunkDescriptor,
@@ -173,6 +186,7 @@ pub struct FluxRegistrar {
     pub register_save_chunk_fn: Option<FluxRegisterSaveChunkFn>,
     pub register_subscription_fn: Option<FluxRegisterSubscriptionFn>,
     pub registration_context: *mut c_void,
+    pub register_overlay_material_fn: Option<FluxRegisterOverlayMaterialFn>,
 }
 
 #[repr(C)]
@@ -291,6 +305,11 @@ pub(crate) type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
     len: usize,
 ) -> FluxStatus;
 
+pub(crate) type FluxSubmitOverlayGraphFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    graph_json: FluxUtf8Slice,
+) -> FluxStatus;
+
 pub(crate) type FluxWriteSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
     chunk_id: FluxUtf8Slice,
@@ -345,6 +364,7 @@ pub struct FluxRuntimeHost {
     pub gas_amount_at_fn: Option<FluxGasAmountAtFn>,
     pub submit_hud_block_fn: Option<FluxSubmitHudBlockFn>,
     pub submit_overlay_frame_fn: Option<FluxSubmitOverlayFrameFn>,
+    pub submit_overlay_graph_fn: Option<FluxSubmitOverlayGraphFn>,
     pub write_save_chunk_fn: Option<FluxWriteSaveChunkFn>,
     pub read_save_chunk_fn: Option<FluxReadSaveChunkFn>,
     pub delete_save_chunk_fn: Option<FluxDeleteSaveChunkFn>,

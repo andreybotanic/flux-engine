@@ -1,13 +1,15 @@
 use std::{cell::RefCell, ptr};
 
 use flux_plugin_sdk::{
-    BuildHudForCellEvent, HudBlock, Plugin, PluginError, PluginEvent, PluginInit, SimulationPausedChangedEvent,
+    BuildHudForCellEvent, HudBlock, OverlayDescriptor, OverlayMaterialDescriptor, OverlayRenderPolicy,
+    Plugin, PluginError, PluginEvent, PluginInit, RenderOverlayEvent, SimulationPausedChangedEvent,
     SimulationPreCellGasStepEvent, UiApi, WorldApi, EntityApi, GasApi, OverlayApi, SaveApi, TimeApi,
     InputApi, LoggerApi, WorldAfterSaveEvent, WorldBeforeSaveEvent,
 };
 
 use crate::{
     plugins::{
+        default_plugin::{build_pipes_overlay_graph, OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID, OVERLAY_PIPES_ID},
         default_plugin::pipe_runtime::{apply_gas_structures_pre_step, apply_pipe_network_step},
         RuntimeHostContext,
     },
@@ -56,6 +58,7 @@ pub struct FluxDefaultRuntimeSdkPlugin {
     pub time: TimeApi,
     pub input: InputApi,
     pub log: LoggerApi,
+    overlay_phase: f32,
 }
 
 impl Plugin for FluxDefaultRuntimeSdkPlugin {
@@ -70,6 +73,7 @@ impl Plugin for FluxDefaultRuntimeSdkPlugin {
             time: init.time_api(),
             input: init.input_api(),
             log: init.logger_api(),
+            overlay_phase: 0.0,
         })
     }
 
@@ -77,6 +81,19 @@ impl Plugin for FluxDefaultRuntimeSdkPlugin {
         &mut self,
         registrar: &mut flux_plugin_sdk::Registrar<Self>,
     ) -> Result<(), PluginError> {
+        registrar.register_overlay(OverlayDescriptor {
+            id: flux_plugin_sdk::ContentId::parse(OVERLAY_PIPES_ID).map_err(PluginError::message)?,
+            label: "Pipes".to_string(),
+            hotkey: Some("F3".to_string()),
+            render_policy: OverlayRenderPolicy::PluginControlled,
+            graph: None,
+        })?;
+        registrar.register_overlay_material(OverlayMaterialDescriptor {
+            id: flux_plugin_sdk::ContentId::parse(OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID)
+                .map_err(PluginError::message)?,
+            label: "Pipe Highlight".to_string(),
+            shader_path: "flux_default://shaders/pipe_highlight_material.wgsl".to_string(),
+        })?;
         registrar.subscribe(
             PluginEvent::WorldCreated,
             Self::on_world_created,
@@ -108,6 +125,10 @@ impl Plugin for FluxDefaultRuntimeSdkPlugin {
         registrar.subscribe(
             PluginEvent::BuildHudForCell,
             Self::on_build_hud_for_cell,
+        )?;
+        registrar.subscribe(
+            PluginEvent::RenderOverlay,
+            Self::on_render_overlay,
         )?;
         Ok(())
     }
@@ -207,9 +228,12 @@ impl FluxDefaultRuntimeSdkPlugin {
 
     fn on_simulation_paused_changed(
         &mut self,
-        _event: &SimulationPausedChangedEvent,
+        event: &SimulationPausedChangedEvent,
     ) -> Result<(), PluginError> {
-        clear_flow_visuals()
+        if event.paused {
+            clear_flow_visuals()?;
+        }
+        Ok(())
     }
 
     fn on_build_hud_for_cell(
@@ -280,6 +304,44 @@ impl FluxDefaultRuntimeSdkPlugin {
         }
         Ok(())
     }
+
+    fn on_render_overlay(
+        &mut self,
+        event: &RenderOverlayEvent,
+    ) -> Result<(), PluginError> {
+        if event.overlay_id.as_str() != OVERLAY_PIPES_ID {
+            return Ok(());
+        }
+        let paused = self.time.is_paused().unwrap_or(true);
+        self.overlay_phase = next_overlay_phase(self.overlay_phase, paused);
+        let graph = with_bound_context("flux.default.render_overlay", |context| {
+            let structures = context
+                .structures
+                .as_deref()
+                .ok_or(PluginError::ApiUnavailable("flux.default.structures"))?;
+            let pipe_gas = context
+                .pipe_gas
+                .as_deref()
+                .ok_or(PluginError::ApiUnavailable("flux.default.pipe_gas"))?;
+            let flow_state = context
+                .pipe_flow_visuals
+                .as_deref()
+                .ok_or(PluginError::ApiUnavailable("flux.default.pipe_flow_visuals"))?;
+            let pipe_config = context
+                .pipe_config
+                .ok_or(PluginError::ApiUnavailable("flux.default.pipe_config"))?;
+            Ok(build_pipes_overlay_graph(
+                structures,
+                pipe_gas,
+                flow_state,
+                pipe_config,
+                context.gas_registry,
+                self.overlay_phase,
+                paused,
+            ))
+        })?;
+        self.overlays.submit_graph(graph)
+    }
 }
 
 fn reset_runtime_state(clear_pipe_gas: bool) -> Result<(), PluginError> {
@@ -313,4 +375,31 @@ fn clear_flow_visuals() -> Result<(), PluginError> {
 fn hud_block_id(index: usize) -> flux_plugin_sdk::ContentId {
     flux_plugin_sdk::ContentId::parse(&format!("flux.default.hud.block.{index}"))
         .expect("default HUD content ids must stay valid")
+}
+
+fn next_overlay_phase(current: f32, paused: bool) -> f32 {
+    if paused {
+        current
+    } else {
+        (current + 0.12).fract()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::next_overlay_phase;
+
+    #[test]
+    fn paused_overlay_keeps_phase_stable() {
+        assert_eq!(next_overlay_phase(0.37, true), 0.37);
+    }
+
+    #[test]
+    fn running_overlay_advances_phase_and_wraps() {
+        let advanced = next_overlay_phase(0.25, false);
+        assert!((advanced - 0.37).abs() < 1e-6);
+
+        let wrapped = next_overlay_phase(0.95, false);
+        assert!((wrapped - 0.07).abs() < 1e-6);
+    }
 }

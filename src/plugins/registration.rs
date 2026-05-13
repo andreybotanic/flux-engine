@@ -22,6 +22,7 @@ pub struct PluginRuntimeRegistration {
     pub subscriptions: Vec<PluginSubscriptionRegistration>,
     pub tools: Vec<ToolDescriptor>,
     pub overlays: Vec<RuntimeOverlayDescriptor>,
+    pub overlay_materials: Vec<flux_plugin_sdk::OverlayMaterialDescriptor>,
     pub save_chunks: Vec<SaveChunkDescriptor>,
 }
 
@@ -33,6 +34,7 @@ impl PluginRuntimeRegistration {
             && self.subscriptions.is_empty()
             && self.tools.is_empty()
             && self.overlays.is_empty()
+            && self.overlay_materials.is_empty()
             && self.save_chunks.is_empty()
     }
 }

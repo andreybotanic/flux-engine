@@ -67,12 +67,14 @@ FluxEngine/
 - `crates/flux_plugin_abi/src/lib.rs`: РўРѕС‡РєР° РІС…РѕРґР° РІРЅСѓС‚СЂРµРЅРЅРµРіРѕ ABI crate-Р° Рё re-export РµРіРѕ РјРѕРґСѓР»РµР№.
 - `crates/flux_plugin_sdk/Cargo.toml`: РњР°РЅРёС„РµСЃС‚ РїСѓР±Р»РёС‡РЅРѕРіРѕ Rust-first Plugin SDK.
 - `crates/flux_plugin_sdk/src/api.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ proxy API РїР»Р°РіРёРЅР° (`WorldApi`, `EntityApi`, `GasApi`, `UiApi`, `OverlayApi`, `SaveApi`, `TimeApi`, `InputApi`, `LoggerApi`).
-- `crates/flux_plugin_sdk/src/descriptors.rs`: Typed descriptor-С‹ SDK РґР»СЏ СЃСѓС‰РЅРѕСЃС‚РµР№, РіР°Р·РѕРІ, overlay, tool Рё save chunk.
+- `crates/flux_plugin_sdk/src/descriptors.rs`: Typed descriptor-С‹ SDK РґР»СЏ СЃСѓС‰РЅРѕСЃС‚РµР№, РіР°Р·РѕРІ, overlay, optional overlay graph, tool Рё save chunk.
 - `crates/flux_plugin_sdk/src/dispatch_state_builder.rs`: Р’РЅСѓС‚СЂРµРЅРЅРёР№ builder typed dispatch-state РёР· ABI payload РґР»СЏ СЂР°Р±РѕС‚С‹ proxy API РІРѕ РІСЂРµРјСЏ handler-РІС‹Р·РѕРІР°.
 - `crates/flux_plugin_sdk/src/error.rs`: `PluginError` Рё Р±Р°Р·РѕРІС‹Рµ РѕС€РёР±РєРё РїСѓР±Р»РёС‡РЅРѕРіРѕ SDK.
 - `crates/flux_plugin_sdk/src/events.rs`: Typed runtime events SDK, `PluginEvent` Рё ABI decode logic, СЃРєСЂС‹С‚Р°СЏ РѕС‚ plugin author-Р° Р·Р° trait-СЃР»РѕРµРј.
-- `crates/flux_plugin_sdk/src/ids.rs`: Typed identifier wrapper-С‹ SDK Рё Р±Р°Р·РѕРІС‹Рµ РіРµРѕРјРµС‚СЂРёС‡РµСЃРєРёРµ helper-С‚РёРїС‹.
+- `crates/flux_plugin_sdk/src/ids.rs`: Typed identifier wrapper-С‹ SDK (`PluginId`, `ContentId`, `ContentTag`, `SubstanceId`) Рё Р±Р°Р·РѕРІС‹Рµ РіРµРѕРјРµС‚СЂРёС‡РµСЃРєРёРµ helper-С‚РёРїС‹.
 - `crates/flux_plugin_sdk/src/lib.rs`: РџСѓР±Р»РёС‡РЅР°СЏ С‚РѕС‡РєР° РІС…РѕРґР° SDK, re-export-С‹ Рё macro `declare_plugin!`.
+- `crates/flux_plugin_sdk/src/overlay_graph.rs`: Public SDK model for plugin overlay scene graph: node IDs, selectors by `ContentId`/`ContentTag`, `RenderImageNode`, blend/material nodes and DAG validation.
+- `crates/flux_plugin_sdk/src/overlay_graph_tests.rs`: SDK unit-тесты graph validation/order, selector builders, `ContentTag` matching и JSON roundtrip overlay graph descriptors.
 - `crates/flux_plugin_sdk/src/plugin.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ `Plugin`, `PluginInit` Рё СЃРєСЂС‹С‚С‹Р№ `PluginRuntime`, РєРѕС‚РѕСЂС‹Р№ СЃРІСЏР·С‹РІР°РµС‚ Rust-РїР»Р°РіРёРЅ СЃ РІРЅСѓС‚СЂРµРЅРЅРёРј ABI dispatch.
 - `crates/flux_plugin_sdk/src/registrar.rs`: `Registrar<Self>`, typed `subscribe(...)` Рё РІРЅСѓС‚СЂРµРЅРЅСЏСЏ С‚Р°Р±Р»РёС†Р° Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅРЅС‹С… Rust-РѕР±СЂР°Р±РѕС‚С‡РёРєРѕРІ.
 - `crates/flux_plugin_sdk/src/runtime_host.rs`: Internal SDK host-contract (`RuntimeHostBinding`, `RuntimeHostFns`, save/time snapshots) shared by ABI and built-in runtime execution.
@@ -90,6 +92,7 @@ FluxEngine/
 - `docs/plugin_sdk/theme/sdk.css`: РљР°СЃС‚РѕРјРЅС‹Рµ СЃС‚РёР»Рё РёРЅС‚РµСЂР°РєС‚РёРІРЅС‹С… SDK API-Р±Р»РѕРєРѕРІ, Р±РµР№РґР¶РµР№ Рё С„РёР»СЊС‚СЂР°.
 - `docs/plugin_sdk/theme/sdk.js`: РљР°СЃС‚РѕРјРЅР°СЏ РёРЅС‚РµСЂР°РєС‚РёРІРЅРѕСЃС‚СЊ Plugin SDK book: С„РёР»СЊС‚СЂ API items Рё copy-РєРЅРѕРїРєРё РґР»СЏ code blocks.
 - `docs/plans/plugin_system/00_roadmap.md`: РћР±С‰РёР№ roadmap Р±СѓРґСѓС‰РµР№ РјРёРіСЂР°С†РёРё FluxEngine РЅР° runtime-РїР»Р°РіРёРЅС‹.
+- `docs/plans/plugin_system/09_overlay_scene_graph_and_compositor.md`: Р­С‚Р°РїРЅС‹Р№ РїР»Р°РЅ РїРµСЂРµС…РѕРґР° plugin overlay rendering РЅР° named DAG-compositor СЃ selector-Р°РјРё РїРѕ `ContentId`/`ContentTag` Рё СѓРЅРёРІРµСЂСЃР°Р»СЊРЅС‹Рј `RenderImageNode`.
 - `docs/plans/plugin_system/*.md`: Р”РµС‚Р°Р»СЊРЅС‹Рµ РёРЅСЃС‚СЂСѓРєС†РёРё РїРѕ СЌС‚Р°РїР°Рј СЂРµР°Р»РёР·Р°С†РёРё plugin-system РјРёРіСЂР°С†РёРё.
 - `docs/project_structure.md`: РљР°СЂС‚Р° СЃС‚СЂСѓРєС‚СѓСЂС‹ РїСЂРѕРµРєС‚Р°: РґРµСЂРµРІРѕ РїР°РїРѕРє + Р·РѕРЅС‹ РѕС‚РІРµС‚СЃС‚РІРµРЅРЅРѕСЃС‚Рё С„Р°Р№Р»РѕРІ.
 - `docs/technical_overview.md`: РўРµС…РЅРёС‡РµСЃРєР°СЏ Р°СЂС…РёС‚РµРєС‚СѓСЂР°, РїРѕРґСЃРёСЃС‚РµРјС‹ Рё РёРЅР¶РµРЅРµСЂРЅС‹Рµ РѕРіСЂР°РЅРёС‡РµРЅРёСЏ.
@@ -126,13 +129,14 @@ FluxEngine/
 - `src/plugins/abi.rs`: Engine-side wrapper РЅР°Рґ `crates/flux_plugin_abi`: СЃР±РѕСЂРєР° host/registrar payload РґР»СЏ loader/runtime Рё mapping ABI event kinds РІ РІРЅСѓС‚СЂРµРЅРЅРёРµ engine events.
 - `src/plugins/api/mod.rs`: Engine-side shared plugin API module root Рё re-exports РґР»СЏ СЃРѕР±С‹С‚РёР№, runtime registry, render/UI/save contracts, РєРѕС‚РѕСЂС‹Рµ РёСЃРїРѕР»СЊР·СѓРµС‚ С…РѕСЃС‚ plugin-СЃРёСЃС‚РµРјС‹.
 - `src/plugins/api/events.rs`: Plugin event kinds and payloads, including simulation lifecycle, save lifecycle, low-level mouse cell input and keyboard events.
-- `src/plugins/api/render_api.rs`: Overlay render contract with `OverlayRenderPolicy`, `OverlayFrame`, per-cell/per-structure/per-gas styles and draw commands.
+- `src/plugins/api/render_api.rs`: Overlay render contract with `OverlayRenderPolicy`, legacy `OverlayFrame` support and re-exported overlay scene graph SDK types for engine-side runtime code.
 - `src/plugins/api/ui_api.rs`: Declarative plugin UI descriptors for tools, panels, HUD blocks and simple UI node trees.
 - `src/plugins/api/save_api.rs`: In-memory plugin save chunk store and chunk payload contracts.
-- `src/plugins/api/runtime.rs`: Runtime registry for plugin event subscriber groups, tool descriptors, overlay descriptors and save chunk descriptors.
+- `src/plugins/api/runtime.rs`: Runtime registry for plugin event subscriber groups, tool descriptors, overlay descriptors (including optional in-process overlay graph) and save chunk descriptors.
 - `src/plugins/content.rs`: Content registry runtime-РјРѕРґРµР»СЊ: stable `ContentId`, provider plugins, descriptors РєР»РµС‚РѕРє/СЃС‚СЂСѓРєС‚СѓСЂ/overlay, HUD metadata Рё registered substances.
 - `src/plugins/default_plugin/mod.rs`: Built-in locked `flux.default` content/runtime: default descriptor registration, generic ID facade, legacy numeric save adapters Рё wiring built-in SDK runtime + pipe-runtime support.
-- `src/plugins/default_plugin/runtime_sdk.rs`: In-process SDK plugin type РґР»СЏ `flux.default`: С…СЂР°РЅРёС‚ typed proxy API, РїРѕРґРїРёСЃС‹РІР°РµС‚СЃСЏ РЅР° lifecycle/simulation/HUD СЃРѕР±С‹С‚РёСЏ Рё РІС‹РїРѕР»РЅСЏРµС‚ built-in runtime-Р»РѕРіРёРєСѓ С‡РµСЂРµР· РѕР±С‰РёР№ plugin dispatch.
+- `src/plugins/default_plugin/runtime_sdk.rs`: In-process SDK plugin type РґР»СЏ `flux.default`: typed proxy API + lifecycle/simulation/HUD подписки, и graph-based `RenderOverlay` producer для `F3/Pipes` через `OverlayApi::submit_graph`.
+- `src/plugins/default_plugin/overlay_graph.rs`: Builder graph-модели `F3/Pipes`: формирует selector/material/image узлы, включая static pipe gas squares, moving packets и bridge/vent port icons.
 - `src/plugins/default_plugin/descriptors_block.rs`: Р’РЅСѓС‚СЂРµРЅРЅРёР№ Р±Р»РѕРє СЃР±РѕСЂРєРё descriptors default plugin-Р°: layer/collision rules, footprint, rotations, sprite metadata Рё HUD blocks.
 - `src/plugins/default_plugin/ids.rs`: Stable IDs `flux.default` РґР»СЏ cells/structures/plugin overlays/substances, typed wrapper helpers Рё asset/config root helpers default plugin-Р°.
 - `src/plugins/default_plugin/tests.rs`: Unit-С‚РµСЃС‚С‹ С„Р°СЃР°РґР° default plugin-Р°: legacy ID roundtrip, РїРѕР»РЅРѕС‚Р° registry Рё РїРѕСЂСЏРґРѕРє HUD-Р±Р»РѕРєРѕРІ.
@@ -163,18 +167,19 @@ FluxEngine/
 - `src/plugins/reload.rs`: РђС‚РѕРјР°СЂРЅС‹Р№ manual reload/rescan runtime-РїР»Р°РіРёРЅРѕРІ Р±РµР· Р·Р°РіСЂСѓР¶РµРЅРЅРѕРіРѕ РјРёСЂР°: rebuild registry, РїРµСЂРµСЃР±РѕСЂРєР° gas registry, generation/report Рё СЃСЂР°РІРЅРµРЅРёРµ source fingerprints.
 - `src/plugins/registration.rs`: Runtime-СЃС‚СЂСѓРєС‚СѓСЂР° СЂРµР·СѓР»СЊС‚Р°С‚Р° ABI-СЂРµРіРёСЃС‚СЂР°С†РёРё plugin capabilities/content, РІРєР»СЋС‡Р°СЏ СЃСѓС‰РЅРѕСЃС‚Рё, РіР°Р·С‹, РёРЅСЃС‚СЂСѓРјРµРЅС‚С‹, overlay, save chunks Рё event subscriptions Р±РµР· `handler_name`.
 - `src/plugins/runtime_builtin.rs`: Built-in runtime endpoint-С‹ РЅР° Р±Р°Р·Рµ `flux_plugin_sdk::BuiltinPluginRuntime`, conversion engine events -> typed SDK events Рё СЃР±РѕСЂРєР° runtime registration РґР»СЏ `flux.default`.
-- `src/plugins/runtime_dll.rs`: РћР±С‰РёР№ runtime executor РІРµСЂС…РЅРµРіРѕ СѓСЂРѕРІРЅСЏ: С…СЂР°РЅРёС‚ unified plugin endpoint registry, DLL host callbacks РґР»СЏ entity/gas/UI/overlay/save/time APIs Рё dispatch РєР°Рє РІ live DLL-РїР»Р°РіРёРЅС‹, С‚Р°Рє Рё РІ built-in `flux.default`.
+- `src/plugins/runtime_dll.rs`: РћР±С‰РёР№ runtime executor РІРµСЂС…РЅРµРіРѕ СѓСЂРѕРІРЅСЏ: unified plugin endpoint registry, DLL host callbacks, dispatch и per-frame stores для legacy overlay frame + declarative overlay graph submit path.
 - `src/plugins/runtime_dll_events.rs`: Typed runtime event dispatch РґР»СЏ SDK v5: РєРѕРґРёСЂСѓРµС‚ ABI payload Рё РІС‹Р·С‹РІР°РµС‚ РµРґРёРЅС‹Р№ `flux_plugin_dispatch` Сѓ РєР°Р¶РґРѕРіРѕ РїРѕРґРїРёСЃР°РЅРЅРѕРіРѕ DLL-РїР»Р°РіРёРЅР°.
-- `src/plugins/runtime_host_binding.rs`: Engine-side Р°РґР°РїС‚РµСЂ `RuntimeHostContext -> flux_plugin_sdk::__private::RuntimeHostBinding`, РєРѕС‚РѕСЂС‹Р№ РґР°С‘С‚ built-in SDK runtime С‚РѕС‚ Р¶Рµ host-contract, С‡С‚Рѕ Рё ABI-РїР»Р°РіРёРЅС‹.
+- `src/plugins/runtime_host_binding.rs`: Engine-side adapter `RuntimeHostContext -> flux_plugin_sdk::__private::RuntimeHostBinding`, включая `submit_overlay_graph` alongside legacy frame path для общего host-контракта built-in и ABI plugin runtimes.
 - `src/plugins/flux_api_cell_demo_plugin/`: Runtime DLL fixture РЅР° `flux_plugin_sdk`, РґРµРјРѕРЅСЃС‚СЂРёСЂСѓСЋС‰РёР№ entity/tool/input path РЅРѕРІРѕРіРѕ SDK.
 - `src/plugins/flux_api_tick_demo_plugin/`: Runtime DLL fixture РЅР° `flux_plugin_sdk`, РґРµРјРѕРЅСЃС‚СЂРёСЂСѓСЋС‰РёР№ simulation pre-step handler Р±РµР· named ABI exports.
-- `src/plugins/flux_api_temperature_overlay_plugin/`: Runtime DLL fixture РЅР° `flux_plugin_sdk`, СЂРµРіРёСЃС‚СЂРёСЂСѓСЋС‰РёР№ plugin-controlled overlay Рё РїСЂРёСЃС‹Р»Р°СЋС‰РёР№ РіРѕС‚РѕРІС‹Р№ frame С‡РµСЂРµР· unified dispatch.
+- `src/plugins/flux_api_temperature_overlay_plugin/`: Runtime DLL fixture РЅР° `flux_plugin_sdk`, демонстрирующий temperature-style graph overlay (`RenderImageNode` + selector-based entity layer) через `submit_graph`.
 - `src/plugins/flux_api_ui_save_demo_plugin/`: Runtime DLL fixture РЅР° `flux_plugin_sdk`, РґРµРјРѕРЅСЃС‚СЂРёСЂСѓСЋС‰РёР№ HUD, save chunk Рё input-driven runtime path.
 - `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` Рё rebuild-helper РґР»СЏ menu toggle; content registry СЃРѕР·РґР°С‘С‚СЃСЏ РёР· default descriptors РїР»СЋСЃ runtime registration РІРєР»СЋС‡С‘РЅРЅС‹С… content-РїР»Р°РіРёРЅРѕРІ.
 - `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics, source fingerprint Рё resolve plugin layout РІРЅСѓС‚СЂРё plugin root.
 - `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses Рё aggregate `PluginRegistryState`.
 - `src/plugins/substances.rs`: Generic plugin-owned substance contract: `SubstanceId`, `SubstanceDefinition`, `SubstanceFlags` Рё deterministic `SubstanceRegistry` РґР»СЏ compact runtime indices.
-- `src/render/mod.rs`: РџР»Р°РіРёРЅ СЂРµРЅРґРµСЂР° Рё РїРѕСЂСЏРґРѕРє render-СЃРёСЃС‚РµРј, РІРєР»СЋС‡Р°СЏ pipe visuals.
+- `src/render/mod.rs`: Render plugin wiring: core world-view systems + overlay graph runtime systems (assets setup, graph compositor sync, legacy frame fallback).
+- `src/render/overlay_graph_runtime.rs`: Generic runtime overlay graph compositor: evaluates DAG order, materializes layer plan (`RenderEntities`/`RenderFreeGas`/`RenderImage`/`Blend`/`Material`), spawns overlay entities и обслуживает dynamic `Rgba8` image instances.
 - `src/render/pipe_highlight_material.rs`: РљР°СЃС‚РѕРјРЅС‹Р№ `Material2d` Рё helper-Р»РѕРіРёРєР° РґР»СЏ shader-РїРѕРґСЃРІРµС‚РєРё С‚СЂСѓР± РІ `F3`.
 - `src/render/save_preview.rs`: Offscreen preview pipeline РґР»СЏ save-slots: РѕС‚РґРµР»СЊРЅР°СЏ РєР°РјРµСЂР°, settle-frame РІ РєР°РЅРѕРЅРёС‡РµСЃРєРѕРј `F1`, screenshot capture, PNG-Р·Р°РїРёСЃСЊ Рё РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёРµ UI/overlay СЃРѕСЃС‚РѕСЏРЅРёСЏ РїРѕСЃР»Рµ РєР°РґСЂР°.
 - `src/render/world_view.rs`: РџСѓР±Р»РёС‡РЅС‹Рµ render-СЃРёСЃС‚РµРјС‹ world view, config-driven appearance z-order Рё layer-based pipe/bridge visuals.

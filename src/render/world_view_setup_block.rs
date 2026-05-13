@@ -36,6 +36,18 @@ pub fn setup_world_view(
                 )
             })
             .collect(),
+        vent_material: pipe_highlight_materials.add(
+            crate::render::pipe_highlight_material::PipeHighlightMaterial::from_pipe_mask(
+                vent_world.clone(),
+            ),
+        ),
+        bridge_material: pipe_highlight_materials.add(
+            crate::render::pipe_highlight_material::PipeHighlightMaterial::from_pipe_mask(
+                asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
+                    crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+                )),
+            ),
+        ),
     };
     let visuals = WorldVisualAssets {
         backdrop_noise: asset_server.load("sprites/world/backdrop_noise.png"),
@@ -216,6 +228,7 @@ pub fn setup_world_view(
     commands.insert_resource(structure_entities);
 
     let mut pipe_entities = PipeEntities::default();
+    let legacy_pipes_overlay = legacy_pipes_overlay_active(*overlay_mode, None);
     for structure in structures.iter() {
         spawn_structure_pipe_visuals(
             &mut commands,
@@ -227,6 +240,7 @@ pub fn setup_world_view(
             *structure_draw_ranks.get(&structure.id).unwrap_or(&0),
             show_world,
             *overlay_mode,
+            legacy_pipes_overlay,
         );
     }
     commands.insert_resource(pipe_entities);
@@ -401,6 +415,7 @@ fn spawn_structure_pipe_visuals(
     draw_rank: usize,
     show_world: bool,
     overlay_mode: OverlayMode,
+    legacy_pipes_overlay: bool,
 ) {
     let visual_layout = structure_visuals.get(structure.kind);
     let appearance_z = appearance_z(visual_layout.draw_priority, draw_rank);
@@ -426,7 +441,7 @@ fn spawn_structure_pipe_visuals(
                                 structure_visuals,
                             ),
                         )),
-                        color: pipe_sprite_tint(overlay_mode, &pipe_visual),
+                        color: pipe_sprite_tint(overlay_mode, &pipe_visual, legacy_pipes_overlay),
                         ..default()
                     },
                     Transform::from_translation(center.extend(appearance_z)),
@@ -442,7 +457,7 @@ fn spawn_structure_pipe_visuals(
                     &visuals.pipe_highlight,
                     mask,
                     Transform::from_translation(center.extend(pipe_highlight_z())),
-                    pipe_highlight_visibility(show_world, overlay_mode),
+                    pipe_highlight_visibility(show_world, overlay_mode, legacy_pipes_overlay),
                 );
             commands
                 .entity(highlight_entity)
@@ -498,7 +513,7 @@ fn spawn_structure_pipe_visuals(
                     Sprite {
                         image: visuals.bridge.clone(),
                         custom_size: Some(bridge_visual_size(structure.rotation, structure_visuals)),
-                        color: pipe_sprite_tint(overlay_mode, &pipe_visual),
+                        color: pipe_sprite_tint(overlay_mode, &pipe_visual, legacy_pipes_overlay),
                         ..default()
                     },
                     bridge_visual_transform(center_cell, structure.rotation, appearance_z),
@@ -712,8 +727,12 @@ fn world_layer_visibility(show_world: bool) -> Visibility {
     }
 }
 
-fn pipe_sprite_tint(overlay_mode: OverlayMode, pipe_visual: &PipeWorldVisual) -> Color {
-    if crate::plugins::default_plugin::is_pipes_overlay_mode(overlay_mode) {
+fn pipe_sprite_tint(
+    overlay_mode: OverlayMode,
+    pipe_visual: &PipeWorldVisual,
+    legacy_pipes_overlay: bool,
+) -> Color {
+    if legacy_pipes_overlay && crate::plugins::default_plugin::is_pipes_overlay_mode(overlay_mode) {
         pipe_visual.pipe_tint
     } else {
         match overlay_mode {
@@ -724,8 +743,15 @@ fn pipe_sprite_tint(overlay_mode: OverlayMode, pipe_visual: &PipeWorldVisual) ->
     }
 }
 
-fn pipe_highlight_visibility(show_world: bool, overlay_mode: OverlayMode) -> Visibility {
-    if show_world && crate::plugins::default_plugin::is_pipes_overlay_mode(overlay_mode) {
+fn pipe_highlight_visibility(
+    show_world: bool,
+    overlay_mode: OverlayMode,
+    legacy_pipes_overlay: bool,
+) -> Visibility {
+    if show_world
+        && legacy_pipes_overlay
+        && crate::plugins::default_plugin::is_pipes_overlay_mode(overlay_mode)
+    {
         Visibility::Visible
     } else {
         Visibility::Hidden
@@ -878,6 +904,7 @@ pub(crate) fn sync_pipe_world_visuals(
     structures: Res<PlacedStructureMap>,
     world_load_state: Res<WorldLoadState>,
     overlay_mode: Res<OverlayMode>,
+    graph_scene: Option<Res<super::overlay_graph_runtime::OverlayGraphSceneState>>,
     visuals: Res<WorldVisualAssets>,
     structure_visuals: Res<crate::config::StructureVisualConfigMap>,
     mut pipe_entities: ResMut<PipeEntities>,
@@ -920,6 +947,7 @@ pub(crate) fn sync_pipe_world_visuals(
     }
 
     let structure_draw_ranks = build_structure_draw_ranks(&structures, &structure_visuals);
+    let legacy_pipes_overlay = legacy_pipes_overlay_active(*overlay_mode, graph_scene.as_deref());
     for structure in structures.iter() {
         spawn_structure_pipe_visuals(
             &mut commands,
@@ -931,6 +959,7 @@ pub(crate) fn sync_pipe_world_visuals(
             *structure_draw_ranks.get(&structure.id).unwrap_or(&0),
             world_load_state.has_world,
             *overlay_mode,
+            legacy_pipes_overlay,
         );
     }
 }

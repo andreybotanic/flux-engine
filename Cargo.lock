@@ -2347,6 +2347,7 @@ dependencies = [
  "pollster",
  "semver",
  "serde",
+ "serde_json",
  "time",
  "toml",
  "wgpu",

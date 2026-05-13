@@ -80,6 +80,7 @@ pub enum LegacyStorageDescriptor {
 /// - `layer_descriptor`: Layer occupancy descriptor used for collision and rendering.
 /// - `sprite`: Sprite metadata used to render the material in the world and tool UI.
 /// - `storage`: Legacy storage mapping used for save compatibility.
+/// - `tags`: Public render/content tags used by overlay selectors.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CellContentDescriptor {
     pub id: ContentId,
@@ -90,6 +91,7 @@ pub struct CellContentDescriptor {
     pub layer_descriptor: StructureDescriptor,
     pub sprite: SpriteMetadata,
     pub storage: LegacyStorageDescriptor,
+    pub tags: Vec<flux_plugin_sdk::ContentTag>,
 }
 
 /// Describes one placeable structure registered by a content plugin.
@@ -105,6 +107,7 @@ pub struct CellContentDescriptor {
 /// - `sprite`: Sprite metadata used to render the structure in the world and tool UI.
 /// - `hud`: HUD block configuration used when hovering this structure.
 /// - `storage`: Legacy storage mapping used for save compatibility.
+/// - `tags`: Public render/content tags used by overlay selectors.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructureContentDescriptor {
     pub id: ContentId,
@@ -117,6 +120,7 @@ pub struct StructureContentDescriptor {
     pub sprite: SpriteMetadata,
     pub hud: HudBlockConfig,
     pub storage: LegacyStorageDescriptor,
+    pub tags: Vec<flux_plugin_sdk::ContentTag>,
 }
 
 impl StructureContentDescriptor {
@@ -262,6 +266,56 @@ impl ContentRegistry {
         self.overlays
             .values()
             .find(|descriptor| descriptor.mode == mode)
+    }
+
+    /// Returns true when one registered cell descriptor matches an overlay selector.
+    ///
+    pub fn cell_matches_selector(
+        &self,
+        id: &ContentId,
+        selector: &flux_plugin_sdk::OverlaySelectorExpr,
+    ) -> bool {
+        self.cells
+            .get(id)
+            .map(|descriptor| selector_matches(id, &descriptor.tags, selector))
+            .unwrap_or(false)
+    }
+
+    /// Returns true when one registered structure descriptor matches an overlay selector.
+    ///
+    pub fn structure_matches_selector(
+        &self,
+        id: &ContentId,
+        selector: &flux_plugin_sdk::OverlaySelectorExpr,
+    ) -> bool {
+        self.structures
+            .get(id)
+            .map(|descriptor| selector_matches(id, &descriptor.tags, selector))
+            .unwrap_or(false)
+    }
+}
+
+fn selector_matches(
+    id: &ContentId,
+    tags: &[flux_plugin_sdk::ContentTag],
+    selector: &flux_plugin_sdk::OverlaySelectorExpr,
+) -> bool {
+    match selector {
+        flux_plugin_sdk::OverlaySelectorExpr::ContentId(content_id) => {
+            id.as_str() == content_id.as_str()
+        }
+        flux_plugin_sdk::OverlaySelectorExpr::Tag(tag) => {
+            tags.iter().any(|candidate| candidate == tag)
+        }
+        flux_plugin_sdk::OverlaySelectorExpr::Not(inner) => {
+            !selector_matches(id, tags, inner)
+        }
+        flux_plugin_sdk::OverlaySelectorExpr::Any(items) => {
+            items.iter().any(|item| selector_matches(id, tags, item))
+        }
+        flux_plugin_sdk::OverlaySelectorExpr::All(items) => {
+            items.iter().all(|item| selector_matches(id, tags, item))
+        }
     }
 }
 

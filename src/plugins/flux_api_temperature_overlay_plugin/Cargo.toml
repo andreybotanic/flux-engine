@@ -8,5 +8,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 flux_plugin_sdk = { path = "../../../crates/flux_plugin_sdk" }
+bevy_math = { version = "0.16.1", features = ["serialize"] }
 
 [workspace]

@@ -1,3 +1,4 @@
+pub(crate) mod overlay_graph_runtime;
 mod pipe_highlight_material;
 mod save_preview;
 pub mod world_view;
@@ -6,6 +7,7 @@ use bevy::prelude::*;
 use pipe_highlight_material::PipeHighlightMaterialPlugin;
 use save_preview::SavePreviewPlugin;
 
+use self::overlay_graph_runtime::{setup_overlay_graph_assets, OverlayGraphSceneState};
 use self::world_view::{
     apply_overlay_mode, apply_overlay_visibility_mode, draw_cursor_cell_highlight,
     draw_cursor_grid_overlay, setup_simulation_images, setup_world_view, sync_gas_display_texture,
@@ -27,10 +29,12 @@ impl Plugin for RenderPlugin {
             .init_resource::<WallEntities>()
             .init_resource::<GasStructureEntities>()
             .init_resource::<PipeEntities>()
+            .init_resource::<OverlayGraphSceneState>()
             .add_systems(
                 Startup,
                 (
                     setup_simulation_images,
+                    setup_overlay_graph_assets.after(setup_simulation_images),
                     setup_world_view.after(setup_simulation_images),
                 )
                     .after(spawn_main_camera),

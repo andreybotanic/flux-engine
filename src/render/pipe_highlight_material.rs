@@ -70,6 +70,8 @@ impl Plugin for PipeHighlightMaterialPlugin {
 pub(crate) struct PipeHighlightRenderAssets {
     pub quad: Handle<Mesh>,
     pub materials: Vec<Handle<PipeHighlightMaterial>>,
+    pub vent_material: Handle<PipeHighlightMaterial>,
+    pub bridge_material: Handle<PipeHighlightMaterial>,
 }
 
 /// Spawns one highlight overlay entity for a pipe tile.
@@ -84,6 +86,24 @@ pub(crate) fn spawn_pipe_highlight_entity(
         .spawn((
             Mesh2d(render_assets.quad.clone()),
             MeshMaterial2d(render_assets.materials[mask].clone()),
+            transform,
+            visibility,
+        ))
+        .id()
+}
+
+/// Spawns one highlight overlay entity using an explicit material handle.
+pub(crate) fn spawn_pipe_highlight_material_entity(
+    commands: &mut Commands,
+    render_assets: &PipeHighlightRenderAssets,
+    material: Handle<PipeHighlightMaterial>,
+    transform: Transform,
+    visibility: Visibility,
+) -> Entity {
+    commands
+        .spawn((
+            Mesh2d(render_assets.quad.clone()),
+            MeshMaterial2d(material),
             transform,
             visibility,
         ))

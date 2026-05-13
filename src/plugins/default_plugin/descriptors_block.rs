@@ -20,6 +20,7 @@ fn cell_descriptor_for(
         layer_descriptor: cell_layers(material),
         sprite: sprite(image_path, silhouette_path, None),
         storage: LegacyStorageDescriptor::WorldCellCode(storage_code),
+        tags: cell_tags(material),
     }
 }
 
@@ -52,6 +53,7 @@ fn structure_descriptor_for(
         sprite: sprite(image_path, silhouette_path, overlay_path),
         hud,
         storage: LegacyStorageDescriptor::PlacedStructureKind(storage_kind),
+        tags: structure_tags(kind),
     }
 }
 
@@ -73,6 +75,40 @@ fn overlay_descriptor(
 
 fn content_id(raw: &str) -> ContentId {
     ContentId::parse(raw).expect("default plugin content id must stay valid")
+}
+
+fn content_tag(raw: &str) -> flux_plugin_sdk::ContentTag {
+    flux_plugin_sdk::ContentTag::parse(raw).expect("default plugin content tag must stay valid")
+}
+
+fn cell_tags(material: CellMaterial) -> Vec<flux_plugin_sdk::ContentTag> {
+    let mut tags = vec![content_tag("flux.default.tag.solid")];
+    if material == boundary_cell_material() {
+        tags.push(content_tag("flux.default.tag.boundary"));
+    }
+    tags
+}
+
+fn structure_tags(kind: StructureKind) -> Vec<flux_plugin_sdk::ContentTag> {
+    match kind.as_str() {
+        ENTITY_PIPE_ID => vec![
+            content_tag("flux.default.tag.pipe-network"),
+            content_tag("flux.default.tag.pipe"),
+        ],
+        ENTITY_VENT_ID => vec![
+            content_tag("flux.default.tag.pipe-network"),
+            content_tag("flux.default.tag.pipe-port"),
+            content_tag("flux.default.tag.vent"),
+        ],
+        ENTITY_GAS_PIPE_BRIDGE_ID => vec![
+            content_tag("flux.default.tag.pipe-network"),
+            content_tag("flux.default.tag.pipe-bridge"),
+            content_tag("flux.default.tag.pipe-port"),
+        ],
+        ENTITY_GAS_SOURCE_ID => vec![content_tag("flux.default.tag.gas-source")],
+        ENTITY_GAS_SINK_ID => vec![content_tag("flux.default.tag.gas-sink")],
+        _ => Vec::new(),
+    }
 }
 
 fn default_gas_substance(

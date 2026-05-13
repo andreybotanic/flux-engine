@@ -51,7 +51,8 @@ pub use self::reload::{
 };
 pub use self::runtime_dll::{
     overlay_is_plugin_controlled, PluginHudBlockStore, PluginOverlayFrameStore,
-    RuntimeDllHostPlugin, RuntimeDllPluginRegistry, RuntimeHostContext,
+    PluginOverlayGraphStore, RuntimeDllHostPlugin, RuntimeDllPluginRegistry,
+    RuntimeHostContext,
 };
 pub use self::source::{
     discover_dev_plugin_sources, discover_packaged_plugin_sources, discover_plugin_sources,

@@ -1,15 +1,15 @@
 use std::marker::PhantomData;
 
 use flux_plugin_abi::{
-    FluxEntityDescriptor, FluxGasSubstanceDescriptor, FluxOverlayDescriptor, FluxRegistrar,
-    FluxSaveChunkDescriptor, FluxStatus, FluxSubscriptionDescriptor, FluxToolDescriptor,
-    FluxUtf8Slice,
+    FluxEntityDescriptor, FluxGasSubstanceDescriptor, FluxOverlayDescriptor,
+    FluxOverlayMaterialDescriptor, FluxRegistrar, FluxSaveChunkDescriptor, FluxStatus,
+    FluxSubscriptionDescriptor, FluxToolDescriptor, FluxUtf8Slice,
 };
 
 use crate::{
     AbiEventPayload, BuiltinEventPayload, EntityDescriptor, OverlayDescriptor,
-    OverlayRenderPolicy, PluginError, PluginEvent, SaveChunkDescriptor, SubstanceDescriptor,
-    ToolDescriptor,
+    OverlayMaterialDescriptor, OverlayRenderPolicy, PluginError, PluginEvent, SaveChunkDescriptor,
+    SubstanceDescriptor, ToolDescriptor,
 };
 
 /// One typed plugin event handler.
@@ -29,6 +29,7 @@ pub struct MemoryRegistration {
     pub substances: Vec<SubstanceDescriptor>,
     pub entities: Vec<EntityDescriptor>,
     pub overlays: Vec<OverlayDescriptor>,
+    pub overlay_materials: Vec<OverlayMaterialDescriptor>,
     pub tools: Vec<ToolDescriptor>,
     pub save_chunks: Vec<SaveChunkDescriptor>,
     pub subscriptions: Vec<PluginEvent>,
@@ -147,10 +148,12 @@ impl<'a, P> Registrar<'a, P> {
     }
 
     /// Registers one overlay descriptor.
-    pub fn register_overlay(
-        &mut self,
-        descriptor: OverlayDescriptor,
-    ) -> Result<(), PluginError> {
+    pub fn register_overlay(&mut self, descriptor: OverlayDescriptor) -> Result<(), PluginError> {
+        if let Some(graph) = &descriptor.graph {
+            graph
+                .validate()
+                .map_err(|error| PluginError::InvalidArgument(error.to_string()))?;
+        }
         match &mut self.sink {
             RegistrarSink::Abi(raw) => {
                 let callback = raw
@@ -159,9 +162,7 @@ impl<'a, P> Registrar<'a, P> {
                 let abi = FluxOverlayDescriptor {
                     id: FluxUtf8Slice::from_str(descriptor.id.as_str()),
                     label: FluxUtf8Slice::from_str(&descriptor.label),
-                    hotkey: FluxUtf8Slice::from_str(
-                        descriptor.hotkey.as_deref().unwrap_or(""),
-                    ),
+                    hotkey: FluxUtf8Slice::from_str(descriptor.hotkey.as_deref().unwrap_or("")),
                     render_policy: match descriptor.render_policy {
                         OverlayRenderPolicy::CoreDefault => 0,
                         OverlayRenderPolicy::PluginControlled => 1,
@@ -172,6 +173,31 @@ impl<'a, P> Registrar<'a, P> {
                     .map_err(status_error)?;
             }
             RegistrarSink::Memory(memory) => memory.overlays.push(descriptor.clone()),
+        }
+        self.registered_ids.push(descriptor.id);
+        Ok(())
+    }
+
+    /// Registers one plugin-owned overlay material descriptor.
+    pub fn register_overlay_material(
+        &mut self,
+        descriptor: OverlayMaterialDescriptor,
+    ) -> Result<(), PluginError> {
+        match &mut self.sink {
+            RegistrarSink::Abi(raw) => {
+                let callback = raw.register_overlay_material_fn.ok_or(
+                    PluginError::Unsupported("registrar.register_overlay_material"),
+                )?;
+                let abi = FluxOverlayMaterialDescriptor {
+                    id: FluxUtf8Slice::from_str(descriptor.id.as_str()),
+                    label: FluxUtf8Slice::from_str(&descriptor.label),
+                    shader_path: FluxUtf8Slice::from_str(&descriptor.shader_path),
+                };
+                unsafe { callback(raw.registration_context, &abi) }
+                    .into_result()
+                    .map_err(status_error)?;
+            }
+            RegistrarSink::Memory(memory) => memory.overlay_materials.push(descriptor.clone()),
         }
         self.registered_ids.push(descriptor.id);
         Ok(())
@@ -248,7 +274,8 @@ impl<'a, P> Registrar<'a, P> {
         {
             return Err(PluginError::message(format!(
                 "handler payload {:?} does not match subscription {:?}",
-                E::KIND, event
+                E::KIND,
+                event
             )));
         }
         if self.has_subscription(event) {

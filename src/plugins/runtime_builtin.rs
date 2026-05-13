@@ -2,11 +2,11 @@ use std::path::Path;
 
 use flux_plugin_sdk::{
     __private::{BuiltinPluginRuntime, DispatchState},
-    BuildHudForCellEvent, EntityEvent, KeyEvent, MouseCellEvent,
-    OverlayChangedEvent, PluginError, PluginEvent, PluginPaths,
-    RenderOverlayEvent, SimulationPausedChangedEvent, SimulationPostCellGasStepEvent,
-    SimulationPreCellGasStepEvent, ToolSelectedEvent, WorldAfterSaveEvent, WorldBeforeSaveEvent,
-    WorldCreatedEvent, WorldLoadedEvent, WorldUnloadedEvent,
+    BuildHudForCellEvent, EntityEvent, KeyEvent, MouseCellEvent, OverlayChangedEvent, PluginError,
+    PluginEvent, PluginPaths, RenderOverlayEvent, SimulationPausedChangedEvent,
+    SimulationPostCellGasStepEvent, SimulationPreCellGasStepEvent, ToolSelectedEvent,
+    WorldAfterSaveEvent, WorldBeforeSaveEvent, WorldCreatedEvent, WorldLoadedEvent,
+    WorldUnloadedEvent,
 };
 
 use crate::plugins::{
@@ -15,8 +15,8 @@ use crate::plugins::{
         ui_api::ToolDescriptor,
     },
     default_plugin::{
-        runtime_sdk::{with_runtime_context, FluxDefaultRuntimeSdkPlugin},
         asset_root, config_root,
+        runtime_sdk::{with_runtime_context, FluxDefaultRuntimeSdkPlugin},
     },
     runtime_dll::RuntimeHostContext,
     runtime_host_binding::sdk_runtime_host_binding,
@@ -83,7 +83,9 @@ pub fn default_builtin_runtime_registration() -> Result<PluginRuntimeRegistratio
 /// Creates the live built-in runtime endpoint for `flux.default`.
 pub fn default_builtin_runtime_endpoint() -> Result<Box<dyn RuntimePluginEndpoint>, String> {
     let runtime = build_default_builtin_runtime()?;
-    Ok(Box::new(BuiltinRuntimePluginEndpoint::<FluxDefaultRuntimeSdkPlugin> {
+    Ok(Box::new(BuiltinRuntimePluginEndpoint::<
+        FluxDefaultRuntimeSdkPlugin,
+    > {
         plugin_id: engine_plugin_id(runtime.plugin_id()),
         runtime,
     }))
@@ -116,16 +118,14 @@ fn convert_memory_registration(
         gas_substances: registration
             .substances
             .iter()
-            .map(|substance| {
-                SubstanceDefinition {
-                    id: engine_substance_id(&substance.id),
-                    plugin_id: engine_plugin_id(&plugin_id),
-                    label: substance.label.clone(),
-                    molecular_mass: substance.molecular_mass,
-                    color: substance.color,
-                    aliases: vec![substance.alias.clone()],
-                    flags: SubstanceFlags::gas(),
-                }
+            .map(|substance| SubstanceDefinition {
+                id: engine_substance_id(&substance.id),
+                plugin_id: engine_plugin_id(&plugin_id),
+                label: substance.label.clone(),
+                molecular_mass: substance.molecular_mass,
+                color: substance.color,
+                aliases: vec![substance.alias.clone()],
+                flags: SubstanceFlags::gas(),
             })
             .collect(),
         entities: registration.entities.clone(),
@@ -158,8 +158,10 @@ fn convert_memory_registration(
                 label: overlay.label,
                 hotkey: overlay.hotkey,
                 render_policy: engine_overlay_render_policy(overlay.render_policy),
+                graph: overlay.graph,
             })
             .collect(),
+        overlay_materials: registration.overlay_materials.clone(),
         save_chunks: registration
             .save_chunks
             .iter()
@@ -305,7 +307,12 @@ fn dispatch_builtin_sdk_event<P: flux_plugin_sdk::Plugin>(
         | PluginRuntimeEvent::MouseLeaveCell(mouse) => {
             let payload = convert_mouse_event(mouse)?;
             let event_kind = sdk_event_kind(event.kind());
-            runtime.dispatch(event_kind, &payload, binding, dispatch_state_from_mouse(&payload))
+            runtime.dispatch(
+                event_kind,
+                &payload,
+                binding,
+                dispatch_state_from_mouse(&payload),
+            )
         }
         PluginRuntimeEvent::KeyPressed { key, modifiers }
         | PluginRuntimeEvent::KeyReleased { key, modifiers } => {
@@ -425,8 +432,7 @@ fn engine_plugin_id(plugin_id: &flux_plugin_sdk::PluginId) -> PluginId {
 }
 
 fn engine_content_id(content_id: &flux_plugin_sdk::ContentId) -> crate::plugins::ContentId {
-    crate::plugins::ContentId::parse(content_id.as_str())
-        .expect("sdk content id must stay valid")
+    crate::plugins::ContentId::parse(content_id.as_str()).expect("sdk content id must stay valid")
 }
 
 fn engine_substance_id(substance_id: &flux_plugin_sdk::SubstanceId) -> crate::plugins::SubstanceId {
@@ -438,7 +444,9 @@ fn engine_event_kind(event: flux_plugin_sdk::PluginEvent) -> crate::plugins::Plu
     match event {
         flux_plugin_sdk::PluginEvent::WorldCreated => crate::plugins::PluginEvent::WorldCreated,
         flux_plugin_sdk::PluginEvent::WorldLoaded => crate::plugins::PluginEvent::WorldLoaded,
-        flux_plugin_sdk::PluginEvent::WorldBeforeSave => crate::plugins::PluginEvent::WorldBeforeSave,
+        flux_plugin_sdk::PluginEvent::WorldBeforeSave => {
+            crate::plugins::PluginEvent::WorldBeforeSave
+        }
         flux_plugin_sdk::PluginEvent::WorldAfterSave => crate::plugins::PluginEvent::WorldAfterSave,
         flux_plugin_sdk::PluginEvent::WorldUnloaded => crate::plugins::PluginEvent::WorldUnloaded,
         flux_plugin_sdk::PluginEvent::SimulationPreCellGasStep => {
@@ -451,7 +459,9 @@ fn engine_event_kind(event: flux_plugin_sdk::PluginEvent) -> crate::plugins::Plu
             crate::plugins::PluginEvent::SimulationPausedChanged
         }
         flux_plugin_sdk::PluginEvent::EntityPlaced => crate::plugins::PluginEvent::StructurePlaced,
-        flux_plugin_sdk::PluginEvent::EntityRemoved => crate::plugins::PluginEvent::StructureRemoved,
+        flux_plugin_sdk::PluginEvent::EntityRemoved => {
+            crate::plugins::PluginEvent::StructureRemoved
+        }
         flux_plugin_sdk::PluginEvent::ToolSelected => crate::plugins::PluginEvent::ToolSelected,
         flux_plugin_sdk::PluginEvent::MouseDownCell => crate::plugins::PluginEvent::MouseDownCell,
         flux_plugin_sdk::PluginEvent::MouseMoveCell => crate::plugins::PluginEvent::MouseMoveCell,
@@ -461,7 +471,9 @@ fn engine_event_kind(event: flux_plugin_sdk::PluginEvent) -> crate::plugins::Plu
         flux_plugin_sdk::PluginEvent::KeyPressed => crate::plugins::PluginEvent::KeyPressed,
         flux_plugin_sdk::PluginEvent::KeyReleased => crate::plugins::PluginEvent::KeyReleased,
         flux_plugin_sdk::PluginEvent::OverlayChanged => crate::plugins::PluginEvent::OverlayChanged,
-        flux_plugin_sdk::PluginEvent::BuildHudForCell => crate::plugins::PluginEvent::BuildHudForCell,
+        flux_plugin_sdk::PluginEvent::BuildHudForCell => {
+            crate::plugins::PluginEvent::BuildHudForCell
+        }
         flux_plugin_sdk::PluginEvent::RenderOverlay => crate::plugins::PluginEvent::RenderOverlay,
     }
 }
@@ -470,7 +482,9 @@ fn sdk_event_kind(event: crate::plugins::PluginEvent) -> flux_plugin_sdk::Plugin
     match event {
         crate::plugins::PluginEvent::WorldCreated => flux_plugin_sdk::PluginEvent::WorldCreated,
         crate::plugins::PluginEvent::WorldLoaded => flux_plugin_sdk::PluginEvent::WorldLoaded,
-        crate::plugins::PluginEvent::WorldBeforeSave => flux_plugin_sdk::PluginEvent::WorldBeforeSave,
+        crate::plugins::PluginEvent::WorldBeforeSave => {
+            flux_plugin_sdk::PluginEvent::WorldBeforeSave
+        }
         crate::plugins::PluginEvent::WorldAfterSave => flux_plugin_sdk::PluginEvent::WorldAfterSave,
         crate::plugins::PluginEvent::WorldUnloaded => flux_plugin_sdk::PluginEvent::WorldUnloaded,
         crate::plugins::PluginEvent::SimulationPreCellGasStep => {
@@ -483,7 +497,9 @@ fn sdk_event_kind(event: crate::plugins::PluginEvent) -> flux_plugin_sdk::Plugin
             flux_plugin_sdk::PluginEvent::SimulationPausedChanged
         }
         crate::plugins::PluginEvent::StructurePlaced => flux_plugin_sdk::PluginEvent::EntityPlaced,
-        crate::plugins::PluginEvent::StructureRemoved => flux_plugin_sdk::PluginEvent::EntityRemoved,
+        crate::plugins::PluginEvent::StructureRemoved => {
+            flux_plugin_sdk::PluginEvent::EntityRemoved
+        }
         crate::plugins::PluginEvent::ToolSelected => flux_plugin_sdk::PluginEvent::ToolSelected,
         crate::plugins::PluginEvent::MouseDownCell => flux_plugin_sdk::PluginEvent::MouseDownCell,
         crate::plugins::PluginEvent::MouseMoveCell => flux_plugin_sdk::PluginEvent::MouseMoveCell,
@@ -493,7 +509,9 @@ fn sdk_event_kind(event: crate::plugins::PluginEvent) -> flux_plugin_sdk::Plugin
         crate::plugins::PluginEvent::KeyPressed => flux_plugin_sdk::PluginEvent::KeyPressed,
         crate::plugins::PluginEvent::KeyReleased => flux_plugin_sdk::PluginEvent::KeyReleased,
         crate::plugins::PluginEvent::OverlayChanged => flux_plugin_sdk::PluginEvent::OverlayChanged,
-        crate::plugins::PluginEvent::BuildHudForCell => flux_plugin_sdk::PluginEvent::BuildHudForCell,
+        crate::plugins::PluginEvent::BuildHudForCell => {
+            flux_plugin_sdk::PluginEvent::BuildHudForCell
+        }
         crate::plugins::PluginEvent::RenderOverlay => flux_plugin_sdk::PluginEvent::RenderOverlay,
     }
 }

@@ -4,8 +4,8 @@ use smallvec::SmallVec;
 use crate::{
     scope, CellPos, CellRect, CellSnapshot, ContentId, EntityFilter, EntityInstanceId,
     EntityKindId, EntityPlacement, EntitySnapshot, EntitySpawnRequest, GasMixture, HudBlock,
-    InputModifiers, OverlayFrame, OverlayModeId, PlacementCheck, PluginError, Rotation, SaveChunk,
-    SimulationSpeed, SubstanceId, SubstanceRegistryView, WorldBounds,
+    InputModifiers, OverlayFrame, OverlayGraph, OverlayModeId, PlacementCheck, PluginError,
+    Rotation, SaveChunk, SimulationSpeed, SubstanceId, SubstanceRegistryView, WorldBounds,
 };
 
 /// Read-only world query API exposed to runtime plugins.
@@ -397,7 +397,18 @@ impl OverlayApi {
         UVec2::new(102, 102)
     }
 
+    /// Submits one declarative overlay graph for the current render event.
+    pub fn submit_graph(&mut self, graph: OverlayGraph) -> Result<(), PluginError> {
+        graph
+            .validate()
+            .map_err(|error| PluginError::InvalidArgument(error.to_string()))?;
+        scope::with_runtime_host("overlays.submit_graph", |host| {
+            host.submit_overlay_graph(&graph)
+        })
+    }
+
     /// Submits one complete RGBA8 frame.
+    #[deprecated(note = "Use OverlayApi::submit_graph or OverlayDescriptor::graph for new overlays.")]
     pub fn submit_frame(&mut self, frame: OverlayFrame) -> Result<(), PluginError> {
         scope::with_runtime_host("overlays.submit_frame", |host| {
             host.submit_overlay_frame(frame.width, frame.height, &frame.rgba8)

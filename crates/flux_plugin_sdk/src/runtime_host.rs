@@ -3,7 +3,7 @@ use std::ffi::c_void;
 use bevy_math::Vec2;
 use flux_plugin_abi::{FluxRuntimeHost, FluxStatus, FluxTimeSnapshot, FluxUtf8Slice};
 
-use crate::{ContentId, PluginError};
+use crate::{ContentId, OverlayGraph, PluginError};
 
 /// Internal runtime save-chunk snapshot returned by host adapters.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,6 +40,7 @@ pub struct RuntimeHostFns {
         fn(*mut c_void, &str, &str, &str, i32) -> Result<(), PluginError>,
     pub submit_overlay_frame:
         fn(*mut c_void, u32, u32, &[u8]) -> Result<(), PluginError>,
+    pub submit_overlay_graph: fn(*mut c_void, &OverlayGraph) -> Result<(), PluginError>,
     pub write_save_chunk:
         fn(*mut c_void, &str, u32, &[u8]) -> Result<(), PluginError>,
     pub read_save_chunk:
@@ -183,6 +184,11 @@ impl RuntimeHostBinding {
         (self.fns.submit_overlay_frame)(self.context, width, height, rgba8)
     }
 
+    /// Submits one declarative overlay graph.
+    pub(crate) fn submit_overlay_graph(&self, graph: &OverlayGraph) -> Result<(), PluginError> {
+        (self.fns.submit_overlay_graph)(self.context, graph)
+    }
+
     /// Writes one plugin-owned save chunk.
     pub(crate) fn write_save_chunk(
         &self,
@@ -265,6 +271,7 @@ static ABI_HOST_FNS: RuntimeHostFns = RuntimeHostFns {
     gas_amount_at: abi_gas_amount_at,
     submit_hud_line: abi_submit_hud_line,
     submit_overlay_frame: abi_submit_overlay_frame,
+    submit_overlay_graph: abi_submit_overlay_graph,
     write_save_chunk: abi_write_save_chunk,
     read_save_chunk: abi_read_save_chunk,
     delete_save_chunk: abi_delete_save_chunk,
@@ -519,6 +526,21 @@ fn abi_submit_overlay_frame(
         .submit_overlay_frame_fn
         .ok_or(PluginError::Unsupported("overlays.submit_frame"))?;
     unsafe { callback(host.context, width, height, rgba8.as_ptr(), rgba8.len()) }
+        .into_result()
+        .map_err(status_error)
+}
+
+fn abi_submit_overlay_graph(
+    context: *mut c_void,
+    graph: &OverlayGraph,
+) -> Result<(), PluginError> {
+    let host = abi_host(context, "overlays.submit_graph")?;
+    let callback = host
+        .submit_overlay_graph_fn
+        .ok_or(PluginError::Unsupported("overlays.submit_graph"))?;
+    let json = serde_json::to_string(graph)
+        .map_err(|error| PluginError::message(format!("failed to encode overlay graph: {error}")))?;
+    unsafe { callback(host.context, FluxUtf8Slice::from_str(&json)) }
         .into_result()
         .map_err(status_error)
 }

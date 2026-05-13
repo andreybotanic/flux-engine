@@ -1,7 +1,10 @@
 use serde::{de::DeserializeOwned, Serialize};
 use smallvec::SmallVec;
 
-use crate::{CellPos, ContentId, EntityInstanceId, EntityKindId, OverlayModeId, PluginId, SubstanceId};
+use crate::{
+    CellPos, ContentId, ContentTag, EntityInstanceId, EntityKindId, OverlayGraph, OverlayModeId,
+    PluginId, SubstanceId,
+};
 
 /// One plugin-owned gas substance.
 #[derive(Clone, Debug, PartialEq)]
@@ -20,6 +23,7 @@ pub struct EntityDescriptor {
     pub label: String,
     pub icon_path: String,
     pub silhouette_path: Option<String>,
+    pub tags: Vec<ContentTag>,
 }
 
 /// One plugin-owned editor tool.
@@ -32,12 +36,13 @@ pub struct ToolDescriptor {
 }
 
 /// One plugin-owned overlay mode.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OverlayDescriptor {
     pub id: ContentId,
     pub label: String,
     pub hotkey: Option<String>,
     pub render_policy: OverlayRenderPolicy,
+    pub graph: Option<OverlayGraph>,
 }
 
 /// One plugin-owned save chunk schema.
@@ -70,8 +75,9 @@ impl SaveChunk {
         version: u32,
         value: &T,
     ) -> Result<Self, crate::PluginError> {
-        let bytes = serde_json::to_vec(value)
-            .map_err(|error| crate::PluginError::message(format!("failed to encode JSON: {error}")))?;
+        let bytes = serde_json::to_vec(value).map_err(|error| {
+            crate::PluginError::message(format!("failed to encode JSON: {error}"))
+        })?;
         Ok(Self {
             plugin_id,
             chunk_id,
