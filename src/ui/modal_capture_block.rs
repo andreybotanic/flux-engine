@@ -245,12 +245,20 @@ fn build_snapshot_target_image(size: UVec2) -> Image {
 }
 
 fn build_blurred_backdrop_image(source: &Image, blur_sigma: f32) -> Result<Image, String> {
+    if source.texture_descriptor.mip_level_count > 1 {
+        return Err(format!(
+            "Failed to blur backdrop image: mipmapped textures are not supported (mip levels: {}).",
+            source.texture_descriptor.mip_level_count
+        ));
+    }
     let dynamic = source
         .clone()
         .try_into_dynamic()
         .map_err(|err| format!("Failed to convert backdrop image for blur: {err}"))?;
+    let blurred = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| dynamic.blur(blur_sigma)))
+        .map_err(|_| "Failed to blur backdrop image: image pipeline panicked.".to_string())?;
     Ok(Image::from_dynamic(
-        dynamic.blur(blur_sigma),
+        blurred,
         true,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     ))

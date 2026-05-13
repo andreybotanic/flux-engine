@@ -1159,4 +1159,3 @@ fn build_vent_image(with_arrows: bool) -> Image {
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     )
 }
-

@@ -190,3 +190,22 @@ fn modal_snapshot_capture_refreshes_for_new_open_generation_or_resize() {
         Some(resized),
     ));
 }
+
+#[test]
+fn modal_blur_rejects_mipmapped_source_images() {
+    let mut image = Image::new_fill(
+        Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        &[255, 255, 255, 255],
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    );
+    image.texture_descriptor.mip_level_count = 2;
+
+    let error = build_blurred_backdrop_image(&image, 1.0).expect_err("mipmapped image must fail");
+    assert!(error.contains("mipmapped textures are not supported"));
+}

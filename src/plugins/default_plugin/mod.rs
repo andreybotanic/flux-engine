@@ -129,7 +129,7 @@ pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
             boundary_cell_material(),
             "boundary.toml",
             "Boundary",
-            "flux_default://world/tile_boundary.png",
+            "flux_default://world/tile_boundary.ktx2",
             None,
             1,
         ),
@@ -138,8 +138,8 @@ pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
             brick_cell_material(),
             "brick.toml",
             "Brick",
-            "flux_default://world/tile_brick.png",
-            Some("flux_default://world/silhouette_brick.png"),
+            "flux_default://world/tile_brick.ktx2",
+            Some("flux_default://world/silhouette_brick.ktx2"),
             2,
         ),
         cell_descriptor_for(
@@ -147,8 +147,8 @@ pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
             metal_cell_material(),
             "metal.toml",
             "Metal",
-            "flux_default://world/tile_metal.png",
-            Some("flux_default://world/silhouette_metal.png"),
+            "flux_default://world/tile_metal.ktx2",
+            Some("flux_default://world/silhouette_metal.ktx2"),
             3,
         ),
     ]
@@ -164,8 +164,8 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             "Pipe",
             100,
             UVec2::ONE,
-            "flux_default://world/pipe_mask_00.png",
-            Some("flux_default://world/pipe_silhouette_mask_00.png"),
+            "flux_default://world/pipe_mask_00.ktx2",
+            Some("flux_default://world/pipe_silhouette_mask_00.ktx2"),
             None,
             vec![StructureRotation::Deg0],
             pipe_hud_block(),
@@ -178,9 +178,9 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             "Vent",
             120,
             UVec2::ONE,
-            "flux_default://world/tile_vent.png",
-            Some("flux_default://world/silhouette_vent.png"),
-            Some("flux_default://world/gas_in_out.png"),
+            "flux_default://world/tile_vent.ktx2",
+            Some("flux_default://world/silhouette_vent.ktx2"),
+            Some("flux_default://world/gas_in_out.ktx2"),
             vec![StructureRotation::Deg0],
             title_only_hud_block(30),
             "Vent",
@@ -192,8 +192,8 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             "Gas Source",
             130,
             UVec2::ONE,
-            "flux_default://world/tile_gas_source.png",
-            Some("flux_default://world/tile_gas_source.png"),
+            "flux_default://world/tile_gas_source.ktx2",
+            Some("flux_default://world/tile_gas_source.ktx2"),
             None,
             vec![StructureRotation::Deg0],
             title_only_hud_block(40),
@@ -206,8 +206,8 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             "Gas Sink",
             130,
             UVec2::ONE,
-            "flux_default://world/tile_gas_sink.png",
-            Some("flux_default://world/tile_gas_sink.png"),
+            "flux_default://world/tile_gas_sink.ktx2",
+            Some("flux_default://world/tile_gas_sink.ktx2"),
             None,
             vec![StructureRotation::Deg0],
             title_only_hud_block(50),
@@ -220,9 +220,9 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             "Bridge",
             110,
             UVec2::new(3, 1),
-            "flux_default://world/bridge.png",
-            Some("flux_default://world/bridge_silhouette.png"),
-            Some("flux_default://world/gas_in_out.png"),
+            "flux_default://world/bridge.ktx2",
+            Some("flux_default://world/bridge_silhouette.ktx2"),
+            Some("flux_default://world/gas_in_out.ktx2"),
             vec![StructureRotation::Deg0, StructureRotation::Deg90],
             bridge_hud_block(),
             "GasPipeBridge",
@@ -359,10 +359,10 @@ pub fn structure_label(kind: StructureKind) -> &'static str {
 /// Returns the sprite path registered for a legacy cell material.
 pub fn cell_sprite_path(material: CellMaterial) -> &'static str {
     match material.as_str() {
-        CELL_BOUNDARY_ID => "flux_default://world/tile_boundary.png",
-        CELL_BRICK_ID => "flux_default://world/tile_brick.png",
-        CELL_METAL_ID => "flux_default://world/tile_metal.png",
-        _ => "flux_default://world/tile_brick.png",
+        CELL_BOUNDARY_ID => "flux_default://world/tile_boundary.ktx2",
+        CELL_BRICK_ID => "flux_default://world/tile_brick.ktx2",
+        CELL_METAL_ID => "flux_default://world/tile_metal.ktx2",
+        _ => "flux_default://world/tile_brick.ktx2",
     }
 }
 
@@ -370,8 +370,8 @@ pub fn cell_sprite_path(material: CellMaterial) -> &'static str {
 pub fn cell_silhouette_path(material: CellMaterial) -> Option<&'static str> {
     match material.as_str() {
         CELL_BOUNDARY_ID => None,
-        CELL_BRICK_ID => Some("flux_default://world/silhouette_brick.png"),
-        CELL_METAL_ID => Some("flux_default://world/silhouette_metal.png"),
+        CELL_BRICK_ID => Some("flux_default://world/silhouette_brick.ktx2"),
+        CELL_METAL_ID => Some("flux_default://world/silhouette_metal.ktx2"),
         _ => None,
     }
 }
@@ -379,32 +379,32 @@ pub fn cell_silhouette_path(material: CellMaterial) -> Option<&'static str> {
 /// Returns the UI tool icon path registered for a legacy cell material.
 pub fn cell_tool_icon_path(material: CellMaterial) -> &'static str {
     match material.as_str() {
-        CELL_BRICK_ID => "flux_default://ui/tool_brick.png",
-        CELL_METAL_ID => "flux_default://ui/tool_metal.png",
-        _ => "flux_default://ui/tool_brick.png",
+        CELL_BRICK_ID => "flux_default://ui/tool_brick.ktx2",
+        CELL_METAL_ID => "flux_default://ui/tool_metal.ktx2",
+        _ => "flux_default://ui/tool_brick.ktx2",
     }
 }
 
 /// Returns the primary sprite path registered for a legacy structure kind.
 pub fn structure_sprite_path(kind: StructureKind) -> &'static str {
     match kind.as_str() {
-        ENTITY_PIPE_ID => "flux_default://world/pipe_mask_00.png",
-        ENTITY_VENT_ID => "flux_default://world/tile_vent.png",
-        ENTITY_GAS_SOURCE_ID => "flux_default://world/tile_gas_source.png",
-        ENTITY_GAS_SINK_ID => "flux_default://world/tile_gas_sink.png",
-        ENTITY_GAS_PIPE_BRIDGE_ID => "flux_default://world/bridge.png",
-        _ => "flux_default://world/pipe_mask_00.png",
+        ENTITY_PIPE_ID => "flux_default://world/pipe_mask_00.ktx2",
+        ENTITY_VENT_ID => "flux_default://world/tile_vent.ktx2",
+        ENTITY_GAS_SOURCE_ID => "flux_default://world/tile_gas_source.ktx2",
+        ENTITY_GAS_SINK_ID => "flux_default://world/tile_gas_sink.ktx2",
+        ENTITY_GAS_PIPE_BRIDGE_ID => "flux_default://world/bridge.ktx2",
+        _ => "flux_default://world/pipe_mask_00.ktx2",
     }
 }
 
 /// Returns the silhouette sprite path registered for a legacy structure kind.
 pub fn structure_silhouette_path(kind: StructureKind) -> Option<&'static str> {
     match kind.as_str() {
-        ENTITY_PIPE_ID => Some("flux_default://world/pipe_silhouette_mask_00.png"),
-        ENTITY_VENT_ID => Some("flux_default://world/silhouette_vent.png"),
-        ENTITY_GAS_SOURCE_ID => Some("flux_default://world/tile_gas_source.png"),
-        ENTITY_GAS_SINK_ID => Some("flux_default://world/tile_gas_sink.png"),
-        ENTITY_GAS_PIPE_BRIDGE_ID => Some("flux_default://world/bridge_silhouette.png"),
+        ENTITY_PIPE_ID => Some("flux_default://world/pipe_silhouette_mask_00.ktx2"),
+        ENTITY_VENT_ID => Some("flux_default://world/silhouette_vent.ktx2"),
+        ENTITY_GAS_SOURCE_ID => Some("flux_default://world/tile_gas_source.ktx2"),
+        ENTITY_GAS_SINK_ID => Some("flux_default://world/tile_gas_sink.ktx2"),
+        ENTITY_GAS_PIPE_BRIDGE_ID => Some("flux_default://world/bridge_silhouette.ktx2"),
         _ => None,
     }
 }
@@ -412,23 +412,23 @@ pub fn structure_silhouette_path(kind: StructureKind) -> Option<&'static str> {
 /// Returns the UI tool icon path registered for a legacy structure kind.
 pub fn structure_tool_icon_path(kind: StructureKind) -> &'static str {
     match kind.as_str() {
-        ENTITY_PIPE_ID => "flux_default://ui/tool_pipe.png",
-        ENTITY_VENT_ID => "flux_default://ui/tool_vent.png",
-        ENTITY_GAS_SOURCE_ID => "flux_default://ui/tool_gas_source.png",
-        ENTITY_GAS_SINK_ID => "flux_default://ui/tool_gas_sink.png",
-        ENTITY_GAS_PIPE_BRIDGE_ID => "flux_default://ui/tool_bridge.png",
-        _ => "flux_default://ui/tool_pipe.png",
+        ENTITY_PIPE_ID => "flux_default://ui/tool_pipe.ktx2",
+        ENTITY_VENT_ID => "flux_default://ui/tool_vent.ktx2",
+        ENTITY_GAS_SOURCE_ID => "flux_default://ui/tool_gas_source.ktx2",
+        ENTITY_GAS_SINK_ID => "flux_default://ui/tool_gas_sink.ktx2",
+        ENTITY_GAS_PIPE_BRIDGE_ID => "flux_default://ui/tool_bridge.ktx2",
+        _ => "flux_default://ui/tool_pipe.ktx2",
     }
 }
 
 /// Returns the overlay sprite path registered for pipe connection markers.
 pub fn pipe_connection_overlay_sprite_path() -> &'static str {
-    "flux_default://world/gas_in_out.png"
+    "flux_default://world/gas_in_out.ktx2"
 }
 
 /// Returns the registered pipe mask sprite path for one connection mask.
 pub fn pipe_mask_sprite_path(mask: u8) -> String {
-    format!("flux_default://world/pipe_mask_{mask:02}.png")
+    format!("flux_default://world/pipe_mask_{mask:02}.ktx2")
 }
 
 /// Returns true when the cell kind is the default plugin boundary material.

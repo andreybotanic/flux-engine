@@ -14,6 +14,7 @@ use flux_engine::plugins::{
 use zip::{write::SimpleFileOptions, ZipWriter};
 
 mod plugin_sdk_docs;
+mod sprite_ktx;
 mod target_cleanup;
 
 const MANIFEST_RELATIVE: &str = "package_template/manifest.toml";
@@ -112,6 +113,23 @@ pub fn run_cli(repo_root: &Path, args: &[String]) -> Result<(), XtaskError> {
         "build-plugin-sdk-docs" => {
             let output = plugin_sdk_docs::build_plugin_sdk_docs(repo_root)?;
             println!("Built Plugin SDK docs at {}", output.display());
+            Ok(())
+        }
+        "generate-sprite-ktx" => {
+            let report = sprite_ktx::generate_sprite_ktx(repo_root)?;
+            println!(
+                "Generated KTX2 sprites: {} updated from {} PNG sources.",
+                report.generated_ktx2_count(),
+                report.scanned_png_count()
+            );
+            Ok(())
+        }
+        "check-sprite-ktx" => {
+            let report = sprite_ktx::check_sprite_ktx(repo_root)?;
+            println!(
+                "Sprite KTX2 assets are up to date for {} PNG sources.",
+                report.scanned_png_count()
+            );
             Ok(())
         }
         "clean-target" => {
@@ -344,7 +362,7 @@ fn parse_build_plugin_args(args: &[String]) -> Result<BuildPluginRequest<'_>, Xt
 
 fn usage_error() -> XtaskError {
     XtaskError::new(
-        "usage: cargo xtask build-plugin <plugin_id> [--dev] | pack-plugin <plugin_id> | build-all-plugins | generate-plugin-sdk-docs | check-plugin-sdk-docs | build-plugin-sdk-docs | clean-target | clean-target-hard | build-release",
+        "usage: cargo xtask build-plugin <plugin_id> [--dev] | pack-plugin <plugin_id> | build-all-plugins | generate-plugin-sdk-docs | check-plugin-sdk-docs | build-plugin-sdk-docs | generate-sprite-ktx | check-sprite-ktx | clean-target | clean-target-hard | build-release",
     )
 }
 
@@ -614,7 +632,7 @@ mod tests {
                 r#"id = "{plugin_id}"
 display_name = "Test Plugin"
 version = "1.0.0"
-api_version = 4
+api_version = 5
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"
@@ -705,11 +723,15 @@ content = false
     #[test]
     fn duplicate_plugin_ids_are_rejected() {
         let root = temp_repo("flux_xtask_dupe");
-        write_project_manifest(&root, "a", "dup.plugin");
-        write_project_manifest(&root, "b", "dup.plugin");
+        write_project_manifest(&root, "a", "dup.plugin.test");
+        write_project_manifest(&root, "b", "dup.plugin.test");
 
         let error = discover_plugin_projects(&root).expect_err("must reject duplicates");
-        assert!(error.to_string().contains("duplicate plugin ids"));
+        assert!(
+            error.to_string().contains("duplicate plugin ids"),
+            "unexpected duplicate test error: {}",
+            error
+        );
 
         let _ = fs::remove_dir_all(root);
     }

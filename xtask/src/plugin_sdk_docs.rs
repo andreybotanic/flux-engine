@@ -16,6 +16,8 @@ mod model;
 mod parser;
 mod render;
 
+const UTF8_BOM: &str = "\u{FEFF}";
+
 /// Rebuilds generated Plugin SDK Markdown files in-place.
 pub fn generate_plugin_sdk_docs(repo_root: &Path) -> Result<(), XtaskError> {
     let files = generated_plugin_sdk_files(repo_root)?;
@@ -30,7 +32,7 @@ pub fn generate_plugin_sdk_docs(repo_root: &Path) -> Result<(), XtaskError> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(&path, file.contents).map_err(|error| {
+        fs::write(&path, with_utf8_bom(&file.contents)).map_err(|error| {
             XtaskError::new(format!(
                 "failed to write generated SDK docs '{}': {}",
                 path.display(),
@@ -49,7 +51,7 @@ pub fn check_plugin_sdk_docs(repo_root: &Path) -> Result<(), XtaskError> {
     for file in files {
         let path = docs_src_root.join(&file.relative_path);
         let current = fs::read_to_string(&path).unwrap_or_default();
-        if current != file.contents {
+        if current != with_utf8_bom(&file.contents) {
             stale.push(path);
         }
     }
@@ -129,6 +131,13 @@ fn grouped_items(items: &[ApiItemDoc]) -> BTreeMap<ApiGroup, Vec<ApiItemDoc>> {
         grouped.entry(item.group).or_default().push(item.clone());
     }
     grouped
+}
+
+fn with_utf8_bom(contents: &str) -> String {
+    if contents.starts_with(UTF8_BOM) {
+        return contents.to_string();
+    }
+    format!("{}{}", UTF8_BOM, contents)
 }
 
 fn summary_groups<'a>(
@@ -411,5 +420,29 @@ mod tests {
     #[test]
     fn tracked_sdk_docs_are_current() {
         check_plugin_sdk_docs(&repo_root()).expect("tracked generated SDK docs must be current");
+    }
+
+    #[test]
+    fn generated_sdk_docs_are_written_with_utf8_bom() {
+        let repo = temp_repo("generated_docs_bom");
+        super::generate_plugin_sdk_docs(&repo.root).expect("generate docs into temp repo");
+        let summary_path = repo.root.join("docs").join("plugin_sdk").join("src").join("SUMMARY.md");
+        let bytes = fs::read(&summary_path).expect("read generated summary");
+
+        assert!(bytes.starts_with(&[0xEF, 0xBB, 0xBF]));
+    }
+
+    #[test]
+    fn generated_sdk_examples_strip_utf8_bom_marker() {
+        let files = generated_plugin_sdk_files(&repo_root()).expect("generate SDK docs in memory");
+        let page = files
+            .iter()
+            .find(|file| {
+                file.relative_path == Path::new("generated/events/pluginevent-worldunloaded.md")
+            })
+            .expect("WorldUnloaded event page");
+
+        assert!(!page.contents.contains('\u{FEFF}'));
+        assert!(!page.contents.contains('\r'));
     }
 }

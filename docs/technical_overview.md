@@ -108,6 +108,8 @@
   - `cargo xtask build-plugin <plugin_id> --dev` делает ту же сборку, затем обновляет `plugins_dev/<plugin_id>` через временную папку и повторно валидирует установленный dev-root; после этого в запущенной игре достаточно нажать `Reload`.
   - `cargo xtask pack-plugin <plugin_id>` выполняет build, пишет `.fluxplugin` в `target/plugins/packages/<plugin_id>.fluxplugin` и валидирует archive через runtime loader.
   - `cargo xtask build-all-plugins` собирает и упаковывает все найденные plugin projects в детерминированном порядке.
+  - `cargo xtask generate-sprite-ktx` сканирует built-in файловые PNG-спрайты в `assets/sprites/**` и `src/plugins/default_plugin/assets/**`, конвертирует их в соседние `.ktx2` и генерирует mip-chain через `ktx create` (кроме исключений `assets/sprites/ui/main_menu_background.png` и `assets/sprites/world/backdrop_noise.png`).
+  - `cargo xtask check-sprite-ktx` проверяет, что для тех же PNG-источников существуют `.ktx2` и они не старее source PNG (с теми же исключениями).
   - `cargo xtask clean-target` удаляет transient-мусор из `target/`: root-логи, `flycheck*`, `codex_runcheck`, `.rustc_info.json`, `tmp_*`, а также stray logs/скриншоты в profile-папках, но не трогает cargo-кэш сборки.
   - `cargo xtask clean-target-hard` выполняет агрессивную зачистку `target/`: помимо мусора удаляет cache-каталоги Cargo (`debug/release deps`, `build`, `.fingerprint`, `incremental`) и оставляет только живой `xtask`-бинарник и top-level release deliverables (`.exe`, `.pdb`).
   - `cargo xtask build-release` выполняет обычный `clean-target`, затем запускает штатную релизную сборку `cargo build --release`; release cache после сборки сохраняется для быстрых повторных прогонов.
@@ -116,6 +118,7 @@
 - The generated API groups are rendered as mdBook foldable sidebar nodes and are collapsed by default through `[output.html.fold] enable = true` with `level = 0`.
 - Structure pages render field tables from public struct fields, enum pages render variant tables, constant pages render declarations, method pages render arguments and return values from signatures or callback type aliases, and event pages render trigger descriptions plus payload arguments inferred from the matching `PluginEvent` variant. Structure pages also list owned methods, and documented SDK types are cross-linked from field, payload, argument and return-value cells.
 - SDK examples are stored outside Rustdoc in `docs/plugin_sdk/src/examples/{methods,events,constants}/`. Generated pages встраивают эти snippets, если соответствующий markdown-файл существует и не содержит legacy v4 ABI surface вроде `FluxRuntimeHost`/`extern "C"`, и ссылаются обратно на source snippet file; отсутствие внешнего snippet-а больше не ломает documentation pipeline.
+- При генерации Plugin SDK docs все markdown-файлы в `docs/plugin_sdk/src/` теперь записываются в `UTF-8 with BOM`, а ведущий BOM внешнего snippet-а удаляется перед встраиванием в generated page. Это убирает артефакты `п»ї` в `SDK Example` и ложные «невидимые» git-изменения после регенерации.
 - The SDK docs generator hides internal runtime helpers вроде `PluginRuntime`, собирает event payload tables из typed SDK event-структур через `AbiEventPayload` mapping и подставляет безопасные fallback-описания для полей/enum-вариантов, если у конкретного user-facing item нет отдельного подробного section-блока. `cargo xtask generate-plugin-sdk-docs` и `cargo xtask check-plugin-sdk-docs` всё ещё валятся на реально плохих состояниях вроде отсутствующего summary doc-comment, пустого external snippet-а или устаревших tracked generated files.
 - Plugin SDK docs commands:
   - `cargo xtask generate-plugin-sdk-docs` rewrites generated Markdown chapters.
@@ -125,6 +128,16 @@
 - Stage-7 sample content plugin находится в `src/plugins/flux_stage7_sample_content_plugin`: его ABI v2 DLL регистрирует газ `flux.sample_content.substance.neon` с alias `neon`.
 - Runtime registration сохраняется в `PluginRuntimeRegistration`, затем `LoadedPluginRegistry` передаёт её в `ContentRegistry`. При включении/выключении content-плагина из `Main Menu -> Plugins` rebuild пересоздаёт `ContentRegistry`, `GasRegistry`, world/pipe gas fields, pipe flux state и GPU solver buffers, а gas dropdown-поля обновляются без перезапуска.
 - `GameConfig::load_from_default_location_with_content(...)` и `load_gas_registry_from_default_location(...)` строят `GasRegistry` из default substances плюс substances включённых content-плагинов. Save/load gate использует те же stable substance IDs, поэтому мир с plugin-owned газом требует соответствующий enabled content plugin.
+
+### Built-in sprite KTX2 pipeline
+
+- Built-in файловые спрайты ядра и `flux.default` хранят исходники в PNG, а в рантайме в основном загружаются из заранее сгенерированных `.ktx2` рядом с исходниками.
+- `assets/sprites/ui/main_menu_background.png` и `assets/sprites/world/backdrop_noise.png` являются исключениями: оба ассета загружаются напрямую как PNG и не участвуют в `ktx2`-генерации/check-проверке.
+- Глобальный `ImagePlugin` в приложении использует `default_sampler` с линейной фильтрацией (`mag/min/mipmap = Linear`) вместо `default_nearest()`, чтобы precomputed mip-chain у файловых спрайтов использовался корректно.
+- Runtime-изображения газа для core-оверлеев `F1/F2` (`texture_f1_*`, `texture_f2_*`, формат `Rgba32Float`) задают локальный sampler `ImageSampler::nearest`, чтобы клеточные границы газа не размывались на стыках с твёрдыми блоками.
+- Конвертация в `.ktx2` выполняется офлайн через `xtask` и KTX CLI (`ktx create --format R8G8B8A8_SRGB --generate-mipmap`), без runtime-генерации mipmaps.
+- Для RGB PNG без alpha применяется swizzle `rgb1`, чтобы рантайм всегда получал RGBA-совместимый KTX2.
+- Runtime-текстуры, создаваемые в коде (`Image::new`, `Image::new_fill`, `Image::from_dynamic`), и `preview.png` внутри save-слотов остаются на PNG-пути и не участвуют в офлайн KTX2-пайплайне.
 
 ### Dev mode и hot reload (stage 8)
 

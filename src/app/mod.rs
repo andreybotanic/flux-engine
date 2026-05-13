@@ -2,6 +2,7 @@ use std::path::Path;
 
 use bevy::{
     asset::{io::AssetSourceBuilder, AssetApp, AssetPlugin},
+    image::{ImageFilterMode, ImageSamplerDescriptor},
     prelude::*,
     window::{MonitorSelection, PresentMode, WindowMode},
 };
@@ -145,7 +146,15 @@ pub fn run() {
                     }),
                     ..default()
                 })
-                .set(ImagePlugin::default_nearest()),
+                .set(ImagePlugin {
+                    default_sampler: ImageSamplerDescriptor {
+                        mag_filter: ImageFilterMode::Linear,
+                        min_filter: ImageFilterMode::Linear,
+                        mipmap_filter: ImageFilterMode::Linear,
+                        ..default()
+                    },
+                    ..default()
+                }),
         )
         .add_plugins((
             WorldPlugin,

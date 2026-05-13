@@ -6,16 +6,16 @@
 
 ```text
 FluxEngine/
-|-- .cargo/                  # Локальные cargo alias-ы проекта, включая обычную/глубокую очистку target и релизную сборку через xtask.
+|-- .cargo/                  # Локальные cargo alias-ы проекта: сборка/проверка офлайн KTX2-спрайтов, очистка target и релизная сборка через xtask.
 |-- assets/                  # Core-графика, музыка и шейдерные ресурсы приложения.
 |   |-- fonts/               # UI-шрифты, загружаемые через AssetServer.
 |   |-- music/               # Фоновая музыка игры.
 |   |   |-- game/            # MP3-треки игрового контекста (мир загружен / Game Menu).
 |   |   `-- menu/            # MP3-треки контекста главного меню.
 |   |-- shaders/             # Core WGSL-шейдеры вычислений.
-|   `-- sprites/             # Спрайты UI и мира.
-|       |-- ui/              # Core UI-элементы меню/селектов/общих инструментов.
-|       `-- world/           # Core фоновые текстуры мира.
+|   `-- sprites/             # Source PNG core-спрайтов UI/мира и соседние runtime `.ktx2` с офлайн mip-chain (кроме `ui/main_menu_background.png` и `world/backdrop_noise.png`).
+|       |-- ui/              # Source+runtime core UI-спрайты меню/селектов/общих инструментов.
+|       `-- world/           # Source+runtime core фоновые текстуры мира.
 |-- config/                  # Core TOML-конфиги симуляции/free-gas поведения.
 |   |-- backups/             # Резервные копии конфигов.
 |   |-- settings.toml        # Пользовательские настройки звука (`audio.music_volume` в шкале 0..100).
@@ -53,14 +53,14 @@ FluxEngine/
 ## Файлы
 
 - `AGENTS.md`: Правила работы агента в этом репозитории.
-- `.cargo/config.toml`: Локальные cargo alias-ы `cargo xtask`, `cargo clean-target`, `cargo clean-target-hard` и `cargo build-release` для запуска helper-crate-а `xtask`, обычной/глубокой уборки `target` и релизной сборки с сохранением build cache.
+- `.cargo/config.toml`: Локальные cargo alias-ы `cargo xtask`, `cargo generate-sprite-ktx`, `cargo check-sprite-ktx`, `cargo clean-target`, `cargo clean-target-hard` и `cargo build-release` для запуска helper-crate-а `xtask`, офлайн подготовки sprite KTX2-артефактов и release workflow.
 - `.gitignore`: Игнорирует runtime artifacts и новые `src/plugins/*/` in-project plugin-папки; tracked исключения — core `src/plugins/api/`, `default_plugin`, API demo plugins, `flux_stage1_sample_plugin`, `flux_stage7_sample_content_plugin`.
 - `assets/fonts/ui_main.ttf`: Основной UI-шрифт с поддержкой кириллицы для всех текстовых элементов интерфейса.
 - `assets/shaders/gas_solver.wgsl`: GPU-шейдер газового шага (WGSL), синхронизированный с CPU-эталоном.
-- `assets/sprites/ui/main_menu_background.png`: Отдельный fullscreen-фон главного меню.
-- `assets/sprites/ui/select_arrow.png`: UI-спрайт стрелки для выпадающих списков.
-- `assets/sprites/ui/tool_build.png`, `tool_erase.png`, `tool_add_gas.png`, `tool_clear_gas.png`: Core UI-спрайты общих инструментов; content-specific tool icons лежат в default plugin assets.
-- `assets/sprites/world/backdrop_noise.png`: Core фоновая текстура мира; default-owned тайлы/структуры лежат в default plugin assets.
+- `assets/sprites/ui/main_menu_background.png`: Source и runtime fullscreen-фон главного меню (без `.ktx2`).
+- `assets/sprites/ui/select_arrow.{png,ktx2}`: Source+runtime UI-спрайт стрелки для выпадающих списков.
+- `assets/sprites/ui/tool_build.*`, `tool_erase.*`, `tool_add_gas.*`, `tool_clear_gas.*`: Core source PNG и runtime `.ktx2` спрайты общих инструментов; content-specific tool icons лежат в default plugin assets.
+- `assets/sprites/world/backdrop_noise.png`: Source и runtime core фоновая текстура мира (без `.ktx2`); default-owned тайлы/структуры лежат в default plugin assets.
 - `assets/music/menu/*.mp3`: Набор треков фоновой музыки для `Main Menu`; сканируется один раз на старте и проигрывается в случайном цикле с fade и паузами.
 - `assets/music/game/*.mp3`: Набор треков фоновой музыки для режима загруженного мира (`игра` + `Game Menu`) с тем же циклом воспроизведения.
 - `Cargo.lock`: Зафиксированные версии зависимостей Cargo.
@@ -145,11 +145,11 @@ FluxEngine/
 - `src/plugins/default_plugin/descriptors_block.rs`: Внутренний блок сборки descriptors default plugin-а: layer/collision rules, footprint, rotations, sprite metadata и HUD blocks.
 - `src/plugins/default_plugin/ids.rs`: Stable IDs `flux.default` для cells/structures/plugin overlays/substances, typed wrapper helpers и asset/config root helpers default plugin-а.
 - `src/plugins/default_plugin/tests.rs`: Unit-тесты фасада default plugin-а: legacy ID roundtrip, полнота registry и порядок HUD-блоков.
-- `src/plugins/default_plugin/assets/ui/tool_*.png`: Content-specific UI-иконки default plugin-а для материалов и структур.
+- `src/plugins/default_plugin/assets/ui/tool_*.{png,ktx2}`: Content-specific source PNG и runtime `.ktx2` UI-иконки default plugin-а для материалов и структур.
 - `src/plugins/default_plugin/assets/shaders/pipe_highlight_material.wgsl`: Plugin-owned WGSL-шейдер `Material2d` для яркой подсветки труб в `F3/Pipes`.
-- `src/plugins/default_plugin/assets/world/pipe_mask_*.png`: Файловые спрайты труб для всех connection-mask вариантов, загружаемые через `flux_default://world/...`.
-- `src/plugins/default_plugin/assets/world/pipe_silhouette_mask_*.png`: Файловые silhouette-спрайты труб для ghost-preview.
-- `src/plugins/default_plugin/assets/world/bridge*.png`, `gas_*.png`, `silhouette_*.png`, `tile_*.png`: World-спрайты default plugin-а для стен, структур, мостов и pipe overlay.
+- `src/plugins/default_plugin/assets/world/pipe_mask_*.{png,ktx2}`: Source+runtime файловые спрайты труб для всех connection-mask вариантов, загружаемые через `flux_default://world/...`.
+- `src/plugins/default_plugin/assets/world/pipe_silhouette_mask_*.{png,ktx2}`: Source+runtime silhouette-спрайты труб для ghost-preview.
+- `src/plugins/default_plugin/assets/world/bridge*.*`, `gas_*.*`, `silhouette_*.*`, `tile_*.*`: World source PNG и runtime `.ktx2` спрайты default plugin-а для стен, структур, мостов и pipe overlay.
 - `src/plugins/default_plugin/config/cell_types.toml`: Настройки визуала/параметров default-клеток и HUD-конфиг world-клетки для свободного газа.
 - `src/plugins/default_plugin/config/gases/*.toml`: Optional data-конфиги default plugin gas substances; при пустой папке базовые `H2/O2/CO2` берутся из built-in default plugin definitions.
 - `src/plugins/default_plugin/config/pipe_runtime.toml`: Runtime-настройки pipe pressure/flux/vent solver default plugin-а.
@@ -248,7 +248,8 @@ FluxEngine/
 - `src/world/mod.rs`: Плагин мира и события изменений клеток.
 - `src/world/structures.rs`: Unified layer/descriptor-модель структур, generic structure/layer ID wrapper-ы, `PlacedStructureMap`, rotation, bridge-footprint compatibility helpers и pipe-cut state.
 - `xtask/Cargo.toml`: Манифест helper-crate-а для сборки/упаковки runtime-плагинов, cleanup `target` и генерации Plugin SDK документации.
-- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, `clean-target`, `clean-target-hard`, `build-release`, Plugin SDK docs команд, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>` и безопасная упаковка `.fluxplugin`.
+- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, `generate-sprite-ktx`, `check-sprite-ktx`, `clean-target`, `clean-target-hard`, `build-release`, Plugin SDK docs команд, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>` и безопасная упаковка `.fluxplugin`.
+- `xtask/src/sprite_ktx.rs`: Офлайн pipeline built-in sprite-ассетов: поиск `ktx`, скан source PNG в core/default-plugin директориях, генерация `.ktx2` с mipmaps и проверка актуальности generated файлов.
 - `xtask/src/plugin_sdk_docs.rs`: Orchestration-модуль Plugin SDK docs команд: собирает generated Markdown, stale-check и mdBook build.
 - `xtask/src/target_cleanup.rs`: Очистка transient-артефактов `target/` в двух режимах: обычный cleanup сохраняет cargo build cache, а deep cleanup удаляет и cache-каталоги; здесь же живёт обёртка релизной сборки с предочисткой.
 - `xtask/src/plugin_sdk_docs/collector.rs`: Сбор Plugin SDK API-сущностей из Rust AST через `syn`: структуры, методы, callback-типы, константы и события, exclude-фильтрация внутренних helper-ов, mapping `PluginEvent -> typed payload` через `AbiEventPayload`, fallback-описания полей/вариантов и загрузка optional external example-snippets с пропуском legacy v4 ABI примеров.

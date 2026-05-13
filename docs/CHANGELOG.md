@@ -1,6 +1,12 @@
 ﻿# Changelog
 
 ## 2026-05-13
+- Исправлена генерация Plugin SDK документации: `cargo xtask generate-plugin-sdk-docs` теперь записывает `docs/plugin_sdk/src/*.md` в `UTF-8 with BOM`, а external `SDK Example` snippets встраиваются без ведущего BOM, поэтому в generated-файлах больше не появляется `п»ї` и снижается шум ложных git-изменений.
+- Исправлено размытие газа в `F1/F2` после перехода на глобальный linear sampler: runtime-текстуры газового оверлея (`Rgba32Float`) теперь явно используют `ImageSampler::nearest`, поэтому границы газа у твёрдых блоков снова рисуются чётко.
+- В инициализации Bevy `ImagePlugin` заменён `default_nearest()` на явный `default_sampler` с `ImageFilterMode::Linear` для `mag/min/mipmap`, чтобы файлы со сгенерированными mip-levels корректно фильтровались в рантайме.
+- Built-in файловые спрайты переведены на офлайн-артефакты `.ktx2` с mip-chain: core `assets/sprites/...` и default-plugin `src/plugins/default_plugin/assets/...` теперь загружаются из KTX2, а PNG остаются source-ассетами; исключения — `assets/sprites/ui/main_menu_background.png` и `assets/sprites/world/backdrop_noise.png`, которые загружаются напрямую как PNG.
+- В `xtask` добавлены команды `generate-sprite-ktx` и `check-sprite-ktx`: генерация/обновление `.ktx2` через KTX CLI и проверка наличия/актуальности относительно PNG-источников с теми же исключениями.
+- Добавлены cargo alias-ы `cargo generate-sprite-ktx` и `cargo check-sprite-ktx` в `.cargo/config.toml`.
 - Добавлен экран `Settings` в `Main Menu` и `Game Menu` с вкладками `Graphics` и `Sound`, кнопками `Back` на вкладках и кнопкой `Save` на вкладке `Sound`.
 - Добавлен переиспользуемый UI-компонент `slider` (`min/max/step`, click+drag, квантизация по шагу), применённый для настройки громкости музыки в шкале `0..100`.
 - Настройка громкости в `Sound` теперь применяется мгновенно в рантайме (нормализация `0..100 -> 0.0..1.0`), а в `config/settings.toml` сохраняется только по кнопке `Save`.

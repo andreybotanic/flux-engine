@@ -51,11 +51,11 @@ fn setup_editor_ui(
     let gamma_initial_text = fmt_f32(gamma_initial);
     let max_color_initial_text = max_color_initial.to_string();
     let icon_set = EditorIconSet {
-        build: asset_server.load("sprites/ui/tool_build.png"),
+        build: asset_server.load("sprites/ui/tool_build.ktx2"),
         gases: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::pipe_structure_kind(),
         )),
-        erase: asset_server.load("sprites/ui/tool_erase.png"),
+        erase: asset_server.load("sprites/ui/tool_erase.ktx2"),
         pipe: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::pipe_structure_kind(),
         )),
@@ -65,8 +65,8 @@ fn setup_editor_ui(
         bridge: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
         )),
-        add_gas: asset_server.load("sprites/ui/tool_add_gas.png"),
-        clear_gas: asset_server.load("sprites/ui/tool_clear_gas.png"),
+        add_gas: asset_server.load("sprites/ui/tool_add_gas.ktx2"),
+        clear_gas: asset_server.load("sprites/ui/tool_clear_gas.ktx2"),
         source: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::gas_source_structure_kind(),
         )),
@@ -117,7 +117,7 @@ fn setup_editor_ui(
             )
             .expect("sink silhouette is registered"),
         ),
-        select_arrow: asset_server.load("sprites/ui/select_arrow.png"),
+        select_arrow: asset_server.load("sprites/ui/select_arrow.ktx2"),
         main_menu_background: asset_server.load("sprites/ui/main_menu_background.png"),
     };
     commands.insert_resource(icon_set.clone());
@@ -1048,4 +1048,3 @@ fn setup_editor_ui(
             ));
         });
 }
-

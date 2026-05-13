@@ -20,6 +20,8 @@ use crate::{
     XtaskError,
 };
 
+const UTF8_BOM: char = '\u{FEFF}';
+
 /// Collects all generated Plugin SDK item docs from configured Rust sources.
 pub(super) fn collect_api_items(repo_root: &Path) -> Result<Vec<ApiItemDoc>, XtaskError> {
     let mut items = Vec::new();
@@ -87,19 +89,20 @@ pub(super) fn collect_api_items(repo_root: &Path) -> Result<Vec<ApiItemDoc>, Xta
             let absolute_path = repo_root.join(DOCS_SRC_ROOT).join(&relative_path);
             match fs::read_to_string(&absolute_path) {
                 Ok(contents) => {
-                    if contents.trim().is_empty() {
+                    let normalized_contents = normalize_external_example(&contents);
+                    if normalized_contents.trim().is_empty() {
                         return Err(XtaskError::new(format!(
                             "Plugin SDK example for `{}` is empty: '{}'",
                             item.name,
                             absolute_path.display()
                         )));
                     }
-                    if contains_legacy_plugin_api_markers(&contents) {
+                    if contains_legacy_plugin_api_markers(&normalized_contents) {
                         continue;
                     }
                     item.example = Some(ApiExampleDoc {
                         relative_path,
-                        contents: contents.trim().to_string(),
+                        contents: normalized_contents.trim().to_string(),
                     });
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -829,4 +832,14 @@ fn contains_legacy_plugin_api_markers(contents: &str) -> bool {
     ]
     .iter()
     .any(|marker| contents.contains(marker))
+}
+
+fn strip_utf8_bom_prefix(contents: &str) -> &str {
+    contents.strip_prefix(UTF8_BOM).unwrap_or(contents)
+}
+
+fn normalize_external_example(contents: &str) -> String {
+    strip_utf8_bom_prefix(contents)
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
 }

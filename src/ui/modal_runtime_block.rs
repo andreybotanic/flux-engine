@@ -67,10 +67,10 @@ fn prepare_asset_backdrop_blur_cache(
     let Some(source_image) = images.get(source).cloned() else {
         return;
     };
-    let Ok(blurred) = build_blurred_backdrop_image(&source_image, spec.blur_sigma) else {
-        return;
+    let blurred_handle = match build_blurred_backdrop_image(&source_image, spec.blur_sigma) {
+        Ok(blurred) => images.add(blurred),
+        Err(_) => source.clone(),
     };
-    let blurred_handle = images.add(blurred);
     cache.blurred_by_asset.insert(key, blurred_handle);
 }
 

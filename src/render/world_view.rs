@@ -127,6 +127,7 @@ fn build_seeded_image_f2() -> Image {
 
     image.texture_descriptor.usage =
         TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
+    image.sampler = ImageSampler::nearest();
 
     for y in 0..WORLD_HEIGHT {
         for x in 0..WORLD_WIDTH {
@@ -157,6 +158,7 @@ fn build_seeded_image_f1() -> Image {
     );
     image.texture_descriptor.usage =
         TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
+    image.sampler = ImageSampler::nearest();
     image
 }
 
