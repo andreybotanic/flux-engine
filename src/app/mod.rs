@@ -8,7 +8,7 @@ use bevy::{
 
 use crate::{
     bgm::BgmPlugin,
-    config::GameConfig,
+    config::{AudioSettingsState, GameConfig},
     debug::DebugPlugin,
     editor::EditorPlugin,
     input::InputPlugin,
@@ -50,6 +50,10 @@ pub fn run() {
     )
     .unwrap_or_else(|err| {
         panic!("Failed to load game config files from ./config and default plugin config: {err}");
+    });
+    let audio_settings = AudioSettingsState::load_from_default_location().unwrap_or_else(|err| {
+        eprintln!("Failed to load settings config from ./config/settings.toml: {err}");
+        AudioSettingsState::default()
     });
     let default_plugin_content = DefaultPluginContent::default();
 
@@ -93,6 +97,7 @@ pub fn run() {
     }
 
     app.insert_resource(game_config.gas_registry.clone())
+        .insert_resource(audio_settings)
         .insert_resource(game_config.simulation_rate)
         .insert_resource(game_config.gas_simulation)
         .insert_resource(game_config.gas_visual)

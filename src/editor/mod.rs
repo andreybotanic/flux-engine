@@ -1,7 +1,7 @@
 use bevy::{app::AppExit, ecs::system::SystemParam, prelude::*, window::PrimaryWindow};
 
 use crate::{
-    config::GasRegistry,
+    config::{AudioSettingsState, GasRegistry},
     debug::{DebugGasMetrics, DebugMode, DebugOverlaySettings},
     input::camera::MainCamera,
     plugins::{
@@ -14,8 +14,8 @@ use crate::{
         emit_full_world_changed, list_saves, load_save, new_game_snapshot,
         overwrite_save_with_plugin_chunks, restore_runtime_world_state, save_preview_target_path,
         saves_root_default, MainMenuConfirmState, MainMenuDeferredAction, MainMenuMode,
-        MainMenuScreen, MainMenuUiState, SavePreviewCaptureFinished, SavePreviewQueueState,
-        SavePreviewRequest, SaveSessionState, WorldLoadState,
+        MainMenuScreen, MainMenuSettingsTab, MainMenuUiState, SavePreviewCaptureFinished,
+        SavePreviewQueueState, SavePreviewRequest, SaveSessionState, WorldLoadState,
     },
     simulation::{
         gas::GasField, GasSimulationConfig, SimulationControl, SimulationPerfStats,
@@ -35,6 +35,7 @@ use crate::{
         },
         scroll_area::{spawn_scroll_area_scrollbar, ScrollAreaViewport, UiScrollBlockState},
         select_field::{spawn_select_field, SelectFieldConfig, SelectFieldId, SelectFieldState},
+        slider::{spawn_slider, SliderConfig, SliderId, SliderState, SliderValueChanged},
     },
     world::{
         grid::{cell_center, world_to_cell, CellMaterial, WorldGrid, CELL_SIZE},
@@ -88,6 +89,8 @@ const GAS_TOOL_PANEL_ID: PanelId = PanelId::new("gas_tool_panel");
 const STRUCTURE_TOOL_PANEL_ID: PanelId = PanelId::new("structure_tool_panel");
 const GAS_SELECT_ADD_ID: SelectFieldId = SelectFieldId::new("gas_select_add");
 const GAS_SELECT_SOURCE_ID: SelectFieldId = SelectFieldId::new("gas_select_source");
+const SETTINGS_MUSIC_VOLUME_SLIDER_ID: SliderId =
+    SliderId::new("settings_music_volume_slider");
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EditorTool {
@@ -341,6 +344,21 @@ struct MainMenuRootActions;
 struct MainMenuPluginsActions;
 
 #[derive(Component)]
+struct MainMenuSettingsActions;
+
+#[derive(Component)]
+struct MainMenuSettingsFooterActions;
+
+#[derive(Component)]
+struct MainMenuSettingsGraphicsContent;
+
+#[derive(Component)]
+struct MainMenuSettingsSoundContent;
+
+#[derive(Component)]
+struct MainMenuSettingsMusicVolumeValueText;
+
+#[derive(Component)]
 struct MainMenuPluginsListRoot;
 
 #[derive(Component)]
@@ -386,6 +404,9 @@ struct MainMenuConfirmCancelLabel;
 struct MainMenuActionButton(MainMenuButtonAction);
 
 #[derive(Component, Clone, Copy)]
+struct MainMenuSettingsTabButton;
+
+#[derive(Component, Clone, Copy)]
 struct MainMenuButtonPalette {
     idle: Color,
     hover: Color,
@@ -418,6 +439,7 @@ enum MainMenuButtonAction {
     Continue,
     NewGame,
     OpenPluginsScreen,
+    OpenSettingsScreen,
     OpenSaveScreen,
     OpenLoadScreen,
     ExitToMainMenu,
@@ -429,6 +451,9 @@ enum MainMenuButtonAction {
     SelectDelete(String),
     TogglePlugin(PluginId),
     ReloadPlugins,
+    SettingsTabGraphics,
+    SettingsTabSound,
+    SaveSettings,
     ConfirmPrimary,
     ConfirmSecondary,
     ConfirmCancel,
@@ -511,17 +536,27 @@ impl Plugin for EditorPlugin {
             .add_systems(Update, emit_plugin_keyboard_events)
             .add_systems(Update, handle_editor_ui_actions)
             .add_systems(Update, refresh_editor_ui)
+            .add_systems(Update, handle_settings_slider_changes)
             .add_systems(
                 Update,
                 (
                     emit_main_menu_button_actions,
                     update_main_menu_save_card_interactions,
                     handle_main_menu_actions,
-                    sync_main_menu_plugin_rows,
-                    handle_save_preview_capture_finished,
-                    refresh_main_menu_ui,
                 )
                     .chain(),
+            )
+            .add_systems(
+                Update,
+                sync_main_menu_plugin_rows.after(handle_main_menu_actions),
+            )
+            .add_systems(
+                Update,
+                handle_save_preview_capture_finished.after(handle_main_menu_actions),
+            )
+            .add_systems(
+                Update,
+                refresh_main_menu_ui.after(handle_save_preview_capture_finished),
             )
             .add_systems(
                 Update,
@@ -667,6 +702,21 @@ mod tests {
             ),
             EscAction::BackToRoot,
             "Esc should leave the Plugins screen open at the root menu"
+        );
+    }
+
+    #[test]
+    fn escape_returns_settings_screen_to_root() {
+        assert_eq!(
+            escape_action(
+                MainMenuMode::Main,
+                MainMenuScreen::Settings,
+                false,
+                false,
+                false
+            ),
+            EscAction::BackToRoot,
+            "Esc should leave the Settings screen open at the root menu"
         );
     }
 

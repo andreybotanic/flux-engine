@@ -450,4 +450,5 @@ impl GameConfig {
 }
 
 include!("config_loader_block.rs");
+include!("audio_settings_block.rs");
 include!("config_tests_block.rs");

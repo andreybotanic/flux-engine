@@ -95,9 +95,17 @@ pub enum MainMenuScreen {
     #[default]
     Root,
     Plugins,
+    Settings,
     Save,
     Load,
     Confirm,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum MainMenuSettingsTab {
+    #[default]
+    Graphics,
+    Sound,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -129,6 +137,7 @@ pub struct MainMenuUiState {
     pub return_screen: MainMenuScreen,
     pub confirm_state: Option<MainMenuConfirmState>,
     pub post_save_action: Option<MainMenuDeferredAction>,
+    pub settings_tab: MainMenuSettingsTab,
     pub confirm_text: String,
     pub status_text: String,
     pub saves: Vec<SaveDescriptor>,
@@ -146,6 +155,7 @@ impl Default for MainMenuUiState {
             return_screen: MainMenuScreen::Root,
             confirm_state: None,
             post_save_action: None,
+            settings_tab: MainMenuSettingsTab::Graphics,
             confirm_text: String::new(),
             status_text: String::new(),
             saves: Vec::new(),

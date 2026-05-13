@@ -1,6 +1,10 @@
 ﻿# Changelog
 
 ## 2026-05-13
+- Добавлен экран `Settings` в `Main Menu` и `Game Menu` с вкладками `Graphics` и `Sound`, кнопками `Back` на вкладках и кнопкой `Save` на вкладке `Sound`.
+- Добавлен переиспользуемый UI-компонент `slider` (`min/max/step`, click+drag, квантизация по шагу), применённый для настройки громкости музыки в шкале `0..100`.
+- Настройка громкости в `Sound` теперь применяется мгновенно в рантайме (нормализация `0..100 -> 0.0..1.0`), а в `config/settings.toml` сохраняется только по кнопке `Save`.
+- BGM-планировщик переведён на runtime target volume: при громкости `0` текущий трек останавливается и новые треки не стартуют, при значении выше `0` цикл воспроизведения автоматически возобновляется.
 - Добавлена отдельная runtime-подсистема фоновой музыки (`BgmPlugin`): единоразовый startup-скан `assets/music/menu` и `assets/music/game`, случайный независимый бесконечный цикл треков с `fade-in 2.5s`/`fade-out 2.5s` и паузой `3-5s`; переход `menu <-> game` выполняется сразу через более резкий последовательный `fade-out 1s -> fade-in 1s`; при пустом каталоге контекст остаётся в тишине с warning в логах.
 - Добавлен штатный cleanup workflow для разросшегося `target`: `xtask` получил команды `clean-target`, `clean-target-hard` и `build-release`, а `.cargo/config.toml` — одноимённые cargo alias-ы. Обычная предсборочная очистка теперь удаляет только мусор и сохраняет cargo build cache для быстрых повторных сборок; глубокая зачистка кэша вынесена в отдельную `clean-target-hard`.
 - Полностью удалён рабочий frame-based submit path overlay-рендера: из `flux_plugin_sdk::OverlayApi` убраны legacy frame-методы, из runtime host binding и compositor-а убран frame fallback, а `RenderOverlay` теперь обрабатывает только graph-path через `submit_graph`.

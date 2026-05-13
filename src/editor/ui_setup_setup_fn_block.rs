@@ -2,12 +2,14 @@ fn setup_editor_ui(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     gas_registry: Res<GasRegistry>,
+    audio_settings: Res<AudioSettingsState>,
     sim_rate: Res<SimulationRateConfig>,
     gas_simulation: Res<GasSimulationConfig>,
     gas_visual_settings: Res<GasVisualSettings>,
     mut panel_manager: ResMut<PanelManager>,
     mut panel_open_order: ResMut<PanelOpenOrder>,
     mut select_fields: ResMut<SelectFieldState>,
+    mut slider_state: ResMut<SliderState>,
 ) {
     let fmt_f32 = |v: f32| {
         let s = format!("{:.3}", v);
@@ -130,6 +132,13 @@ fn setup_editor_ui(
         options: gas_select_options.clone(),
         selected: 0,
     });
+    slider_state.register_slider(SliderConfig::with_default_width(
+        SETTINGS_MUSIC_VOLUME_SLIDER_ID,
+        0,
+        100,
+        1,
+        audio_settings.runtime_music_volume_percent as i32,
+    ));
 
     commands
         .spawn((
@@ -524,6 +533,12 @@ fn setup_editor_ui(
                                 );
                                 spawn_main_menu_action_button(
                                     actions,
+                                    "Settings",
+                                    MainMenuButtonAction::OpenSettingsScreen,
+                                    220.0,
+                                );
+                                spawn_main_menu_action_button(
+                                    actions,
                                     "Exit To Main",
                                     MainMenuButtonAction::ExitToMainMenu,
                                     220.0,
@@ -633,6 +648,145 @@ fn setup_editor_ui(
                                     actions,
                                     "Back",
                                     MainMenuButtonAction::BackToRoot,
+                                    140.0,
+                                );
+                            });
+
+                        panel
+                            .spawn((
+                                Node {
+                                    display: Display::None,
+                                    flex_direction: FlexDirection::Row,
+                                    width: Val::Percent(100.0),
+                                    justify_content: JustifyContent::FlexStart,
+                                    align_items: AlignItems::Center,
+                                    column_gap: Val::Px(0.0),
+                                    padding: UiRect::axes(Val::Px(24.0), Val::Px(0.0)),
+                                    margin: UiRect::bottom(Val::Px(-10.0)),
+                                    ..default()
+                                },
+                                MainMenuSettingsActions,
+                            ))
+                            .with_children(|actions| {
+                                spawn_main_menu_settings_tab_button(
+                                    actions,
+                                    "Graphics",
+                                    MainMenuButtonAction::SettingsTabGraphics,
+                                    160.0,
+                                );
+                                spawn_main_menu_settings_tab_button(
+                                    actions,
+                                    "Sound",
+                                    MainMenuButtonAction::SettingsTabSound,
+                                    160.0,
+                                );
+                            });
+
+                        panel
+                            .spawn((
+                                Node {
+                                    display: Display::None,
+                                    width: Val::Percent(100.0),
+                                    flex_direction: FlexDirection::Column,
+                                    align_items: AlignItems::FlexStart,
+                                    padding: UiRect::all(Val::Px(22.0)),
+                                    border: UiRect::all(Val::Px(0.0)),
+                                    row_gap: Val::Px(14.0),
+                                    flex_grow: 1.0,
+                                    justify_content: JustifyContent::FlexStart,
+                                    ..default()
+                                },
+                                BackgroundColor(MENU_MODAL_CARD_BG),
+                                MainMenuSettingsGraphicsContent,
+                            ))
+                            .with_children(|content| {
+                                content.spawn((
+                                    Text::new(
+                                        "Graphics settings are coming soon.\nThis tab is intentionally simple for tab testing.",
+                                    ),
+                                    TextFont::from_font_size(15.0),
+                                    TextColor(crate::ui::palette::TEXT_PRIMARY),
+                                    TextLayout::new_with_justify(JustifyText::Center),
+                                ));
+                            });
+
+                        panel
+                            .spawn((
+                                Node {
+                                    display: Display::None,
+                                    width: Val::Percent(100.0),
+                                    flex_direction: FlexDirection::Column,
+                                    align_items: AlignItems::FlexStart,
+                                    padding: UiRect::all(Val::Px(22.0)),
+                                    border: UiRect::all(Val::Px(0.0)),
+                                    row_gap: Val::Px(14.0),
+                                    flex_grow: 1.0,
+                                    justify_content: JustifyContent::FlexStart,
+                                    ..default()
+                                },
+                                BackgroundColor(MENU_MODAL_CARD_BG),
+                                MainMenuSettingsSoundContent,
+                            ))
+                            .with_children(|content| {
+                                content.spawn((
+                                    Text::new("Music Volume"),
+                                    TextFont::from_font_size(16.0),
+                                    TextColor(crate::ui::palette::TEXT_PRIMARY),
+                                ));
+                                content
+                                    .spawn((Node {
+                                        display: Display::Flex,
+                                        flex_direction: FlexDirection::Row,
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        column_gap: Val::Px(12.0),
+                                        ..default()
+                                    },))
+                                    .with_children(|slider_row| {
+                                        spawn_slider(
+                                            slider_row,
+                                            SliderConfig::with_default_width(
+                                                SETTINGS_MUSIC_VOLUME_SLIDER_ID,
+                                                0,
+                                                100,
+                                                1,
+                                                audio_settings.runtime_music_volume_percent as i32,
+                                            ),
+                                        );
+                                        slider_row.spawn((
+                                            Text::new(
+                                                audio_settings.runtime_music_volume_percent.to_string(),
+                                            ),
+                                            TextFont::from_font_size(16.0),
+                                            TextColor(crate::ui::palette::TEXT_PRIMARY),
+                                            MainMenuSettingsMusicVolumeValueText,
+                                        ));
+                                    });
+                            });
+
+                        panel
+                            .spawn((
+                                Node {
+                                    display: Display::None,
+                                    flex_direction: FlexDirection::Row,
+                                    width: Val::Percent(100.0),
+                                    justify_content: JustifyContent::Center,
+                                    column_gap: Val::Px(8.0),
+                                    ..default()
+                                },
+                                MainMenuSettingsFooterActions,
+                            ))
+                            .with_children(|actions| {
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Back",
+                                    MainMenuButtonAction::BackToRoot,
+                                    140.0,
+                                );
+                                spawn_main_menu_action_button(
+                                    actions,
+                                    "Save",
+                                    MainMenuButtonAction::SaveSettings,
                                     140.0,
                                 );
                             });

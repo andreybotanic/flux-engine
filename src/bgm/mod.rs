@@ -12,13 +12,12 @@ use bevy::{
     prelude::*,
 };
 
-use crate::save::WorldLoadState;
+use crate::{config::AudioSettingsState, save::WorldLoadState};
 
 const MENU_MUSIC_SUBDIR: &str = "music/menu";
 const GAME_MUSIC_SUBDIR: &str = "music/game";
 const TRACK_FADE_SECONDS: f32 = 2.5;
 const CONTEXT_SWITCH_FADE_SECONDS: f32 = 1.0;
-const TARGET_VOLUME: f32 = 0.5;
 const INTER_TRACK_PAUSE_MIN_SECONDS: f32 = 3.0;
 const INTER_TRACK_PAUSE_MAX_SECONDS: f32 = 5.0;
 
@@ -46,6 +45,7 @@ enum FadeOutReason {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum BgmPhase {
+    Suspended,
     NextTrack,
     StartFadeIn { elapsed_secs: f32, duration_secs: f32 },
     Playing,
@@ -137,6 +137,10 @@ fn fade_out_duration_for(reason: FadeOutReason) -> f32 {
     }
 }
 
+fn scheduler_enabled(target_volume: f32) -> bool {
+    target_volume > f32::EPSILON
+}
+
 #[derive(Component)]
 struct BgmTrackMarker;
 
@@ -185,11 +189,28 @@ fn drive_bgm_playback(
     mut commands: Commands,
     time: Res<Time>,
     world_load_state: Res<WorldLoadState>,
+    audio_settings: Res<AudioSettingsState>,
     catalog: Res<BgmTrackCatalog>,
     audio_assets: Res<Assets<AudioSource>>,
     mut runtime: ResMut<BgmRuntime>,
     sinks: Query<&mut AudioSink, With<BgmTrackMarker>>,
 ) {
+    let target_volume = audio_settings.runtime_music_volume_normalized();
+    if !scheduler_enabled(target_volume) {
+        despawn_active_track(&mut commands, &mut runtime.active_track);
+        runtime.phase = BgmPhase::Suspended;
+        runtime.current_context = if world_load_state.has_world {
+            MusicContext::Game
+        } else {
+            MusicContext::Menu
+        };
+        runtime.target_context = runtime.current_context;
+        return;
+    }
+    if matches!(runtime.phase, BgmPhase::Suspended) {
+        runtime.phase = BgmPhase::NextTrack;
+    }
+
     let desired_context = if world_load_state.has_world {
         MusicContext::Game
     } else {
@@ -222,13 +243,17 @@ fn drive_bgm_playback(
                 active_track.duration_secs = duration;
             }
         }
-        if let Ok(_sink) = active_sinks.get_mut(active_track.entity) {
+        if let Ok(mut sink) = active_sinks.get_mut(active_track.entity) {
             active_track.sink_started = true;
             active_track.playback_elapsed_secs += delta_secs;
+            if matches!(runtime.phase, BgmPhase::Playing) {
+                sink.set_volume(Volume::Linear(target_volume));
+            }
         }
     }
 
     match runtime.phase {
+        BgmPhase::Suspended => {}
         BgmPhase::NextTrack => {
             start_next_track_for_target_context(&mut commands, &catalog, &mut runtime);
         }
@@ -244,7 +269,7 @@ fn drive_bgm_playback(
                     } else {
                         next_elapsed / duration_secs
                     };
-                    sink.set_volume(Volume::Linear((TARGET_VOLUME * ratio).clamp(0.0, TARGET_VOLUME)));
+                    sink.set_volume(Volume::Linear((target_volume * ratio).clamp(0.0, target_volume)));
                     if next_elapsed >= duration_secs {
                         runtime.phase = BgmPhase::Playing;
                     } else {
@@ -304,7 +329,7 @@ fn drive_bgm_playback(
                     } else {
                         1.0 - (next_elapsed / fade_duration)
                     };
-                    sink.set_volume(Volume::Linear((TARGET_VOLUME * ratio).clamp(0.0, TARGET_VOLUME)));
+                    sink.set_volume(Volume::Linear((target_volume * ratio).clamp(0.0, target_volume)));
                 }
             }
             if next_elapsed >= fade_duration {
@@ -514,6 +539,13 @@ mod tests {
         };
         runtime.phase = BgmPhase::NextTrack;
         assert!(matches!(runtime.phase, BgmPhase::NextTrack));
+    }
+
+    #[test]
+    fn scheduler_is_disabled_for_zero_volume() {
+        assert!(!scheduler_enabled(0.0));
+        assert!(!scheduler_enabled(f32::EPSILON * 0.5));
+        assert!(scheduler_enabled(0.01));
     }
 
     #[test]

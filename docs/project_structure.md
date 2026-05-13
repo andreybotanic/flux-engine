@@ -18,6 +18,7 @@ FluxEngine/
 |       `-- world/           # Core фоновые текстуры мира.
 |-- config/                  # Core TOML-конфиги симуляции/free-gas поведения.
 |   |-- backups/             # Резервные копии конфигов.
+|   |-- settings.toml        # Пользовательские настройки звука (`audio.music_volume` в шкале 0..100).
 |   `-- simulation.toml      # Core runtime-настройки без default-plugin content.
 |-- crates/                  # Отдельные workspace-crate-ы публичного Plugin SDK и внутреннего ABI.
 |   |-- flux_plugin_abi/     # Внутренний ABI/glue crate для runtime DLL handshake и dispatch.
@@ -84,6 +85,7 @@ FluxEngine/
 - `crates/flux_plugin_sdk/src/scope.rs`: Внутренний dispatch scope SDK, который временно привязывает proxy API к текущему runtime host.
 - `config/backups/simulation.toml.pre_tuning_20260503_174021.toml`: Резервная копия конфигурации симуляции для отката/сравнения.
 - `config/simulation.toml`: Core-параметры симуляции/free-gas и визуализации газа; pipe-runtime настройки default plugin-а вынесены отдельно.
+- `config/settings.toml`: Пользовательские настройки аудио (`[audio].music_volume` в диапазоне `0..100`) для экрана `Settings`.
 - `docs/CHANGELOG.md`: Краткая история важных изменений проекта.
 - `docs/game_overview.md`: Описание игрового процесса и пользовательских механик MVP.
 - `docs/plugin_sdk/book.toml`: Конфигурация mdBook-сайта Plugin SDK; build output направлен в `target/plugin_sdk_docs`, а sidebar folding включён для collapsed-by-default generated API групп.
@@ -100,28 +102,30 @@ FluxEngine/
 - `plugins/.gitkeep`: Фиксирует пустой runtime-каталог для packaged plugins; реальные `.fluxplugin` игнорируются через `.gitignore`.
 - `plugins_dev/.gitkeep`: Фиксирует пустой runtime-каталог expanded dev plugins; реальные папки плагинов игнорируются через `.gitignore`.
 - `src/app/mod.rs`: Сборка Bevy-приложения, plugin bootstrap/config resource, CLI-флаги запуска включая `--plugins-dev`, backend-инициализация, запуск и подключение общего runtime host-пути для built-in/DLL plugin dispatch.
-- `src/bgm/mod.rs`: Отдельный runtime-plugin фоновой музыки: одноразовый startup-скан `assets/music/menu|game`, state machine `fade-in -> play -> fade-out -> pause`, случайный независимый выбор следующего трека и мгновенное переключение контекста `menu <-> game`.
+- `src/bgm/mod.rs`: Отдельный runtime-plugin фоновой музыки: одноразовый startup-скан `assets/music/menu|game`, state machine `fade-in -> play -> fade-out -> pause`, случайный независимый выбор следующего трека, мгновенное переключение контекста `menu <-> game` и полная остановка планировщика при громкости `0`.
 - `src/bin/generate_pipe_scenario_saves.rs`: Вспомогательный бинарник, который пересоздаёт стартовые save-slots для пяти эталонных pipe-сценариев через штатный save API.
 - `src/bin/gas_perf.rs`: Пайплайн перф-бенчмарка газа (CPU/GPU), parity-gate и отчёты.
 - `src/config/hud.rs`: Публичные типы runtime-конфигов HUD, включая substance-контейнеры и режимы видимости по hover, без встроенных entity-label/fallback-конфигов.
 - `src/config/config_loader_block.rs`: Внутренняя логика чтения/валидации core/default-plugin TOML-конфигов и подключение gas substances из активного `ContentRegistry`.
 - `src/config/config_tests_block.rs`: Тесты загрузки и валидации конфигов.
-- `src/config/mod.rs`: Публичные конфиг-типы, compatibility `GasRegistry` поверх plugin-owned substance registry, runtime-реестры base/visual/layout/HUD-метаданных и входная точка загрузки конфигов.
+- `src/config/audio_settings_block.rs`: Runtime-состояние звуковых настроек, нормализация громкости `0..100 -> 0.0..1.0`, загрузка/сохранение `config/settings.toml` и тесты fallback/roundtrip.
+- `src/config/mod.rs`: Публичные конфиг-типы, включая `AudioSettingsState`; compatibility `GasRegistry` поверх plugin-owned substance registry, runtime-реестры base/visual/layout/HUD-метаданных и входная точка загрузки конфигов.
 - `src/debug/mod.rs`: Debug-режимы, оверлейные метрики и диагностические ресурсы.
 - `src/editor/editor_ui_block.rs`: Runtime-обработка editor UI: tooltip, state sync, панели.
 - `src/editor/input_block.rs`: Мышь/кисть/выделение и применение инструментов к миру, unified pipe/structure-сети и мосту.
 - `src/editor/main_menu_actions_block.rs`: Обработчики действий меню: save/load/new/exit/plugins/reload/confirm, очередь preview-capture и post-save follow-up сценарии.
-- `src/editor/main_menu_block.rs`: Композиция логики main menu (escape/actions/ui refresh).
-- `src/editor/main_menu_escape_block.rs`: Обработка Esc и переходов состояний меню/инструментов, включая возврат из `Plugins` к root screen.
+- `src/editor/main_menu_block.rs`: Композиция логики main menu (escape/actions/ui refresh), включая экран `Settings`.
+- `src/editor/main_menu_escape_block.rs`: Обработка Esc и переходов состояний меню/инструментов, включая возврат из `Plugins` и `Settings` к root screen.
 - `src/editor/main_menu_plugins_block.rs`: Сборка и in-place синхронизация списка runtime-плагинов для экрана `Plugins`, правила доступности toggle/reload и safe registry rebuild после изменения `EnabledPluginSet`.
 - `src/editor/main_menu_save_list_block.rs`: Общая отправка action-ивентов кнопок главного меню, сборка карточек save/load, загрузка preview PNG в UI и hit-test логика primary-click по всей карточке.
-- `src/editor/main_menu_ui_block.rs`: Обновление состояния и видимости элементов меню, включая экраны save/load/confirm/plugins.
+- `src/editor/main_menu_settings_block.rs`: Логика экрана `Settings`: открытие вкладок и live-применение изменений слайдера громкости в `AudioSettingsState`.
+- `src/editor/main_menu_ui_block.rs`: Обновление состояния и видимости элементов меню, включая экраны save/load/confirm/plugins/settings и отображение текущего значения slider-громкости.
 - `src/editor/mod.rs`: Публичные editor-типы/ресурсы и точка сборки editor-систем, включая `Pipe/Vent/Bridge` и состояние поворота моста.
 - `src/editor/overlay_setup_block.rs`: Инициализация визуальных editor-оверлеев.
 - `src/editor/ui_setup_block.rs`: Сборка editor-UI: панели, кнопки, поля и привязка виджетов.
 - `src/editor/ui_setup_debug_panels_block.rs`: Построение debug-панелей и строк параметров.
 - `src/editor/ui_setup_menu_button_factory_block.rs`: Фабрика кнопок модального меню.
-- `src/editor/ui_setup_setup_fn_block.rs`: Основная функция первичной сборки editor-UI, включая кнопку `Gases`, подпaнель выбора `Pipe/Vent/Bridge` и контейнеры экранов главного меню.
+- `src/editor/ui_setup_setup_fn_block.rs`: Основная функция первичной сборки editor-UI, включая кнопку `Gases`, подпaнель выбора `Pipe/Vent/Bridge`, контейнеры экранов главного меню и layout экрана `Settings` со слайдером громкости.
 - `src/editor/ui_setup_structure_buttons_block.rs`: Вспомогательные фабрики кнопок инструментов/материалов.
 - `src/input/camera.rs`: Управление камерой, зум/пан и тесты корректности якоря.
 - `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
@@ -229,7 +233,7 @@ FluxEngine/
 - `src/ui/modal_capture_block.rs`: Snapshot/capture runtime для modal backdrop-ов: offscreen-камера, resize target-а, blur world-snapshot и cache lifecycle.
 - `src/ui/modal_runtime_block.rs`: Выбор topmost модалки, cover-layout backdrop-изображений и переключение режимов `PanelFrosted` / `FullscreenBlur`.
 - `src/ui/modal_tests_block.rs`: Unit-тесты modal helper-ов, cover-layout и правил refresh/capture для world-snapshot backdrop.
-- `src/ui/mod.rs`: UI-плагин, wiring общих UI-систем и exports переиспользуемых UI-компонентов.
+- `src/ui/mod.rs`: UI-плагин, wiring общих UI-систем и exports переиспользуемых UI-компонентов, включая `slider` и `toggle_switch`.
 - `src/ui/palette.rs`: Единая палитра цветов UI (панели, меню, текст, input/select, tooltip, HUD и тени HUD).
 - `src/ui/panels.rs`: Публичные типы panel-системы и композиция блоков панели.
 - `src/ui/panels_manager_block.rs`: Состояние и API PanelManager, hit-rect и управление панелями.
@@ -237,6 +241,7 @@ FluxEngine/
 - `src/ui/panels_tests_block.rs`: Тесты layout/scroll/stack-поведения панелей.
 - `src/ui/scroll_area.rs`: Общий scroll-area runtime для modal/panel viewport-ов: wheel input, drag thumb, click on track, visibility scrollbar и приоритет групп ввода.
 - `src/ui/select_field.rs`: Dropdown/select-компонент для UI-панелей, динамическая перерисовка option buttons при смене списка и его тесты.
+- `src/ui/slider.rs`: Переиспользуемый slider-компонент (`min/max/step`, clamp/квантизация, click+drag по треку) и события изменения значения.
 - `src/ui/sim_controls.rs`: UI-контролы симуляции (pause/speed/hotkeys).
 - `src/ui/toggle_switch.rs`: Переиспользуемый двухпозиционный toggle-switch UI-компонент для включения/выключения настроек.
 - `src/world/grid.rs`: Клеточная сетка мира, generic material ID wrapper, координатные утилиты и тесты.

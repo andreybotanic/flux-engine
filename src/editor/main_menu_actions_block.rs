@@ -1,10 +1,12 @@
 fn handle_main_menu_actions(
     mut action_requests: EventReader<MainMenuActionRequest>,
+    slider_state: Res<SliderState>,
     ui_state: (
         ResMut<MainMenuState>,
         ResMut<MainMenuUiState>,
         ResMut<SimulationControl>,
         ResMut<GasRegistry>,
+        ResMut<AudioSettingsState>,
         ResMut<SavePreviewQueueState>,
         ResMut<SelectFieldState>,
         ResMut<GasToolSettings>,
@@ -52,6 +54,7 @@ fn handle_main_menu_actions(
         mut menu_ui,
         mut control,
         mut gas_registry,
+        mut audio_settings,
         mut preview_queue,
         mut select_fields,
         mut gas_settings,
@@ -142,6 +145,9 @@ fn handle_main_menu_actions(
             }
             MainMenuButtonAction::OpenPluginsScreen => {
                 open_plugins_screen(&mut menu_ui);
+            }
+            MainMenuButtonAction::OpenSettingsScreen => {
+                open_settings_screen(&mut menu_ui);
             }
             MainMenuButtonAction::OpenSaveScreen => {
                 if !world_load_state.has_world {
@@ -318,6 +324,25 @@ fn handle_main_menu_actions(
                     &mut plugin_runtime_registry,
                     &mut runtime_dll_plugins,
                 );
+            }
+            MainMenuButtonAction::SettingsTabGraphics => {
+                menu_ui.settings_tab = MainMenuSettingsTab::Graphics;
+            }
+            MainMenuButtonAction::SettingsTabSound => {
+                menu_ui.settings_tab = MainMenuSettingsTab::Sound;
+            }
+            MainMenuButtonAction::SaveSettings => {
+                if let Some(slider_value) = slider_state.value(SETTINGS_MUSIC_VOLUME_SLIDER_ID) {
+                    audio_settings.set_runtime_music_volume_percent(slider_value.max(0) as u32);
+                }
+                match audio_settings.save_runtime_to_default_location() {
+                    Ok(()) => {
+                        menu_ui.status_text = "Settings saved.".to_string();
+                    }
+                    Err(err) => {
+                        menu_ui.status_text = format!("Settings save failed: {}", err);
+                    }
+                }
             }
             MainMenuButtonAction::SelectLoad(save_id) => {
                 match load_save(&saves_root, &save_id, &gas_registry, &content_registry) {

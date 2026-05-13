@@ -2,30 +2,50 @@ fn refresh_main_menu_ui(
     mut commands: Commands,
     main_menu: Res<MainMenuState>,
     mut menu_ui: ResMut<MainMenuUiState>,
-    plugin_registry_state: Res<PluginRegistryState>,
-    enabled_plugins: Res<EnabledPluginSet>,
-    world_load_state: Res<WorldLoadState>,
-    icon_set: Res<EditorIconSet>,
+    slider_state: Res<SliderState>,
+    audio_settings: Res<AudioSettingsState>,
+    shared_resources: (
+        Res<PluginRegistryState>,
+        Res<EnabledPluginSet>,
+        Res<WorldLoadState>,
+        Res<EditorIconSet>,
+    ),
     mut images: ResMut<Assets<Image>>,
-    mut root_visibility: Single<&mut Visibility, With<MainMenuRoot>>,
-    mut backdrop_spec: Single<&mut ModalBackdropSpec, With<MainMenuRoot>>,
+    mut text_color_query: Query<&mut TextColor>,
+    modal_state: (
+        Single<&mut Visibility, With<MainMenuRoot>>,
+        Single<&mut ModalBackdropSpec, With<MainMenuRoot>>,
+    ),
     mut text_set: ParamSet<(
         Single<&mut Text, With<MainMenuTitleText>>,
         Single<&mut Text, With<MainMenuStatusText>>,
+        Single<&mut Text, With<MainMenuSettingsMusicVolumeValueText>>,
         Query<&mut Text>,
     )>,
-    mut node_set: ParamSet<(
-        Single<&mut Node, With<MainMenuRootActions>>,
-        Single<&mut Node, With<MainMenuPluginsActions>>,
-        Single<&mut Node, With<MainMenuSaveActions>>,
-        Single<&mut Node, With<MainMenuLoadActions>>,
-        Single<&mut Node, With<MainMenuConfirmActions>>,
-        Single<&mut Node, With<MainMenuSaveNameRow>>,
-        Single<&mut Node, With<MainMenuSaveListRoot>>,
-        Single<&mut Node, With<MainMenuPluginsListRoot>>,
-    )>,
+    menu_nodes: (
+        Single<Entity, With<MainMenuRootActions>>,
+        Single<Entity, With<MainMenuPluginsActions>>,
+        Single<Entity, With<MainMenuSaveActions>>,
+        Single<Entity, With<MainMenuLoadActions>>,
+        Single<Entity, With<MainMenuConfirmActions>>,
+        Single<Entity, With<MainMenuSaveNameRow>>,
+        Single<Entity, With<MainMenuSaveListRoot>>,
+        Single<Entity, With<MainMenuPluginsListRoot>>,
+        Single<Entity, With<MainMenuSettingsActions>>,
+        Single<Entity, With<MainMenuSettingsFooterActions>>,
+        Single<Entity, With<MainMenuSettingsGraphicsContent>>,
+        Single<Entity, With<MainMenuSettingsSoundContent>>,
+    ),
+    mut node_by_entity: Query<&mut Node, Without<Button>>,
     mut action_button_nodes: Query<
-        (&MainMenuActionButton, &mut Node),
+        (
+            &MainMenuActionButton,
+            &mut Node,
+            &mut BackgroundColor,
+            Option<&mut MainMenuButtonPalette>,
+            Option<&MainMenuSettingsTabButton>,
+            Option<&Children>,
+        ),
         (
             With<Button>,
             Without<MainMenuRootActions>,
@@ -64,28 +84,46 @@ fn refresh_main_menu_ui(
         >,
     ),
 ) {
+    let (plugin_registry_state, enabled_plugins, world_load_state, icon_set) = shared_resources;
+    let (mut root_visibility, mut backdrop_spec) = modal_state;
+    let (
+        root_actions_entity,
+        plugins_actions_entity,
+        save_actions_entity,
+        load_actions_entity,
+        confirm_actions_entity,
+        save_name_row_entity,
+        save_list_root_entity,
+        plugins_list_root_entity,
+        settings_actions_entity,
+        settings_footer_entity,
+        settings_graphics_entity,
+        settings_sound_entity,
+    ) = menu_nodes;
+    let mut set_node_display = |entity: Entity, display: Display| {
+        if let Ok(mut node) = node_by_entity.get_mut(entity) {
+            node.display = display;
+        }
+    };
+
     **root_visibility = if main_menu.open {
         Visibility::Visible
     } else {
         Visibility::Hidden
     };
     if !main_menu.open {
-        let mut root_actions = node_set.p0();
-        root_actions.display = Display::None;
-        let mut plugins_actions = node_set.p1();
-        plugins_actions.display = Display::None;
-        let mut save_actions = node_set.p2();
-        save_actions.display = Display::None;
-        let mut load_actions = node_set.p3();
-        load_actions.display = Display::None;
-        let mut confirm_actions = node_set.p4();
-        confirm_actions.display = Display::None;
-        let mut save_name_row = node_set.p5();
-        save_name_row.display = Display::None;
-        let mut save_list = node_set.p6();
-        save_list.display = Display::None;
-        let mut plugins_list = node_set.p7();
-        plugins_list.display = Display::None;
+        set_node_display(*root_actions_entity, Display::None);
+        set_node_display(*plugins_actions_entity, Display::None);
+        set_node_display(*save_actions_entity, Display::None);
+        set_node_display(*load_actions_entity, Display::None);
+        set_node_display(*confirm_actions_entity, Display::None);
+        set_node_display(*save_name_row_entity, Display::None);
+        set_node_display(*save_list_root_entity, Display::None);
+        set_node_display(*plugins_list_root_entity, Display::None);
+        set_node_display(*settings_actions_entity, Display::None);
+        set_node_display(*settings_footer_entity, Display::None);
+        set_node_display(*settings_graphics_entity, Display::None);
+        set_node_display(*settings_sound_entity, Display::None);
         return;
     }
 
@@ -112,6 +150,7 @@ fn refresh_main_menu_ui(
                 MainMenuMode::Hidden => "Menu".to_string(),
             },
             MainMenuScreen::Plugins => "Plugins".to_string(),
+            MainMenuScreen::Settings => "Settings".to_string(),
             MainMenuScreen::Save => "Save World".to_string(),
             MainMenuScreen::Load => "Load World".to_string(),
             MainMenuScreen::Confirm => "Confirm Action".to_string(),
@@ -130,15 +169,15 @@ fn refresh_main_menu_ui(
         status_text.0 = status;
     }
 
-    {
-        let mut root_actions_visibility = node_set.p0();
-        root_actions_visibility.display = if screen == MainMenuScreen::Root {
+    set_node_display(
+        *root_actions_entity,
+        if screen == MainMenuScreen::Root {
             Display::Flex
         } else {
             Display::None
-        };
-    }
-    for (action_button, mut node) in &mut action_button_nodes {
+        },
+    );
+    for (action_button, mut node, mut background, palette, settings_tab_marker, children) in &mut action_button_nodes {
         node.display = match screen {
             MainMenuScreen::Root => match (&action_button.0, mode) {
                 (_, MainMenuMode::Hidden) => Display::None,
@@ -147,6 +186,8 @@ fn refresh_main_menu_ui(
                 (MainMenuButtonAction::OpenPluginsScreen, _) if root_plugins_button_visible(mode) => {
                     Display::Flex
                 }
+                (MainMenuButtonAction::OpenSettingsScreen, MainMenuMode::Main) => Display::Flex,
+                (MainMenuButtonAction::OpenSettingsScreen, MainMenuMode::InGame) => Display::Flex,
                 (MainMenuButtonAction::ExitToMainMenu, MainMenuMode::InGame) => Display::Flex,
                 (MainMenuButtonAction::ExitApp, MainMenuMode::InGame) => Display::Flex,
                 (MainMenuButtonAction::NewGame, MainMenuMode::Main) => Display::Flex,
@@ -159,6 +200,13 @@ fn refresh_main_menu_ui(
                     Display::Flex
                 }
                 MainMenuButtonAction::ReloadPlugins => Display::Flex,
+                _ => Display::None,
+            },
+            MainMenuScreen::Settings => match action_button.0 {
+                MainMenuButtonAction::BackToRoot
+                | MainMenuButtonAction::SettingsTabGraphics
+                | MainMenuButtonAction::SettingsTabSound
+                | MainMenuButtonAction::SaveSettings => Display::Flex,
                 _ => Display::None,
             },
             MainMenuScreen::Save => match action_button.0 {
@@ -182,39 +230,95 @@ fn refresh_main_menu_ui(
                 _ => Display::None,
             },
         };
+        if settings_tab_marker.is_some() {
+            let is_active_tab = match action_button.0 {
+                MainMenuButtonAction::SettingsTabGraphics => {
+                    menu_ui.settings_tab == MainMenuSettingsTab::Graphics
+                }
+                MainMenuButtonAction::SettingsTabSound => {
+                    menu_ui.settings_tab == MainMenuSettingsTab::Sound
+                }
+                _ => false,
+            };
+            let idle = if is_active_tab {
+                MENU_MODAL_CARD_BG
+            } else {
+                MODAL_BUTTON_BG
+            };
+            let hover = if is_active_tab {
+                MENU_MODAL_INPUT_BG
+            } else {
+                MODAL_BUTTON_HOVER
+            };
+            if let Some(mut palette) = palette {
+                palette.idle = idle;
+                palette.hover = hover;
+            }
+            background.0 = idle;
+            node.border.bottom = Val::Px(0.0);
+            node.margin.bottom = Val::Px(0.0);
+            if let Some(children) = children {
+                let text_color = if is_active_tab {
+                    crate::ui::palette::TEXT_PRIMARY
+                } else {
+                    crate::ui::palette::TEXT_ON_DARK
+                };
+                for child in children.iter() {
+                    if let Ok(mut color) = text_color_query.get_mut(child) {
+                        color.0 = text_color;
+                    }
+                }
+            }
+        }
     }
-    {
-        let mut plugins_actions_visibility = node_set.p1();
-        plugins_actions_visibility.display = if screen == MainMenuScreen::Plugins {
+    set_node_display(
+        *plugins_actions_entity,
+        if screen == MainMenuScreen::Plugins {
             Display::Flex
         } else {
             Display::None
-        };
-    }
-    {
-        let mut save_actions_visibility = node_set.p2();
-        save_actions_visibility.display = if screen == MainMenuScreen::Save {
+        },
+    );
+    set_node_display(
+        *settings_actions_entity,
+        if screen == MainMenuScreen::Settings {
             Display::Flex
         } else {
             Display::None
-        };
-    }
-    {
-        let mut load_actions_visibility = node_set.p3();
-        load_actions_visibility.display = if screen == MainMenuScreen::Load {
+        },
+    );
+    set_node_display(
+        *settings_footer_entity,
+        if screen == MainMenuScreen::Settings {
             Display::Flex
         } else {
             Display::None
-        };
-    }
-    {
-        let mut confirm_actions_visibility = node_set.p4();
-        confirm_actions_visibility.display = if screen == MainMenuScreen::Confirm {
+        },
+    );
+    set_node_display(
+        *save_actions_entity,
+        if screen == MainMenuScreen::Save {
             Display::Flex
         } else {
             Display::None
-        };
-    }
+        },
+    );
+    set_node_display(
+        *load_actions_entity,
+        if screen == MainMenuScreen::Load {
+            Display::Flex
+        } else {
+            Display::None
+        },
+    );
+    set_node_display(
+        *confirm_actions_entity,
+        if screen == MainMenuScreen::Confirm {
+            Display::Flex
+        } else {
+            Display::None
+        },
+    );
 
     if screen == MainMenuScreen::Confirm {
         let mut primary_label = "Yes";
@@ -239,24 +343,24 @@ fn refresh_main_menu_ui(
 
         let primary_text_entity = confirm_button_set.0.iter().next();
         if let Some(entity) = primary_text_entity {
-            if let Ok(mut text) = text_set.p2().get_mut(entity) {
+            if let Ok(mut text) = text_set.p3().get_mut(entity) {
                 text.0 = primary_label.to_string();
             }
         }
         let secondary_text_entity = confirm_button_set.1.iter().next();
         if let Some(entity) = secondary_text_entity {
-            if let Ok(mut text) = text_set.p2().get_mut(entity) {
+            if let Ok(mut text) = text_set.p3().get_mut(entity) {
                 text.0 = secondary_label.to_string();
             }
         }
         let cancel_text_entity = confirm_button_set.2.iter().next();
         if let Some(entity) = cancel_text_entity {
-            if let Ok(mut text) = text_set.p2().get_mut(entity) {
+            if let Ok(mut text) = text_set.p3().get_mut(entity) {
                 text.0 = "Cancel".to_string();
             }
         }
 
-        for (action_button, mut node) in &mut action_button_nodes {
+        for (action_button, mut node, ..) in &mut action_button_nodes {
             if matches!(action_button.0, MainMenuButtonAction::ConfirmCancel) {
                 node.display = if show_cancel {
                     Display::Flex
@@ -266,30 +370,57 @@ fn refresh_main_menu_ui(
             }
         }
     }
-    {
-        let mut save_name_row_visibility = node_set.p5();
-        save_name_row_visibility.display = if screen == MainMenuScreen::Save {
+    set_node_display(
+        *save_name_row_entity,
+        if screen == MainMenuScreen::Save {
             Display::Flex
         } else {
             Display::None
-        };
-    }
-    {
-        let mut save_list_visibility = node_set.p6();
-        save_list_visibility.display = if matches!(screen, MainMenuScreen::Save | MainMenuScreen::Load)
+        },
+    );
+    set_node_display(
+        *save_list_root_entity,
+        if matches!(screen, MainMenuScreen::Save | MainMenuScreen::Load) {
+            Display::Flex
+        } else {
+            Display::None
+        },
+    );
+    set_node_display(
+        *plugins_list_root_entity,
+        if screen == MainMenuScreen::Plugins {
+            Display::Flex
+        } else {
+            Display::None
+        },
+    );
+    set_node_display(
+        *settings_graphics_entity,
+        if screen == MainMenuScreen::Settings
+            && menu_ui.settings_tab == MainMenuSettingsTab::Graphics
         {
             Display::Flex
         } else {
             Display::None
-        };
-    }
-    {
-        let mut plugins_list_visibility = node_set.p7();
-        plugins_list_visibility.display = if screen == MainMenuScreen::Plugins {
+        },
+    );
+    set_node_display(
+        *settings_sound_entity,
+        if screen == MainMenuScreen::Settings
+            && menu_ui.settings_tab == MainMenuSettingsTab::Sound
+        {
             Display::Flex
         } else {
             Display::None
-        };
+        },
+    );
+    {
+        let mut settings_value_text = text_set.p2();
+        let slider_value = slider_state
+            .value(SETTINGS_MUSIC_VOLUME_SLIDER_ID)
+            .map(|value| value.max(0) as u32)
+            .unwrap_or(audio_settings.runtime_music_volume_percent);
+        settings_value_text.0 = slider_value.to_string();
     }
 
     if matches!(screen, MainMenuScreen::Save | MainMenuScreen::Load) {

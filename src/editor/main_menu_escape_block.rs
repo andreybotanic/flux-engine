@@ -16,7 +16,7 @@ fn escape_action(
     has_structure_editor: bool,
     has_world: bool,
 ) -> EscAction {
-    if menu_screen == MainMenuScreen::Plugins {
+    if matches!(menu_screen, MainMenuScreen::Plugins | MainMenuScreen::Settings) {
         return EscAction::BackToRoot;
     }
 

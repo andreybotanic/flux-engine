@@ -7,6 +7,7 @@ pub mod panels;
 pub mod scroll_area;
 pub mod select_field;
 pub mod sim_controls;
+pub mod slider;
 pub mod toggle_switch;
 
 use bevy::prelude::*;
@@ -21,6 +22,7 @@ use self::sim_controls::{
     handle_sim_control_buttons, handle_sim_control_keyboard, refresh_sim_control_ui,
     refresh_sim_control_visibility, setup_sim_control_ui,
 };
+use self::slider::SliderPlugin;
 use self::toggle_switch::ToggleSwitchPlugin;
 
 #[derive(Resource, Clone)]
@@ -66,6 +68,7 @@ impl Plugin for UiPlugin {
             PanelPlugin,
             ScrollAreaPlugin,
             SelectFieldPlugin,
+            SliderPlugin,
             ToggleSwitchPlugin,
         ))
         .add_systems(
