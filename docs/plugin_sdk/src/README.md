@@ -1,4 +1,4 @@
-# FluxEngine Plugin SDK
+﻿# FluxEngine Plugin SDK
 
 Эта документация описывает публичный Rust-first runtime SDK FluxEngine (`crates/flux_plugin_sdk`).
 

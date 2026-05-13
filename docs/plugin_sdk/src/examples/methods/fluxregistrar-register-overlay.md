@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 fn register_overlay(registrar: &mut FluxRegistrar) -> FluxStatus {
     let descriptor = FluxOverlayDescriptor {
         id: FluxUtf8Slice::from_str("flux.demo.overlay.temperature"),

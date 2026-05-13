@@ -1,4 +1,4 @@
-# Overlay graph pipeline
+﻿# Overlay graph pipeline
 
 В SDK v5 plugin-controlled overlay рендерится только через declarative graph.
 

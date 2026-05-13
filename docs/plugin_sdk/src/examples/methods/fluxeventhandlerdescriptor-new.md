@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let descriptor = FluxEventHandlerDescriptor::new(
     FluxEventKind::BuildHudForCell,
     FluxUtf8Slice::from_str("onBuildHudForCell"),

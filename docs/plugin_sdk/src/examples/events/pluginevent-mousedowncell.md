@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 impl MyPlugin {
     fn on_mouse_down(&mut self, event: &MouseCellEvent) -> Result<(), PluginError> {
         if event.button != Some(MouseButton::Right) || !self.world.is_editable(event.cell) {

@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let descriptor = registry
     .structure_by_kind(StructureKind::new("flux.demo.structure.filter"))
     .expect("registered structure");

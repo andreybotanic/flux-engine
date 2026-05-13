@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 fn register_oxygen(registrar: &mut FluxRegistrar) -> FluxStatus {
     let descriptor = FluxGasSubstanceDescriptor {
         id: FluxUtf8Slice::from_str("flux.demo.gas.oxygen"),

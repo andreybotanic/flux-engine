@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let manifest = PluginManifest::from_str(r#"
 id = "flux.demo"
 display_name = "Flux Demo"

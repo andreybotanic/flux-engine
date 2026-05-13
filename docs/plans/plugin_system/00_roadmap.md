@@ -1,4 +1,4 @@
-# Roadmap: runtime-плагины FluxEngine
+﻿# Roadmap: runtime-плагины FluxEngine
 
 Этот документ задаёт порядок работ по миграции FluxEngine на runtime-плагины.
 

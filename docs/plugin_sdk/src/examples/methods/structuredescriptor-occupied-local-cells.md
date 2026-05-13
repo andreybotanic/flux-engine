@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let descriptor = StructureDescriptor {
     layers: vec![
         StructureLayer {

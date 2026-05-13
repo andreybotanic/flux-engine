@@ -1,4 +1,4 @@
-# Manifest
+﻿# Manifest
 
 Минимальный `manifest.toml`:
 

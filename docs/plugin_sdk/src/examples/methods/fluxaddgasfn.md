@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn puff_oxygen(callback: FluxAddGasFn, context: *mut std::ffi::c_void) -> FluxStatus {
     let mut added = 0u32;
     let status = unsafe {

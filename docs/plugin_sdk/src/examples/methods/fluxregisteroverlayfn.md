@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn register_overlay(
     callback: FluxRegisterOverlayFn,
     context: *mut std::ffi::c_void,

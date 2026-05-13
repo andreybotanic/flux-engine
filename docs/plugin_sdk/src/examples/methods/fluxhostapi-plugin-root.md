@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 fn print_plugin_root(host: &FluxHostApi) -> FluxStatus {
     let plugin_root = match host.plugin_root() {
         Ok(path) => path,

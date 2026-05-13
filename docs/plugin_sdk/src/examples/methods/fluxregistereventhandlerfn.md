@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn register_handler(
     callback: FluxRegisterEventHandlerFn,
     context: *mut std::ffi::c_void,

@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 impl MyPlugin {
     fn on_simulation_post_step(
         &mut self,

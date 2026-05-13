@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 impl MyPlugin {
     fn on_world_before_save(
         &mut self,

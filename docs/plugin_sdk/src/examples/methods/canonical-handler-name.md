@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let name = canonical_handler_name(PluginEvent::MouseDownCell);
 let descriptor = FluxEventHandlerDescriptor::new(
     FluxEventKind::MouseDownCell,

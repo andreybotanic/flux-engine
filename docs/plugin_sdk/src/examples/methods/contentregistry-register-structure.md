@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let mut registry = ContentRegistry::default();
 let descriptor = StructureContentDescriptor {
     id: ContentId::parse("flux.demo.structure.filter").expect("id"),

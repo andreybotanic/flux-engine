@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let mut registry = ContentRegistry::default();
 registry.set_world_cell_hud(WorldCellHudConfig {
     label: "Hovered Cell".to_string(),

@@ -1,4 +1,4 @@
-# FluxEngine: Technical Overview
+﻿# FluxEngine: Technical Overview
 
 ## Назначение документа
 

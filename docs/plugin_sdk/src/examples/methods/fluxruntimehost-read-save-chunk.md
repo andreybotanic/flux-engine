@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 fn read_counter(host: &mut FluxRuntimeHost) -> FluxStatus {
     let Some((version, bytes)) = (match host.read_save_chunk("flux.demo.save.counter") {
         Ok(chunk) => chunk,

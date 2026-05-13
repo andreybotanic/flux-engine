@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 impl MyPlugin {
     fn on_entity_placed(&mut self, event: &EntityEvent) -> Result<(), PluginError> {
         self.log.info(format!(

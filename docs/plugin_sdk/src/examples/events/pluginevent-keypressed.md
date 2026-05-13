@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 impl MyPlugin {
     fn on_key_pressed(&mut self, event: &KeyEvent) -> Result<(), PluginError> {
         if event.key == "Space" {

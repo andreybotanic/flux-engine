@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let mut registry = PluginRuntimeRegistry::default();
 let descriptor = ToolDescriptor {
     id: ContentId::parse("flux.demo.tool.paint").expect("tool id"),

@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let registry = SubstanceRegistry::new(vec![
     SubstanceDefinition::gas(
         SubstanceId::parse("flux.demo.gas.hydrogen").expect("id"),

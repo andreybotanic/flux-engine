@@ -1,4 +1,4 @@
-# Этап 8: dev mode и hot reload
+﻿# Этап 8: dev mode и hot reload
 
 ## Проверка предпосылок
 

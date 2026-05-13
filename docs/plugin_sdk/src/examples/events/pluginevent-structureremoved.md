@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe extern "C" fn on_structure_removed(
     plugin: *mut FluxPluginHandle,
     payload: *const FluxStructureEventPayload,

@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let mut registry = ContentRegistry::default();
 let descriptor = OverlayContentDescriptor {
     id: ContentId::parse("flux.demo.overlay.temperature").expect("id"),

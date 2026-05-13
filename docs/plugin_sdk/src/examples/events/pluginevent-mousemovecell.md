@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 impl MyPlugin {
     fn on_mouse_move(&mut self, event: &MouseCellEvent) -> Result<(), PluginError> {
         if !self.dragging || !self.world.contains(event.cell) {

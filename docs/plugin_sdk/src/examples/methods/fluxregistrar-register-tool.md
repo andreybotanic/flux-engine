@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 fn register_tool(registrar: &mut FluxRegistrar) -> FluxStatus {
     let descriptor = FluxToolDescriptor {
         id: FluxUtf8Slice::from_str("flux.demo.tool.paint"),

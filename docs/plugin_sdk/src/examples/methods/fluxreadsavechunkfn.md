@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn read_counter_chunk(
     callback: FluxReadSaveChunkFn,
     context: *mut std::ffi::c_void,

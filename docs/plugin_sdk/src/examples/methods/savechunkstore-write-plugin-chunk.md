@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let plugin_id = PluginId::parse("flux.demo").expect("plugin id");
 let chunk_id = ContentId::parse("flux.demo.save.counter").expect("chunk id");
 let mut store = SaveChunkStore::default();

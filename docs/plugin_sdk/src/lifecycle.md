@@ -1,4 +1,4 @@
-# Lifecycle runtime-плагина
+﻿# Lifecycle runtime-плагина
 
 Runtime DLL-плагин проходит один и тот же цикл:
 

@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn write_counter_chunk(
     callback: FluxWriteSaveChunkFn,
     context: *mut std::ffi::c_void,

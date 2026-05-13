@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let mut registry = ContentRegistry::default();
 let descriptor = CellContentDescriptor {
     id: ContentId::parse("flux.demo.cell.steel").expect("id"),

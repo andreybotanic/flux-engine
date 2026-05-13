@@ -1,4 +1,4 @@
-# Структура plugin package
+﻿# Структура plugin package
 
 Expanded plugin root содержит:
 

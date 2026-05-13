@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn register_oxygen(
     callback: FluxRegisterGasSubstanceFn,
     context: *mut std::ffi::c_void,

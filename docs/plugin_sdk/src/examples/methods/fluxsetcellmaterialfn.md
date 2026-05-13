@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn paint_cell(
     callback: FluxSetCellMaterialFn,
     context: *mut std::ffi::c_void,

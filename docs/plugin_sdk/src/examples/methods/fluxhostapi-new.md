@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let host = FluxHostApi::new(
     FluxUtf8Slice::from_str("plugins/flux.demo"),
     FluxUtf8Slice::from_str("plugins/flux.demo/config"),

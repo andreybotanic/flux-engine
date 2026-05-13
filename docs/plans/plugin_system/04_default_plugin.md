@@ -1,4 +1,4 @@
-# Этап 4: default plugin
+﻿# Этап 4: default plugin
 
 ## Проверка предпосылок
 

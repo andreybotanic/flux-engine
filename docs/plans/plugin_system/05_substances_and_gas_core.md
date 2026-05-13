@@ -1,4 +1,4 @@
-# Этап 5: substances и gas core
+﻿# Этап 5: substances и gas core
 
 ## Цель этапа
 

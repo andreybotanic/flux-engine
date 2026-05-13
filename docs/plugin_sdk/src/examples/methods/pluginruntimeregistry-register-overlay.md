@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let mut registry = PluginRuntimeRegistry::default();
 let descriptor = RuntimeOverlayDescriptor {
     id: ContentId::parse("flux.demo.overlay.temperature").expect("overlay id"),

@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn register_plugin_instance(
     symbol: FluxPluginRegisterFn,
     plugin: *mut FluxPluginHandle,

@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 impl MyPlugin {
     fn on_render_overlay(&mut self, event: &RenderOverlayEvent) -> Result<(), PluginError> {
         if event.overlay_id.as_str() != "flux.demo.overlay.pipes" {

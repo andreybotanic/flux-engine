@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn submit_counter_block(
     callback: FluxSubmitHudBlockFn,
     context: *mut std::ffi::c_void,

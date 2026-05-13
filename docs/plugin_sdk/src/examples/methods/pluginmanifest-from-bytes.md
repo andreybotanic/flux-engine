@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let bytes = br#"
 id = "flux.demo"
 display_name = "Flux Demo"

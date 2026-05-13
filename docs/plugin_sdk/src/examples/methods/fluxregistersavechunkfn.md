@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn register_chunk(
     callback: FluxRegisterSaveChunkFn,
     context: *mut std::ffi::c_void,

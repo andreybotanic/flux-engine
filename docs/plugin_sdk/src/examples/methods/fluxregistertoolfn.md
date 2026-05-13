@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 unsafe fn register_tool(callback: FluxRegisterToolFn, context: *mut std::ffi::c_void) -> FluxStatus {
     let descriptor = FluxToolDescriptor {
         id: FluxUtf8Slice::from_str("flux.demo.tool.paint"),

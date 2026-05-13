@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let definition = SubstanceDefinition::gas(
     SubstanceId::parse("flux.demo.gas.oxygen").expect("id"),
     PluginId::parse("flux.demo").expect("plugin id"),

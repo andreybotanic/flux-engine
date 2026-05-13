@@ -1,4 +1,4 @@
-# Этап 1: Plugin contract и ABI
+﻿# Этап 1: Plugin contract и ABI
 
 ## Проверка предпосылок
 

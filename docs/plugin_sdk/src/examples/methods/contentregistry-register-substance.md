@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let mut registry = ContentRegistry::default();
 let definition = SubstanceDefinition::gas(
     SubstanceId::parse("flux.demo.gas.oxygen").expect("id"),

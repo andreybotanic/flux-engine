@@ -1,4 +1,4 @@
-```rust
+﻿```rust
 let mut registry = PluginRuntimeRegistry::default();
 let descriptor = SaveChunkDescriptor {
     id: ContentId::parse("flux.demo.save.counter").expect("chunk id"),

@@ -1,4 +1,4 @@
-# Сборка и dev reload
+﻿# Сборка и dev reload
 
 Внутрипроектные sample plugin crates собираются через `xtask`:
 

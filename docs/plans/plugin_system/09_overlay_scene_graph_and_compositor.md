@@ -1,4 +1,4 @@
-# Этап 9: plugin overlay scene graph и compositing
+﻿# Этап 9: plugin overlay scene graph и compositing
 
 ## Проверка предпосылок
 
