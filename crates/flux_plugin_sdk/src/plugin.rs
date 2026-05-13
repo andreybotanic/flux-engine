@@ -3,12 +3,11 @@ use std::marker::PhantomData;
 use flux_plugin_abi::{FluxHostApi, FluxPluginHandle, FluxRegistrar, FluxRuntimeHost, FluxStatus};
 
 use crate::{
-    runtime_host::{abi_runtime_host_binding, RuntimeHostBinding},
     registrar::MemoryRegistration,
-    scope,
-    BuiltinEventPayload, EntityApi, GasApi, InputApi, LoggerApi, OverlayApi,
-    PluginApiVersion, PluginError, PluginEvent, PluginId, PluginPaths, Registrar, SaveApi,
-    TimeApi, UiApi, WorldApi,
+    runtime_host::{abi_runtime_host_binding, RuntimeHostBinding},
+    scope, BuiltinEventPayload, EntityApi, GasApi, InputApi, LoggerApi, OverlayApi,
+    PluginApiVersion, PluginError, PluginEvent, PluginId, PluginPaths, Registrar, SaveApi, TimeApi,
+    UiApi, WorldApi,
 };
 
 /// Public runtime plugin contract implemented by plugin authors.
@@ -313,12 +312,7 @@ impl<P: Plugin> BuiltinPluginRuntime<P> {
         engine_api_version: PluginApiVersion,
         paths: PluginPaths,
     ) -> Result<Self, PluginError> {
-        let init = PluginInit::new(
-            plugin_id.clone(),
-            engine_version,
-            engine_api_version,
-            paths,
-        );
+        let init = PluginInit::new(plugin_id.clone(), engine_version, engine_api_version, paths);
         let plugin = P::new(init)?;
         Ok(Self {
             plugin_id,

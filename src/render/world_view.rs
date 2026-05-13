@@ -59,12 +59,6 @@ pub struct GasSimulationImages {
     pub texture_f1_b: Handle<Image>,
 }
 
-#[derive(Resource, Clone)]
-/// Stores the texture used for plugin-controlled overlay frames.
-pub struct PluginOverlayImage {
-    pub texture: Handle<Image>,
-}
-
 #[derive(Resource, Clone, Copy)]
 /// Stores `GasVisualSettings` state.
 pub struct GasVisualSettings {
@@ -109,16 +103,12 @@ pub fn setup_simulation_images(mut commands: Commands, mut images: ResMut<Assets
     let image_f2_b = images.add(build_seeded_image_f2());
     let image_f1_a = images.add(build_seeded_image_f1());
     let image_f1_b = images.add(build_seeded_image_f1());
-    let plugin_overlay = images.add(build_empty_plugin_overlay_image());
 
     commands.insert_resource(GasSimulationImages {
         texture_f2_a: image_f2_a,
         texture_f2_b: image_f2_b,
         texture_f1_a: image_f1_a,
         texture_f1_b: image_f1_b,
-    });
-    commands.insert_resource(PluginOverlayImage {
-        texture: plugin_overlay,
     });
 }
 
@@ -167,23 +157,6 @@ fn build_seeded_image_f1() -> Image {
     );
     image.texture_descriptor.usage =
         TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
-    image
-}
-
-fn build_empty_plugin_overlay_image() -> Image {
-    let mut image = Image::new(
-        Extent3d {
-            width: WORLD_WIDTH,
-            height: WORLD_HEIGHT,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        vec![0; (WORLD_WIDTH as usize) * (WORLD_HEIGHT as usize) * 4],
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-    );
-    image.texture_descriptor.usage = TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING;
-    image.sampler = ImageSampler::nearest();
     image
 }
 
@@ -301,9 +274,6 @@ pub(crate) struct GasOverlaySprite;
 
 #[derive(Component)]
 pub(crate) struct GasMainOverlaySprite;
-
-#[derive(Component)]
-pub(crate) struct PluginOverlaySprite;
 
 #[derive(Component)]
 pub(crate) struct WallVisual {

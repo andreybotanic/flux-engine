@@ -1,23 +1,27 @@
 ﻿# Changelog
 
 ## 2026-05-13
+- Полностью удалён рабочий frame-based submit path overlay-рендера: из `flux_plugin_sdk::OverlayApi` убраны legacy frame-методы, из runtime host binding и compositor-а убран frame fallback, а `RenderOverlay` теперь обрабатывает только graph-path через `submit_graph`.
+- В ABI `FluxRuntimeHost` возвращён reserved callback slot на месте старого frame submit-поля (без рабочей логики frame submit), чтобы сохранить бинарную совместимость с уже упакованными `.fluxplugin`; `submit_graph` для архивного `flux.api_temperature_overlay` подтверждён отдельными runtime-регрессионными тестами.
+- Plugin SDK mdBook обновлён под новый overlay runtime path: из документации полностью убраны legacy frame-термины, а guide-раздел получил отдельную главу `Overlay graph pipeline` с актуальным `RenderOverlay -> submit_graph` workflow.
 - Исправлен `F3` graph-рендер движущихся пакетов: позиции `flow_packets` теперь корректно переводятся из world-space в `OverlayPlacement::GridLocal`, поэтому пакеты снова видны внутри мира, а не рисуются за пределами поля.
 - Стабилизирован `F3` при снятии с паузы: `flux.default` больше не сбрасывает `overlay_phase` на паузе и очищает `pipe_flow_visuals` только при входе в паузу, поэтому при resume анимация продолжается без резкого визуального скачка.
 - Добавлены точечные регрессионные тесты для `F3` overlay: проверка world→grid координат пакетов (`overlay_graph`) и проверка стабильного шага фазы при `paused/running` (`runtime_sdk`).
 - Исправлено наложение core free-gas в plugin graph overlay: при активном graph-оверлее (`OverlayMode::Plugin` + `OverlayGraphSceneState::renders_overlay`) `GasMainOverlaySprite` теперь скрывается, поэтому `F3` не подмешивает визуализацию свободного газа при снятой паузе.
-- `F3` shader-проход подсветки труб (`pipe_highlight`) расширен на `GasPipeBridge`: graph compositor теперь спавнит highlight-сегменты по клеткам моста с соответствующими mask-битами, чтобы мост визуально совпадал с трубами.
+- `F3` shader-проход подсветки труб (`pipe_highlight`) расширен на `GasPipeBridge`: graph compositor теперь применяет material к world-спрайту моста (`bridge`), чтобы мост визуально совпадал с трубами без сегментированных mask-вставок.
 - В `apply_overlay_mode` режим `F3/Pipes` теперь всегда использует pipe-цветовую схему (а не `F1`-цвета), а при активном graph `F3` скрывает базовые world/backdrop/wall/pipe/vent слои legacy-рендера, чтобы исключить визуальное вмешательство `F1` в plugin overlay.
 - Для `F3/Pipes` отключено участие legacy world-слоёв независимо от паузы и состояния симуляции: в этом режиме итоговая картинка всегда формируется plugin-overlay пайплайном, что устраняет расхождения tint/фона/порядка отрисовки между paused и running состояниями.
 - Устранён скрытый fallback `F3` в legacy-рендер на паузе: SDK overlay graph теперь допускает пустые `RenderImageNode` (например, слой пакетов при `paused=true`), поэтому граф остаётся валидным и core не переключает рендер-пайплайн между paused/running.
 - В graph compositor для `F3` восстановлен корректный sprite mask обычных труб: pipe-структуры теперь берут `pipe_mask_##` по фактическим соседним соединениям, поэтому сегмент трубы в центральной клетке моста снова отображает правильную геометрию соединений.
 - `MaterialNode` pipe-highlight в graph-пайплайне расширен на вентиляции и мосты через их собственные world-спрайты (`tile_vent`, `bridge`), поэтому подсветка больше не смешивается с mask-сегментами в центральной клетке моста и не создаёт ложный эффект `pipe_mask_15` у трубы под мостом.
 - Иконки `gas_in_out` для вентиляций и портов моста подняты на самый передний слой `F3`, чтобы они гарантированно рисовались поверх остальных overlay-элементов.
+- Обновлена техническая и SDK-документация по overlay-рендеру: в примерах `RenderOverlay` и описании `F3` закреплён graph-путь (`submit_graph`) как основной, а legacy frame-методы отмечены как удалённые из рабочего runtime API.
 
 ## 2026-05-12
 - Исправлен runtime dispatch для `RenderOverlay`: host-контекст теперь прокидывает `world/structures/gas/pipe_*` ресурсы, поэтому `flux.default` больше не падает в логах с `API 'flux.default.structures' is unavailable outside dispatch`.
 - `flux.api_temperature_overlay` перестал перетирать чужие оверлеи: plugin теперь проверяет `RenderOverlayEvent.overlay_id` и рендерит graph только для своего `OVERLAY_ID`, поэтому `F3/Pipes` не подменяется «движущейся температурой».
 - Исправлен крэш релизного старта (`0xC0000005`) после расширения plugin ABI: поле `register_overlay_material_fn` в `FluxRegistrar` перенесено в append-only хвост структуры, чтобы сохранить бинарную совместимость с уже собранными `.fluxplugin` (старые смещения callback-полей больше не ломаются).
-- Завершена migration plugin overlay path с `submit_frame` на declarative `submit_graph`: runtime host/ABI/SDK теперь передают `OverlayGraph` JSON, хранят per-frame graph store и исполняют graph в render-композиторе `src/render/overlay_graph_runtime.rs`.
+- Завершена migration plugin overlay path на declarative `submit_graph`: runtime host/ABI/SDK теперь передают `OverlayGraph` JSON, хранят per-frame graph store и исполняют graph в render-композиторе `src/render/overlay_graph_runtime.rs`.
 - ABI handshake расширен регистрацией overlay materials: `FluxRegistrar` получил `register_overlay_material_fn`, loader научился собирать `OverlayMaterialDescriptor` из DLL registration, а SDK `Registrar::register_overlay_material` теперь работает и для ABI-плагинов.
 - `F3/Pipes` в `flux.default` переведён на graph producer (`src/plugins/default_plugin/overlay_graph.rs`): dim background, selector-based entity layers, `MaterialNode` pipe highlight, static gas squares, moving packets и port icons теперь приходят как image instances.
 - Temperature demo plugin `flux_api_temperature_overlay_plugin` переведён с legacy RGBA frame на graph path (`RenderImageNode` + `RenderEntitiesNode` + `BlendNode`).

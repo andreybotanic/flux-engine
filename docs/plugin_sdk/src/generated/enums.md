@@ -7,7 +7,14 @@
 | API item | Kind | Source |
 | --- | --- | --- |
 | [`MouseButton`](enums/mousebutton.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
+| [`OverlayBlendMode`](enums/overlayblendmode.md) | enum | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlayEntitySpriteOverride`](enums/overlayentityspriteoverride.md) | enum | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlayImageSource`](enums/overlayimagesource.md) | enum | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlayMaterialParamValue`](enums/overlaymaterialparamvalue.md) | enum | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlayNodeKind`](enums/overlaynodekind.md) | enum | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlayPlacement`](enums/overlayplacement.md) | enum | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
 | [`OverlayRenderPolicy`](enums/overlayrenderpolicy.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
+| [`OverlaySelectorExpr`](enums/overlayselectorexpr.md) | enum | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
 | [`PlacementCheck`](enums/placementcheck.md) | enum | `crates/flux_plugin_sdk/src/descriptors.rs` |
 | [`PluginError`](enums/pluginerror.md) | enum | `crates/flux_plugin_sdk/src/error.rs` |
 | [`PluginEvent`](enums/pluginevent.md) | enum | `crates/flux_plugin_sdk/src/events.rs` |

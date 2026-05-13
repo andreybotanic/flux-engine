@@ -4,8 +4,8 @@ use smallvec::SmallVec;
 use crate::{
     scope, CellPos, CellRect, CellSnapshot, ContentId, EntityFilter, EntityInstanceId,
     EntityKindId, EntityPlacement, EntitySnapshot, EntitySpawnRequest, GasMixture, HudBlock,
-    InputModifiers, OverlayFrame, OverlayGraph, OverlayModeId, PlacementCheck, PluginError,
-    Rotation, SaveChunk, SimulationSpeed, SubstanceId, SubstanceRegistryView, WorldBounds,
+    InputModifiers, OverlayGraph, OverlayModeId, PlacementCheck, PluginError, Rotation, SaveChunk,
+    SimulationSpeed, SubstanceId, SubstanceRegistryView, WorldBounds,
 };
 
 /// Read-only world query API exposed to runtime plugins.
@@ -88,8 +88,14 @@ impl WorldApi {
     pub fn neighbors4(&self, cell: CellPos) -> [Option<CellPos>; 4] {
         [
             cell.y.checked_sub(1).map(|y| UVec2::new(cell.x, y)),
-            cell.x.checked_add(1).filter(|x| *x < self.width()).map(|x| UVec2::new(x, cell.y)),
-            cell.y.checked_add(1).filter(|y| *y < self.height()).map(|y| UVec2::new(cell.x, y)),
+            cell.x
+                .checked_add(1)
+                .filter(|x| *x < self.width())
+                .map(|x| UVec2::new(x, cell.y)),
+            cell.y
+                .checked_add(1)
+                .filter(|y| *y < self.height())
+                .map(|y| UVec2::new(cell.x, y)),
             cell.x.checked_sub(1).map(|x| UVec2::new(x, cell.y)),
         ]
     }
@@ -97,8 +103,14 @@ impl WorldApi {
     /// Returns eight surrounding neighbors of one cell.
     pub fn neighbors8(&self, cell: CellPos) -> [Option<CellPos>; 8] {
         let offsets = [
-            (-1, -1), (0, -1), (1, -1), (1, 0),
-            (1, 1), (0, 1), (-1, 1), (-1, 0),
+            (-1, -1),
+            (0, -1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+            (0, 1),
+            (-1, 1),
+            (-1, 0),
         ];
         offsets.map(|(dx, dy)| {
             let nx = cell.x as i32 + dx;
@@ -208,11 +220,21 @@ impl EntityApi {
     }
 
     /// Clears entities in the requested rectangle.
-    pub fn clear_rect(&mut self, rect: CellRect, _filter: EntityFilter) -> Result<u32, PluginError> {
+    pub fn clear_rect(
+        &mut self,
+        rect: CellRect,
+        _filter: EntityFilter,
+    ) -> Result<u32, PluginError> {
         let mut removed = 0u32;
         for y in rect.min.y..=rect.max.y {
             for x in rect.min.x..=rect.max.x {
-                if self.remove_at(UVec2::new(x, y), ContentId::parse("flux.core.layer.appearance").expect("static content id"))?.is_some() {
+                if self
+                    .remove_at(
+                        UVec2::new(x, y),
+                        ContentId::parse("flux.core.layer.appearance").expect("static content id"),
+                    )?
+                    .is_some()
+                {
                     removed += 1;
                 }
             }
@@ -250,14 +272,22 @@ impl EntityApi {
     }
 
     /// Updates one entity rotation.
-    pub fn set_rotation(&mut self, id: EntityInstanceId, rotation: Rotation) -> Result<(), PluginError> {
+    pub fn set_rotation(
+        &mut self,
+        id: EntityInstanceId,
+        rotation: Rotation,
+    ) -> Result<(), PluginError> {
         scope::with_runtime_host("entities.set_rotation", |host| {
             host.entity_set_rotation(id.0, encode_rotation(rotation))
         })
     }
 
     /// Applies one minimal entity-state patch.
-    pub fn set_state(&mut self, id: EntityInstanceId, patch: crate::EntityStatePatch) -> Result<(), PluginError> {
+    pub fn set_state(
+        &mut self,
+        id: EntityInstanceId,
+        patch: crate::EntityStatePatch,
+    ) -> Result<(), PluginError> {
         if let Some(enabled) = patch.enabled {
             self.set_enabled(id, enabled)?;
         }
@@ -308,7 +338,12 @@ impl GasApi {
     }
 
     /// Adds free gas to one world cell.
-    pub fn add(&mut self, cell: CellPos, substance: SubstanceId, amount: u32) -> Result<u32, PluginError> {
+    pub fn add(
+        &mut self,
+        cell: CellPos,
+        substance: SubstanceId,
+        amount: u32,
+    ) -> Result<u32, PluginError> {
         self.add_with_velocity(cell, substance, amount, Vec2::ZERO)
     }
 
@@ -326,7 +361,12 @@ impl GasApi {
     }
 
     /// Removes free gas from one cell.
-    pub fn remove(&mut self, cell: CellPos, substance: SubstanceId, amount: u32) -> Result<u32, PluginError> {
+    pub fn remove(
+        &mut self,
+        cell: CellPos,
+        substance: SubstanceId,
+        amount: u32,
+    ) -> Result<u32, PluginError> {
         scope::with_runtime_host("gases.remove", |host| {
             host.gas_remove(cell.x, cell.y, substance.as_str(), amount)
         })
@@ -345,12 +385,7 @@ impl UiApi {
     pub fn add_hud_block(&mut self, block: HudBlock) -> Result<(), PluginError> {
         scope::with_runtime_host("ui.add_hud_block", |host| {
             for line in &block.lines {
-                host.submit_hud_line(
-                    block.id.as_str(),
-                    &block.title,
-                    line,
-                    block.sort_order,
-                )?;
+                host.submit_hud_line(block.id.as_str(), &block.title, line, block.sort_order)?;
             }
             Ok(())
         })
@@ -398,6 +433,8 @@ impl OverlayApi {
     }
 
     /// Submits one declarative overlay graph for the current render event.
+    ///
+    /// This is the primary overlay path for new plugin overlays.
     pub fn submit_graph(&mut self, graph: OverlayGraph) -> Result<(), PluginError> {
         graph
             .validate()
@@ -405,19 +442,6 @@ impl OverlayApi {
         scope::with_runtime_host("overlays.submit_graph", |host| {
             host.submit_overlay_graph(&graph)
         })
-    }
-
-    /// Submits one complete RGBA8 frame.
-    #[deprecated(note = "Use OverlayApi::submit_graph or OverlayDescriptor::graph for new overlays.")]
-    pub fn submit_frame(&mut self, frame: OverlayFrame) -> Result<(), PluginError> {
-        scope::with_runtime_host("overlays.submit_frame", |host| {
-            host.submit_overlay_frame(frame.width, frame.height, &frame.rgba8)
-        })
-    }
-
-    /// Clears the current overlay frame by submitting an empty frame.
-    pub fn clear_frame(&mut self) -> Result<(), PluginError> {
-        Err(PluginError::Unsupported("overlays.clear_frame"))
     }
 }
 
@@ -448,7 +472,10 @@ impl SaveApi {
     }
 
     /// Reads one JSON chunk.
-    pub fn read_json<T: serde::de::DeserializeOwned>(&self, chunk_id: &ContentId) -> Result<Option<T>, PluginError> {
+    pub fn read_json<T: serde::de::DeserializeOwned>(
+        &self,
+        chunk_id: &ContentId,
+    ) -> Result<Option<T>, PluginError> {
         Ok(match self.read_chunk(chunk_id)? {
             Some(chunk) => Some(chunk.read_json()?),
             None => None,
@@ -525,9 +552,7 @@ impl TimeApi {
 
     /// Sets the current simulation speed.
     pub fn set_speed(&mut self, speed: SimulationSpeed) -> Result<(), PluginError> {
-        scope::with_runtime_host("time.set_speed", |host| {
-            host.set_speed(encode_speed(speed))
-        })
+        scope::with_runtime_host("time.set_speed", |host| host.set_speed(encode_speed(speed)))
     }
 
     fn snapshot(&self) -> Result<DecodedTimeSnapshot, PluginError> {

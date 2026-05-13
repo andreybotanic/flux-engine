@@ -185,9 +185,11 @@ impl<'a, P> Registrar<'a, P> {
     ) -> Result<(), PluginError> {
         match &mut self.sink {
             RegistrarSink::Abi(raw) => {
-                let callback = raw.register_overlay_material_fn.ok_or(
-                    PluginError::Unsupported("registrar.register_overlay_material"),
-                )?;
+                let callback = raw
+                    .register_overlay_material_fn
+                    .ok_or(PluginError::Unsupported(
+                        "registrar.register_overlay_material",
+                    ))?;
                 let abi = FluxOverlayMaterialDescriptor {
                     id: FluxUtf8Slice::from_str(descriptor.id.as_str()),
                     label: FluxUtf8Slice::from_str(&descriptor.label),

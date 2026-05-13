@@ -1,34 +1,26 @@
 # FluxEngine Plugin SDK
 
-Эта документация описывает единственный публичный runtime Plugin SDK FluxEngine.
-Для автора DLL-плагина каноническая поверхность API состоит из:
+Эта документация описывает публичный Rust-first runtime SDK FluxEngine (`crates/flux_plugin_sdk`).
 
-- `FluxHostApi` для `flux_plugin_create`
-- `FluxRegistrar` для `flux_plugin_register`
-- `FluxRuntimeHost` для runtime-событий
-- typed event payload structs и `FluxEventKind`
-- descriptor structs, export names и ABI-совместимые базовые типы
+Базовый рабочий путь для автора плагина:
 
-Важно: generated reference намеренно не документирует внутренние или legacy-параллели вроде `WorldApi`, `WorldApiMut` и raw host callback aliases. Если у ABI-структуры есть wrapper-метод, публичный SDK показывает именно этот метод.
+- реализовать `Plugin` и объявить entrypoint через `declare_plugin!`;
+- зарегистрировать дескрипторы и подписки через `Registrar`;
+- обрабатывать typed runtime events (`PluginEvent`) и использовать proxy API (`WorldApi`, `EntityApi`, `GasApi`, `OverlayApi`, `SaveApi`, `TimeApi`, `InputApi`, `LoggerApi`).
+
+Для plugin-controlled overlay используется только graph-пайплайн:
+
+- событие `PluginEvent::RenderOverlay`;
+- построение `OverlayGraph`;
+- отправка через `OverlayApi::submit_graph`.
+
+Legacy frame-based API больше не является рабочей частью SDK/runtime контракта.
 
 Сгенерированные reference-разделы обновляются командой:
 
 ```powershell
 cargo xtask generate-plugin-sdk-docs
 ```
-
-Генератор строгий. Он завершится ошибкой, если у SDK-facing item:
-
-- нет doc-comment;
-- нет обязательной секции вроде `# Fields`, `# Variants` или `# SDK Notes`;
-- у публичного поля структуры или варианта enum нет явного описания;
-- отсутствует внешний example-snippet для метода, функции, константы или события.
-
-Примеры хранятся отдельно от Rustdoc в каталоге [`examples/`](examples/):
-
-- `examples/methods/*.md`
-- `examples/events/*.md`
-- `examples/constants/*.md`
 
 Сайт документации собирается командой:
 

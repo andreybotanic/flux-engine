@@ -15,7 +15,7 @@ Clears entities in the requested rectangle.
 ## Signature
 
 ```rust
-fn clear_rect (& mut self , rect : CellRect , _filter : EntityFilter) -> Result < u32 , PluginError >
+fn clear_rect (& mut self , rect : CellRect , _filter : EntityFilter ,) -> Result < u32 , PluginError >
 ```
 
 ## Arguments

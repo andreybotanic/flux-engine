@@ -255,7 +255,7 @@ mod tests {
             "[`PluginEvent::WorldCreated`](generated/events/pluginevent-worldcreated.md)"
         ));
         assert!(!summary.contents.contains("FluxRuntimeHost"));
-        assert!(!summary.contents.contains("PluginRuntime"));
+        assert!(!summary.contents.contains("`PluginRuntime`"));
     }
 
     #[test]
@@ -347,13 +347,15 @@ mod tests {
             .expect("methods index page");
 
         assert!(!methods_index.contents.contains("FluxRuntimeHost"));
-        assert!(!methods_index.contents.contains("PluginRuntime"));
-        assert!(!files
-            .iter()
-            .any(|file| file.relative_path.to_string_lossy().contains("pluginruntime")));
-        assert!(!files
-            .iter()
-            .any(|file| file.relative_path.to_string_lossy().contains("fluxruntimehost")));
+        assert!(!methods_index.contents.contains("`PluginRuntime`"));
+        assert!(!files.iter().any(|file| {
+            let path = file.relative_path.to_string_lossy().replace('\\', "/");
+            path.contains("/pluginruntime.") || path.contains("/pluginruntime/")
+        }));
+        assert!(!files.iter().any(|file| file
+            .relative_path
+            .to_string_lossy()
+            .contains("fluxruntimehost")));
     }
 
     #[test]

@@ -10,17 +10,14 @@ use bevy::{
 use crate::{
     config::{GasMainViewVisualConfig, StructureVisualConfigMap},
     plugins::{
-        ContentId, ContentRegistry, PluginOverlayFrameStore, PluginOverlayGraphStore,
-        PluginRuntimeRegistry, RuntimeOverlayDescriptor,
+        ContentId, ContentRegistry, PluginOverlayGraphStore, PluginRuntimeRegistry,
+        RuntimeOverlayDescriptor,
     },
     render::{
         pipe_highlight_material::{
             spawn_pipe_highlight_entity, spawn_pipe_highlight_material_entity,
         },
-        world_view::{
-            GasSimulationImages, OverlayMode, PluginOverlayImage, PluginOverlaySprite,
-            WorldVisualAssets,
-        },
+        world_view::{GasSimulationImages, OverlayMode, WorldVisualAssets},
     },
     save::WorldLoadState,
     simulation::SimulationStep,
@@ -44,7 +41,6 @@ pub(crate) struct OverlayGraphAssets {
 #[derive(Resource, Default)]
 pub(crate) struct OverlayGraphSceneState {
     pub active_overlay: Option<ContentId>,
-    pub uses_legacy_frame: bool,
     overlay_entities: Vec<Entity>,
     dynamic_images: HashMap<String, Handle<Image>>,
 }
@@ -101,8 +97,6 @@ pub(crate) fn sync_overlay_graph_visuals(
         Res<PluginRuntimeRegistry>,
         Res<ContentRegistry>,
         Res<OverlayGraphAssets>,
-        Res<PluginOverlayImage>,
-        Res<PluginOverlayFrameStore>,
         Res<PluginOverlayGraphStore>,
     ),
     world_resources: (
@@ -115,21 +109,11 @@ pub(crate) fn sync_overlay_graph_visuals(
         Res<GasMainViewVisualConfig>,
         Res<AssetServer>,
     ),
-    render_resources: (
-        ResMut<Assets<Image>>,
-        Query<&mut Visibility, With<PluginOverlaySprite>>,
-        ResMut<OverlayGraphSceneState>,
-    ),
+    render_resources: (ResMut<Assets<Image>>, ResMut<OverlayGraphSceneState>),
 ) {
     let (overlay_mode, world_load_state) = mode_resources;
-    let (
-        runtime_registry,
-        content_registry,
-        overlay_assets,
-        overlay_image,
-        overlay_frame,
-        overlay_graph_store,
-    ) = overlay_resources;
+    let (runtime_registry, content_registry, overlay_assets, overlay_graph_store) =
+        overlay_resources;
     let (
         simulation_images,
         simulation_step,
@@ -140,27 +124,22 @@ pub(crate) fn sync_overlay_graph_visuals(
         gas_main_visual,
         asset_server,
     ) = world_resources;
-    let (mut images, mut overlay_sprites, mut scene_state) = render_resources;
+    let (mut images, mut scene_state) = render_resources;
 
     clear_overlay_entities(&mut commands, &mut scene_state);
     scene_state.active_overlay = None;
-    scene_state.uses_legacy_frame = false;
 
     if !world_load_state.has_world {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
         return;
     }
 
     let OverlayMode::Plugin(raw_overlay_id) = *overlay_mode else {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
         return;
     };
     let Ok(overlay_id) = ContentId::parse(raw_overlay_id) else {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
         return;
     };
     let Some(descriptor) = runtime_registry.overlays().get(&overlay_id) else {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
         return;
     };
 
@@ -170,7 +149,6 @@ pub(crate) fn sync_overlay_graph_visuals(
         .or_else(|| overlay_graph_store.graph.clone());
 
     if let Some(graph) = graph {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
         if graph_references_known_materials(&graph, &runtime_registry) {
             if let Ok(order) = graph.execution_order() {
                 if let Some(layers) = evaluate_graph(&graph, &order) {
@@ -197,19 +175,6 @@ pub(crate) fn sync_overlay_graph_visuals(
             }
         }
     }
-
-    if overlay_frame.has_frame() {
-        if let Some(image) = images.get_mut(&overlay_image.texture) {
-            if let Some(data) = image.data.as_mut() {
-                data.clear();
-                data.extend_from_slice(&overlay_frame.rgba8);
-            }
-        }
-        scene_state.uses_legacy_frame = true;
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Visible);
-    } else {
-        set_plugin_overlay_visibility(&mut overlay_sprites, Visibility::Hidden);
-    }
 }
 
 fn evaluate_graph(
@@ -232,7 +197,9 @@ fn evaluate_graph(
                 material: None,
             }],
             flux_plugin_sdk::OverlayNodeKind::RenderFreeGas(render) => {
-                vec![LayerPlan::FreeGas { alpha: render.alpha }]
+                vec![LayerPlan::FreeGas {
+                    alpha: render.alpha,
+                }]
             }
             flux_plugin_sdk::OverlayNodeKind::RenderImage(render) => vec![LayerPlan::Images {
                 instances: render.instances.clone(),
@@ -285,7 +252,10 @@ fn graph_references_known_materials(
         let Ok(material_id) = ContentId::parse(material.material_id.as_str()) else {
             return false;
         };
-        if !runtime_registry.overlay_materials().contains_key(&material_id) {
+        if !runtime_registry
+            .overlay_materials()
+            .contains_key(&material_id)
+        {
             return false;
         }
     }
@@ -393,9 +363,11 @@ fn render_entity_layer(
                         color: vec4_to_color(style.tint.unwrap_or(Vec4::ONE)),
                         ..default()
                     },
-                    Transform::from_translation(
-                        cell_center(x, y).extend(layer_subject_z(layer_index, descriptor.visual.draw_priority, linear_index(x, y))),
-                    ),
+                    Transform::from_translation(cell_center(x, y).extend(layer_subject_z(
+                        layer_index,
+                        descriptor.visual.draw_priority,
+                        linear_index(x, y),
+                    ))),
                 ))
                 .id();
             scene_state.overlay_entities.push(entity);
@@ -423,8 +395,11 @@ fn render_entity_layer(
         let Some(image_handle) = image_handle else {
             continue;
         };
-        let size_in_cells =
-            crate::world::structures::structure_sprite_size_in_cells(structure.kind, structure.rotation, structure_visuals);
+        let size_in_cells = crate::world::structures::structure_sprite_size_in_cells(
+            structure.kind,
+            structure.rotation,
+            structure_visuals,
+        );
         let draw_rank = *structure_draw_ranks.get(&structure.id).unwrap_or(&0);
         let entity = commands
             .spawn((
@@ -447,7 +422,8 @@ fn render_entity_layer(
             .map(|material_id| material_id.as_str() == DEFAULT_PIPE_HIGHLIGHT_MATERIAL_ID)
             .unwrap_or(false)
         {
-            let z = layer_subject_z(layer_index, descriptor.visual.draw_priority, draw_rank) + 0.0005;
+            let z =
+                layer_subject_z(layer_index, descriptor.visual.draw_priority, draw_rank) + 0.0005;
             if crate::plugins::default_plugin::is_pipe_structure(structure.kind) {
                 let mask = pipe_connection_mask(structures, structure.origin) as usize;
                 let highlight = spawn_pipe_highlight_entity(
@@ -471,8 +447,7 @@ fn render_entity_layer(
                     Visibility::Visible,
                 );
                 scene_state.overlay_entities.push(highlight);
-            } else if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind)
-            {
+            } else if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind) {
                 let size_in_cells = crate::world::structures::structure_sprite_size_in_cells(
                     structure.kind,
                     structure.rotation,
@@ -518,7 +493,11 @@ fn render_free_gas_layer(
                 color: Color::srgba(1.0, 1.0, 1.0, alpha.clamp(0.0, 1.0)),
                 ..default()
             },
-            Transform::from_xyz(0.0, 0.0, OVERLAY_ENTITY_BASE_Z + layer_index as f32 * OVERLAY_LAYER_STEP_Z),
+            Transform::from_xyz(
+                0.0,
+                0.0,
+                OVERLAY_ENTITY_BASE_Z + layer_index as f32 * OVERLAY_LAYER_STEP_Z,
+            ),
         ))
         .id();
     scene_state.overlay_entities.push(entity);
@@ -610,10 +589,7 @@ fn resolve_overlay_image_handle(
             Some(asset_server.load(id.as_str().to_string()))
         }
         flux_plugin_sdk::OverlayImageSource::Rgba8 { size_px, rgba8 } => {
-            let key = format!(
-                "{}:{layer_index}:{instance_index}",
-                descriptor.id.as_str()
-            );
+            let key = format!("{}:{layer_index}:{instance_index}", descriptor.id.as_str());
             let handle = scene_state.dynamic_images.entry(key).or_insert_with(|| {
                 let mut image = Image::new(
                     Extent3d {
@@ -652,12 +628,14 @@ fn resolve_entity_sprite_path(
     style: &flux_plugin_sdk::OverlayEntityStyle,
 ) -> Option<String> {
     match style.sprite_override.as_ref() {
-        Some(flux_plugin_sdk::OverlayEntitySpriteOverride::OverlayVariant) => {
-            sprite.overlay_path.clone().or_else(|| Some(sprite.image_path.clone()))
-        }
-        Some(flux_plugin_sdk::OverlayEntitySpriteOverride::Silhouette) => {
-            sprite.silhouette_path.clone().or_else(|| Some(sprite.image_path.clone()))
-        }
+        Some(flux_plugin_sdk::OverlayEntitySpriteOverride::OverlayVariant) => sprite
+            .overlay_path
+            .clone()
+            .or_else(|| Some(sprite.image_path.clone())),
+        Some(flux_plugin_sdk::OverlayEntitySpriteOverride::Silhouette) => sprite
+            .silhouette_path
+            .clone()
+            .or_else(|| Some(sprite.image_path.clone())),
         Some(flux_plugin_sdk::OverlayEntitySpriteOverride::Asset(asset)) => {
             Some(asset.as_str().to_string())
         }
@@ -665,9 +643,7 @@ fn resolve_entity_sprite_path(
     }
 }
 
-fn overlay_instance_transform(
-    placement: &flux_plugin_sdk::OverlayPlacement,
-) -> (Vec2, Vec2, f32) {
+fn overlay_instance_transform(placement: &flux_plugin_sdk::OverlayPlacement) -> (Vec2, Vec2, f32) {
     match placement {
         flux_plugin_sdk::OverlayPlacement::CellLocal {
             cell,
@@ -704,15 +680,6 @@ fn clear_overlay_entities(commands: &mut Commands, state: &mut OverlayGraphScene
     }
 }
 
-fn set_plugin_overlay_visibility(
-    overlay_sprites: &mut Query<&mut Visibility, With<PluginOverlaySprite>>,
-    visibility: Visibility,
-) {
-    for mut sprite_visibility in overlay_sprites.iter_mut() {
-        *sprite_visibility = visibility;
-    }
-}
-
 fn build_structure_draw_ranks(
     structures: &PlacedStructureMap,
     structure_visuals: &StructureVisualConfigMap,
@@ -733,10 +700,9 @@ fn build_structure_draw_ranks(
 
 fn structure_transform(structure: &PlacedStructure, z: f32) -> Transform {
     if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind) {
-        let center = bridge_center_cell(structure.origin, structure.rotation)
-            .unwrap_or(structure.origin);
-        let mut transform =
-            Transform::from_translation(cell_center(center.x, center.y).extend(z));
+        let center =
+            bridge_center_cell(structure.origin, structure.rotation).unwrap_or(structure.origin);
+        let mut transform = Transform::from_translation(cell_center(center.x, center.y).extend(z));
         transform.rotation = match structure.rotation {
             StructureRotation::Deg0 => Quat::IDENTITY,
             StructureRotation::Deg90 => Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
@@ -766,25 +732,29 @@ fn pipe_connection_mask(structures: &PlacedStructureMap, cell: UVec2) -> u8 {
     let mut mask = 0u8;
     if cell.y > 0 {
         let neighbor = UVec2::new(cell.x, cell.y - 1);
-        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
+        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor)
+        {
             mask |= 0b0001;
         }
     }
     if cell.x + 1 < crate::world::grid::WORLD_WIDTH {
         let neighbor = UVec2::new(cell.x + 1, cell.y);
-        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
+        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor)
+        {
             mask |= 0b0010;
         }
     }
     if cell.y + 1 < crate::world::grid::WORLD_HEIGHT {
         let neighbor = UVec2::new(cell.x, cell.y + 1);
-        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
+        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor)
+        {
             mask |= 0b0100;
         }
     }
     if cell.x > 0 {
         let neighbor = UVec2::new(cell.x - 1, cell.y);
-        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
+        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor)
+        {
             mask |= 0b1000;
         }
     }
@@ -798,8 +768,8 @@ fn vec4_to_color(value: Vec4) -> Color {
 fn local_appearance_z(draw_priority: i32, draw_rank: usize) -> f32 {
     const APPEARANCE_PRIORITY_STEP: f32 = 0.000001;
     const APPEARANCE_TIEBREAK_STEP: f32 = 0.0000000001;
-    let offset =
-        draw_priority as f32 * APPEARANCE_PRIORITY_STEP + draw_rank as f32 * APPEARANCE_TIEBREAK_STEP;
+    let offset = draw_priority as f32 * APPEARANCE_PRIORITY_STEP
+        + draw_rank as f32 * APPEARANCE_TIEBREAK_STEP;
     offset.clamp(-OVERLAY_LAYER_STEP_Z * 0.4, OVERLAY_LAYER_STEP_Z * 0.4)
 }
 

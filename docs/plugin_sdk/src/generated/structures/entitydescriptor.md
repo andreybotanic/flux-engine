@@ -26,4 +26,5 @@ pub struct EntityDescriptor
 | `label` | String | `label` field stored as `String` on `EntityDescriptor`. |
 | `icon_path` | String | `icon_path` field stored as `String` on `EntityDescriptor`. |
 | `silhouette_path` | Option < String > | `silhouette_path` field stored as `Option < String >` on `EntityDescriptor`. |
+| `tags` | Vec < [`ContentTag`](../structures/contenttag.md) > | `tags` field stored as `Vec < ContentTag >` on `EntityDescriptor`. |
 

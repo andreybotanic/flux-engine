@@ -10,7 +10,9 @@ Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **
 
 ## When It Fires
 
-Fired when a plugin-controlled overlay should submit one frame.
+Fired when a plugin-controlled overlay should submit its render result.
+
+New overlays should submit `OverlayGraph` via `OverlayApi::submit_graph`.
 
 ## Arguments
 
@@ -25,14 +27,19 @@ _Source: [`examples/events/pluginevent-renderoverlay.md`](../../examples/events/
 ```rust
 impl MyPlugin {
     fn on_render_overlay(&mut self, event: &RenderOverlayEvent) -> Result<(), PluginError> {
-        let width = 102;
-        let height = 102;
-        let rgba8 = vec![0; (width * height * 4) as usize];
-        self.overlays.submit_frame(OverlayFrame {
-            overlay_id: event.overlay_id.clone(),
-            width,
-            height,
-            rgba8,
+        if event.overlay_id.as_str() != "flux.demo.overlay.pipes" {
+            return Ok(());
+        }
+        let root = OverlayNodeId::parse("pipes.root").expect("valid node id");
+        self.overlays.submit_graph(OverlayGraph {
+            nodes: vec![OverlayNode {
+                id: root.clone(),
+                depends_on: vec![],
+                kind: OverlayNodeKind::RenderImage(RenderImageNode {
+                    instances: Vec::new(),
+                }),
+            }],
+            output: root,
         })
     }
 }

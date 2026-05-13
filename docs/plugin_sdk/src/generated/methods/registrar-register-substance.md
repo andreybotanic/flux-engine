@@ -15,7 +15,7 @@ Registers one gas substance.
 ## Signature
 
 ```rust
-fn register_substance (& mut self , descriptor : SubstanceDescriptor) -> Result < () , PluginError >
+fn register_substance (& mut self , descriptor : SubstanceDescriptor ,) -> Result < () , PluginError >
 ```
 
 ## Arguments

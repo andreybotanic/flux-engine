@@ -2,9 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     config::GasRegistry,
+    editor::ActiveEditorTool,
     input::camera::MainCamera,
     plugins::{
-        default_plugin::pipe_runtime::{PipeFlowVisualState, PipeFluxField, PipeGasField, PipeSimulationConfig},
+        default_plugin::pipe_runtime::{
+            PipeFlowVisualState, PipeFluxField, PipeGasField, PipeSimulationConfig,
+        },
         ContentRegistry, PluginRuntimeEvent, RuntimeDllPluginRegistry, RuntimeHostContext,
     },
     simulation::{
@@ -16,7 +19,6 @@ use crate::{
         structures::PlacedStructureMap,
         WorldCellChanged,
     },
-    editor::ActiveEditorTool,
 };
 
 #[derive(Resource, Default)]

@@ -101,19 +101,14 @@ fn default_content_tags_support_overlay_selectors() {
     let registry = default_content_registry();
     let pipe_id = structure_kind_content_id(crate::plugins::default_plugin::pipe_structure_kind());
     let brick_id = cell_material_content_id(crate::plugins::default_plugin::brick_cell_material());
-    let pipe_tag = flux_plugin_sdk::ContentTag::parse("flux.default.tag.pipe-network")
-        .expect("pipe tag");
+    let pipe_tag =
+        flux_plugin_sdk::ContentTag::parse("flux.default.tag.pipe-network").expect("pipe tag");
     let solid_tag =
         flux_plugin_sdk::ContentTag::parse("flux.default.tag.solid").expect("solid tag");
 
-    assert!(registry.structure_matches_selector(
-        &pipe_id,
-        &flux_plugin_sdk::Selector::tag(pipe_tag.clone()),
-    ));
-    assert!(registry.cell_matches_selector(
-        &brick_id,
-        &flux_plugin_sdk::Selector::tag(solid_tag),
-    ));
+    assert!(registry
+        .structure_matches_selector(&pipe_id, &flux_plugin_sdk::Selector::tag(pipe_tag.clone()),));
+    assert!(registry.cell_matches_selector(&brick_id, &flux_plugin_sdk::Selector::tag(solid_tag),));
     assert!(!registry.structure_matches_selector(
         &pipe_id,
         &flux_plugin_sdk::Selector::not(flux_plugin_sdk::Selector::tag(pipe_tag)),

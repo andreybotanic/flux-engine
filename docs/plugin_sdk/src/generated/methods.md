@@ -6,8 +6,15 @@
 
 | API item | Kind | Source |
 | --- | --- | --- |
+| [`BuiltinPluginRuntime::create`](methods/builtinpluginruntime-create.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
+| [`BuiltinPluginRuntime::dispatch`](methods/builtinpluginruntime-dispatch.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
+| [`BuiltinPluginRuntime::plugin_id`](methods/builtinpluginruntime-plugin-id.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
+| [`BuiltinPluginRuntime::register`](methods/builtinpluginruntime-register.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
+| [`BuiltinPluginRuntime::registration`](methods/builtinpluginruntime-registration.md) | method | `crates/flux_plugin_sdk/src/plugin.rs` |
 | [`ContentId::as_str`](methods/contentid-as-str.md) | method | `crates/flux_plugin_sdk/src/ids.rs` |
 | [`ContentId::parse`](methods/contentid-parse.md) | method | `crates/flux_plugin_sdk/src/ids.rs` |
+| [`ContentTag::as_str`](methods/contenttag-as-str.md) | method | `crates/flux_plugin_sdk/src/ids.rs` |
+| [`ContentTag::parse`](methods/contenttag-parse.md) | method | `crates/flux_plugin_sdk/src/ids.rs` |
 | [`EntityApi::all_at`](methods/entityapi-all-at.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`EntityApi::at`](methods/entityapi-at.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`EntityApi::can_place`](methods/entityapi-can-place.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
@@ -42,10 +49,20 @@
 | [`LoggerApi::info`](methods/loggerapi-info.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`LoggerApi::warn`](methods/loggerapi-warn.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`OverlayApi::active_overlay`](methods/overlayapi-active-overlay.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
-| [`OverlayApi::clear_frame`](methods/overlayapi-clear-frame.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`OverlayApi::requested_overlay`](methods/overlayapi-requested-overlay.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
-| [`OverlayApi::submit_frame`](methods/overlayapi-submit-frame.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
+| [`OverlayApi::submit_graph`](methods/overlayapi-submit-graph.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
 | [`OverlayApi::viewport_size`](methods/overlayapi-viewport-size.md) | method | `crates/flux_plugin_sdk/src/api.rs` |
+| [`OverlayGraph::execution_order`](methods/overlaygraph-execution-order.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlayGraph::validate`](methods/overlaygraph-validate.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlayGraphError::as_str`](methods/overlaygrapherror-as-str.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlayGraphError::message`](methods/overlaygrapherror-message.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlayNodeId::as_str`](methods/overlaynodeid-as-str.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlayNodeId::parse`](methods/overlaynodeid-parse.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlaySelectorExpr::all`](methods/overlayselectorexpr-all.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlaySelectorExpr::any`](methods/overlayselectorexpr-any.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlaySelectorExpr::content_id`](methods/overlayselectorexpr-content-id.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlaySelectorExpr::not`](methods/overlayselectorexpr-not.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
+| [`OverlaySelectorExpr::tag`](methods/overlayselectorexpr-tag.md) | method | `crates/flux_plugin_sdk/src/overlay_graph.rs` |
 | [`PluginApiVersion::value`](methods/pluginapiversion-value.md) | method | `crates/flux_plugin_sdk/src/ids.rs` |
 | [`PluginError::message`](methods/pluginerror-message.md) | method | `crates/flux_plugin_sdk/src/error.rs` |
 | [`PluginEvent::abi_kind`](methods/pluginevent-abi-kind.md) | method | `crates/flux_plugin_sdk/src/events.rs` |
@@ -78,6 +95,7 @@
 | [`Registrar::plugin_id`](methods/registrar-plugin-id.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
 | [`Registrar::register_entity`](methods/registrar-register-entity.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
 | [`Registrar::register_overlay`](methods/registrar-register-overlay.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
+| [`Registrar::register_overlay_material`](methods/registrar-register-overlay-material.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
 | [`Registrar::register_save_chunk`](methods/registrar-register-save-chunk.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
 | [`Registrar::register_substance`](methods/registrar-register-substance.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |
 | [`Registrar::register_tool`](methods/registrar-register-tool.md) | method | `crates/flux_plugin_sdk/src/registrar.rs` |

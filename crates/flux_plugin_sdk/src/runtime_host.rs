@@ -25,26 +25,19 @@ pub struct RuntimeTimeSnapshot {
 pub struct RuntimeHostFns {
     pub entity_place: fn(*mut c_void, &str, u32, u32, u32) -> Result<u32, PluginError>,
     pub entity_remove: fn(*mut c_void, u32) -> Result<(), PluginError>,
-    pub entity_remove_at:
-        fn(*mut c_void, u32, u32, &str) -> Result<Option<u32>, PluginError>,
+    pub entity_remove_at: fn(*mut c_void, u32, u32, &str) -> Result<Option<u32>, PluginError>,
     pub entity_set_rotation: fn(*mut c_void, u32, u32) -> Result<(), PluginError>,
     pub entity_set_enabled: fn(*mut c_void, u32, bool) -> Result<(), PluginError>,
     pub entity_set_label: fn(*mut c_void, u32, &str) -> Result<(), PluginError>,
-    pub gas_add:
-        fn(*mut c_void, u32, u32, &str, u32, Vec2) -> Result<u32, PluginError>,
+    pub gas_add: fn(*mut c_void, u32, u32, &str, u32, Vec2) -> Result<u32, PluginError>,
     pub gas_remove: fn(*mut c_void, u32, u32, &str, u32) -> Result<u32, PluginError>,
     pub gas_clear_cell: fn(*mut c_void, u32, u32) -> Result<(), PluginError>,
     pub gas_pressure_at: fn(*mut c_void, u32, u32) -> Result<f32, PluginError>,
     pub gas_amount_at: fn(*mut c_void, u32, u32, &str) -> Result<u32, PluginError>,
-    pub submit_hud_line:
-        fn(*mut c_void, &str, &str, &str, i32) -> Result<(), PluginError>,
-    pub submit_overlay_frame:
-        fn(*mut c_void, u32, u32, &[u8]) -> Result<(), PluginError>,
+    pub submit_hud_line: fn(*mut c_void, &str, &str, &str, i32) -> Result<(), PluginError>,
     pub submit_overlay_graph: fn(*mut c_void, &OverlayGraph) -> Result<(), PluginError>,
-    pub write_save_chunk:
-        fn(*mut c_void, &str, u32, &[u8]) -> Result<(), PluginError>,
-    pub read_save_chunk:
-        fn(*mut c_void, &str) -> Result<Option<RuntimeSaveChunkData>, PluginError>,
+    pub write_save_chunk: fn(*mut c_void, &str, u32, &[u8]) -> Result<(), PluginError>,
+    pub read_save_chunk: fn(*mut c_void, &str) -> Result<Option<RuntimeSaveChunkData>, PluginError>,
     pub delete_save_chunk: fn(*mut c_void, &str) -> Result<(), PluginError>,
     pub time_snapshot: fn(*mut c_void) -> Result<RuntimeTimeSnapshot, PluginError>,
     pub set_paused: fn(*mut c_void, bool) -> Result<(), PluginError>,
@@ -112,11 +105,7 @@ impl RuntimeHostBinding {
     }
 
     /// Sets one entity label.
-    pub(crate) fn entity_set_label(
-        &self,
-        entity_id: u32,
-        label: &str,
-    ) -> Result<(), PluginError> {
+    pub(crate) fn entity_set_label(&self, entity_id: u32, label: &str) -> Result<(), PluginError> {
         (self.fns.entity_set_label)(self.context, entity_id, label)
     }
 
@@ -174,16 +163,6 @@ impl RuntimeHostBinding {
         (self.fns.submit_hud_line)(self.context, block_id, title, line, sort_order)
     }
 
-    /// Submits one complete overlay frame.
-    pub(crate) fn submit_overlay_frame(
-        &self,
-        width: u32,
-        height: u32,
-        rgba8: &[u8],
-    ) -> Result<(), PluginError> {
-        (self.fns.submit_overlay_frame)(self.context, width, height, rgba8)
-    }
-
     /// Submits one declarative overlay graph.
     pub(crate) fn submit_overlay_graph(&self, graph: &OverlayGraph) -> Result<(), PluginError> {
         (self.fns.submit_overlay_graph)(self.context, graph)
@@ -233,14 +212,8 @@ impl RuntimeHostBinding {
     }
 
     /// Sets the currently active tool.
-    pub(crate) fn set_active_tool(
-        &self,
-        tool_id: Option<&ContentId>,
-    ) -> Result<(), PluginError> {
-        (self.fns.set_active_tool)(
-            self.context,
-            tool_id.as_ref().map(|id| id.as_str()),
-        )
+    pub(crate) fn set_active_tool(&self, tool_id: Option<&ContentId>) -> Result<(), PluginError> {
+        (self.fns.set_active_tool)(self.context, tool_id.as_ref().map(|id| id.as_str()))
     }
 
     /// Writes one log line through the current runtime host.
@@ -254,7 +227,10 @@ pub(crate) unsafe fn abi_runtime_host_binding(
     host: *mut FluxRuntimeHost,
 ) -> Option<RuntimeHostBinding> {
     let host = host.as_ref()?;
-    Some(RuntimeHostBinding::new(host as *const FluxRuntimeHost as *mut c_void, &ABI_HOST_FNS))
+    Some(RuntimeHostBinding::new(
+        host as *const FluxRuntimeHost as *mut c_void,
+        &ABI_HOST_FNS,
+    ))
 }
 
 static ABI_HOST_FNS: RuntimeHostFns = RuntimeHostFns {
@@ -270,7 +246,6 @@ static ABI_HOST_FNS: RuntimeHostFns = RuntimeHostFns {
     gas_pressure_at: abi_gas_pressure_at,
     gas_amount_at: abi_gas_amount_at,
     submit_hud_line: abi_submit_hud_line,
-    submit_overlay_frame: abi_submit_overlay_frame,
     submit_overlay_graph: abi_submit_overlay_graph,
     write_save_chunk: abi_write_save_chunk,
     read_save_chunk: abi_read_save_chunk,
@@ -515,31 +490,14 @@ fn abi_submit_hud_line(
     .map_err(status_error)
 }
 
-fn abi_submit_overlay_frame(
-    context: *mut c_void,
-    width: u32,
-    height: u32,
-    rgba8: &[u8],
-) -> Result<(), PluginError> {
-    let host = abi_host(context, "overlays.submit_frame")?;
-    let callback = host
-        .submit_overlay_frame_fn
-        .ok_or(PluginError::Unsupported("overlays.submit_frame"))?;
-    unsafe { callback(host.context, width, height, rgba8.as_ptr(), rgba8.len()) }
-        .into_result()
-        .map_err(status_error)
-}
-
-fn abi_submit_overlay_graph(
-    context: *mut c_void,
-    graph: &OverlayGraph,
-) -> Result<(), PluginError> {
+fn abi_submit_overlay_graph(context: *mut c_void, graph: &OverlayGraph) -> Result<(), PluginError> {
     let host = abi_host(context, "overlays.submit_graph")?;
     let callback = host
         .submit_overlay_graph_fn
         .ok_or(PluginError::Unsupported("overlays.submit_graph"))?;
-    let json = serde_json::to_string(graph)
-        .map_err(|error| PluginError::message(format!("failed to encode overlay graph: {error}")))?;
+    let json = serde_json::to_string(graph).map_err(|error| {
+        PluginError::message(format!("failed to encode overlay graph: {error}"))
+    })?;
     unsafe { callback(host.context, FluxUtf8Slice::from_str(&json)) }
         .into_result()
         .map_err(status_error)
@@ -668,22 +626,14 @@ fn abi_set_speed(context: *mut c_void, speed: u32) -> Result<(), PluginError> {
         .map_err(status_error)
 }
 
-fn abi_set_active_tool(
-    context: *mut c_void,
-    tool_id: Option<&str>,
-) -> Result<(), PluginError> {
+fn abi_set_active_tool(context: *mut c_void, tool_id: Option<&str>) -> Result<(), PluginError> {
     let host = abi_host(context, "ui.set_active_tool")?;
     let callback = host
         .set_active_tool_fn
         .ok_or(PluginError::Unsupported("ui.set_active_tool"))?;
-    unsafe {
-        callback(
-            host.context,
-            FluxUtf8Slice::from_str(tool_id.unwrap_or("")),
-        )
-    }
-    .into_result()
-    .map_err(status_error)
+    unsafe { callback(host.context, FluxUtf8Slice::from_str(tool_id.unwrap_or(""))) }
+        .into_result()
+        .map_err(status_error)
 }
 
 fn abi_write_log(context: *mut c_void, level: u32, message: &str) -> Result<(), PluginError> {

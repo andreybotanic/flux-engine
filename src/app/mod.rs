@@ -16,8 +16,8 @@ use crate::{
         default_plugin::{
             asset_root, pipe_runtime::DefaultPluginSupportPlugin, DEFAULT_PLUGIN_ASSET_SOURCE,
         },
-        DefaultPluginContent, PluginBootstrapConfig, PluginHudBlockStore, PluginOverlayFrameStore,
-        PluginOverlayGraphStore, RuntimeDllHostPlugin, RuntimeDllPluginRegistry, SaveChunkStore,
+        DefaultPluginContent, PluginBootstrapConfig, PluginHudBlockStore, PluginOverlayGraphStore,
+        RuntimeDllHostPlugin, RuntimeDllPluginRegistry, SaveChunkStore,
     },
     render::RenderPlugin,
     simulation::{
@@ -108,7 +108,6 @@ pub fn run() {
         .insert_resource(plugin_bootstrap.content_registry)
         .insert_resource(plugin_runtime_registry)
         .insert_resource(runtime_dll_registry)
-        .init_resource::<PluginOverlayFrameStore>()
         .init_resource::<PluginOverlayGraphStore>()
         .init_resource::<PluginHudBlockStore>()
         .init_resource::<SaveChunkStore>()

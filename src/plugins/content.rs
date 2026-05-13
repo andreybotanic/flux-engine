@@ -1,4 +1,4 @@
-﻿use std::{
+use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
 };
@@ -307,9 +307,7 @@ fn selector_matches(
         flux_plugin_sdk::OverlaySelectorExpr::Tag(tag) => {
             tags.iter().any(|candidate| candidate == tag)
         }
-        flux_plugin_sdk::OverlaySelectorExpr::Not(inner) => {
-            !selector_matches(id, tags, inner)
-        }
+        flux_plugin_sdk::OverlaySelectorExpr::Not(inner) => !selector_matches(id, tags, inner),
         flux_plugin_sdk::OverlaySelectorExpr::Any(items) => {
             items.iter().any(|item| selector_matches(id, tags, item))
         }

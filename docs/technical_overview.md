@@ -536,17 +536,30 @@
 - Базовый набор узлов на этапе миграции: `RenderEntitiesNode`, `RenderFreeGasNode`, `RenderImageNode`, `BlendNode`, `MaterialNode`.
 - `RenderImageNode` служит универсальным источником plugin-графики (иконки, батчи инстансов, крупные grid-aligned raster-слои вроде температурной карты) и поддерживает placement в координатах клеточной сетки без ручной screen-space математики через камеру.
 - Runtime compositor добавлен в `src/render/overlay_graph_runtime.rs`: plugin overlay graph исполняется в детерминированном топологическом порядке, material/blend узлы собирают слойный render-plan, а финальный результат публикуется как активный overlay без knowledge о gameplay-смыслах `pipes`/`temperature`.
-- Host API расширен `submit_overlay_graph` (SDK runtime binding + ABI callback), поэтому `RenderOverlay` может присылать declarative graph вместо `RGBA8 full-frame`; legacy `submit_frame` сохранён как fallback.
-- Пустые image-слои в graph (`RenderImageNode` с `instances.is_empty()`) считаются валидными: это нужно для режимов вроде `F3`, где отдельные слои (например, движущиеся пакеты газа на паузе) могут временно отсутствовать, но сам graph-пайплайн должен оставаться активным без fallback в legacy-рендер.
+- Host API использует только `submit_overlay_graph` (SDK runtime binding + ABI callback), поэтому `RenderOverlay` отправляет declarative graph вместо `RGBA8 full-frame`; frame-based submit path удалён из рабочего runtime/SDK-контракта.
+- Пустые image-слои в graph (`RenderImageNode` с `instances.is_empty()`) считаются валидными: это нужно для режимов вроде `F3`, где отдельные слои (например, движущиеся пакеты газа на паузе) могут временно отсутствовать, но сам graph-пайплайн должен оставаться активным без переключения на отдельный frame-path.
 - Default plugin `F3/Pipes` мигрирован на graph producer: `flux.default` на событии `RenderOverlay` строит graph с dim-фоном, selector-слоями сущностей, `MaterialNode` для pipe highlight, image-слоями статического газа/flow-packets/порт-иконок и отправляет его через `OverlayApi::submit_graph`.
 - Temperature demo overlay переведён на graph path: `RenderImageNode` передаёт одну большую `GridLocal` RGBA8 temperature map, а `RenderEntitiesNode` накладывает силуэты solid-сущностей через selector по `ContentTag`.
 - Подробный пошаговый план реализации вынесен в `docs/plans/plugin_system/09_overlay_scene_graph_and_compositor.md`.
 - В graph-path `F3/Pipes` flow-packets рендерятся через `OverlayPlacement::GridLocal`, поэтому world-space позиции переводятся в grid-local координаты относительно `world_origin()` перед отправкой в graph.
 - Фаза анимации flow-packets в `flux.default` (`overlay_phase`) больше не сбрасывается на паузе: при `paused=true` она фиксируется, а при `paused=false` продолжает шагать, что устраняет резкий визуальный скачок на resume.
 - При активном graph-оверлее plugin-режима `GasMainOverlaySprite` скрывается, чтобы core free-gas слой не подмешивался поверх `F3/Pipes` во время анимации.
-- `MaterialNode` с `flux.default.overlay.material.pipe_highlight` в graph-композиторе применяется не только к обычным трубам, но и к мостам (`GasPipeBridge`) через сегментированную mask-подсветку по трём клеткам моста.
+- `MaterialNode` с `flux.default.overlay.material.pipe_highlight` в graph-композиторе применяется не только к обычным трубам, но и к мостам (`GasPipeBridge`) через собственный world-спрайт моста (`bridge`), без отдельной сегментированной mask-подсветки по трём клеткам.
 - Для pipe-структур в graph-композиторе используется не статичный `pipe_mask_00`, а динамический выбор `pipe_mask_##` по `pipe_connection_mask`, чтобы визуальные соединения трубы в `F3` совпадали с фактической топологией соседей (включая сценарии с трубой под мостом).
 - `MaterialNode` pipe-highlight также применяется к `Vent` и `GasPipeBridge` через их собственные world-спрайты (`tile_vent`, `bridge`), а не через дополнительные mask-сегменты в клетке пересечения; это сохраняет корректный вид трубы под мостом без ложного визуального объединения в `pipe_mask_15`.
 - Для `F3/Pipes` базовая цветовая схема слоя мира теперь выбирается как pipe-режим независимо от legacy-path, а при активном graph `F3` базовые legacy-спрайты мира (`board/backdrop/walls/pipes/vents`) скрываются, чтобы итоговую картинку полностью определял plugin overlay graph.
 - В режиме `F3/Pipes` legacy world-слои теперь не участвуют в финальном кадре независимо от paused/running состояния; это исключает влияние `F1`-пайплайна на tint/фон/порядок отрисовки во время симуляции.
 - Локальные z-смещения graph-сущностей ограничены внутри бюджета одного слоя (`OVERLAY_LAYER_STEP_Z`), а `gas_in_out` иконки получают дополнительный front-z bias, поэтому порт-иконки стабильно остаются на самом переднем плане `F3`.
+
+### Runtime overlay graph pipeline (актуальное состояние)
+
+- Событие `PluginRuntimeEvent::RenderOverlay` диспатчится в `src/plugins/runtime_dll.rs::dispatch_plugin_overlay_render`; перед dispatch очищается только `PluginOverlayGraphStore`, frame-store в runtime больше не существует.
+- Runtime host для DLL и built-in плагинов отдаёт только graph submit callback: старый frame-slot в ABI оставлен как reserved-only для бинарной совместимости, но не используется runtime-логикой.
+- Для packaged-плагинов путь `RenderOverlay -> submit_graph` зафиксирован регрессионными тестами в `src/plugins/runtime_dll.rs` (архивный `flux.api_temperature_overlay.fluxplugin`): тест проверяет submit графа на собственный `overlay_id` и отсутствие submit на чужой `overlay_id`.
+- Плагин отправляет `OverlayGraph` через `OverlayApi::submit_graph`; graph валидируется в SDK до отправки (`OverlayGraph::validate`) и сериализуется в JSON для ABI callback.
+- Engine сохраняет присланный graph в `PluginOverlayGraphStore.graph` на кадр, после чего `sync_overlay_graph_visuals` в `src/render/overlay_graph_runtime.rs`:
+  - выбирает graph из `RuntimeOverlayDescriptor.graph` или из `PluginOverlayGraphStore`;
+  - строит topological execution order;
+  - сводит узлы в слойный `LayerPlan` (`RenderEntities` / `RenderFreeGas` / `RenderImage` / `Blend` / `Material`);
+  - материализует результат спавном overlay-entity с жёстким layer budget по `z`.
+- Если graph отсутствует или невалиден, отдельного frame-fallback больше нет: `PluginOverlaySprite` принудительно скрывается, и оверлей плагина не рисуется.

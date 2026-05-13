@@ -2,13 +2,16 @@ use std::any::Any;
 
 use bevy_math::{UVec2, Vec2};
 use flux_plugin_abi::{
-    FluxBuildHudForCellEventPayload, FluxEmptyEventPayload, FluxEntityEventPayload,
-    FluxEventKind, FluxKeyEventPayload, FluxMouseCellEventPayload,
-    FluxOverlayChangedEventPayload, FluxRenderOverlayEventPayload,
-    FluxSimulationPausedChangedEvent, FluxToolSelectedEventPayload, FluxUtf8Slice,
+    FluxBuildHudForCellEventPayload, FluxEmptyEventPayload, FluxEntityEventPayload, FluxEventKind,
+    FluxKeyEventPayload, FluxMouseCellEventPayload, FluxOverlayChangedEventPayload,
+    FluxRenderOverlayEventPayload, FluxSimulationPausedChangedEvent, FluxToolSelectedEventPayload,
+    FluxUtf8Slice,
 };
 
-use crate::{ContentId, EntityInstanceId, EntityKindId, InputModifiers, MouseButton, OverlayModeId, PluginError};
+use crate::{
+    ContentId, EntityInstanceId, EntityKindId, InputModifiers, MouseButton, OverlayModeId,
+    PluginError,
+};
 
 /// Runtime event category used for subscriptions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -53,7 +56,9 @@ pub enum PluginEvent {
     OverlayChanged,
     /// Fired when the engine asks plugins to contribute HUD lines for one cell.
     BuildHudForCell,
-    /// Fired when a plugin-controlled overlay should submit one frame.
+    /// Fired when a plugin-controlled overlay should submit its render result.
+    ///
+    /// New overlays should submit `OverlayGraph` via `OverlayApi::submit_graph`.
     RenderOverlay,
 }
 
@@ -202,7 +207,9 @@ pub struct BuildHudForCellEvent {
     pub cell: UVec2,
 }
 
-/// Event fired when a plugin-controlled overlay should submit one frame.
+/// Event fired when a plugin-controlled overlay should submit its render result.
+///
+/// New overlays should submit `OverlayGraph` via `OverlayApi::submit_graph`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenderOverlayEvent {
     pub overlay_id: OverlayModeId,
@@ -232,8 +239,14 @@ impl_empty_event!(WorldLoadedEvent, PluginEvent::WorldLoaded);
 impl_empty_event!(WorldBeforeSaveEvent, PluginEvent::WorldBeforeSave);
 impl_empty_event!(WorldAfterSaveEvent, PluginEvent::WorldAfterSave);
 impl_empty_event!(WorldUnloadedEvent, PluginEvent::WorldUnloaded);
-impl_empty_event!(SimulationPreCellGasStepEvent, PluginEvent::SimulationPreCellGasStep);
-impl_empty_event!(SimulationPostCellGasStepEvent, PluginEvent::SimulationPostCellGasStep);
+impl_empty_event!(
+    SimulationPreCellGasStepEvent,
+    PluginEvent::SimulationPreCellGasStep
+);
+impl_empty_event!(
+    SimulationPostCellGasStepEvent,
+    PluginEvent::SimulationPostCellGasStep
+);
 
 impl AbiEventPayload for SimulationPausedChangedEvent {
     const KIND: PluginEvent = PluginEvent::SimulationPausedChanged;
@@ -392,9 +405,14 @@ impl BuiltinEventPayload for RenderOverlayEvent {
     }
 }
 
-unsafe fn validate_payload<T>(payload: *const u8, payload_len: usize) -> Result<&'static T, PluginError> {
+unsafe fn validate_payload<T>(
+    payload: *const u8,
+    payload_len: usize,
+) -> Result<&'static T, PluginError> {
     if payload.is_null() || payload_len < std::mem::size_of::<T>() {
-        return Err(PluginError::InvalidArgument("invalid ABI payload".to_string()));
+        return Err(PluginError::InvalidArgument(
+            "invalid ABI payload".to_string(),
+        ));
     }
     Ok(&*(payload.cast::<T>()))
 }
@@ -404,7 +422,9 @@ fn read_utf8(slice: FluxUtf8Slice) -> Result<String, PluginError> {
         return Ok(String::new());
     }
     if slice.ptr.is_null() {
-        return Err(PluginError::InvalidArgument("null UTF-8 pointer".to_string()));
+        return Err(PluginError::InvalidArgument(
+            "null UTF-8 pointer".to_string(),
+        ));
     }
     let bytes = unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) };
     std::str::from_utf8(bytes)

@@ -15,7 +15,7 @@ Registers one save chunk descriptor.
 ## Signature
 
 ```rust
-fn register_save_chunk (& mut self , descriptor : SaveChunkDescriptor) -> Result < () , PluginError >
+fn register_save_chunk (& mut self , descriptor : SaveChunkDescriptor ,) -> Result < () , PluginError >
 ```
 
 ## Arguments

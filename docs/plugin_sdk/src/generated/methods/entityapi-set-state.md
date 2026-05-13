@@ -15,7 +15,7 @@ Applies one minimal entity-state patch.
 ## Signature
 
 ```rust
-fn set_state (& mut self , id : EntityInstanceId , patch : crate :: EntityStatePatch) -> Result < () , PluginError >
+fn set_state (& mut self , id : EntityInstanceId , patch : crate :: EntityStatePatch ,) -> Result < () , PluginError >
 ```
 
 ## Arguments

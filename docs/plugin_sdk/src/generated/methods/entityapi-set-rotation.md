@@ -15,7 +15,7 @@ Updates one entity rotation.
 ## Signature
 
 ```rust
-fn set_rotation (& mut self , id : EntityInstanceId , rotation : Rotation) -> Result < () , PluginError >
+fn set_rotation (& mut self , id : EntityInstanceId , rotation : Rotation ,) -> Result < () , PluginError >
 ```
 
 ## Arguments

@@ -3,12 +3,12 @@ use bevy::prelude::{UVec2, Vec2, Vec3, Vec4};
 use crate::{
     config::GasRegistry,
     plugins::default_plugin::{
+        is_gas_pipe_bridge_structure,
         pipe_runtime::{
             pipe_cell_display_blocks_with_transfers, PipeContainerKind, PipeFlowVisualState,
             PipeGasField, PipeSimulationConfig, PipeTransferRecord, PipeTransferVisualPath,
         },
-        is_gas_pipe_bridge_structure, OVERLAY_IMAGE_VENT_ICON_ID, OVERLAY_IMAGE_WHITE_ID,
-        OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID,
+        OVERLAY_IMAGE_VENT_ICON_ID, OVERLAY_IMAGE_WHITE_ID, OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID,
     },
     world::{
         grid::{cell_center, world_origin, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH},
@@ -145,28 +145,35 @@ fn pipe_gas_instances(
     for y in 0..WORLD_HEIGHT {
         for x in 0..WORLD_WIDTH {
             let blocks = pipe_cell_display_blocks_with_transfers(
-                structures,
-                pipe_gas,
-                flow_state,
-                x,
-                y,
-                false,
+                structures, pipe_gas, flow_state, x, y, false,
             );
             let total_slots = blocks.len().max(1);
             for (slot, block) in blocks.iter().enumerate() {
                 if block.total_particles == 0 {
                     continue;
                 }
-                let outer_size = pipe_overlay_slot_size(pipe_config, block.total_particles, total_slots);
+                let outer_size =
+                    pipe_overlay_slot_size(pipe_config, block.total_particles, total_slots);
                 let inner_size = pipe_square_inner_size(outer_size);
-                let offset = pipe_overlay_block_offset(slot, total_slots, block.kind, structures, UVec2::new(x, y));
+                let offset = pipe_overlay_block_offset(
+                    slot,
+                    total_slots,
+                    block.kind,
+                    structures,
+                    UVec2::new(x, y),
+                );
                 instances.push(cell_square_instance(x, y, offset, outer_size, Vec4::ONE));
                 instances.push(cell_square_instance(
                     x,
                     y,
                     offset,
                     inner_size,
-                    mixture_color(block.total_particles, &block.species_counts, gas_registry, 0.92),
+                    mixture_color(
+                        block.total_particles,
+                        &block.species_counts,
+                        gas_registry,
+                        0.92,
+                    ),
                 ));
             }
         }
@@ -193,11 +200,20 @@ fn flow_packet_instances(
         let inner_size = pipe_square_inner_size(outer_size);
         let position = flow_packet_position(transfer, flow_progress);
         let position_in_grid = world_position_to_grid_local(position);
-        instances.push(grid_square_instance(position_in_grid, outer_size, Vec4::ONE));
+        instances.push(grid_square_instance(
+            position_in_grid,
+            outer_size,
+            Vec4::ONE,
+        ));
         instances.push(grid_square_instance(
             position_in_grid,
             inner_size,
-            mixture_color(transfer.total_amount, &transfer.gas_counts, gas_registry, 0.84),
+            mixture_color(
+                transfer.total_amount,
+                &transfer.gas_counts,
+                gas_registry,
+                0.84,
+            ),
         ));
     }
     instances
@@ -320,7 +336,8 @@ fn mixture_color(
 
 fn flow_packet_position(transfer: &PipeTransferRecord, t: f32) -> Vec2 {
     bridge_packet_position(transfer, t).unwrap_or_else(|| {
-        cell_center(transfer.from.x, transfer.from.y).lerp(cell_center(transfer.to.x, transfer.to.y), t)
+        cell_center(transfer.from.x, transfer.from.y)
+            .lerp(cell_center(transfer.to.x, transfer.to.y), t)
     })
 }
 
@@ -391,7 +408,7 @@ fn pipe_overlay_block_offset(
         .find_map(|structure| {
             (is_gas_pipe_bridge_structure(structure.kind)
                 && bridge_center_cell(structure.origin, structure.rotation) == Some(cell))
-                .then_some(bridge_bend_direction(structure.rotation) * (CELL_SIZE * 0.18))
+            .then_some(bridge_bend_direction(structure.rotation) * (CELL_SIZE * 0.18))
         })
         .unwrap_or_else(|| pipe_overlay_slot_offset(slot, total_slots));
     match kind {
@@ -411,7 +428,11 @@ fn pipe_overlay_slot_offset(slot: usize, total_slots: usize) -> Vec2 {
     }
 }
 
-fn pipe_overlay_slot_size(config: &PipeSimulationConfig, total_particles: u32, total_slots: usize) -> f32 {
+fn pipe_overlay_slot_size(
+    config: &PipeSimulationConfig,
+    total_particles: u32,
+    total_slots: usize,
+) -> f32 {
     let base = pipe_gas_square_size(config, total_particles);
     if total_slots <= 1 {
         base
@@ -437,7 +458,8 @@ fn scaled_pipe_square_size(
     if particles == 0 {
         return 0.0;
     }
-    let pressure = crate::plugins::default_plugin::pipe_runtime::pressure::pipe_pressure_pa(config, particles);
+    let pressure =
+        crate::plugins::default_plugin::pipe_runtime::pressure::pipe_pressure_pa(config, particles);
     let reference =
         crate::plugins::default_plugin::pipe_runtime::pressure::pipe_pressure_pa(config, 1_000)
             .max(1.0);
@@ -541,8 +563,14 @@ mod tests {
             else {
                 panic!("flow packets must be rendered in grid-local space");
             };
-            assert!(position_in_grid.x >= 0.0 && position_in_grid.x <= crate::world::grid::WORLD_WIDTH as f32);
-            assert!(position_in_grid.y >= 0.0 && position_in_grid.y <= crate::world::grid::WORLD_HEIGHT as f32);
+            assert!(
+                position_in_grid.x >= 0.0
+                    && position_in_grid.x <= crate::world::grid::WORLD_WIDTH as f32
+            );
+            assert!(
+                position_in_grid.y >= 0.0
+                    && position_in_grid.y <= crate::world::grid::WORLD_HEIGHT as f32
+            );
         }
     }
 

@@ -8,12 +8,12 @@ use bevy::prelude::Resource;
 use crate::plugins::{
     content::ContentRegistry,
     default_plugin::default_content_registry,
+    runtime_builtin::default_builtin_runtime_registration,
     source::{
         discover_plugin_sources, DiscoveredPluginSource, PluginSourceDiscovery,
         PluginSourceFingerprint, PluginSourceKind, RejectedPluginSource,
     },
     state::{EnabledPluginSet, PluginRegistryEntry, PluginRegistryState, PluginRuntimeStatus},
-    runtime_builtin::default_builtin_runtime_registration,
     PluginId, PluginManifest, PluginRuntimeRegistration, PluginVersion, SubstanceRegistry,
 };
 

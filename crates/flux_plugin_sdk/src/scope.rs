@@ -94,16 +94,16 @@ pub(crate) fn with_runtime_scope<T>(
 }
 
 pub(crate) fn write_log(level: u32, message: &str) -> Result<(), PluginError> {
-    let runtime_result = with_runtime_host("logger", |host| {
-        host.write_log(level, message)
-    });
+    let runtime_result = with_runtime_host("logger", |host| host.write_log(level, message));
     if runtime_result.is_ok() {
         return runtime_result;
     }
 
     CURRENT_SCOPE.with(|scope| {
         let scope = scope.borrow();
-        let init_log = scope.init_log.ok_or(PluginError::ApiUnavailable("logger"))?;
+        let init_log = scope
+            .init_log
+            .ok_or(PluginError::ApiUnavailable("logger"))?;
         let callback = init_log
             .callback
             .ok_or(PluginError::Unsupported("logger"))?;
@@ -123,10 +123,14 @@ pub(crate) fn parse_utf8(slice: FluxUtf8Slice, label: &str) -> Result<String, Pl
         return Ok(String::new());
     }
     if slice.ptr.is_null() {
-        return Err(PluginError::InvalidArgument(format!("{label} pointer is null")));
+        return Err(PluginError::InvalidArgument(format!(
+            "{label} pointer is null"
+        )));
     }
     let bytes = unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) };
     std::str::from_utf8(bytes)
         .map(str::to_string)
-        .map_err(|error| PluginError::InvalidArgument(format!("{label} is not valid UTF-8: {error}")))
+        .map_err(|error| {
+            PluginError::InvalidArgument(format!("{label} is not valid UTF-8: {error}"))
+        })
 }

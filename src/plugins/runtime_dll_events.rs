@@ -3,9 +3,8 @@ use crate::{
         abi::{
             FluxBuildHudForCellEventPayload, FluxEmptyEventPayload, FluxEntityEventPayload,
             FluxKeyEventPayload, FluxMouseCellEventPayload, FluxOverlayChangedEventPayload,
-            FluxPluginDispatchFn, FluxPluginHandle, FluxRenderOverlayEventPayload,
-            FluxRuntimeHost, FluxSimulationPausedChangedEvent, FluxToolSelectedEventPayload,
-            FluxUtf8Slice,
+            FluxPluginDispatchFn, FluxPluginHandle, FluxRenderOverlayEventPayload, FluxRuntimeHost,
+            FluxSimulationPausedChangedEvent, FluxToolSelectedEventPayload, FluxUtf8Slice,
         },
         api::events::{InputModifiers, MouseButton, MouseCellEvent, PluginRuntimeEvent},
     },
@@ -36,7 +35,7 @@ pub(super) fn dispatch_to_plugin(
         gas_pressure_at_fn: Some(super::gas_pressure_at_callback),
         gas_amount_at_fn: Some(super::gas_amount_at_callback),
         submit_hud_block_fn: Some(super::submit_hud_block_callback),
-        submit_overlay_frame_fn: Some(super::submit_overlay_frame_callback),
+        reserved_overlay_submit_slot_fn: None,
         submit_overlay_graph_fn: Some(super::submit_overlay_graph_callback),
         write_save_chunk_fn: Some(super::write_save_chunk_callback),
         read_save_chunk_fn: Some(super::read_save_chunk_callback),
@@ -53,31 +52,73 @@ pub(super) fn dispatch_to_plugin(
         match event {
             PluginRuntimeEvent::WorldCreated => {
                 let payload = FluxEmptyEventPayload::new();
-                let _ = dispatch_fn(handle, 0, (&payload as *const FluxEmptyEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    0,
+                    (&payload as *const FluxEmptyEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::WorldLoaded => {
                 let payload = FluxEmptyEventPayload::new();
-                let _ = dispatch_fn(handle, 1, (&payload as *const FluxEmptyEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    1,
+                    (&payload as *const FluxEmptyEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::WorldBeforeSave => {
                 let payload = FluxEmptyEventPayload::new();
-                let _ = dispatch_fn(handle, 2, (&payload as *const FluxEmptyEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    2,
+                    (&payload as *const FluxEmptyEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::WorldAfterSave => {
                 let payload = FluxEmptyEventPayload::new();
-                let _ = dispatch_fn(handle, 3, (&payload as *const FluxEmptyEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    3,
+                    (&payload as *const FluxEmptyEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::WorldUnloaded => {
                 let payload = FluxEmptyEventPayload::new();
-                let _ = dispatch_fn(handle, 4, (&payload as *const FluxEmptyEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    4,
+                    (&payload as *const FluxEmptyEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::SimulationPreCellGasStep => {
                 let payload = FluxEmptyEventPayload::new();
-                let _ = dispatch_fn(handle, 5, (&payload as *const FluxEmptyEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    5,
+                    (&payload as *const FluxEmptyEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::SimulationPostCellGasStep => {
                 let payload = FluxEmptyEventPayload::new();
-                let _ = dispatch_fn(handle, 6, (&payload as *const FluxEmptyEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    6,
+                    (&payload as *const FluxEmptyEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::SimulationPausedChanged { paused } => {
                 let payload = FluxSimulationPausedChangedEvent {
@@ -85,46 +126,102 @@ pub(super) fn dispatch_to_plugin(
                     api_version: crate::plugins::ENGINE_PLUGIN_API_VERSION_VALUE,
                     paused: *paused as u8,
                 };
-                let _ = dispatch_fn(handle, 7, (&payload as *const FluxSimulationPausedChangedEvent).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    7,
+                    (&payload as *const FluxSimulationPausedChangedEvent).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::StructurePlaced(event) => {
                 let payload = build_entity_payload(event.id, event.kind.as_str(), event.cell);
-                let _ = dispatch_fn(handle, 8, (&payload as *const FluxEntityEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    8,
+                    (&payload as *const FluxEntityEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::StructureRemoved(event) => {
                 let payload = build_entity_payload(event.id, event.kind.as_str(), event.cell);
-                let _ = dispatch_fn(handle, 9, (&payload as *const FluxEntityEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    9,
+                    (&payload as *const FluxEntityEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::ToolSelected { tool_id } => {
                 let payload = FluxToolSelectedEventPayload {
                     struct_size: std::mem::size_of::<FluxToolSelectedEventPayload>() as u32,
                     api_version: crate::plugins::ENGINE_PLUGIN_API_VERSION_VALUE,
                     has_tool_id: tool_id.is_some() as u8,
-                    tool_id: FluxUtf8Slice::from_str(tool_id.as_ref().map(|id| id.as_str()).unwrap_or("")),
+                    tool_id: FluxUtf8Slice::from_str(
+                        tool_id.as_ref().map(|id| id.as_str()).unwrap_or(""),
+                    ),
                 };
-                let _ = dispatch_fn(handle, 10, (&payload as *const FluxToolSelectedEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    10,
+                    (&payload as *const FluxToolSelectedEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
-            PluginRuntimeEvent::MouseDownCell(mouse) => dispatch_mouse(handle, dispatch_fn, 11, mouse, &mut host),
-            PluginRuntimeEvent::MouseMoveCell(mouse) => dispatch_mouse(handle, dispatch_fn, 12, mouse, &mut host),
-            PluginRuntimeEvent::MouseUpCell(mouse) => dispatch_mouse(handle, dispatch_fn, 13, mouse, &mut host),
-            PluginRuntimeEvent::MouseEnterCell(mouse) => dispatch_mouse(handle, dispatch_fn, 14, mouse, &mut host),
-            PluginRuntimeEvent::MouseLeaveCell(mouse) => dispatch_mouse(handle, dispatch_fn, 15, mouse, &mut host),
+            PluginRuntimeEvent::MouseDownCell(mouse) => {
+                dispatch_mouse(handle, dispatch_fn, 11, mouse, &mut host)
+            }
+            PluginRuntimeEvent::MouseMoveCell(mouse) => {
+                dispatch_mouse(handle, dispatch_fn, 12, mouse, &mut host)
+            }
+            PluginRuntimeEvent::MouseUpCell(mouse) => {
+                dispatch_mouse(handle, dispatch_fn, 13, mouse, &mut host)
+            }
+            PluginRuntimeEvent::MouseEnterCell(mouse) => {
+                dispatch_mouse(handle, dispatch_fn, 14, mouse, &mut host)
+            }
+            PluginRuntimeEvent::MouseLeaveCell(mouse) => {
+                dispatch_mouse(handle, dispatch_fn, 15, mouse, &mut host)
+            }
             PluginRuntimeEvent::KeyPressed { key, modifiers } => {
                 let payload = build_key_payload(key, *modifiers);
-                let _ = dispatch_fn(handle, 16, (&payload as *const FluxKeyEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    16,
+                    (&payload as *const FluxKeyEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::KeyReleased { key, modifiers } => {
                 let payload = build_key_payload(key, *modifiers);
-                let _ = dispatch_fn(handle, 17, (&payload as *const FluxKeyEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    17,
+                    (&payload as *const FluxKeyEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::OverlayChanged { overlay_id } => {
                 let payload = FluxOverlayChangedEventPayload {
                     struct_size: std::mem::size_of::<FluxOverlayChangedEventPayload>() as u32,
                     api_version: crate::plugins::ENGINE_PLUGIN_API_VERSION_VALUE,
                     has_overlay_id: overlay_id.is_some() as u8,
-                    overlay_id: FluxUtf8Slice::from_str(overlay_id.as_ref().map(|id| id.as_str()).unwrap_or("")),
+                    overlay_id: FluxUtf8Slice::from_str(
+                        overlay_id.as_ref().map(|id| id.as_str()).unwrap_or(""),
+                    ),
                 };
-                let _ = dispatch_fn(handle, 18, (&payload as *const FluxOverlayChangedEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    18,
+                    (&payload as *const FluxOverlayChangedEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::BuildHudForCell { cell } => {
                 let payload = FluxBuildHudForCellEventPayload {
@@ -133,7 +230,13 @@ pub(super) fn dispatch_to_plugin(
                     cell_x: cell.x,
                     cell_y: cell.y,
                 };
-                let _ = dispatch_fn(handle, 19, (&payload as *const FluxBuildHudForCellEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    19,
+                    (&payload as *const FluxBuildHudForCellEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
             PluginRuntimeEvent::RenderOverlay { overlay_id } => {
                 let payload = FluxRenderOverlayEventPayload {
@@ -141,7 +244,13 @@ pub(super) fn dispatch_to_plugin(
                     api_version: crate::plugins::ENGINE_PLUGIN_API_VERSION_VALUE,
                     overlay_id: FluxUtf8Slice::from_str(overlay_id.as_str()),
                 };
-                let _ = dispatch_fn(handle, 21, (&payload as *const FluxRenderOverlayEventPayload).cast(), std::mem::size_of_val(&payload), &mut host);
+                let _ = dispatch_fn(
+                    handle,
+                    21,
+                    (&payload as *const FluxRenderOverlayEventPayload).cast(),
+                    std::mem::size_of_val(&payload),
+                    &mut host,
+                );
             }
         }
     }
@@ -166,10 +275,22 @@ unsafe fn dispatch_mouse(
         screen_y: mouse.screen_position.y,
         modifiers: encode_modifiers(mouse.modifiers),
         has_active_tool_id: mouse.active_tool_id.is_some() as u8,
-        active_tool_id: FluxUtf8Slice::from_str(mouse.active_tool_id.as_ref().map(|id| id.as_str()).unwrap_or("")),
+        active_tool_id: FluxUtf8Slice::from_str(
+            mouse
+                .active_tool_id
+                .as_ref()
+                .map(|id| id.as_str())
+                .unwrap_or(""),
+        ),
         is_over_ui: mouse.is_over_ui as u8,
     };
-    let _ = dispatch_fn(handle, event_kind, (&payload as *const FluxMouseCellEventPayload).cast(), std::mem::size_of_val(&payload), host);
+    let _ = dispatch_fn(
+        handle,
+        event_kind,
+        (&payload as *const FluxMouseCellEventPayload).cast(),
+        std::mem::size_of_val(&payload),
+        host,
+    );
 }
 
 fn build_entity_payload(

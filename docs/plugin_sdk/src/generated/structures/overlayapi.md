@@ -21,8 +21,7 @@ pub struct OverlayApi
 ## Methods
 
 - [`OverlayApi::active_overlay`](../methods/overlayapi-active-overlay.md)
-- [`OverlayApi::clear_frame`](../methods/overlayapi-clear-frame.md)
 - [`OverlayApi::requested_overlay`](../methods/overlayapi-requested-overlay.md)
-- [`OverlayApi::submit_frame`](../methods/overlayapi-submit-frame.md)
+- [`OverlayApi::submit_graph`](../methods/overlayapi-submit-graph.md)
 - [`OverlayApi::viewport_size`](../methods/overlayapi-viewport-size.md)
 

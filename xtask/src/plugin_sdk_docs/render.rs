@@ -62,6 +62,7 @@ pub(super) fn render_summary(contents: &mut String, groups: &[(ApiGroup, Vec<&Ap
     contents.push_str("- [Plugin package structure](package-structure.md)\n");
     contents.push_str("- [Manifest](manifest-guide.md)\n");
     contents.push_str("- [Build and dev reload](build-and-reload.md)\n\n");
+    contents.push_str("- [Overlay graph pipeline](overlay-graph-pipeline.md)\n\n");
     contents.push_str("# Generated API\n\n");
     for (group, items) in groups {
         contents.push_str(&format!(

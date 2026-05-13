@@ -103,15 +103,6 @@ pub enum OverlayRenderPolicy {
     PluginControlled,
 }
 
-/// One RGBA8 overlay frame.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct OverlayFrame {
-    pub overlay_id: OverlayModeId,
-    pub width: u32,
-    pub height: u32,
-    pub rgba8: Vec<u8>,
-}
-
 /// One entity placement request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EntityPlacement {

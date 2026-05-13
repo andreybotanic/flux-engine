@@ -573,7 +573,9 @@ fn struct_fields_as_arguments(
                 })
             })
             .collect(),
-        Fields::Unnamed(fields) => Ok(variant_fields_as_arguments(&Fields::Unnamed(fields.clone()))),
+        Fields::Unnamed(fields) => Ok(variant_fields_as_arguments(&Fields::Unnamed(
+            fields.clone(),
+        ))),
         Fields::Unit => Ok(Vec::new()),
     }
 }
@@ -586,7 +588,11 @@ fn collect_abi_event_payload_impl(
     let Some((_, trait_path, _)) = &item.trait_ else {
         return;
     };
-    let Some(trait_name) = trait_path.segments.last().map(|segment| segment.ident.to_string()) else {
+    let Some(trait_name) = trait_path
+        .segments
+        .last()
+        .map(|segment| segment.ident.to_string())
+    else {
         return;
     };
     if trait_name != "AbiEventPayload" {
@@ -605,7 +611,10 @@ fn collect_abi_event_payload_impl(
         let syn::Expr::Path(path) = &impl_const.expr else {
             return None;
         };
-        path.path.segments.last().map(|segment| segment.ident.to_string())
+        path.path
+            .segments
+            .last()
+            .map(|segment| segment.ident.to_string())
     }) else {
         return;
     };
@@ -765,7 +774,10 @@ fn default_field_description(item_name: &str, field_name: &str, field_ty: &str) 
     if field_name == "0" {
         return format!("Wrapped `{}` value stored by `{}`.", field_ty, item_name);
     }
-    format!("`{}` field stored as `{}` on `{}`.", field_name, field_ty, item_name)
+    format!(
+        "`{}` field stored as `{}` on `{}`.",
+        field_name, field_ty, item_name
+    )
 }
 
 fn default_variant_description(item_name: &str, variant_name: &str, payload: &str) -> String {

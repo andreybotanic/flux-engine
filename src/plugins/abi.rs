@@ -30,14 +30,30 @@ pub fn build_host_api(
 /// Builds one registration callback table for the loader handshake.
 #[allow(clippy::too_many_arguments)]
 pub fn build_registrar(
-    register_gas_substance_fn: Option<unsafe extern "C" fn(*mut c_void, *const FluxGasSubstanceDescriptor) -> FluxStatus>,
-    register_entity_fn: Option<unsafe extern "C" fn(*mut c_void, *const FluxEntityDescriptor) -> FluxStatus>,
-    register_tool_fn: Option<unsafe extern "C" fn(*mut c_void, *const FluxToolDescriptor) -> FluxStatus>,
-    register_panel_fn: Option<unsafe extern "C" fn(*mut c_void, *const FluxPanelDescriptor) -> FluxStatus>,
-    register_overlay_fn: Option<unsafe extern "C" fn(*mut c_void, *const FluxOverlayDescriptor) -> FluxStatus>,
-    register_overlay_material_fn: Option<unsafe extern "C" fn(*mut c_void, *const FluxOverlayMaterialDescriptor) -> FluxStatus>,
-    register_save_chunk_fn: Option<unsafe extern "C" fn(*mut c_void, *const FluxSaveChunkDescriptor) -> FluxStatus>,
-    register_subscription_fn: Option<unsafe extern "C" fn(*mut c_void, *const FluxSubscriptionDescriptor) -> FluxStatus>,
+    register_gas_substance_fn: Option<
+        unsafe extern "C" fn(*mut c_void, *const FluxGasSubstanceDescriptor) -> FluxStatus,
+    >,
+    register_entity_fn: Option<
+        unsafe extern "C" fn(*mut c_void, *const FluxEntityDescriptor) -> FluxStatus,
+    >,
+    register_tool_fn: Option<
+        unsafe extern "C" fn(*mut c_void, *const FluxToolDescriptor) -> FluxStatus,
+    >,
+    register_panel_fn: Option<
+        unsafe extern "C" fn(*mut c_void, *const FluxPanelDescriptor) -> FluxStatus,
+    >,
+    register_overlay_fn: Option<
+        unsafe extern "C" fn(*mut c_void, *const FluxOverlayDescriptor) -> FluxStatus,
+    >,
+    register_overlay_material_fn: Option<
+        unsafe extern "C" fn(*mut c_void, *const FluxOverlayMaterialDescriptor) -> FluxStatus,
+    >,
+    register_save_chunk_fn: Option<
+        unsafe extern "C" fn(*mut c_void, *const FluxSaveChunkDescriptor) -> FluxStatus,
+    >,
+    register_subscription_fn: Option<
+        unsafe extern "C" fn(*mut c_void, *const FluxSubscriptionDescriptor) -> FluxStatus,
+    >,
     registration_context: *mut c_void,
 ) -> FluxRegistrar {
     FluxRegistrar {

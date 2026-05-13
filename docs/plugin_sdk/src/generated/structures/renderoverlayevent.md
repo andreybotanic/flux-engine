@@ -10,7 +10,9 @@ Source: **Events** (`crates/flux_plugin_sdk/src/events.rs`). Generated group: **
 
 ## Description
 
-Event fired when a plugin-controlled overlay should submit one frame.
+Event fired when a plugin-controlled overlay should submit its render result.
+
+New overlays should submit `OverlayGraph` via `OverlayApi::submit_graph`.
 
 ## Declaration
 

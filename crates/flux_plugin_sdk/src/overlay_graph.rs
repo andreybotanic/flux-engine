@@ -146,10 +146,7 @@ pub struct OverlayImageInstance {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum OverlayImageSource {
     Asset(ContentId),
-    Rgba8 {
-        size_px: UVec2,
-        rgba8: Vec<u8>,
-    },
+    Rgba8 { size_px: UVec2, rgba8: Vec<u8> },
 }
 
 /// Placement for one image instance.

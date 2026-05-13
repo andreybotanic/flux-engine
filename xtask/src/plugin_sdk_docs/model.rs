@@ -8,24 +8,53 @@ pub(in crate::plugin_sdk_docs) const GENERATED_DIR: &str = "generated";
 pub(in crate::plugin_sdk_docs) const EXAMPLES_DIR: &str = "examples";
 
 pub(in crate::plugin_sdk_docs) const SDK_SOURCES: &[SdkSource] = &[
-    SdkSource::new("SDK Root", "crates/flux_plugin_sdk/src/lib.rs", SdkCategory::Sdk),
+    SdkSource::new(
+        "SDK Root",
+        "crates/flux_plugin_sdk/src/lib.rs",
+        SdkCategory::Sdk,
+    ),
     SdkSource::with_excludes(
         "Plugin",
         "crates/flux_plugin_sdk/src/plugin.rs",
         SdkCategory::Sdk,
         &["PluginRuntime"],
     ),
-    SdkSource::new("Registrar", "crates/flux_plugin_sdk/src/registrar.rs", SdkCategory::Sdk),
-    SdkSource::new("Identifiers", "crates/flux_plugin_sdk/src/ids.rs", SdkCategory::Sdk),
+    SdkSource::new(
+        "Registrar",
+        "crates/flux_plugin_sdk/src/registrar.rs",
+        SdkCategory::Sdk,
+    ),
+    SdkSource::new(
+        "Identifiers",
+        "crates/flux_plugin_sdk/src/ids.rs",
+        SdkCategory::Sdk,
+    ),
     SdkSource::with_excludes(
         "Descriptors",
         "crates/flux_plugin_sdk/src/descriptors.rs",
         SdkCategory::Sdk,
         &["PanelState", "OverlayState"],
     ),
-    SdkSource::new("Events", "crates/flux_plugin_sdk/src/events.rs", SdkCategory::Event),
-    SdkSource::new("Runtime APIs", "crates/flux_plugin_sdk/src/api.rs", SdkCategory::Sdk),
-    SdkSource::new("Errors", "crates/flux_plugin_sdk/src/error.rs", SdkCategory::Sdk),
+    SdkSource::new(
+        "Overlay Graph",
+        "crates/flux_plugin_sdk/src/overlay_graph.rs",
+        SdkCategory::Sdk,
+    ),
+    SdkSource::new(
+        "Events",
+        "crates/flux_plugin_sdk/src/events.rs",
+        SdkCategory::Event,
+    ),
+    SdkSource::new(
+        "Runtime APIs",
+        "crates/flux_plugin_sdk/src/api.rs",
+        SdkCategory::Sdk,
+    ),
+    SdkSource::new(
+        "Errors",
+        "crates/flux_plugin_sdk/src/error.rs",
+        SdkCategory::Sdk,
+    ),
 ];
 
 #[derive(Clone, Copy, Debug)]

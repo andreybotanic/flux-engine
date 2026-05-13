@@ -1,16 +1,19 @@
 use std::{cell::RefCell, ptr};
 
 use flux_plugin_sdk::{
-    BuildHudForCellEvent, HudBlock, OverlayDescriptor, OverlayMaterialDescriptor, OverlayRenderPolicy,
-    Plugin, PluginError, PluginEvent, PluginInit, RenderOverlayEvent, SimulationPausedChangedEvent,
-    SimulationPreCellGasStepEvent, UiApi, WorldApi, EntityApi, GasApi, OverlayApi, SaveApi, TimeApi,
-    InputApi, LoggerApi, WorldAfterSaveEvent, WorldBeforeSaveEvent,
+    BuildHudForCellEvent, EntityApi, GasApi, HudBlock, InputApi, LoggerApi, OverlayApi,
+    OverlayDescriptor, OverlayMaterialDescriptor, OverlayRenderPolicy, Plugin, PluginError,
+    PluginEvent, PluginInit, RenderOverlayEvent, SaveApi, SimulationPausedChangedEvent,
+    SimulationPreCellGasStepEvent, TimeApi, UiApi, WorldAfterSaveEvent, WorldApi,
+    WorldBeforeSaveEvent,
 };
 
 use crate::{
     plugins::{
-        default_plugin::{build_pipes_overlay_graph, OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID, OVERLAY_PIPES_ID},
         default_plugin::pipe_runtime::{apply_gas_structures_pre_step, apply_pipe_network_step},
+        default_plugin::{
+            build_pipes_overlay_graph, OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID, OVERLAY_PIPES_ID,
+        },
         RuntimeHostContext,
     },
     ui::cell_inspector_model::build_cell_inspector_blocks,
@@ -82,7 +85,8 @@ impl Plugin for FluxDefaultRuntimeSdkPlugin {
         registrar: &mut flux_plugin_sdk::Registrar<Self>,
     ) -> Result<(), PluginError> {
         registrar.register_overlay(OverlayDescriptor {
-            id: flux_plugin_sdk::ContentId::parse(OVERLAY_PIPES_ID).map_err(PluginError::message)?,
+            id: flux_plugin_sdk::ContentId::parse(OVERLAY_PIPES_ID)
+                .map_err(PluginError::message)?,
             label: "Pipes".to_string(),
             hotkey: Some("F3".to_string()),
             render_policy: OverlayRenderPolicy::PluginControlled,
@@ -94,26 +98,11 @@ impl Plugin for FluxDefaultRuntimeSdkPlugin {
             label: "Pipe Highlight".to_string(),
             shader_path: "flux_default://shaders/pipe_highlight_material.wgsl".to_string(),
         })?;
-        registrar.subscribe(
-            PluginEvent::WorldCreated,
-            Self::on_world_created,
-        )?;
-        registrar.subscribe(
-            PluginEvent::WorldLoaded,
-            Self::on_world_loaded,
-        )?;
-        registrar.subscribe(
-            PluginEvent::WorldUnloaded,
-            Self::on_world_unloaded,
-        )?;
-        registrar.subscribe(
-            PluginEvent::WorldBeforeSave,
-            Self::on_world_before_save,
-        )?;
-        registrar.subscribe(
-            PluginEvent::WorldAfterSave,
-            Self::on_world_after_save,
-        )?;
+        registrar.subscribe(PluginEvent::WorldCreated, Self::on_world_created)?;
+        registrar.subscribe(PluginEvent::WorldLoaded, Self::on_world_loaded)?;
+        registrar.subscribe(PluginEvent::WorldUnloaded, Self::on_world_unloaded)?;
+        registrar.subscribe(PluginEvent::WorldBeforeSave, Self::on_world_before_save)?;
+        registrar.subscribe(PluginEvent::WorldAfterSave, Self::on_world_after_save)?;
         registrar.subscribe(
             PluginEvent::SimulationPreCellGasStep,
             Self::on_simulation_pre_cell_gas_step,
@@ -122,28 +111,31 @@ impl Plugin for FluxDefaultRuntimeSdkPlugin {
             PluginEvent::SimulationPausedChanged,
             Self::on_simulation_paused_changed,
         )?;
-        registrar.subscribe(
-            PluginEvent::BuildHudForCell,
-            Self::on_build_hud_for_cell,
-        )?;
-        registrar.subscribe(
-            PluginEvent::RenderOverlay,
-            Self::on_render_overlay,
-        )?;
+        registrar.subscribe(PluginEvent::BuildHudForCell, Self::on_build_hud_for_cell)?;
+        registrar.subscribe(PluginEvent::RenderOverlay, Self::on_render_overlay)?;
         Ok(())
     }
 }
 
 impl FluxDefaultRuntimeSdkPlugin {
-    fn on_world_created(&mut self, _event: &flux_plugin_sdk::WorldCreatedEvent) -> Result<(), PluginError> {
+    fn on_world_created(
+        &mut self,
+        _event: &flux_plugin_sdk::WorldCreatedEvent,
+    ) -> Result<(), PluginError> {
         reset_runtime_state(false)
     }
 
-    fn on_world_loaded(&mut self, _event: &flux_plugin_sdk::WorldLoadedEvent) -> Result<(), PluginError> {
+    fn on_world_loaded(
+        &mut self,
+        _event: &flux_plugin_sdk::WorldLoadedEvent,
+    ) -> Result<(), PluginError> {
         reset_runtime_state(false)
     }
 
-    fn on_world_unloaded(&mut self, _event: &flux_plugin_sdk::WorldUnloadedEvent) -> Result<(), PluginError> {
+    fn on_world_unloaded(
+        &mut self,
+        _event: &flux_plugin_sdk::WorldUnloadedEvent,
+    ) -> Result<(), PluginError> {
         reset_runtime_state(true)
     }
 
@@ -179,10 +171,13 @@ impl FluxDefaultRuntimeSdkPlugin {
                 .pipe_flux
                 .as_deref_mut()
                 .ok_or(PluginError::ApiUnavailable("flux.default.pipe_flux"))?;
-            let pipe_flow_visuals = context
-                .pipe_flow_visuals
-                .as_deref_mut()
-                .ok_or(PluginError::ApiUnavailable("flux.default.pipe_flow_visuals"))?;
+            let pipe_flow_visuals =
+                context
+                    .pipe_flow_visuals
+                    .as_deref_mut()
+                    .ok_or(PluginError::ApiUnavailable(
+                        "flux.default.pipe_flow_visuals",
+                    ))?;
             let gas = context
                 .gas
                 .as_deref_mut()
@@ -212,11 +207,7 @@ impl FluxDefaultRuntimeSdkPlugin {
 
             let changed_by_structures = apply_gas_structures_pre_step(structures, gas, world);
             if (changed_by_pipes || changed_by_structures)
-                && context
-                    .gpu_state
-                    .as_deref()
-                    .map(|_| true)
-                    .unwrap_or(false)
+                && context.gpu_state.as_deref().map(|_| true).unwrap_or(false)
             {
                 if let Some(gpu_state) = context.gpu_state.as_deref_mut() {
                     gpu_state.mark_needs_full_upload();
@@ -236,10 +227,7 @@ impl FluxDefaultRuntimeSdkPlugin {
         Ok(())
     }
 
-    fn on_build_hud_for_cell(
-        &mut self,
-        event: &BuildHudForCellEvent,
-    ) -> Result<(), PluginError> {
+    fn on_build_hud_for_cell(&mut self, event: &BuildHudForCellEvent) -> Result<(), PluginError> {
         let blocks = with_bound_context("flux.default.build_hud", |context| {
             let world = context
                 .world
@@ -256,15 +244,21 @@ impl FluxDefaultRuntimeSdkPlugin {
             let world_cell_hud = context
                 .world_cell_hud
                 .ok_or(PluginError::ApiUnavailable("flux.default.world_cell_hud"))?;
-            let cell_visual_layouts = context
-                .cell_visual_layouts
-                .ok_or(PluginError::ApiUnavailable("flux.default.cell_visual_layouts"))?;
+            let cell_visual_layouts =
+                context
+                    .cell_visual_layouts
+                    .ok_or(PluginError::ApiUnavailable(
+                        "flux.default.cell_visual_layouts",
+                    ))?;
             let structure_hud = context
                 .structure_hud
                 .ok_or(PluginError::ApiUnavailable("flux.default.structure_hud"))?;
-            let structure_visuals = context
-                .structure_visuals
-                .ok_or(PluginError::ApiUnavailable("flux.default.structure_visuals"))?;
+            let structure_visuals =
+                context
+                    .structure_visuals
+                    .ok_or(PluginError::ApiUnavailable(
+                        "flux.default.structure_visuals",
+                    ))?;
             let structures = context
                 .structures
                 .as_deref()
@@ -273,10 +267,13 @@ impl FluxDefaultRuntimeSdkPlugin {
                 .pipe_gas
                 .as_deref()
                 .ok_or(PluginError::ApiUnavailable("flux.default.pipe_gas"))?;
-            let flow_state = context
-                .pipe_flow_visuals
-                .as_deref()
-                .ok_or(PluginError::ApiUnavailable("flux.default.pipe_flow_visuals"))?;
+            let flow_state =
+                context
+                    .pipe_flow_visuals
+                    .as_deref()
+                    .ok_or(PluginError::ApiUnavailable(
+                        "flux.default.pipe_flow_visuals",
+                    ))?;
             Ok(build_cell_inspector_blocks(
                 event.cell,
                 world,
@@ -305,10 +302,7 @@ impl FluxDefaultRuntimeSdkPlugin {
         Ok(())
     }
 
-    fn on_render_overlay(
-        &mut self,
-        event: &RenderOverlayEvent,
-    ) -> Result<(), PluginError> {
+    fn on_render_overlay(&mut self, event: &RenderOverlayEvent) -> Result<(), PluginError> {
         if event.overlay_id.as_str() != OVERLAY_PIPES_ID {
             return Ok(());
         }
@@ -323,10 +317,13 @@ impl FluxDefaultRuntimeSdkPlugin {
                 .pipe_gas
                 .as_deref()
                 .ok_or(PluginError::ApiUnavailable("flux.default.pipe_gas"))?;
-            let flow_state = context
-                .pipe_flow_visuals
-                .as_deref()
-                .ok_or(PluginError::ApiUnavailable("flux.default.pipe_flow_visuals"))?;
+            let flow_state =
+                context
+                    .pipe_flow_visuals
+                    .as_deref()
+                    .ok_or(PluginError::ApiUnavailable(
+                        "flux.default.pipe_flow_visuals",
+                    ))?;
             let pipe_config = context
                 .pipe_config
                 .ok_or(PluginError::ApiUnavailable("flux.default.pipe_config"))?;
@@ -363,10 +360,13 @@ fn reset_runtime_state(clear_pipe_gas: bool) -> Result<(), PluginError> {
 
 fn clear_flow_visuals() -> Result<(), PluginError> {
     with_bound_context("flux.default.clear_flow_visuals", |context| {
-        let flow_visuals = context
-            .pipe_flow_visuals
-            .as_deref_mut()
-            .ok_or(PluginError::ApiUnavailable("flux.default.pipe_flow_visuals"))?;
+        let flow_visuals =
+            context
+                .pipe_flow_visuals
+                .as_deref_mut()
+                .ok_or(PluginError::ApiUnavailable(
+                    "flux.default.pipe_flow_visuals",
+                ))?;
         flow_visuals.transfers.clear();
         Ok(())
     })

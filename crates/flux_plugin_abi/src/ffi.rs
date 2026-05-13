@@ -45,7 +45,11 @@ impl FluxStatus {
     }
 
     pub fn into_result(self) -> Result<(), Self> {
-        if self.is_ok() { Ok(()) } else { Err(self) }
+        if self.is_ok() {
+            Ok(())
+        } else {
+            Err(self)
+        }
     }
 }
 
@@ -143,10 +147,8 @@ pub(crate) type FluxRegisterEntityFn = unsafe extern "C" fn(
     descriptor: *const FluxEntityDescriptor,
 ) -> FluxStatus;
 
-pub(crate) type FluxRegisterToolFn = unsafe extern "C" fn(
-    context: *mut c_void,
-    descriptor: *const FluxToolDescriptor,
-) -> FluxStatus;
+pub(crate) type FluxRegisterToolFn =
+    unsafe extern "C" fn(context: *mut c_void, descriptor: *const FluxToolDescriptor) -> FluxStatus;
 
 pub(crate) type FluxRegisterPanelFn = unsafe extern "C" fn(
     context: *mut c_void,
@@ -233,23 +235,14 @@ pub(crate) type FluxEntityRemoveAtFn = unsafe extern "C" fn(
     out_entity_id: *mut u32,
 ) -> FluxStatus;
 
-pub(crate) type FluxEntitySetRotationFn = unsafe extern "C" fn(
-    context: *mut c_void,
-    entity_id: u32,
-    rotation: u32,
-) -> FluxStatus;
+pub(crate) type FluxEntitySetRotationFn =
+    unsafe extern "C" fn(context: *mut c_void, entity_id: u32, rotation: u32) -> FluxStatus;
 
-pub(crate) type FluxEntitySetEnabledFn = unsafe extern "C" fn(
-    context: *mut c_void,
-    entity_id: u32,
-    enabled: u8,
-) -> FluxStatus;
+pub(crate) type FluxEntitySetEnabledFn =
+    unsafe extern "C" fn(context: *mut c_void, entity_id: u32, enabled: u8) -> FluxStatus;
 
-pub(crate) type FluxEntitySetLabelFn = unsafe extern "C" fn(
-    context: *mut c_void,
-    entity_id: u32,
-    label: FluxUtf8Slice,
-) -> FluxStatus;
+pub(crate) type FluxEntitySetLabelFn =
+    unsafe extern "C" fn(context: *mut c_void, entity_id: u32, label: FluxUtf8Slice) -> FluxStatus;
 
 pub(crate) type FluxGasAddFn = unsafe extern "C" fn(
     context: *mut c_void,
@@ -297,7 +290,8 @@ pub(crate) type FluxSubmitHudBlockFn = unsafe extern "C" fn(
     sort_order: i32,
 ) -> FluxStatus;
 
-pub(crate) type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
+/// Reserved callback slot kept for binary compatibility with previously built plugins.
+pub(crate) type FluxReservedOverlaySubmitSlotFn = unsafe extern "C" fn(
     context: *mut c_void,
     width: u32,
     height: u32,
@@ -305,10 +299,8 @@ pub(crate) type FluxSubmitOverlayFrameFn = unsafe extern "C" fn(
     len: usize,
 ) -> FluxStatus;
 
-pub(crate) type FluxSubmitOverlayGraphFn = unsafe extern "C" fn(
-    context: *mut c_void,
-    graph_json: FluxUtf8Slice,
-) -> FluxStatus;
+pub(crate) type FluxSubmitOverlayGraphFn =
+    unsafe extern "C" fn(context: *mut c_void, graph_json: FluxUtf8Slice) -> FluxStatus;
 
 pub(crate) type FluxWriteSaveChunkFn = unsafe extern "C" fn(
     context: *mut c_void,
@@ -363,7 +355,7 @@ pub struct FluxRuntimeHost {
     pub gas_pressure_at_fn: Option<FluxGasPressureAtFn>,
     pub gas_amount_at_fn: Option<FluxGasAmountAtFn>,
     pub submit_hud_block_fn: Option<FluxSubmitHudBlockFn>,
-    pub submit_overlay_frame_fn: Option<FluxSubmitOverlayFrameFn>,
+    pub reserved_overlay_submit_slot_fn: Option<FluxReservedOverlaySubmitSlotFn>,
     pub submit_overlay_graph_fn: Option<FluxSubmitOverlayGraphFn>,
     pub write_save_chunk_fn: Option<FluxWriteSaveChunkFn>,
     pub read_save_chunk_fn: Option<FluxReadSaveChunkFn>,

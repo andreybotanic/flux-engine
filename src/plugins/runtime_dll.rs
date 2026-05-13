@@ -8,15 +8,18 @@ mod event_dispatch;
 
 use self::event_dispatch::dispatch_to_plugin;
 
+use super::runtime_builtin::{default_builtin_runtime_endpoint, RuntimePluginEndpoint};
 use crate::{
+    config::GasRegistry,
     config::{
         CellVisualPlacementConfigMap, StructureHudConfigMap, StructureVisualConfigMap,
         WorldCellHudConfig,
     },
-    config::GasRegistry,
     editor::{ActiveEditorTool, EditorTool},
     plugins::{
-        abi::{FluxPluginDestroyFn, FluxPluginDispatchFn, FluxPluginHandle, FluxStatus, FluxUtf8Slice},
+        abi::{
+            FluxPluginDestroyFn, FluxPluginDispatchFn, FluxPluginHandle, FluxStatus, FluxUtf8Slice,
+        },
         api::{
             events::PluginEvent, render_api::OverlayRenderPolicy, runtime::PluginRuntimeRegistry,
             save_api::SaveChunkStore, ui_api::HudBlock,
@@ -27,9 +30,7 @@ use crate::{
         },
         ContentId, ContentRegistry, LoadedPluginMetadata, PluginId, PluginRuntimeEvent,
     },
-    render::{
-        OverlayMode,
-    },
+    render::OverlayMode,
     save::WorldLoadState,
     simulation::{
         gas::GasField, GpuRuntimeState, SimulationControl, SimulationPerfStats, SimulationSet,
@@ -41,29 +42,6 @@ use crate::{
         WorldCellChanged,
     },
 };
-use super::runtime_builtin::{default_builtin_runtime_endpoint, RuntimePluginEndpoint};
-
-/// One complete overlay frame submitted by a runtime plugin.
-#[derive(Resource, Clone, Debug, Default, PartialEq)]
-pub struct PluginOverlayFrameStore {
-    pub width: u32,
-    pub height: u32,
-    pub rgba8: Vec<u8>,
-}
-
-impl PluginOverlayFrameStore {
-    /// Removes the submitted overlay image from the current plugin overlay frame.
-    pub fn clear(&mut self) {
-        self.width = 0;
-        self.height = 0;
-        self.rgba8.clear();
-    }
-
-    /// Returns true when a plugin submitted one complete overlay frame.
-    pub fn has_frame(&self) -> bool {
-        self.width > 0 && self.height > 0 && !self.rgba8.is_empty()
-    }
-}
 
 /// One declarative overlay graph submitted by a runtime plugin.
 #[derive(Resource, Clone, Debug, Default, PartialEq)]
@@ -193,7 +171,11 @@ impl RuntimeDllPluginRegistry {
             }
             context.plugin_id = plugin.plugin_id().clone();
             if let Err(error) = plugin.dispatch(event, context) {
-                eprintln!("Runtime plugin dispatch error ({}): {}", plugin.plugin_id(), error);
+                eprintln!(
+                    "Runtime plugin dispatch error ({}): {}",
+                    plugin.plugin_id(),
+                    error
+                );
             }
         }
     }
@@ -252,7 +234,6 @@ pub struct RuntimeHostContext<'a> {
     pub structures: Option<&'a mut PlacedStructureMap>,
     pub gas: Option<&'a mut GasField>,
     pub gpu_state: Option<&'a mut GpuRuntimeState>,
-    pub overlay_frame: Option<&'a mut PluginOverlayFrameStore>,
     pub overlay_graph: Option<&'a mut PluginOverlayGraphStore>,
     pub hud_blocks: Option<&'a mut PluginHudBlockStore>,
     pub save_chunks: Option<&'a mut SaveChunkStore>,
@@ -282,7 +263,6 @@ impl<'a> RuntimeHostContext<'a> {
             structures: None,
             gas: None,
             gpu_state: None,
-            overlay_frame: None,
             overlay_graph: None,
             hud_blocks: None,
             save_chunks: None,
@@ -343,38 +323,40 @@ pub unsafe extern "C" fn entity_place_callback(
         return FluxStatus::OK;
     }
 
-    let (Some(structures), Some(world)) = (context.structures.as_deref_mut(), context.world.as_deref()) else {
+    let (Some(structures), Some(world)) =
+        (context.structures.as_deref_mut(), context.world.as_deref())
+    else {
         return FluxStatus::FAILED;
     };
     let origin = UVec2::new(origin_x, origin_y);
     let placed = match kind_id.as_str() {
-        default_plugin::ENTITY_PIPE_ID => {
-            structures.place_pipe(origin_x, origin_y, world).then_some(encode_structure_entity_id(
+        default_plugin::ENTITY_PIPE_ID => structures
+            .place_pipe(origin_x, origin_y, world)
+            .then_some(encode_structure_entity_id(
                 structures
                     .structure_ids_at(origin_x, origin_y)
                     .last()
                     .copied()
                     .unwrap_or(PlacedStructureId(0)),
-            ))
-        }
-        default_plugin::ENTITY_VENT_ID => {
-            structures.place_vent(origin_x, origin_y, world).then_some(encode_structure_entity_id(
+            )),
+        default_plugin::ENTITY_VENT_ID => structures
+            .place_vent(origin_x, origin_y, world)
+            .then_some(encode_structure_entity_id(
                 structures
                     .structure_ids_at(origin_x, origin_y)
                     .last()
                     .copied()
                     .unwrap_or(PlacedStructureId(0)),
-            ))
-        }
+            )),
         default_plugin::ENTITY_GAS_SOURCE_ID => structures
             .place_gas_source(origin_x, origin_y, 0, 100, world)
             .map(encode_structure_entity_id),
         default_plugin::ENTITY_GAS_SINK_ID => structures
             .place_gas_sink(origin_x, origin_y, 100, world)
             .map(encode_structure_entity_id),
-        default_plugin::ENTITY_GAS_PIPE_BRIDGE_ID => {
-            structures.place_bridge(origin, rotation, world).map(encode_structure_entity_id)
-        }
+        default_plugin::ENTITY_GAS_PIPE_BRIDGE_ID => structures
+            .place_bridge(origin, rotation, world)
+            .map(encode_structure_entity_id),
         _ => None,
     };
     let Some(entity_id) = placed else {
@@ -633,41 +615,6 @@ pub unsafe extern "C" fn gas_amount_at_callback(
     FluxStatus::OK
 }
 
-/// ABI callback that submits one complete RGBA8 image for the active plugin overlay.
-pub unsafe extern "C" fn submit_overlay_frame_callback(
-    context: *mut c_void,
-    width: u32,
-    height: u32,
-    rgba8: *const u8,
-    len: usize,
-) -> FluxStatus {
-    let Some(context) = context.cast::<RuntimeHostContext>().as_mut() else {
-        return FluxStatus::INVALID_ARGUMENT;
-    };
-    if width != WORLD_WIDTH || height != WORLD_HEIGHT {
-        return FluxStatus::INVALID_ARGUMENT;
-    }
-    let Some(expected_len) = (width as usize)
-        .checked_mul(height as usize)
-        .and_then(|pixels| pixels.checked_mul(4))
-    else {
-        return FluxStatus::INVALID_ARGUMENT;
-    };
-    if len != expected_len || rgba8.is_null() {
-        return FluxStatus::INVALID_ARGUMENT;
-    }
-    let Some(frame) = context.overlay_frame.as_deref_mut() else {
-        return FluxStatus::FAILED;
-    };
-    frame.width = width;
-    frame.height = height;
-    frame.rgba8.clear();
-    frame
-        .rgba8
-        .extend_from_slice(std::slice::from_raw_parts(rgba8, len));
-    FluxStatus::OK
-}
-
 /// ABI callback that submits one declarative overlay graph for the active plugin overlay.
 pub unsafe extern "C" fn submit_overlay_graph_callback(
     context: *mut c_void,
@@ -700,9 +647,11 @@ pub unsafe extern "C" fn submit_hud_block_callback(
     let Some(context) = context.cast::<RuntimeHostContext>().as_mut() else {
         return FluxStatus::INVALID_ARGUMENT;
     };
-    let (Ok(raw_block_id), Ok(title), Ok(line)) =
-        (read_abi_utf8(block_id), read_abi_utf8(title), read_abi_utf8(line))
-    else {
+    let (Ok(raw_block_id), Ok(title), Ok(line)) = (
+        read_abi_utf8(block_id),
+        read_abi_utf8(title),
+        read_abi_utf8(line),
+    ) else {
         return FluxStatus::INVALID_ARGUMENT;
     };
     let Some(store) = context.hud_blocks.as_deref_mut() else {
@@ -847,10 +796,7 @@ pub unsafe extern "C" fn get_time_snapshot_callback(
 }
 
 /// ABI callback that sets the pause flag.
-pub unsafe extern "C" fn set_paused_callback(
-    context: *mut c_void,
-    paused: u8,
-) -> FluxStatus {
+pub unsafe extern "C" fn set_paused_callback(context: *mut c_void, paused: u8) -> FluxStatus {
     let Some(context) = context.cast::<RuntimeHostContext>().as_mut() else {
         return FluxStatus::INVALID_ARGUMENT;
     };
@@ -881,10 +827,7 @@ pub unsafe extern "C" fn toggle_pause_callback(
 }
 
 /// ABI callback that sets the simulation speed.
-pub unsafe extern "C" fn set_speed_callback(
-    context: *mut c_void,
-    speed: u32,
-) -> FluxStatus {
+pub unsafe extern "C" fn set_speed_callback(context: *mut c_void, speed: u32) -> FluxStatus {
     let Some(context) = context.cast::<RuntimeHostContext>().as_mut() else {
         return FluxStatus::INVALID_ARGUMENT;
     };
@@ -1046,24 +989,20 @@ pub fn overlay_is_plugin_controlled(
 mod tests {
     use super::{
         add_gas_callback, entity_place_callback, read_save_chunk_callback,
-        submit_hud_block_callback, submit_overlay_frame_callback, write_save_chunk_callback,
-        PluginHudBlockStore, PluginOverlayFrameStore, RuntimeDllPluginRegistry,
-        RuntimeHostContext,
+        submit_hud_block_callback, submit_overlay_graph_callback, write_save_chunk_callback,
+        PluginHudBlockStore, PluginOverlayGraphStore, RuntimeDllPluginRegistry, RuntimeHostContext,
     };
     use crate::{
-        config::{GasRegistry, GameConfig},
+        config::{GameConfig, GasRegistry},
         editor::ActiveEditorTool,
         plugins::{
-            abi::FluxUtf8Slice, build_plugin_runtime_registry, default_plugin, ContentId,
-            runtime_builtin::default_builtin_runtime_registration, LoadedPluginMetadata, PluginId,
-            PluginSourceKind, PluginVersion, SaveChunkStore,
+            abi::FluxUtf8Slice, build_plugin_runtime_registry, default_plugin,
+            runtime_builtin::default_builtin_runtime_registration, ContentId, LoadedPluginMetadata,
+            PluginId, PluginSourceKind, PluginVersion, SaveChunkStore,
         },
-        simulation::{GpuRuntimeState, SimulationControl, SimulationPerfStats, SimulationStep},
         simulation::gas::GasField,
-        world::{
-            grid::WorldGrid,
-            structures::PlacedStructureMap,
-        },
+        simulation::{GpuRuntimeState, SimulationControl, SimulationPerfStats, SimulationStep},
+        world::{grid::WorldGrid, structures::PlacedStructureMap},
     };
     use bevy::prelude::*;
     use std::{
@@ -1175,6 +1114,23 @@ mod tests {
         }
     }
 
+    fn load_packaged_plugin_from_archive(archive_path: &Path) -> LoadedPluginMetadata {
+        let (manifest, registration) = crate::plugins::validate_packaged_plugin_archive(archive_path)
+            .expect("validate packaged plugin archive");
+        LoadedPluginMetadata {
+            plugin_id: manifest.id.clone(),
+            display_name: manifest.display_name.clone(),
+            version: manifest.version.clone(),
+            source_kind: PluginSourceKind::Packaged,
+            content: manifest.content,
+            locked: false,
+            source_name: manifest.id.as_str().to_string(),
+            source_path: Some(archive_path.to_path_buf()),
+            manifest: Some(manifest),
+            registration,
+        }
+    }
+
     #[test]
     fn runtime_add_gas_callback_sets_amount_and_velocity() {
         let content = default_plugin::default_content_registry();
@@ -1242,30 +1198,31 @@ mod tests {
     fn runtime_callbacks_collect_overlay_hud_and_save_chunk_data() {
         let content = default_plugin::default_content_registry();
         let gas_registry = gas_registry();
-        let mut overlay = PluginOverlayFrameStore::default();
+        let mut overlay = PluginOverlayGraphStore::default();
         let mut hud = PluginHudBlockStore::default();
         let mut chunks = SaveChunkStore::default();
         let mut context = RuntimeHostContext::new(&content, &gas_registry);
         context.plugin_id = PluginId::parse("flux.api_ui_save_demo").expect("plugin id");
-        context.overlay_frame = Some(&mut overlay);
+        context.overlay_graph = Some(&mut overlay);
         context.hud_blocks = Some(&mut hud);
         context.save_chunks = Some(&mut chunks);
 
         let context_ptr = (&mut context as *mut RuntimeHostContext).cast::<c_void>();
-        let overlay_bytes = vec![
-            128u8;
-            (crate::world::grid::WORLD_WIDTH as usize)
-                * (crate::world::grid::WORLD_HEIGHT as usize)
-                * 4
-        ];
+        let overlay_graph_json = serde_json::to_string(&flux_plugin_sdk::OverlayGraph {
+            nodes: vec![flux_plugin_sdk::OverlayNode {
+                id: flux_plugin_sdk::OverlayNodeId::parse("test.root").expect("valid test node id"),
+                depends_on: Vec::new(),
+                kind: flux_plugin_sdk::OverlayNodeKind::RenderImage(
+                    flux_plugin_sdk::RenderImageNode {
+                        instances: Vec::new(),
+                    },
+                ),
+            }],
+            output: flux_plugin_sdk::OverlayNodeId::parse("test.root").expect("valid test node id"),
+        })
+        .expect("encode overlay graph");
         assert!(unsafe {
-            submit_overlay_frame_callback(
-                context_ptr,
-                crate::world::grid::WORLD_WIDTH,
-                crate::world::grid::WORLD_HEIGHT,
-                overlay_bytes.as_ptr(),
-                overlay_bytes.len(),
-            )
+            submit_overlay_graph_callback(context_ptr, FluxUtf8Slice::from_str(&overlay_graph_json))
         }
         .is_ok());
         assert!(unsafe {
@@ -1313,10 +1270,12 @@ mod tests {
         }
         .is_ok());
 
-        assert_eq!(
-            context.overlay_frame.as_ref().expect("overlay").rgba8,
-            overlay_bytes
-        );
+        assert!(context
+            .overlay_graph
+            .as_ref()
+            .expect("overlay graph")
+            .graph
+            .is_some());
         let hud = context.hud_blocks.as_ref().expect("hud");
         assert_eq!(hud.blocks.len(), 1);
         assert_eq!(hud.blocks[0].title, "Demo");
@@ -1340,8 +1299,10 @@ mod tests {
 
     #[test]
     fn runtime_dispatches_live_tick_demo_plugin_into_gas_host_api() {
-        let plugin_root =
-            create_working_demo_plugin_directory("flux_api_tick_demo_plugin", "flux_api_tick_demo_plugin.dll");
+        let plugin_root = create_working_demo_plugin_directory(
+            "flux_api_tick_demo_plugin",
+            "flux_api_tick_demo_plugin.dll",
+        );
         let loaded = load_demo_plugin_from_dev_root(&plugin_root);
         let runtime_registry = build_plugin_runtime_registry(&[loaded.clone()]);
         let mut runtime_plugins = RuntimeDllPluginRegistry::from_loaded_plugins(&[loaded]);
@@ -1419,10 +1380,86 @@ mod tests {
 
         assert_eq!(hud.blocks.len(), 1);
         assert_eq!(hud.blocks[0].title, "API UI/Save Demo");
-        assert_eq!(hud.blocks[0].lines, vec!["cell left-clicks 1, cell (10, 20)"]);
+        assert_eq!(
+            hud.blocks[0].lines,
+            vec!["cell left-clicks 1, cell (10, 20)"]
+        );
 
         drop(runtime_plugins);
         let _ = fs::remove_dir_all(plugin_root);
+    }
+
+    #[test]
+    fn runtime_dispatches_packaged_temperature_overlay_plugin_render_overlay() {
+        let archive_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("plugins")
+            .join("flux.api_temperature_overlay.fluxplugin");
+        assert!(
+            archive_path.exists(),
+            "temperature overlay archive must exist at '{}'",
+            archive_path.display()
+        );
+        let loaded = load_packaged_plugin_from_archive(&archive_path);
+        let runtime_registry = build_plugin_runtime_registry(&[loaded.clone()]);
+        let mut runtime_plugins = RuntimeDllPluginRegistry::from_loaded_plugins(&[loaded]);
+        assert!(runtime_plugins.errors().is_empty());
+
+        let content = default_plugin::default_content_registry();
+        let gas_registry = gas_registry();
+        let overlay_id =
+            ContentId::parse("flux.api_temperature_overlay.overlay.temperature").expect("overlay");
+        let mut overlay_graph = PluginOverlayGraphStore::default();
+        {
+            let mut context = RuntimeHostContext::new(&content, &gas_registry);
+            context.overlay_graph = Some(&mut overlay_graph);
+            runtime_plugins.dispatch_event(
+                &runtime_registry,
+                &crate::plugins::PluginRuntimeEvent::RenderOverlay {
+                    overlay_id: overlay_id.clone(),
+                },
+                &mut context,
+            );
+        }
+        assert!(
+            overlay_graph.graph.is_some(),
+            "temperature overlay plugin must submit graph for own overlay id"
+        );
+    }
+
+    #[test]
+    fn runtime_packaged_temperature_overlay_ignores_foreign_overlay_id() {
+        let archive_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("plugins")
+            .join("flux.api_temperature_overlay.fluxplugin");
+        assert!(
+            archive_path.exists(),
+            "temperature overlay archive must exist at '{}'",
+            archive_path.display()
+        );
+        let loaded = load_packaged_plugin_from_archive(&archive_path);
+        let runtime_registry = build_plugin_runtime_registry(&[loaded.clone()]);
+        let mut runtime_plugins = RuntimeDllPluginRegistry::from_loaded_plugins(&[loaded]);
+        assert!(runtime_plugins.errors().is_empty());
+
+        let content = default_plugin::default_content_registry();
+        let gas_registry = gas_registry();
+        let foreign_overlay_id = ContentId::parse("flux.default.overlay.pipes").expect("overlay");
+        let mut overlay_graph = PluginOverlayGraphStore::default();
+        {
+            let mut context = RuntimeHostContext::new(&content, &gas_registry);
+            context.overlay_graph = Some(&mut overlay_graph);
+            runtime_plugins.dispatch_event(
+                &runtime_registry,
+                &crate::plugins::PluginRuntimeEvent::RenderOverlay {
+                    overlay_id: foreign_overlay_id,
+                },
+                &mut context,
+            );
+        }
+        assert!(
+            overlay_graph.graph.is_none(),
+            "temperature overlay plugin must not submit graph for foreign overlay id"
+        );
     }
 
     #[test]
@@ -1449,18 +1486,18 @@ mod tests {
         let mut world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
         let mut gas = GasField::from_registry(&game_config.gas_registry);
-        let mut pipe_gas = default_plugin::pipe_runtime::PipeGasField::from_registry(
-            &game_config.gas_registry,
-        );
+        let mut pipe_gas =
+            default_plugin::pipe_runtime::PipeGasField::from_registry(&game_config.gas_registry);
         let mut pipe_flux = default_plugin::pipe_runtime::PipeFluxField::default();
-        let mut pipe_flow_visuals =
-            default_plugin::pipe_runtime::PipeFlowVisualState::default();
+        let mut pipe_flow_visuals = default_plugin::pipe_runtime::PipeFlowVisualState::default();
         let mut gpu_state = GpuRuntimeState::default();
         let mut simulation_control = SimulationControl::default();
         simulation_control.paused = false;
         let mut perf = SimulationPerfStats::default();
         let mut active_tool = ActiveEditorTool::default();
-        assert!(structures.place_gas_source(10, 10, 0, 100, &world).is_some());
+        assert!(structures
+            .place_gas_source(10, 10, 0, 100, &world)
+            .is_some());
 
         let mut context = RuntimeHostContext::new(&content, &game_config.gas_registry);
         context.world = Some(&mut world);
@@ -1508,11 +1545,9 @@ mod tests {
         let mut world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
         let mut gas = GasField::from_registry(&game_config.gas_registry);
-        let mut pipe_gas = default_plugin::pipe_runtime::PipeGasField::from_registry(
-            &game_config.gas_registry,
-        );
-        let mut pipe_flow_visuals =
-            default_plugin::pipe_runtime::PipeFlowVisualState::default();
+        let mut pipe_gas =
+            default_plugin::pipe_runtime::PipeGasField::from_registry(&game_config.gas_registry);
+        let mut pipe_flow_visuals = default_plugin::pipe_runtime::PipeFlowVisualState::default();
         let mut hud = PluginHudBlockStore::default();
 
         let mut context = RuntimeHostContext::new(&content, &game_config.gas_registry);
@@ -1563,8 +1598,7 @@ fn dispatch_queued_runtime_plugin_events(
     ),
     mut world_changed: EventWriter<WorldCellChanged>,
 ) {
-    let (mut runtime_plugins, runtime_registry, content_registry, gas_registry) =
-        runtime_resources;
+    let (mut runtime_plugins, runtime_registry, content_registry, gas_registry) = runtime_resources;
     let (
         mut world,
         mut structures,
@@ -1765,13 +1799,11 @@ pub(crate) fn dispatch_plugin_overlay_render(
         ResMut<SimulationControl>,
         Res<SimulationStep>,
         ResMut<ActiveEditorTool>,
-        ResMut<PluginOverlayFrameStore>,
         ResMut<PluginOverlayGraphStore>,
     ),
 ) {
     let (overlay_mode, world_load_state) = mode_resources;
-    let (mut runtime_plugins, runtime_registry, content_registry, gas_registry) =
-        runtime_resources;
+    let (mut runtime_plugins, runtime_registry, content_registry, gas_registry) = runtime_resources;
     let (
         mut world,
         mut structures,
@@ -1782,15 +1814,9 @@ pub(crate) fn dispatch_plugin_overlay_render(
         mut pipe_flux,
         mut pipe_flow_visuals,
     ) = world_resources;
-    let (
-        mut simulation_control,
-        simulation_step,
-        mut active_tool,
-        mut overlay_frame,
-        mut overlay_graph,
-    ) = dispatch_resources;
+    let (mut simulation_control, simulation_step, mut active_tool, mut overlay_graph) =
+        dispatch_resources;
 
-    overlay_frame.clear();
     overlay_graph.clear();
     if !world_load_state.has_world {
         return;
@@ -1815,7 +1841,6 @@ pub(crate) fn dispatch_plugin_overlay_render(
         context.pipe_gas = Some(&mut pipe_gas);
         context.pipe_flux = Some(&mut pipe_flux);
         context.pipe_flow_visuals = Some(&mut pipe_flow_visuals);
-        context.overlay_frame = Some(&mut overlay_frame);
         context.overlay_graph = Some(&mut overlay_graph);
         context.simulation_control = Some(&mut simulation_control);
         context.simulation_step = simulation_step.0;

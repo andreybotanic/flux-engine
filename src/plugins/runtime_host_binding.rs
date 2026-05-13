@@ -13,8 +13,8 @@ use crate::plugins::runtime_dll::{
     entity_set_label_callback, entity_set_rotation_callback, gas_amount_at_callback,
     gas_pressure_at_callback, get_time_snapshot_callback, read_save_chunk_callback,
     remove_gas_callback, set_active_tool_callback, set_paused_callback, submit_hud_block_callback,
-    submit_overlay_frame_callback, submit_overlay_graph_callback, toggle_pause_callback,
-    write_runtime_log_callback, write_save_chunk_callback, RuntimeHostContext,
+    submit_overlay_graph_callback, toggle_pause_callback, write_runtime_log_callback,
+    write_save_chunk_callback, RuntimeHostContext,
 };
 
 /// Builds an SDK runtime-host binding backed by the engine `RuntimeHostContext`.
@@ -38,7 +38,6 @@ static SDK_RUNTIME_HOST_FNS: RuntimeHostFns = RuntimeHostFns {
     gas_pressure_at: sdk_gas_pressure_at,
     gas_amount_at: sdk_gas_amount_at,
     submit_hud_line: sdk_submit_hud_line,
-    submit_overlay_frame: sdk_submit_overlay_frame,
     submit_overlay_graph: sdk_submit_overlay_graph,
     write_save_chunk: sdk_write_save_chunk,
     read_save_chunk: sdk_read_save_chunk,
@@ -235,23 +234,13 @@ fn sdk_submit_hud_line(
     .map_err(status_error)
 }
 
-fn sdk_submit_overlay_frame(
-    context: *mut c_void,
-    width: u32,
-    height: u32,
-    rgba8: &[u8],
-) -> Result<(), PluginError> {
-    unsafe { submit_overlay_frame_callback(context, width, height, rgba8.as_ptr(), rgba8.len()) }
-        .into_result()
-        .map_err(status_error)
-}
-
 fn sdk_submit_overlay_graph(
     context: *mut c_void,
     graph: &flux_plugin_sdk::OverlayGraph,
 ) -> Result<(), PluginError> {
-    let json = serde_json::to_string(graph)
-        .map_err(|error| PluginError::message(format!("failed to encode overlay graph: {error}")))?;
+    let json = serde_json::to_string(graph).map_err(|error| {
+        PluginError::message(format!("failed to encode overlay graph: {error}"))
+    })?;
     unsafe { submit_overlay_graph_callback(context, FluxUtf8Slice::from_str(&json)) }
         .into_result()
         .map_err(status_error)
@@ -357,15 +346,10 @@ fn sdk_set_speed(context: *mut c_void, speed: u32) -> Result<(), PluginError> {
         .map_err(status_error)
 }
 
-fn sdk_set_active_tool(
-    context: *mut c_void,
-    tool_id: Option<&str>,
-) -> Result<(), PluginError> {
-    unsafe {
-        set_active_tool_callback(context, FluxUtf8Slice::from_str(tool_id.unwrap_or("")))
-    }
-    .into_result()
-    .map_err(status_error)
+fn sdk_set_active_tool(context: *mut c_void, tool_id: Option<&str>) -> Result<(), PluginError> {
+    unsafe { set_active_tool_callback(context, FluxUtf8Slice::from_str(tool_id.unwrap_or(""))) }
+        .into_result()
+        .map_err(status_error)
 }
 
 fn sdk_write_log(context: *mut c_void, level: u32, message: &str) -> Result<(), PluginError> {

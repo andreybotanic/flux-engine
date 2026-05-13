@@ -71,8 +71,13 @@ fn render_image_node_allows_empty_instances() {
         output: node_id("compose"),
     };
 
-    let order = graph.execution_order().expect("graph with empty image layer should be valid");
-    assert_eq!(order, vec![node_id("empty"), node_id("image"), node_id("compose")]);
+    let order = graph
+        .execution_order()
+        .expect("graph with empty image layer should be valid");
+    assert_eq!(
+        order,
+        vec![node_id("empty"), node_id("image"), node_id("compose")]
+    );
 }
 
 #[test]

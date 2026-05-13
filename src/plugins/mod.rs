@@ -18,11 +18,10 @@ pub mod substances;
 
 pub(crate) use self::api::PluginRuntimeEvent;
 pub use self::api::{
-    build_plugin_runtime_registry, CellRenderStyle, CellStyleEntry, GasRenderStyle, GasStyleEntry,
-    HudBlock, InputModifiers, MouseButton, MouseCellEvent, OverlayDrawCommand, OverlayFrame,
+    build_plugin_runtime_registry, HudBlock, InputModifiers, MouseButton, MouseCellEvent,
     OverlayRenderPolicy, PluginEvent, PluginRuntimeRegistry, PluginSubscription,
     RuntimeOverlayDescriptor, SaveChunk, SaveChunkDescriptor, SaveChunkStore, StructureEvent,
-    StructureRenderStyle, StructureStyleEntry, ToolDescriptor,
+    ToolDescriptor,
 };
 pub use self::content::{
     CellContentDescriptor, ContentId, ContentRegistry, LegacyStorageDescriptor,
@@ -50,9 +49,8 @@ pub use self::reload::{
     reload_plugin_registry, PluginReloadError, PluginReloadReport, PluginReloadRequest,
 };
 pub use self::runtime_dll::{
-    overlay_is_plugin_controlled, PluginHudBlockStore, PluginOverlayFrameStore,
-    PluginOverlayGraphStore, RuntimeDllHostPlugin, RuntimeDllPluginRegistry,
-    RuntimeHostContext,
+    overlay_is_plugin_controlled, PluginHudBlockStore, PluginOverlayGraphStore,
+    RuntimeDllHostPlugin, RuntimeDllPluginRegistry, RuntimeHostContext,
 };
 pub use self::source::{
     discover_dev_plugin_sources, discover_packaged_plugin_sources, discover_plugin_sources,

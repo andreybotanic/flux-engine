@@ -42,5 +42,5 @@ pub enum PluginEvent
 | `KeyReleased` | none | Fired when a key is released. |
 | `OverlayChanged` | none | Fired when the active overlay changes. |
 | `BuildHudForCell` | none | Fired when the engine asks plugins to contribute HUD lines for one cell. |
-| `RenderOverlay` | none | Fired when a plugin-controlled overlay should submit one frame. |
+| `RenderOverlay` | none | Fired when a plugin-controlled overlay should submit its render result.<br><br>New overlays should submit `OverlayGraph` via `OverlayApi::submit_graph`. |
 

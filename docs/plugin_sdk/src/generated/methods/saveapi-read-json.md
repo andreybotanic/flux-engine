@@ -15,7 +15,7 @@ Reads one JSON chunk.
 ## Signature
 
 ```rust
-fn read_json < T : serde :: de :: DeserializeOwned > (& self , chunk_id : & ContentId) -> Result < Option < T > , PluginError >
+fn read_json < T : serde :: de :: DeserializeOwned > (& self , chunk_id : & ContentId ,) -> Result < Option < T > , PluginError >
 ```
 
 ## Arguments

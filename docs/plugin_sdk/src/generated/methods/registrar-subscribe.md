@@ -15,7 +15,7 @@ Subscribes one typed handler to one event.
 ## Signature
 
 ```rust
-fn subscribe < E > (& mut self , event : PluginEvent , handler : Handler < P , E >) -> Result < () , PluginError > where E : AbiEventPayload ,
+fn subscribe < E > (& mut self , event : PluginEvent , handler : Handler < P , E > ,) -> Result < () , PluginError > where E : AbiEventPayload + BuiltinEventPayload ,
 ```
 
 ## Arguments

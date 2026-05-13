@@ -115,7 +115,9 @@ impl fmt::Display for SubstanceId {
 }
 
 /// Runtime entity instance identifier.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 pub struct EntityInstanceId(pub u32);
 
 /// Stable entity-kind identifier.

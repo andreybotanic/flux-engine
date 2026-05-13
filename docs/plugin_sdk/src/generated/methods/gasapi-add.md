@@ -15,7 +15,7 @@ Adds free gas to one world cell.
 ## Signature
 
 ```rust
-fn add (& mut self , cell : CellPos , substance : SubstanceId , amount : u32) -> Result < u32 , PluginError >
+fn add (& mut self , cell : CellPos , substance : SubstanceId , amount : u32 ,) -> Result < u32 , PluginError >
 ```
 
 ## Arguments

@@ -15,7 +15,7 @@ Removes free gas from one cell.
 ## Signature
 
 ```rust
-fn remove (& mut self , cell : CellPos , substance : SubstanceId , amount : u32) -> Result < u32 , PluginError >
+fn remove (& mut self , cell : CellPos , substance : SubstanceId , amount : u32 ,) -> Result < u32 , PluginError >
 ```
 
 ## Arguments

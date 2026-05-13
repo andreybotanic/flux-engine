@@ -26,4 +26,5 @@ pub struct OverlayDescriptor
 | `label` | String | `label` field stored as `String` on `OverlayDescriptor`. |
 | `hotkey` | Option < String > | `hotkey` field stored as `Option < String >` on `OverlayDescriptor`. |
 | `render_policy` | [`OverlayRenderPolicy`](../enums/overlayrenderpolicy.md) | `render_policy` field stored as `OverlayRenderPolicy` on `OverlayDescriptor`. |
+| `graph` | Option < [`OverlayGraph`](../structures/overlaygraph.md) > | `graph` field stored as `Option < OverlayGraph >` on `OverlayDescriptor`. |
 

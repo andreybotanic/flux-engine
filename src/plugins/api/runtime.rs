@@ -278,8 +278,7 @@ mod tests {
                 kind: OverlayNodeKind::RenderImage(RenderImageNode {
                     instances: vec![OverlayImageInstance {
                         image: flux_plugin_sdk::OverlayImageSource::Asset(
-                            flux_plugin_sdk::ContentId::parse("flux.test.image")
-                                .expect("image id"),
+                            flux_plugin_sdk::ContentId::parse("flux.test.image").expect("image id"),
                         ),
                         placement: OverlayPlacement::GridLocal {
                             position_in_grid: Vec2::ZERO,
