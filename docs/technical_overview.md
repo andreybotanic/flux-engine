@@ -98,12 +98,18 @@
 ### External content plugin build workflow (stage 7)
 
 - Workspace теперь содержит `xtask/` как отдельный crate и cargo alias `.cargo/config.toml`: `cargo xtask ...` разворачивается в `cargo run -p xtask -- ...`.
+- Для hygiene `target/` и предсборочной подготовки добавлены alias-ы `cargo clean-target`, `cargo clean-target-hard` и `cargo build-release`.
+- `cargo clean-target` и `cargo build-release` сохраняют стандартный cargo build cache (`debug/release deps`, `build`, `.fingerprint`, `incremental`), чтобы не пересобирать тяжёлые зависимости вроде Bevy на каждом прогоне.
+- `cargo clean-target-hard` существует как one-off режим освобождения места: он уже удаляет и cargo-кэш, поэтому следующая сборка будет заметно холоднее и дольше.
 - `xtask` ищет plugin projects в `src/plugins/*/package_template/manifest.toml`, читает runtime manifest тем же `PluginManifest`, сортирует проекты по `PluginId` и отклоняет дубли.
 - Поддерживаются команды:
   - `cargo xtask build-plugin <plugin_id>` собирает plugin DLL, копирует `manifest.toml`, `bin/`, `config/`, `assets/` в `target/plugins/expanded/<plugin_id>/` и валидирует expanded root через runtime loader.
   - `cargo xtask build-plugin <plugin_id> --dev` делает ту же сборку, затем обновляет `plugins_dev/<plugin_id>` через временную папку и повторно валидирует установленный dev-root; после этого в запущенной игре достаточно нажать `Reload`.
   - `cargo xtask pack-plugin <plugin_id>` выполняет build, пишет `.fluxplugin` в `target/plugins/packages/<plugin_id>.fluxplugin` и валидирует archive через runtime loader.
   - `cargo xtask build-all-plugins` собирает и упаковывает все найденные plugin projects в детерминированном порядке.
+  - `cargo xtask clean-target` удаляет transient-мусор из `target/`: root-логи, `flycheck*`, `codex_runcheck`, `.rustc_info.json`, `tmp_*`, а также stray logs/скриншоты в profile-папках, но не трогает cargo-кэш сборки.
+  - `cargo xtask clean-target-hard` выполняет агрессивную зачистку `target/`: помимо мусора удаляет cache-каталоги Cargo (`debug/release deps`, `build`, `.fingerprint`, `incremental`) и оставляет только живой `xtask`-бинарник и top-level release deliverables (`.exe`, `.pdb`).
+  - `cargo xtask build-release` выполняет обычный `clean-target`, затем запускает штатную релизную сборку `cargo build --release`; release cache после сборки сохраняется для быстрых повторных прогонов.
 - Plugin SDK documentation lives in `docs/plugin_sdk/` as an mdBook site. Генератор reference рассматривает `crates/flux_plugin_sdk/src/*` как основной user-facing источник, а не engine-side ABI wrapper-ы в `src/plugins/`.
 - Generated Plugin SDK navigation is grouped by API role: `Structures`, `Enums`, `Constants`, `Methods` and `Events`. Each concrete item gets its own generated page so the mdBook menu points to SDK-facing items вроде `Plugin`, `PluginInit`, `Registrar::subscribe`, `EntityApi::place` или `PluginEvent::MouseDownCell`, а не к внутренним ABI helper-ам.
 - The generated API groups are rendered as mdBook foldable sidebar nodes and are collapsed by default through `[output.html.fold] enable = true` with `level = 0`.

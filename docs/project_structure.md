@@ -6,7 +6,7 @@
 
 ```text
 FluxEngine/
-|-- .cargo/                  # Локальные cargo alias-ы проекта.
+|-- .cargo/                  # Локальные cargo alias-ы проекта, включая обычную/глубокую очистку target и релизную сборку через xtask.
 |-- assets/                  # Core-графика и шейдерные ресурсы приложения.
 |   |-- fonts/               # UI-шрифты, загружаемые через AssetServer.
 |   |-- shaders/             # Core WGSL-шейдеры вычислений.
@@ -39,7 +39,7 @@ FluxEngine/
 |   |-- simulation/          # CPU/GPU симуляция свободного газа и parity-инфраструктура.
 |   |-- ui/                  # Общие UI-компоненты и панели.
 |   `-- world/               # Клеточный мир и unified structures.
-|-- xtask/                   # Cargo helper crate для сборки и упаковки sample runtime-плагинов.
+|-- xtask/                   # Cargo helper crate для сборки, очистки target, релизной сборки и упаковки sample runtime-плагинов.
 |-- AGENTS.md                # Правила работы агента.
 |-- Cargo.toml               # Манифест проекта и workspace.
 `-- Cargo.lock               # Lock-файл зависимостей.
@@ -48,7 +48,7 @@ FluxEngine/
 ## Файлы
 
 - `AGENTS.md`: Правила работы агента в этом репозитории.
-- `.cargo/config.toml`: Локальный cargo alias `cargo xtask` для запуска helper-crate-а `xtask`.
+- `.cargo/config.toml`: Локальные cargo alias-ы `cargo xtask`, `cargo clean-target`, `cargo clean-target-hard` и `cargo build-release` для запуска helper-crate-а `xtask`, обычной/глубокой уборки `target` и релизной сборки с сохранением build cache.
 - `.gitignore`: Игнорирует runtime artifacts и новые `src/plugins/*/` in-project plugin-папки; tracked исключения — core `src/plugins/api/`, `default_plugin`, API demo plugins, `flux_stage1_sample_plugin`, `flux_stage7_sample_content_plugin`.
 - `assets/fonts/ui_main.ttf`: Основной UI-шрифт с поддержкой кириллицы для всех текстовых элементов интерфейса.
 - `assets/shaders/gas_solver.wgsl`: GPU-шейдер газового шага (WGSL), синхронизированный с CPU-эталоном.
@@ -235,9 +235,10 @@ FluxEngine/
 - `src/world/grid.rs`: Клеточная сетка мира, generic material ID wrapper, координатные утилиты и тесты.
 - `src/world/mod.rs`: Плагин мира и события изменений клеток.
 - `src/world/structures.rs`: Unified layer/descriptor-модель структур, generic structure/layer ID wrapper-ы, `PlacedStructureMap`, rotation, bridge-footprint compatibility helpers и pipe-cut state.
-- `xtask/Cargo.toml`: Манифест helper-crate-а для сборки/упаковки runtime-плагинов и генерации Plugin SDK документации.
-- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, Plugin SDK docs команд, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>` и безопасная упаковка `.fluxplugin`.
+- `xtask/Cargo.toml`: Манифест helper-crate-а для сборки/упаковки runtime-плагинов, cleanup `target` и генерации Plugin SDK документации.
+- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, `clean-target`, `clean-target-hard`, `build-release`, Plugin SDK docs команд, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>` и безопасная упаковка `.fluxplugin`.
 - `xtask/src/plugin_sdk_docs.rs`: Orchestration-модуль Plugin SDK docs команд: собирает generated Markdown, stale-check и mdBook build.
+- `xtask/src/target_cleanup.rs`: Очистка transient-артефактов `target/` в двух режимах: обычный cleanup сохраняет cargo build cache, а deep cleanup удаляет и cache-каталоги; здесь же живёт обёртка релизной сборки с предочисткой.
 - `xtask/src/plugin_sdk_docs/collector.rs`: Сбор Plugin SDK API-сущностей из Rust AST через `syn`: структуры, методы, callback-типы, константы и события, exclude-фильтрация внутренних helper-ов, mapping `PluginEvent -> typed payload` через `AbiEventPayload`, fallback-описания полей/вариантов и загрузка optional external example-snippets с пропуском legacy v4 ABI примеров.
 - `xtask/src/plugin_sdk_docs/model.rs`: Общие модели generated Plugin SDK reference: группы API, item docs, поля, аргументы, варианты, source metadata и схема путей для external examples.
 - `xtask/src/plugin_sdk_docs/parser.rs`: Парсинг SDK-facing Rustdoc через `syn`, извлечение summary/section-блоков и поддержка `#[doc(hidden)]` для исключения внутренних SDK helper-ов из generated reference.

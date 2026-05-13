@@ -14,6 +14,7 @@ use flux_engine::plugins::{
 use zip::{write::SimpleFileOptions, ZipWriter};
 
 mod plugin_sdk_docs;
+mod target_cleanup;
 
 const MANIFEST_RELATIVE: &str = "package_template/manifest.toml";
 const EXPANDED_OUTPUT_ROOT: &str = "target/plugins/expanded";
@@ -111,6 +112,34 @@ pub fn run_cli(repo_root: &Path, args: &[String]) -> Result<(), XtaskError> {
         "build-plugin-sdk-docs" => {
             let output = plugin_sdk_docs::build_plugin_sdk_docs(repo_root)?;
             println!("Built Plugin SDK docs at {}", output.display());
+            Ok(())
+        }
+        "clean-target" => {
+            let report = target_cleanup::clean_target(repo_root)?;
+            println!(
+                "Cleaned target/: removed {} entries, freed {:.3} GiB.",
+                report.removed_entries(),
+                report.removed_bytes() as f64 / 1024.0 / 1024.0 / 1024.0
+            );
+            Ok(())
+        }
+        "clean-target-hard" => {
+            let report = target_cleanup::clean_target_hard(repo_root)?;
+            println!(
+                "Hard-cleaned target/: removed {} entries, freed {:.3} GiB.",
+                report.removed_entries(),
+                report.removed_bytes() as f64 / 1024.0 / 1024.0 / 1024.0
+            );
+            Ok(())
+        }
+        "build-release" => {
+            let report = target_cleanup::build_release(repo_root)?;
+            println!(
+                "Cleaned target/: removed {} entries, freed {:.3} GiB.",
+                report.removed_entries(),
+                report.removed_bytes() as f64 / 1024.0 / 1024.0 / 1024.0
+            );
+            println!("Built release application.");
             Ok(())
         }
         _ => Err(usage_error()),
@@ -315,7 +344,7 @@ fn parse_build_plugin_args(args: &[String]) -> Result<BuildPluginRequest<'_>, Xt
 
 fn usage_error() -> XtaskError {
     XtaskError::new(
-        "usage: cargo xtask build-plugin <plugin_id> [--dev] | pack-plugin <plugin_id> | build-all-plugins | generate-plugin-sdk-docs | check-plugin-sdk-docs | build-plugin-sdk-docs",
+        "usage: cargo xtask build-plugin <plugin_id> [--dev] | pack-plugin <plugin_id> | build-all-plugins | generate-plugin-sdk-docs | check-plugin-sdk-docs | build-plugin-sdk-docs | clean-target | clean-target-hard | build-release",
     )
 }
 
@@ -528,7 +557,7 @@ fn dev_plugin_root(repo_root: &Path, plugin_id: &PluginId) -> PathBuf {
     repo_root.join(DEV_PLUGIN_ROOT).join(plugin_id.as_str())
 }
 
-fn cargo_binary() -> PathBuf {
+pub(crate) fn cargo_binary() -> PathBuf {
     if let Some(path) = std::env::var_os("CARGO") {
         return PathBuf::from(path);
     }

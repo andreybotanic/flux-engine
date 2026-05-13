@@ -1,2 +1,5 @@
 [alias]
 xtask = "run -p xtask --"
+clean-target = "run -p xtask -- clean-target"
+clean-target-hard = "run -p xtask -- clean-target-hard"
+build-release = "run -p xtask -- build-release"

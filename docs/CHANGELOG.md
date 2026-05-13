@@ -1,6 +1,7 @@
 ﻿# Changelog
 
 ## 2026-05-13
+- Добавлен штатный cleanup workflow для разросшегося `target`: `xtask` получил команды `clean-target`, `clean-target-hard` и `build-release`, а `.cargo/config.toml` — одноимённые cargo alias-ы. Обычная предсборочная очистка теперь удаляет только мусор и сохраняет cargo build cache для быстрых повторных сборок; глубокая зачистка кэша вынесена в отдельную `clean-target-hard`.
 - Полностью удалён рабочий frame-based submit path overlay-рендера: из `flux_plugin_sdk::OverlayApi` убраны legacy frame-методы, из runtime host binding и compositor-а убран frame fallback, а `RenderOverlay` теперь обрабатывает только graph-path через `submit_graph`.
 - В ABI `FluxRuntimeHost` возвращён reserved callback slot на месте старого frame submit-поля (без рабочей логики frame submit), чтобы сохранить бинарную совместимость с уже упакованными `.fluxplugin`; `submit_graph` для архивного `flux.api_temperature_overlay` подтверждён отдельными runtime-регрессионными тестами.
 - Plugin SDK mdBook обновлён под новый overlay runtime path: из документации полностью убраны legacy frame-термины, а guide-раздел получил отдельную главу `Overlay graph pipeline` с актуальным `RenderOverlay -> submit_graph` workflow.
