@@ -150,7 +150,12 @@ pub fn run_cli(repo_root: &Path, args: &[String]) -> Result<(), XtaskError> {
             );
             Ok(())
         }
+        "validate-wgsl" => {
+            run_validate_wgsl_command(repo_root)?;
+            Ok(())
+        }
         "build-release" => {
+            run_validate_wgsl_command(repo_root)?;
             let report = target_cleanup::build_release(repo_root)?;
             println!(
                 "Cleaned target/: removed {} entries, freed {:.3} GiB.",
@@ -362,8 +367,26 @@ fn parse_build_plugin_args(args: &[String]) -> Result<BuildPluginRequest<'_>, Xt
 
 fn usage_error() -> XtaskError {
     XtaskError::new(
-        "usage: cargo xtask build-plugin <plugin_id> [--dev] | pack-plugin <plugin_id> | build-all-plugins | generate-plugin-sdk-docs | check-plugin-sdk-docs | build-plugin-sdk-docs | generate-sprite-ktx | check-sprite-ktx | clean-target | clean-target-hard | build-release",
+        "usage: cargo xtask build-plugin <plugin_id> [--dev] | pack-plugin <plugin_id> | build-all-plugins | generate-plugin-sdk-docs | check-plugin-sdk-docs | build-plugin-sdk-docs | generate-sprite-ktx | check-sprite-ktx | clean-target | clean-target-hard | validate-wgsl | build-release",
     )
+}
+
+fn run_validate_wgsl_command(repo_root: &Path) -> Result<(), XtaskError> {
+    let status = Command::new(cargo_binary())
+        .arg("validate-wgsl")
+        .current_dir(repo_root)
+        .status()
+        .map_err(|error| {
+            XtaskError::new(format!("failed to spawn cargo validate-wgsl: {}", error))
+        })?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(XtaskError::new(format!(
+            "cargo validate-wgsl failed with status {}",
+            status
+        )))
+    }
 }
 
 fn find_plugin_project(repo_root: &Path, plugin_id: &str) -> Result<PluginProject, XtaskError> {

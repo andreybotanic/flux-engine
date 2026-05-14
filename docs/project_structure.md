@@ -53,7 +53,7 @@ FluxEngine/
 ## Файлы
 
 - `AGENTS.md`: Правила работы агента в этом репозитории.
-- `.cargo/config.toml`: Локальные cargo alias-ы `cargo xtask`, `cargo generate-sprite-ktx`, `cargo check-sprite-ktx`, `cargo clean-target`, `cargo clean-target-hard` и `cargo build-release` для запуска helper-crate-а `xtask`, офлайн подготовки sprite KTX2-артефактов и release workflow.
+- `.cargo/config.toml`: Локальные cargo alias-ы `cargo xtask`, `cargo generate-sprite-ktx`, `cargo check-sprite-ktx`, `cargo clean-target`, `cargo clean-target-hard`, `cargo validate-wgsl` и `cargo build-release` для запуска helper-crate-ов `xtask`/`xtask_wgsl`, офлайн подготовки sprite KTX2-артефактов и release workflow.
 - `.gitignore`: Игнорирует runtime artifacts и новые `src/plugins/*/` in-project plugin-папки; tracked исключения — core `src/plugins/api/`, `default_plugin`, API demo plugins, `flux_stage1_sample_plugin`, `flux_stage7_sample_content_plugin`.
 - `assets/fonts/ui_main.ttf`: Основной UI-шрифт с поддержкой кириллицы для всех текстовых элементов интерфейса.
 - `assets/shaders/gas_solver.wgsl`: GPU-шейдер газового шага (WGSL), синхронизированный с CPU-эталоном.
@@ -249,10 +249,14 @@ FluxEngine/
 - `src/world/mod.rs`: Плагин мира и события изменений клеток.
 - `src/world/structures.rs`: Unified layer/descriptor-модель структур, generic structure/layer ID wrapper-ы, `PlacedStructureMap`, rotation, bridge-footprint compatibility helpers и pipe-cut state.
 - `xtask/Cargo.toml`: Манифест helper-crate-а для сборки/упаковки runtime-плагинов, cleanup `target` и генерации Plugin SDK документации.
-- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, `generate-sprite-ktx`, `check-sprite-ktx`, `clean-target`, `clean-target-hard`, `build-release`, Plugin SDK docs команд, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>` и безопасная упаковка `.fluxplugin`.
+- `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, `generate-sprite-ktx`, `check-sprite-ktx`, `clean-target`, `clean-target-hard`, `validate-wgsl`, `build-release`, Plugin SDK docs команд, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>`, запуск `cargo validate-wgsl` перед `build-release` и безопасная упаковка `.fluxplugin`.
 - `xtask/src/sprite_ktx.rs`: Офлайн pipeline built-in sprite-ассетов: поиск `ktx`, скан source PNG в core/default-plugin директориях, генерация `.ktx2` с mipmaps и проверка актуальности generated файлов.
 - `xtask/src/plugin_sdk_docs.rs`: Orchestration-модуль Plugin SDK docs команд: собирает generated Markdown, stale-check и mdBook build.
 - `xtask/src/target_cleanup.rs`: Очистка transient-артефактов `target/` в двух режимах: обычный cleanup сохраняет cargo build cache, а deep cleanup удаляет и cache-каталоги; здесь же живёт обёртка релизной сборки с предочисткой.
+- `xtask_wgsl/Cargo.toml`: Манифест лёгкого helper-crate-а для WGSL-валидации без зависимости на `flux_engine`.
+- `xtask_wgsl/src/main.rs`: CLI entrypoint команды `cargo validate-wgsl`, включая проверку аргументов и выход с кодом ошибки при провале валидации.
+- `xtask_wgsl/src/wgsl_imports.rs`: WGSL import resolver для `validate-wgsl`: обход репозитория/registry, поиск `#define_import_path` модулей и резолв `#import` зависимостей (включая bevy-модули).
+- `xtask_wgsl/src/wgsl_validation.rs`: Реализация команды `validate-wgsl`: валидирует все WGSL по всему репозиторию, отмечает `CHANGED/UNCHANGED`, печатает цветной список `OK/NOT OK`, выводит найденные ошибки и итоговую сводку; использует `cargo wgsl --stdin` и fallback-валидацию bevy-шейдеров (`#import`) через `naga_oil` + резолв импортируемых модулей.
 - `xtask/src/plugin_sdk_docs/collector.rs`: Сбор Plugin SDK API-сущностей из Rust AST через `syn`: структуры, методы, callback-типы, константы и события, exclude-фильтрация внутренних helper-ов, mapping `PluginEvent -> typed payload` через `AbiEventPayload`, fallback-описания полей/вариантов и загрузка optional external example-snippets с пропуском legacy v4 ABI примеров.
 - `xtask/src/plugin_sdk_docs/model.rs`: Общие модели generated Plugin SDK reference: группы API, item docs, поля, аргументы, варианты, source metadata и схема путей для external examples.
 - `xtask/src/plugin_sdk_docs/parser.rs`: Парсинг SDK-facing Rustdoc через `syn`, извлечение summary/section-блоков и поддержка `#[doc(hidden)]` для исключения внутренних SDK helper-ов из generated reference.

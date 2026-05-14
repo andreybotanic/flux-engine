@@ -5,7 +5,13 @@ edition = "2021"
 default-run = "flux_engine"
 
 [workspace]
-members = [".", "xtask", "crates/flux_plugin_sdk", "crates/flux_plugin_abi"]
+members = [
+    ".",
+    "xtask",
+    "xtask_wgsl",
+    "crates/flux_plugin_sdk",
+    "crates/flux_plugin_abi",
+]
 exclude = [
     "src/plugins/flux_stage1_sample_plugin",
     "src/plugins/flux_stage7_sample_content_plugin",
