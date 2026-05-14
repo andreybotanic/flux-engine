@@ -485,84 +485,11 @@ fn compute_shares(@builtin(global_invocation_id) gid: vec3<u32>) {
         let left_open = is_open_cell_i32(xy.x - 1, xy.y);
         let right_open = is_open_cell_i32(xy.x + 1, xy.y);
 
-        var w0 = 0.0;
-        var w1 = 0.0;
-        var w2 = 0.0;
-        var w3 = 0.0;
+        var w0 = mobility;
+        var w1 = mobility;
+        var w2 = mobility;
+        var w3 = mobility;
         var w4 = 1.0;
-        let half_mobility = mobility * 0.5;
-
-        // Direction up (0): blocked flow is redistributed along wall (left/right).
-        // If only one tangent side is open (corner-like case), keep half in place
-        // to avoid systematic corner drainage.
-        if (up_open) {
-            w0 = w0 + mobility;
-        } else if (left_open && right_open) {
-            w2 = w2 + half_mobility;
-            w3 = w3 + half_mobility;
-        } else if (left_open) {
-            w2 = w2 + half_mobility;
-            w4 = w4 + half_mobility;
-        } else if (right_open) {
-            w3 = w3 + half_mobility;
-            w4 = w4 + half_mobility;
-        } else {
-            w4 = w4 + mobility;
-        }
-
-        // Direction down (1): blocked flow is redistributed along wall (left/right).
-        // If only one tangent side is open (corner-like case), keep half in place
-        // to avoid systematic corner drainage.
-        if (down_open) {
-            w1 = w1 + mobility;
-        } else if (left_open && right_open) {
-            w2 = w2 + half_mobility;
-            w3 = w3 + half_mobility;
-        } else if (left_open) {
-            w2 = w2 + half_mobility;
-            w4 = w4 + half_mobility;
-        } else if (right_open) {
-            w3 = w3 + half_mobility;
-            w4 = w4 + half_mobility;
-        } else {
-            w4 = w4 + mobility;
-        }
-
-        // Direction left (2): blocked flow is redistributed along wall (up/down).
-        // If only one tangent side is open (corner-like case), keep half in place
-        // to avoid systematic corner drainage.
-        if (left_open) {
-            w2 = w2 + mobility;
-        } else if (up_open && down_open) {
-            w0 = w0 + half_mobility;
-            w1 = w1 + half_mobility;
-        } else if (up_open) {
-            w0 = w0 + half_mobility;
-            w4 = w4 + half_mobility;
-        } else if (down_open) {
-            w1 = w1 + half_mobility;
-            w4 = w4 + half_mobility;
-        } else {
-            w4 = w4 + mobility;
-        }
-
-        // Direction right (3): blocked flow is redistributed along wall (up/down).
-        // If only one tangent side is open (corner-like case), keep half in place
-        // to avoid systematic corner drainage.
-        if (right_open) {
-            w3 = w3 + mobility;
-        } else if (up_open && down_open) {
-            w0 = w0 + half_mobility;
-            w1 = w1 + half_mobility;
-        } else if (up_open) {
-            w0 = w0 + half_mobility;
-            w4 = w4 + half_mobility;
-        } else if (down_open) {
-            w1 = w1 + half_mobility;
-            w4 = w4 + half_mobility;
-        } else {
-            w4 = w4 + mobility;
-        }
 
         if (m_env > BUOYANCY_MIN_ENV_MASS && mobility > 0.0) {
             let alpha = max(params.buoyancy_alpha, 0.0);
@@ -578,6 +505,23 @@ fn compute_shares(@builtin(global_invocation_id) gid: vec3<u32>) {
             if (down_open) {
                 w1 = max(w1 + max(-bias, 0.0), 0.0);
             }
+        }
+
+        if (!up_open) {
+            w0 = 0.0;
+            w4 = w4 + mobility;
+        }
+        if (!down_open) {
+            w1 = 0.0;
+            w4 = w4 + mobility;
+        }
+        if (!left_open) {
+            w2 = 0.0;
+            w4 = w4 + mobility;
+        }
+        if (!right_open) {
+            w3 = 0.0;
+            w4 = w4 + mobility;
         }
 
         let seed = rng_seed(params.step, idx, g);

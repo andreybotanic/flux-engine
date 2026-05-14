@@ -89,81 +89,7 @@ where
                     ^ (gas_index as u32).wrapping_mul(0x85EB_CA77);
                 let mut rng = Rng64::seeded(seed);
 
-                let mut weights = [0.0f32; 5];
-                weights[4] = 1.0;
-                let half_mobility = mobility * 0.5;
-
-                // Direction up (0): blocked flow is redistributed along wall (left/right).
-                // If only one tangent side is open (corner-like case), keep half in place
-                // to avoid systematic corner drainage.
-                if neighbor_open[0] {
-                    weights[0] += mobility;
-                } else if neighbor_open[2] && neighbor_open[3] {
-                    weights[2] += half_mobility;
-                    weights[3] += half_mobility;
-                } else if neighbor_open[2] {
-                    weights[2] += half_mobility;
-                    weights[4] += half_mobility;
-                } else if neighbor_open[3] {
-                    weights[3] += half_mobility;
-                    weights[4] += half_mobility;
-                } else {
-                    weights[4] += mobility;
-                }
-
-                // Direction down (1): blocked flow is redistributed along wall (left/right).
-                // If only one tangent side is open (corner-like case), keep half in place
-                // to avoid systematic corner drainage.
-                if neighbor_open[1] {
-                    weights[1] += mobility;
-                } else if neighbor_open[2] && neighbor_open[3] {
-                    weights[2] += half_mobility;
-                    weights[3] += half_mobility;
-                } else if neighbor_open[2] {
-                    weights[2] += half_mobility;
-                    weights[4] += half_mobility;
-                } else if neighbor_open[3] {
-                    weights[3] += half_mobility;
-                    weights[4] += half_mobility;
-                } else {
-                    weights[4] += mobility;
-                }
-
-                // Direction left (2): blocked flow is redistributed along wall (up/down).
-                // If only one tangent side is open (corner-like case), keep half in place
-                // to avoid systematic corner drainage.
-                if neighbor_open[2] {
-                    weights[2] += mobility;
-                } else if neighbor_open[0] && neighbor_open[1] {
-                    weights[0] += half_mobility;
-                    weights[1] += half_mobility;
-                } else if neighbor_open[0] {
-                    weights[0] += half_mobility;
-                    weights[4] += half_mobility;
-                } else if neighbor_open[1] {
-                    weights[1] += half_mobility;
-                    weights[4] += half_mobility;
-                } else {
-                    weights[4] += mobility;
-                }
-
-                // Direction right (3): blocked flow is redistributed along wall (up/down).
-                // If only one tangent side is open (corner-like case), keep half in place
-                // to avoid systematic corner drainage.
-                if neighbor_open[3] {
-                    weights[3] += mobility;
-                } else if neighbor_open[0] && neighbor_open[1] {
-                    weights[0] += half_mobility;
-                    weights[1] += half_mobility;
-                } else if neighbor_open[0] {
-                    weights[0] += half_mobility;
-                    weights[4] += half_mobility;
-                } else if neighbor_open[1] {
-                    weights[1] += half_mobility;
-                    weights[4] += half_mobility;
-                } else {
-                    weights[4] += mobility;
-                }
+                let mut weights = [mobility, mobility, mobility, mobility, 1.0f32];
 
                 if let Some(m_env) = m_env {
                     if m_env > BUOYANCY_MIN_ENV_MASS && mobility > 0.0 {
@@ -185,6 +111,13 @@ where
                         if neighbor_open[1] {
                             weights[1] = (weights[1] + (-bias).max(0.0)).max(0.0);
                         }
+                    }
+                }
+
+                for dir_i in 0..4 {
+                    if !neighbor_open[dir_i] {
+                        weights[dir_i] = 0.0;
+                        weights[4] += mobility;
                     }
                 }
 
@@ -243,4 +176,3 @@ where
         }
     }
 }
-

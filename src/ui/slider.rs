@@ -33,7 +33,13 @@ pub struct SliderConfig {
 
 impl SliderConfig {
     /// Creates one slider config using the default track width.
-    pub fn with_default_width(id: SliderId, min_value: i32, max_value: i32, step: i32, value: i32) -> Self {
+    pub fn with_default_width(
+        id: SliderId,
+        min_value: i32,
+        max_value: i32,
+        step: i32,
+        value: i32,
+    ) -> Self {
         Self {
             id,
             min_value,
@@ -177,18 +183,17 @@ impl Plugin for SliderPlugin {
             .add_event::<SliderValueChanged>()
             .add_systems(
                 Update,
-                (
-                    handle_slider_press,
-                    handle_slider_drag,
-                    sync_slider_visuals,
-                ),
+                (handle_slider_press, handle_slider_drag, sync_slider_visuals),
             );
     }
 }
 
 fn handle_slider_press(
     mut slider_state: ResMut<SliderState>,
-    tracks: Query<(&Interaction, &SliderTrack, &RelativeCursorPosition), (Changed<Interaction>, With<Button>)>,
+    tracks: Query<
+        (&Interaction, &SliderTrack, &RelativeCursorPosition),
+        (Changed<Interaction>, With<Button>),
+    >,
     mut changed: EventWriter<SliderValueChanged>,
 ) {
     for (interaction, track, cursor) in &tracks {
@@ -212,7 +217,10 @@ fn handle_slider_press(
                 entry.step,
             ),
         ) {
-            changed.write(SliderValueChanged { id: track.id, value });
+            changed.write(SliderValueChanged {
+                id: track.id,
+                value,
+            });
         }
     }
 }

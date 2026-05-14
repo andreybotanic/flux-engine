@@ -1,4 +1,4 @@
-﻿use std::{
+use std::{
     fs,
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -47,10 +47,18 @@ enum FadeOutReason {
 enum BgmPhase {
     Suspended,
     NextTrack,
-    StartFadeIn { elapsed_secs: f32, duration_secs: f32 },
+    StartFadeIn {
+        elapsed_secs: f32,
+        duration_secs: f32,
+    },
     Playing,
-    StartFadeOut { elapsed_secs: f32, reason: FadeOutReason },
-    InterTrackPause { remaining_secs: f32 },
+    StartFadeOut {
+        elapsed_secs: f32,
+        reason: FadeOutReason,
+    },
+    InterTrackPause {
+        remaining_secs: f32,
+    },
 }
 
 #[derive(Debug)]
@@ -90,7 +98,11 @@ struct Rng64 {
 
 impl Rng64 {
     fn seeded(seed: u64) -> Self {
-        let init = if seed == 0 { 0xA5A5_1234_89AB_CDEF } else { seed };
+        let init = if seed == 0 {
+            0xA5A5_1234_89AB_CDEF
+        } else {
+            seed
+        };
         Self { state: init }
     }
 
@@ -220,7 +232,13 @@ fn drive_bgm_playback(
     if runtime.target_context != desired_context {
         runtime.target_context = desired_context;
         match (&runtime.active_track, runtime.phase) {
-            (Some(_), BgmPhase::StartFadeOut { reason: FadeOutReason::ContextSwitch, .. }) => {}
+            (
+                Some(_),
+                BgmPhase::StartFadeOut {
+                    reason: FadeOutReason::ContextSwitch,
+                    ..
+                },
+            ) => {}
             (Some(_), _) => {
                 runtime.phase = BgmPhase::StartFadeOut {
                     elapsed_secs: 0.0,
@@ -269,7 +287,9 @@ fn drive_bgm_playback(
                     } else {
                         next_elapsed / duration_secs
                     };
-                    sink.set_volume(Volume::Linear((target_volume * ratio).clamp(0.0, target_volume)));
+                    sink.set_volume(Volume::Linear(
+                        (target_volume * ratio).clamp(0.0, target_volume),
+                    ));
                     if next_elapsed >= duration_secs {
                         runtime.phase = BgmPhase::Playing;
                     } else {
@@ -295,7 +315,11 @@ fn drive_bgm_playback(
             let should_fade_out = runtime
                 .active_track
                 .as_ref()
-                .and_then(|track| track.duration_secs.map(|d| (track.playback_elapsed_secs, d)))
+                .and_then(|track| {
+                    track
+                        .duration_secs
+                        .map(|d| (track.playback_elapsed_secs, d))
+                })
                 .map(|(elapsed, duration)| elapsed >= (duration - TRACK_FADE_SECONDS).max(0.0))
                 .unwrap_or(false);
             let ended_without_duration = runtime
@@ -318,7 +342,10 @@ fn drive_bgm_playback(
                 };
             }
         }
-        BgmPhase::StartFadeOut { elapsed_secs, reason } => {
+        BgmPhase::StartFadeOut {
+            elapsed_secs,
+            reason,
+        } => {
             let mut fade_completed = false;
             let fade_duration = fade_out_duration_for(reason);
             let next_elapsed = (elapsed_secs + delta_secs).min(fade_duration);
@@ -329,7 +356,9 @@ fn drive_bgm_playback(
                     } else {
                         1.0 - (next_elapsed / fade_duration)
                     };
-                    sink.set_volume(Volume::Linear((target_volume * ratio).clamp(0.0, target_volume)));
+                    sink.set_volume(Volume::Linear(
+                        (target_volume * ratio).clamp(0.0, target_volume),
+                    ));
                 }
             }
             if next_elapsed >= fade_duration {
@@ -452,9 +481,9 @@ fn list_mp3_relative_paths(dir: &Path, relative_prefix: &str) -> Vec<String> {
             if extension != "mp3" {
                 return None;
             }
-            path.file_name().and_then(|name| name.to_str()).map(|name| {
-                format!("{}/{}", relative_prefix.replace('\\', "/"), name)
-            })
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| format!("{}/{}", relative_prefix.replace('\\', "/"), name))
         })
         .collect::<Vec<_>>();
 
@@ -498,7 +527,10 @@ mod tests {
             }
             previous = next;
         }
-        assert!(saw_repetition, "independent random selection should allow repeats");
+        assert!(
+            saw_repetition,
+            "independent random selection should allow repeats"
+        );
     }
 
     #[test]
@@ -577,7 +609,10 @@ mod tests {
         assert!(scan
             .menu_relative_paths
             .contains(&"music/menu/c.MP3".to_string()));
-        assert_eq!(scan.game_relative_paths, vec!["music/game/g1.mp3".to_string()]);
+        assert_eq!(
+            scan.game_relative_paths,
+            vec!["music/game/g1.mp3".to_string()]
+        );
 
         fs::remove_dir_all(&root).expect("cleanup");
     }

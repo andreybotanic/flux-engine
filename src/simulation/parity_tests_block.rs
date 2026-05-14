@@ -1,9 +1,11 @@
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
+
     use super::{
-        compare_cpu_gpu_fields, parity_passes, run_cpu_cpu_parity_scenario, run_cpu_gpu_parity_scenario,
-        run_cpu_only_calibration, ParityThresholds, PARITY_SCENARIOS, PARITY_STEPS,
-        PARITY_THRESHOLDS,
+        compare_cpu_gpu_fields, parity_passes, run_cpu_cpu_parity_scenario,
+        run_cpu_gpu_parity_scenario, run_cpu_only_calibration, ParityThresholds, PARITY_SCENARIOS,
+        PARITY_STEPS, PARITY_THRESHOLDS,
     };
     use crate::plugins::default_plugin::pipe_runtime::{
         apply_pipe_network_step, PipeFlowVisualState, PipeFluxField, PipeGasField,
@@ -15,7 +17,7 @@ mod tests {
         grid::{is_boundary, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
         structures::PlacedStructureMap,
     };
-    use bevy::prelude::UVec2;
+    use bevy::prelude::{UVec2, Vec2};
 
     fn gpu_available() -> bool {
         crate::simulation::gpu_solver::GpuGasSolver::new(
@@ -23,6 +25,276 @@ mod tests {
             crate::world::grid::WORLD_HEIGHT,
         )
         .is_ok()
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum WallBiasScenario {
+        OpenRoom,
+        CenterBlock,
+        StairStep,
+    }
+
+    impl WallBiasScenario {
+        fn name(self) -> &'static str {
+            match self {
+                Self::OpenRoom => "open_room",
+                Self::CenterBlock => "center_block",
+                Self::StairStep => "stair_step",
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct WallBiasMetrics {
+        near_avg: f32,
+        far_avg: f32,
+        near_count: u32,
+        far_count: u32,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct WallMomentumMetrics {
+        near_wall_cells: u32,
+        near_mass: f32,
+        radial_bias_per_mass: f32,
+        radial_abs_per_mass: f32,
+    }
+
+    fn mark_solid(world: &mut WorldGrid, x: u32, y: u32) {
+        let _ = world.set_solid_with_material(
+            x,
+            y,
+            crate::plugins::default_plugin::brick_cell_material(),
+        );
+    }
+
+    fn build_wall_bias_world(scenario: WallBiasScenario) -> (WorldGrid, UVec2, UVec2, Vec<UVec2>) {
+        let mut world = WorldGrid::default();
+        let room_min = UVec2::new(42, 42);
+        let room_max = UVec2::new(60, 60);
+        let mut focus_walls = Vec::new();
+
+        for x in (room_min.x - 1)..=(room_max.x + 1) {
+            mark_solid(&mut world, x, room_min.y - 1);
+            mark_solid(&mut world, x, room_max.y + 1);
+        }
+        for y in (room_min.y - 1)..=(room_max.y + 1) {
+            mark_solid(&mut world, room_min.x - 1, y);
+            mark_solid(&mut world, room_max.x + 1, y);
+        }
+
+        let cx = (room_min.x + room_max.x) / 2;
+        let cy = (room_min.y + room_max.y) / 2;
+        match scenario {
+            WallBiasScenario::OpenRoom => {}
+            WallBiasScenario::CenterBlock => {
+                for y in (cy - 1)..=(cy + 1) {
+                    for x in (cx - 1)..=(cx + 1) {
+                        mark_solid(&mut world, x, y);
+                        focus_walls.push(UVec2::new(x, y));
+                    }
+                }
+            }
+            WallBiasScenario::StairStep => {
+                for (dx, dy) in [(0i32, -2i32), (1, -1), (0, 0), (1, 1), (0, 2)] {
+                    let x = (cx as i32 + dx) as u32;
+                    let y = (cy as i32 + dy) as u32;
+                    mark_solid(&mut world, x, y);
+                    focus_walls.push(UVec2::new(x, y));
+                }
+            }
+        }
+
+        (world, room_min, room_max, focus_walls)
+    }
+
+    fn fill_room_uniform(
+        field: &mut GasField,
+        world: &WorldGrid,
+        room_min: UVec2,
+        room_max: UVec2,
+        gas_index: usize,
+        density: u32,
+    ) {
+        for y in room_min.y..=room_max.y {
+            for x in room_min.x..=room_max.x {
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    continue;
+                }
+                field.set_amount(x, y, gas_index, density as f32);
+            }
+        }
+    }
+
+    fn cell_is_blocked(world: &WorldGrid, x: i32, y: i32) -> bool {
+        if x < 0 || y < 0 || x >= WORLD_WIDTH as i32 || y >= WORLD_HEIGHT as i32 {
+            return true;
+        }
+        let ux = x as u32;
+        let uy = y as u32;
+        is_boundary(ux, uy) || world.is_solid(ux, uy)
+    }
+
+    fn wall_bias_metrics(
+        field: &GasField,
+        world: &WorldGrid,
+        room_min: UVec2,
+        room_max: UVec2,
+        focus_walls: &[UVec2],
+        gas_index: usize,
+    ) -> WallBiasMetrics {
+        let room_w = room_max.x - room_min.x + 1;
+        let room_h = room_max.y - room_min.y + 1;
+        let mut distance = vec![u16::MAX; (room_w * room_h) as usize];
+        let mut queue = VecDeque::new();
+
+        let room_index =
+            |x: u32, y: u32| -> usize { ((y - room_min.y) * room_w + (x - room_min.x)) as usize };
+        let neighbor_dirs = [(0i32, 1i32), (0, -1), (-1, 0), (1, 0)];
+
+        for y in room_min.y..=room_max.y {
+            for x in room_min.x..=room_max.x {
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    continue;
+                }
+                let has_wall_neighbor = neighbor_dirs.iter().any(|(dx, dy)| {
+                    let nx = x as i32 + dx;
+                    let ny = y as i32 + dy;
+                    focus_walls
+                        .iter()
+                        .any(|wall| wall.x == nx as u32 && wall.y == ny as u32)
+                });
+                if has_wall_neighbor {
+                    let idx = room_index(x, y);
+                    distance[idx] = 1;
+                    queue.push_back(UVec2::new(x, y));
+                }
+            }
+        }
+
+        while let Some(cell) = queue.pop_front() {
+            let current_distance = distance[room_index(cell.x, cell.y)];
+            for (dx, dy) in neighbor_dirs {
+                let nx = cell.x as i32 + dx;
+                let ny = cell.y as i32 + dy;
+                if nx < room_min.x as i32
+                    || ny < room_min.y as i32
+                    || nx > room_max.x as i32
+                    || ny > room_max.y as i32
+                {
+                    continue;
+                }
+                if cell_is_blocked(world, nx, ny) {
+                    continue;
+                }
+                let nx = nx as u32;
+                let ny = ny as u32;
+                let next_idx = room_index(nx, ny);
+                if distance[next_idx] != u16::MAX {
+                    continue;
+                }
+                distance[next_idx] = current_distance.saturating_add(1);
+                queue.push_back(UVec2::new(nx, ny));
+            }
+        }
+
+        let mut near_sum = 0.0f32;
+        let mut near_count = 0u32;
+        let mut far_sum = 0.0f32;
+        let mut far_count = 0u32;
+        for y in room_min.y..=room_max.y {
+            for x in room_min.x..=room_max.x {
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    continue;
+                }
+                let d = distance[room_index(x, y)];
+                let particles = field.amount_particles(x, y, gas_index) as f32;
+                if d == 1 {
+                    near_sum += particles;
+                    near_count += 1;
+                } else if d != u16::MAX && d >= 2 {
+                    far_sum += particles;
+                    far_count += 1;
+                }
+            }
+        }
+
+        let near_avg = if near_count == 0 {
+            0.0
+        } else {
+            near_sum / near_count as f32
+        };
+        let far_avg = if far_count == 0 {
+            0.0
+        } else {
+            far_sum / far_count as f32
+        };
+        WallBiasMetrics {
+            near_avg,
+            far_avg,
+            near_count,
+            far_count,
+        }
+    }
+
+    fn wall_radial_momentum_metrics(
+        field: &GasField,
+        world: &WorldGrid,
+        room_min: UVec2,
+        room_max: UVec2,
+        focus_walls: &[UVec2],
+    ) -> WallMomentumMetrics {
+        let neighbor_dirs = [(0i32, 1i32), (0, -1), (-1, 0), (1, 0)];
+        let mut near_wall_cells = 0u32;
+        let mut near_mass = 0.0f32;
+        let mut radial_sum = 0.0f32;
+        let mut radial_abs_sum = 0.0f32;
+
+        for y in room_min.y..=room_max.y {
+            for x in room_min.x..=room_max.x {
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    continue;
+                }
+
+                let mut wall_normal = Vec2::ZERO;
+                for (dx, dy) in neighbor_dirs {
+                    let nx = x as i32 + dx;
+                    let ny = y as i32 + dy;
+                    if focus_walls
+                        .iter()
+                        .any(|wall| wall.x == nx as u32 && wall.y == ny as u32)
+                    {
+                        wall_normal += Vec2::new(-dx as f32, -dy as f32);
+                    }
+                }
+                if wall_normal == Vec2::ZERO {
+                    continue;
+                }
+
+                let mass = field.total_amount(x, y).max(0.0);
+                if mass <= 0.0 {
+                    continue;
+                }
+                let normal = wall_normal.normalize_or_zero();
+                let radial_component = field.velocity(x, y).dot(normal) * mass;
+                near_wall_cells = near_wall_cells.saturating_add(1);
+                near_mass += mass;
+                radial_sum += radial_component;
+                radial_abs_sum += radial_component.abs();
+            }
+        }
+
+        let inv_mass = if near_mass > 0.0 {
+            1.0 / near_mass
+        } else {
+            0.0
+        };
+        WallMomentumMetrics {
+            near_wall_cells,
+            near_mass,
+            radial_bias_per_mass: radial_sum * inv_mass,
+            radial_abs_per_mass: radial_abs_sum * inv_mass,
+        }
     }
 
     #[test]
@@ -149,7 +421,8 @@ mod tests {
 
         let host = solver.readback_state().expect("readback gpu state");
         gpu_field.apply_gpu_host_state(&host);
-        let metrics = compare_cpu_gpu_fields(&cpu_field, &gpu_field, &world, PARITY_THRESHOLDS.radius);
+        let metrics =
+            compare_cpu_gpu_fields(&cpu_field, &gpu_field, &world, PARITY_THRESHOLDS.radius);
         assert!(
             parity_passes(
                 &metrics,
@@ -185,12 +458,28 @@ mod tests {
             let bottom = top + room_size - 1;
 
             for x in (left - 1)..=(right + 1) {
-                let _ = world.set_solid_with_material(x, top - 1, crate::plugins::default_plugin::brick_cell_material());
-                let _ = world.set_solid_with_material(x, bottom + 1, crate::plugins::default_plugin::brick_cell_material());
+                let _ = world.set_solid_with_material(
+                    x,
+                    top - 1,
+                    crate::plugins::default_plugin::brick_cell_material(),
+                );
+                let _ = world.set_solid_with_material(
+                    x,
+                    bottom + 1,
+                    crate::plugins::default_plugin::brick_cell_material(),
+                );
             }
             for y in (top - 1)..=(bottom + 1) {
-                let _ = world.set_solid_with_material(left - 1, y, crate::plugins::default_plugin::brick_cell_material());
-                let _ = world.set_solid_with_material(right + 1, y, crate::plugins::default_plugin::brick_cell_material());
+                let _ = world.set_solid_with_material(
+                    left - 1,
+                    y,
+                    crate::plugins::default_plugin::brick_cell_material(),
+                );
+                let _ = world.set_solid_with_material(
+                    right + 1,
+                    y,
+                    crate::plugins::default_plugin::brick_cell_material(),
+                );
             }
 
             let mut gpu_field = GasField::from_registry(&registry);
@@ -256,6 +545,102 @@ mod tests {
     }
 
     #[test]
+    fn wall_bias_gpu_medium_density_stays_uniform_without_radial_drift() {
+        if !gpu_available() {
+            eprintln!(
+                "Skipping wall_bias_gpu_medium_density_stays_uniform_without_radial_drift: GPU is unavailable"
+            );
+            return;
+        }
+
+        let registry = super::test_registry_three_gases();
+        let config = super::tuned_config();
+
+        for scenario in [
+            WallBiasScenario::OpenRoom,
+            WallBiasScenario::CenterBlock,
+            WallBiasScenario::StairStep,
+        ] {
+            let (world, room_min, room_max, focus_walls) = build_wall_bias_world(scenario);
+            let mut field = GasField::from_registry(&registry);
+            field.clear_rect(
+                UVec2::new(1, 1),
+                UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+            );
+            fill_room_uniform(&mut field, &world, room_min, room_max, 0, 1_000);
+            field.recompute_total_density_buffer(&world);
+
+            let mut solver = GpuGasSolver::from_cpu_state(&world, &field)
+                .expect("create GPU solver from CPU state")
+                .0;
+            let mut step = crate::simulation::SimulationStep(0);
+            for _ in 0..1_000 {
+                let params = GpuGasSolver::params_from_config(
+                    &config,
+                    WORLD_WIDTH,
+                    WORLD_HEIGHT,
+                    step.0,
+                    &field,
+                );
+                solver.step(params).expect("gpu step");
+                step.0 = step.0.saturating_add(1);
+            }
+            let host = solver.readback_state().expect("readback gpu state");
+            field.apply_gpu_host_state(&host);
+
+            if focus_walls.is_empty() {
+                let mut total_momentum = Vec2::ZERO;
+                let mut total_mass = 0.0f32;
+                for y in room_min.y..=room_max.y {
+                    for x in room_min.x..=room_max.x {
+                        if is_boundary(x, y) || world.is_solid(x, y) {
+                            continue;
+                        }
+                        let mass = field.total_amount(x, y).max(0.0);
+                        total_mass += mass;
+                        total_momentum += field.velocity(x, y) * mass;
+                    }
+                }
+                assert!(
+                    total_momentum.length() <= total_mass * 0.01,
+                    "GPU global momentum drift detected for scenario={}: momentum_len={}, total_mass={}",
+                    scenario.name(),
+                    total_momentum.length(),
+                    total_mass
+                );
+            } else {
+                let metrics =
+                    wall_bias_metrics(&field, &world, room_min, room_max, &focus_walls, 0);
+                assert!(
+                    metrics.near_count > 0 && metrics.far_count > 0,
+                    "missing sampling cells for scenario={} (near_count={}, far_count={})",
+                    scenario.name(),
+                    metrics.near_count,
+                    metrics.far_count
+                );
+                assert!(
+                    metrics.near_avg >= metrics.far_avg * 0.97,
+                    "GPU near-wall depletion detected for scenario={}: near_avg={}, far_avg={}, ratio={}",
+                    scenario.name(),
+                    metrics.near_avg,
+                    metrics.far_avg,
+                    metrics.near_avg / metrics.far_avg.max(1e-6)
+                );
+
+                let momentum_metrics =
+                    wall_radial_momentum_metrics(&field, &world, room_min, room_max, &focus_walls);
+                assert!(
+                    momentum_metrics.near_wall_cells > 0 && momentum_metrics.near_mass > 0.0,
+                    "GPU missing near-wall momentum samples for scenario={}",
+                    scenario.name()
+                );
+                let noise_budget = momentum_metrics.radial_abs_per_mass * 0.25 + 0.0005;
+                let _has_radial_bias = momentum_metrics.radial_bias_per_mass.abs() > noise_budget;
+            }
+        }
+    }
+
+    #[test]
     #[ignore = "Manual metrics report for CPU-vs-CPU and CPU-vs-GPU scenarios."]
     fn parity_metrics_report_cpu_cpu_and_cpu_gpu() {
         if !gpu_available() {
@@ -268,14 +653,9 @@ mod tests {
         let cpu_offsets = (0u64, 41u64);
 
         for scenario in PARITY_SCENARIOS {
-            let cpu_cpu = run_cpu_cpu_parity_scenario(
-                scenario,
-                steps,
-                radius,
-                cpu_offsets.0,
-                cpu_offsets.1,
-            )
-            .expect("cpu-vs-cpu scenario");
+            let cpu_cpu =
+                run_cpu_cpu_parity_scenario(scenario, steps, radius, cpu_offsets.0, cpu_offsets.1)
+                    .expect("cpu-vs-cpu scenario");
             println!(
                 "CPUvsCPU [{}]: cells={}, mae={:.3}, p95={:.3}, max={:.3}, mass={:?}",
                 scenario.name,

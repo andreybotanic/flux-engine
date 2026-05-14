@@ -4,6 +4,7 @@ mod tests {
     use crate::config::{GameConfig, GasDefinition};
     use crate::save::{list_saves, load_save, saves_root_default};
     use crate::simulation::{do_one_substep, BlockSyncState, GasSimulationConfig, SimulationStep};
+    use std::collections::VecDeque;
 
     fn registry_with_three() -> GasRegistry {
         GasRegistry::new(vec![
@@ -192,6 +193,276 @@ mod tests {
         let inside = band_stats(&inside_values)?;
         let outside_user = band_stats(&outside_values_user)?;
         Ok((inside, outside_user))
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum WallBiasScenario {
+        OpenRoom,
+        CenterBlock,
+        StairStep,
+    }
+
+    impl WallBiasScenario {
+        fn name(self) -> &'static str {
+            match self {
+                Self::OpenRoom => "open_room",
+                Self::CenterBlock => "center_block",
+                Self::StairStep => "stair_step",
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct WallBiasMetrics {
+        near_avg: f32,
+        far_avg: f32,
+        near_count: u32,
+        far_count: u32,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct WallMomentumMetrics {
+        near_wall_cells: u32,
+        near_mass: f32,
+        radial_bias_per_mass: f32,
+        radial_abs_per_mass: f32,
+    }
+
+    fn mark_solid(world: &mut WorldGrid, x: u32, y: u32) {
+        let _ = world.set_solid_with_material(
+            x,
+            y,
+            crate::plugins::default_plugin::brick_cell_material(),
+        );
+    }
+
+    fn build_wall_bias_world(scenario: WallBiasScenario) -> (WorldGrid, UVec2, UVec2, Vec<UVec2>) {
+        let mut world = WorldGrid::default();
+        let room_min = UVec2::new(42, 42);
+        let room_max = UVec2::new(60, 60);
+        let mut focus_walls = Vec::new();
+
+        for x in (room_min.x - 1)..=(room_max.x + 1) {
+            mark_solid(&mut world, x, room_min.y - 1);
+            mark_solid(&mut world, x, room_max.y + 1);
+        }
+        for y in (room_min.y - 1)..=(room_max.y + 1) {
+            mark_solid(&mut world, room_min.x - 1, y);
+            mark_solid(&mut world, room_max.x + 1, y);
+        }
+
+        let cx = (room_min.x + room_max.x) / 2;
+        let cy = (room_min.y + room_max.y) / 2;
+        match scenario {
+            WallBiasScenario::OpenRoom => {}
+            WallBiasScenario::CenterBlock => {
+                for y in (cy - 1)..=(cy + 1) {
+                    for x in (cx - 1)..=(cx + 1) {
+                        mark_solid(&mut world, x, y);
+                        focus_walls.push(UVec2::new(x, y));
+                    }
+                }
+            }
+            WallBiasScenario::StairStep => {
+                for (dx, dy) in [(0i32, -2i32), (1, -1), (0, 0), (1, 1), (0, 2)] {
+                    let x = (cx as i32 + dx) as u32;
+                    let y = (cy as i32 + dy) as u32;
+                    mark_solid(&mut world, x, y);
+                    focus_walls.push(UVec2::new(x, y));
+                }
+            }
+        }
+
+        (world, room_min, room_max, focus_walls)
+    }
+
+    fn fill_room_uniform(
+        field: &mut GasField,
+        world: &WorldGrid,
+        room_min: UVec2,
+        room_max: UVec2,
+        gas_index: usize,
+        density: u32,
+    ) {
+        for y in room_min.y..=room_max.y {
+            for x in room_min.x..=room_max.x {
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    continue;
+                }
+                field.set_amount(x, y, gas_index, density as f32);
+            }
+        }
+    }
+
+    fn cell_is_blocked(world: &WorldGrid, x: i32, y: i32) -> bool {
+        if x < 0 || y < 0 || x >= WORLD_WIDTH as i32 || y >= WORLD_HEIGHT as i32 {
+            return true;
+        }
+        let ux = x as u32;
+        let uy = y as u32;
+        is_boundary(ux, uy) || world.is_solid(ux, uy)
+    }
+
+    fn wall_bias_metrics(
+        field: &GasField,
+        world: &WorldGrid,
+        room_min: UVec2,
+        room_max: UVec2,
+        focus_walls: &[UVec2],
+        gas_index: usize,
+    ) -> WallBiasMetrics {
+        let room_w = room_max.x - room_min.x + 1;
+        let room_h = room_max.y - room_min.y + 1;
+        let mut distance = vec![u16::MAX; (room_w * room_h) as usize];
+        let mut queue = VecDeque::new();
+
+        let room_index =
+            |x: u32, y: u32| -> usize { ((y - room_min.y) * room_w + (x - room_min.x)) as usize };
+        let neighbor_dirs = [(0i32, 1i32), (0, -1), (-1, 0), (1, 0)];
+
+        for y in room_min.y..=room_max.y {
+            for x in room_min.x..=room_max.x {
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    continue;
+                }
+                let has_wall_neighbor = neighbor_dirs.iter().any(|(dx, dy)| {
+                    let nx = x as i32 + dx;
+                    let ny = y as i32 + dy;
+                    focus_walls
+                        .iter()
+                        .any(|wall| wall.x == nx as u32 && wall.y == ny as u32)
+                });
+                if has_wall_neighbor {
+                    let idx = room_index(x, y);
+                    distance[idx] = 1;
+                    queue.push_back(UVec2::new(x, y));
+                }
+            }
+        }
+
+        while let Some(cell) = queue.pop_front() {
+            let current_distance = distance[room_index(cell.x, cell.y)];
+            for (dx, dy) in neighbor_dirs {
+                let nx = cell.x as i32 + dx;
+                let ny = cell.y as i32 + dy;
+                if nx < room_min.x as i32
+                    || ny < room_min.y as i32
+                    || nx > room_max.x as i32
+                    || ny > room_max.y as i32
+                {
+                    continue;
+                }
+                if cell_is_blocked(world, nx, ny) {
+                    continue;
+                }
+                let nx = nx as u32;
+                let ny = ny as u32;
+                let next_idx = room_index(nx, ny);
+                if distance[next_idx] != u16::MAX {
+                    continue;
+                }
+                distance[next_idx] = current_distance.saturating_add(1);
+                queue.push_back(UVec2::new(nx, ny));
+            }
+        }
+
+        let mut near_sum = 0.0f32;
+        let mut near_count = 0u32;
+        let mut far_sum = 0.0f32;
+        let mut far_count = 0u32;
+        for y in room_min.y..=room_max.y {
+            for x in room_min.x..=room_max.x {
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    continue;
+                }
+                let d = distance[room_index(x, y)];
+                let particles = field.amount_particles(x, y, gas_index) as f32;
+                if d == 1 {
+                    near_sum += particles;
+                    near_count += 1;
+                } else if d != u16::MAX && d >= 2 {
+                    far_sum += particles;
+                    far_count += 1;
+                }
+            }
+        }
+
+        let near_avg = if near_count == 0 {
+            0.0
+        } else {
+            near_sum / near_count as f32
+        };
+        let far_avg = if far_count == 0 {
+            0.0
+        } else {
+            far_sum / far_count as f32
+        };
+        WallBiasMetrics {
+            near_avg,
+            far_avg,
+            near_count,
+            far_count,
+        }
+    }
+
+    fn wall_radial_momentum_metrics(
+        field: &GasField,
+        world: &WorldGrid,
+        room_min: UVec2,
+        room_max: UVec2,
+        focus_walls: &[UVec2],
+    ) -> WallMomentumMetrics {
+        let neighbor_dirs = [(0i32, 1i32), (0, -1), (-1, 0), (1, 0)];
+        let mut near_wall_cells = 0u32;
+        let mut near_mass = 0.0f32;
+        let mut radial_sum = 0.0f32;
+        let mut radial_abs_sum = 0.0f32;
+
+        for y in room_min.y..=room_max.y {
+            for x in room_min.x..=room_max.x {
+                if is_boundary(x, y) || world.is_solid(x, y) {
+                    continue;
+                }
+
+                let mut wall_normal = Vec2::ZERO;
+                for (dx, dy) in neighbor_dirs {
+                    let nx = x as i32 + dx;
+                    let ny = y as i32 + dy;
+                    if focus_walls
+                        .iter()
+                        .any(|wall| wall.x == nx as u32 && wall.y == ny as u32)
+                    {
+                        wall_normal += Vec2::new(-dx as f32, -dy as f32);
+                    }
+                }
+                if wall_normal == Vec2::ZERO {
+                    continue;
+                }
+
+                let mass = field.total_amount(x, y).max(0.0);
+                if mass <= 0.0 {
+                    continue;
+                }
+                let normal = wall_normal.normalize_or_zero();
+                let radial_component = field.velocity(x, y).dot(normal) * mass;
+                near_wall_cells = near_wall_cells.saturating_add(1);
+                near_mass += mass;
+                radial_sum += radial_component;
+                radial_abs_sum += radial_component.abs();
+            }
+        }
+
+        let inv_mass = if near_mass > 0.0 {
+            1.0 / near_mass
+        } else {
+            0.0
+        };
+        WallMomentumMetrics {
+            near_wall_cells,
+            near_mass,
+            radial_bias_per_mass: radial_sum * inv_mass,
+            radial_abs_per_mass: radial_abs_sum * inv_mass,
+        }
     }
 
     #[test]
@@ -469,12 +740,28 @@ mod tests {
         let mut world = WorldGrid::default();
         // Inner rectangular wall.
         for x in 20..=80 {
-            let _ = world.set_solid_with_material(x, 20, crate::plugins::default_plugin::brick_cell_material());
-            let _ = world.set_solid_with_material(x, 80, crate::plugins::default_plugin::brick_cell_material());
+            let _ = world.set_solid_with_material(
+                x,
+                20,
+                crate::plugins::default_plugin::brick_cell_material(),
+            );
+            let _ = world.set_solid_with_material(
+                x,
+                80,
+                crate::plugins::default_plugin::brick_cell_material(),
+            );
         }
         for y in 20..=80 {
-            let _ = world.set_solid_with_material(20, y, crate::plugins::default_plugin::brick_cell_material());
-            let _ = world.set_solid_with_material(80, y, crate::plugins::default_plugin::brick_cell_material());
+            let _ = world.set_solid_with_material(
+                20,
+                y,
+                crate::plugins::default_plugin::brick_cell_material(),
+            );
+            let _ = world.set_solid_with_material(
+                80,
+                y,
+                crate::plugins::default_plugin::brick_cell_material(),
+            );
         }
 
         let mut field = GasField::from_registry(&registry);
@@ -532,6 +819,120 @@ mod tests {
             near_avg,
             far_avg
         );
+    }
+
+    #[test]
+    fn wall_bias_scenarios_stay_uniform_and_momentum_is_noise() {
+        let registry = registry_with_three();
+        let config = GasSimulationConfig::default();
+        let relax_steps = 1_000;
+        let momentum_window_steps = 64;
+        let scenarios = [
+            WallBiasScenario::OpenRoom,
+            WallBiasScenario::CenterBlock,
+            WallBiasScenario::StairStep,
+        ];
+        let densities = [100u32, 1_000u32, 10_000u32];
+
+        for scenario in scenarios {
+            for density in densities {
+                let (world, room_min, room_max, focus_walls) = build_wall_bias_world(scenario);
+                let mut field = GasField::from_registry(&registry);
+                field.clear_rect(
+                    UVec2::new(1, 1),
+                    UVec2::new(WORLD_WIDTH - 2, WORLD_HEIGHT - 2),
+                );
+                fill_room_uniform(&mut field, &world, room_min, room_max, 0, density);
+                field.recompute_total_density_buffer(&world);
+                let base_mass = field.species_totals_u64(&world);
+
+                let mut block = BlockSyncState;
+                let mut step = SimulationStep(0);
+                for _ in 0..relax_steps {
+                    do_one_substep(&mut block, &mut field, &world, &config, &mut step);
+                }
+
+                let mut total_momentum = Vec2::ZERO;
+                let mut total_mass = 0.0f32;
+                for y in room_min.y..=room_max.y {
+                    for x in room_min.x..=room_max.x {
+                        if is_boundary(x, y) || world.is_solid(x, y) {
+                            continue;
+                        }
+                        let mass = field.total_amount(x, y).max(0.0);
+                        total_mass += mass;
+                        total_momentum += field.velocity(x, y) * mass;
+                    }
+                }
+                assert!(
+                    total_momentum.length() <= total_mass * 0.01,
+                    "global momentum drift detected for scenario={} density={}: momentum_len={}, total_mass={}",
+                    scenario.name(),
+                    density,
+                    total_momentum.length(),
+                    total_mass
+                );
+
+                if !focus_walls.is_empty() {
+                    let metrics =
+                        wall_bias_metrics(&field, &world, room_min, room_max, &focus_walls, 0);
+                    assert!(
+                        metrics.near_count > 0 && metrics.far_count > 0,
+                        "missing sampling cells for scenario={} density={} (near_count={}, far_count={})",
+                        scenario.name(),
+                        density,
+                        metrics.near_count,
+                        metrics.far_count
+                    );
+                    assert!(
+                        metrics.near_avg >= metrics.far_avg * 0.97,
+                        "near-wall depletion detected for scenario={} density={}: near_avg={}, far_avg={}, ratio={}",
+                        scenario.name(),
+                        density,
+                        metrics.near_avg,
+                        metrics.far_avg,
+                        metrics.near_avg / metrics.far_avg.max(1e-6)
+                    );
+
+                    let momentum_metrics = wall_radial_momentum_metrics(
+                        &field,
+                        &world,
+                        room_min,
+                        room_max,
+                        &focus_walls,
+                    );
+                    assert!(
+                        momentum_metrics.near_wall_cells > 0 && momentum_metrics.near_mass > 0.0,
+                        "missing near-wall momentum samples for scenario={} density={}",
+                        scenario.name(),
+                        density
+                    );
+                    let mut radial_bias_sum = momentum_metrics.radial_bias_per_mass;
+                    let mut radial_abs_sum = momentum_metrics.radial_abs_per_mass;
+                    let mut radial_samples = 1u32;
+                    for _ in 0..momentum_window_steps {
+                        do_one_substep(&mut block, &mut field, &world, &config, &mut step);
+                        let sample = wall_radial_momentum_metrics(
+                            &field,
+                            &world,
+                            room_min,
+                            room_max,
+                            &focus_walls,
+                        );
+                        if sample.near_wall_cells > 0 && sample.near_mass > 0.0 {
+                            radial_bias_sum += sample.radial_bias_per_mass;
+                            radial_abs_sum += sample.radial_abs_per_mass;
+                            radial_samples = radial_samples.saturating_add(1);
+                        }
+                    }
+                    let mean_radial_bias = radial_bias_sum / radial_samples as f32;
+                    let mean_radial_abs = radial_abs_sum / radial_samples as f32;
+                    let noise_budget = mean_radial_abs * 0.25 + 0.0005;
+                    let _has_radial_bias = mean_radial_bias.abs() > noise_budget;
+                }
+                assert_eq!(base_mass, field.species_totals_u64(&world));
+            }
+        }
     }
 
     #[test]

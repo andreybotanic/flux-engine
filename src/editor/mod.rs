@@ -89,8 +89,7 @@ const GAS_TOOL_PANEL_ID: PanelId = PanelId::new("gas_tool_panel");
 const STRUCTURE_TOOL_PANEL_ID: PanelId = PanelId::new("structure_tool_panel");
 const GAS_SELECT_ADD_ID: SelectFieldId = SelectFieldId::new("gas_select_add");
 const GAS_SELECT_SOURCE_ID: SelectFieldId = SelectFieldId::new("gas_select_source");
-const SETTINGS_MUSIC_VOLUME_SLIDER_ID: SliderId =
-    SliderId::new("settings_music_volume_slider");
+const SETTINGS_MUSIC_VOLUME_SLIDER_ID: SliderId = SliderId::new("settings_music_volume_slider");
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EditorTool {

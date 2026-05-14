@@ -71,20 +71,20 @@ pub fn spawn_collapsible_block(
     root.with_children(|block| {
         block
             .spawn((
-            Button,
-            Node {
-                width: Val::Percent(100.0),
-                min_height: Val::Px(COLLAPSIBLE_HEADER_HEIGHT),
-                max_height: Val::Px(COLLAPSIBLE_HEADER_HEIGHT),
-                padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
-                display: Display::Flex,
-                flex_direction: FlexDirection::Row,
-                justify_content: JustifyContent::SpaceBetween,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            BackgroundColor(config.header_background),
-            CollapsibleBlockHeaderButton { root: root_id },
+                Button,
+                Node {
+                    width: Val::Percent(100.0),
+                    min_height: Val::Px(COLLAPSIBLE_HEADER_HEIGHT),
+                    max_height: Val::Px(COLLAPSIBLE_HEADER_HEIGHT),
+                    padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    justify_content: JustifyContent::SpaceBetween,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                BackgroundColor(config.header_background),
+                CollapsibleBlockHeaderButton { root: root_id },
             ))
             .with_children(|header| {
                 header.spawn((
@@ -117,29 +117,25 @@ pub fn spawn_collapsible_block(
                 }
             });
 
-        block.spawn((
-            Node {
-                width: Val::Percent(100.0),
-                display: if config.initial_collapsed {
-                    Display::None
-                } else {
-                    Display::Flex
+        block
+            .spawn((
+                Node {
+                    width: Val::Percent(100.0),
+                    display: if config.initial_collapsed {
+                        Display::None
+                    } else {
+                        Display::Flex
+                    },
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(config.content_row_gap_px),
+                    padding: config.content_padding,
+                    border: UiRect::new(Val::Px(1.0), Val::Px(1.0), Val::Px(0.0), Val::Px(1.0)),
+                    ..default()
                 },
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(config.content_row_gap_px),
-                padding: config.content_padding,
-                border: UiRect::new(
-                    Val::Px(1.0),
-                    Val::Px(1.0),
-                    Val::Px(0.0),
-                    Val::Px(1.0),
-                ),
-                ..default()
-            },
-            BorderColor(config.header_background),
-            CollapsibleBlockContent { root: root_id },
-        ))
-        .with_children(build_content);
+                BorderColor(config.header_background),
+                CollapsibleBlockContent { root: root_id },
+            ))
+            .with_children(build_content);
     });
 
     root_id
@@ -393,7 +389,10 @@ mod tests {
             .query_filtered::<Entity, With<CollapsibleBlockRoot>>()
             .single(app.world())
             .expect("test block should spawn one collapsible root");
-        let root_node = app.world().get::<Node>(root).expect("root should have ui node");
+        let root_node = app
+            .world()
+            .get::<Node>(root)
+            .expect("root should have ui node");
         assert_ne!(root_node.border.left, Val::Px(1.0));
         assert_ne!(root_node.border.right, Val::Px(1.0));
         assert_ne!(root_node.border.top, Val::Px(1.0));
@@ -454,7 +453,9 @@ mod tests {
             .query_filtered::<Entity, With<CollapsibleBlockHeaderButton>>()
             .single(app.world())
             .expect("test block should spawn one header button");
-        app.world_mut().entity_mut(header).insert(Interaction::Pressed);
+        app.world_mut()
+            .entity_mut(header)
+            .insert(Interaction::Pressed);
         app.update();
 
         let arrow_expanded = app

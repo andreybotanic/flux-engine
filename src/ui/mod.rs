@@ -1,6 +1,6 @@
 pub mod cell_inspector;
-pub mod collapsible_block;
 pub(crate) mod cell_inspector_model;
+pub mod collapsible_block;
 pub mod input_field;
 pub mod modal;
 pub mod palette;

@@ -1,6 +1,8 @@
 ﻿# Changelog
 
 ## 2026-05-14
+- Пересобран blocked-neighbor шаг дискретного газа в CPU (`src/simulation/discrete_step_step_block.rs`) и WGSL (`assets/shaders/gas_solver.wgsl`) по единому reflective-правилу: закрытое направление получает вес `0`, а его mobility-доля добавляется в `stay`; удалены special-case ветки перераспределения вдоль стен/углов, чтобы убрать algorithm drift между backend-ами.
+- Добавлены wall-bias сценарии (`open_room`, `center_block`, `stair_step`) с плотностями `100/1000/10000` и прогоном `~1000` шагов в CPU/GPU тестах; концентрационный критерий `near_wall_avg / far_avg >= 0.97` закреплён как регрессия, для импульсов добавлена радиальная околостенная метрика.
 - Установлен `cargo-wgsl`; WGSL-валидация вынесена в отдельный лёгкий crate `xtask_wgsl`, а alias `cargo validate-wgsl` теперь запускает именно его (без сборки `flux_engine`). Команда валидирует все `*.wgsl` по репозиторию, печатает цветной список файлов с пометками `CHANGED/UNCHANGED` и `OK/NOT OK`, выводит диагностические ошибки для проблемных файлов и итоговую сводку `total/changed/ok/errors`; `cargo xtask build-release` перед сборкой запускает тот же шаг через `cargo validate-wgsl`; для bevy-шейдеров с `#import` используется `naga_oil` fallback.
 - `collapsible_block` переведён на кликабельный заголовок: сворачивание/разворачивание теперь срабатывает по клику в любую точку header-строки, а состояние показывается той же `select_arrow`-иконкой, что и в dropdown `select` (через `flip_y`).
 - Кнопка сворачивания обычных panel-header тоже переведена с `+/-` на ту же `select_arrow`-иконку внутри кнопки; направление иконки синхронизируется по `collapsed` через `flip_y`.

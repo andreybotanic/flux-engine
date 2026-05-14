@@ -1115,8 +1115,9 @@ mod tests {
     }
 
     fn load_packaged_plugin_from_archive(archive_path: &Path) -> LoadedPluginMetadata {
-        let (manifest, registration) = crate::plugins::validate_packaged_plugin_archive(archive_path)
-            .expect("validate packaged plugin archive");
+        let (manifest, registration) =
+            crate::plugins::validate_packaged_plugin_archive(archive_path)
+                .expect("validate packaged plugin archive");
         LoadedPluginMetadata {
             plugin_id: manifest.id.clone(),
             display_name: manifest.display_name.clone(),

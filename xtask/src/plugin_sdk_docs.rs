@@ -426,7 +426,12 @@ mod tests {
     fn generated_sdk_docs_are_written_with_utf8_bom() {
         let repo = temp_repo("generated_docs_bom");
         super::generate_plugin_sdk_docs(&repo.root).expect("generate docs into temp repo");
-        let summary_path = repo.root.join("docs").join("plugin_sdk").join("src").join("SUMMARY.md");
+        let summary_path = repo
+            .root
+            .join("docs")
+            .join("plugin_sdk")
+            .join("src")
+            .join("SUMMARY.md");
         let bytes = fs::read(&summary_path).expect("read generated summary");
 
         assert!(bytes.starts_with(&[0xEF, 0xBB, 0xBF]));

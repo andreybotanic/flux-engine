@@ -268,7 +268,11 @@ fn file_modified(path: &Path) -> Result<SystemTime, XtaskError> {
         })
 }
 
-fn run_ktx_create(ktx_bin: &Path, asset: &SpritePngAsset, repo_root: &Path) -> Result<(), XtaskError> {
+fn run_ktx_create(
+    ktx_bin: &Path,
+    asset: &SpritePngAsset,
+    repo_root: &Path,
+) -> Result<(), XtaskError> {
     if asset.ktx2_path.exists() {
         fs::remove_file(asset.ktx2_path.as_path()).map_err(|error| {
             XtaskError::new(format!(
@@ -515,8 +519,8 @@ mod tests {
             .expect("create fallback parent");
         fs::write(&fallback, "fake fallback").expect("write fallback ktx");
 
-        let resolved = resolve_ktx_binary_with_path(None, fallback.as_path())
-            .expect("resolve from fallback");
+        let resolved =
+            resolve_ktx_binary_with_path(None, fallback.as_path()).expect("resolve from fallback");
         assert_eq!(resolved, fallback);
 
         let _ = fs::remove_dir_all(root);
