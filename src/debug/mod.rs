@@ -44,8 +44,6 @@ impl Default for DebugOverlaySettings {
 #[derive(Resource, Default, Clone, Copy)]
 /// Stores `DebugGasMetrics` state.
 pub struct DebugGasMetrics {
-    pub anisotropy_score: f32,
-    pub radial_wave_score: f32,
     pub mass_error: f32,
 }
 
@@ -191,78 +189,6 @@ fn update_debug_metrics(
     if !gas.is_changed() && !step.is_changed() {
         return;
     }
-
-    let center = UVec2::new(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
-    let radius = (WORLD_WIDTH.min(WORLD_HEIGHT) / 4).max(4) as f32;
-    const ANGLES: usize = 16;
-    let mut angular_samples = Vec::new();
-    for i in 0..ANGLES {
-        let a = (i as f32) * std::f32::consts::TAU / (ANGLES as f32);
-        let x = center.x as f32 + radius * a.cos();
-        let y = center.y as f32 + radius * a.sin();
-        let xi = x.round().clamp(1.0, (WORLD_WIDTH - 2) as f32) as u32;
-        let yi = y.round().clamp(1.0, (WORLD_HEIGHT - 2) as f32) as u32;
-        if world.is_solid(xi, yi) || is_boundary(xi, yi) {
-            continue;
-        }
-        angular_samples.push(gas.total_amount(xi, yi).max(0.0));
-    }
-    let mean = if angular_samples.is_empty() {
-        0.0
-    } else {
-        angular_samples.iter().sum::<f32>() / angular_samples.len() as f32
-    };
-    let std = if angular_samples.is_empty() {
-        0.0
-    } else {
-        let var = angular_samples
-            .iter()
-            .map(|v| {
-                let d = *v - mean;
-                d * d
-            })
-            .sum::<f32>()
-            / angular_samples.len() as f32;
-        var.sqrt()
-    };
-    metrics.anisotropy_score = if mean > 1e-6 { std / mean } else { 0.0 };
-
-    let max_r = ((WORLD_WIDTH.min(WORLD_HEIGHT) / 2).saturating_sub(2)) as usize;
-    let mut profile = vec![0.0f32; max_r + 1];
-    let mut counts = vec![0u32; max_r + 1];
-    for y in 1..WORLD_HEIGHT - 1 {
-        for x in 1..WORLD_WIDTH - 1 {
-            if world.is_solid(x, y) || is_boundary(x, y) {
-                continue;
-            }
-            let dx = x as i32 - center.x as i32;
-            let dy = y as i32 - center.y as i32;
-            let r = (((dx * dx + dy * dy) as f32).sqrt().round() as usize).min(max_r);
-            profile[r] += gas.total_amount(x, y).max(0.0);
-            counts[r] += 1;
-        }
-    }
-    for r in 0..=max_r {
-        if counts[r] > 0 {
-            profile[r] /= counts[r] as f32;
-        }
-    }
-    let mut wave_acc = 0.0;
-    let mut wave_n = 0u32;
-    for r in 1..max_r {
-        wave_acc += (profile[r - 1] - 2.0 * profile[r] + profile[r + 1]).abs();
-        wave_n += 1;
-    }
-    let mean_profile = if profile.is_empty() {
-        0.0
-    } else {
-        profile.iter().sum::<f32>() / profile.len() as f32
-    };
-    metrics.radial_wave_score = if wave_n > 0 && mean_profile > 1e-6 {
-        (wave_acc / wave_n as f32) / mean_profile
-    } else {
-        0.0
-    };
 
     let totals = gas.species_totals(&world);
 

@@ -1,4 +1,5 @@
 pub mod cell_inspector;
+pub mod collapsible_block;
 pub(crate) mod cell_inspector_model;
 pub mod input_field;
 pub mod modal;
@@ -13,6 +14,7 @@ pub mod toggle_switch;
 use bevy::prelude::*;
 
 use self::cell_inspector::{setup_cell_inspector, update_cell_inspector};
+use self::collapsible_block::CollapsibleBlockPlugin;
 use self::input_field::TextInputPlugin;
 use self::modal::ModalPlugin;
 use self::panels::PanelPlugin;
@@ -64,6 +66,7 @@ impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
             TextInputPlugin,
+            CollapsibleBlockPlugin,
             ModalPlugin,
             PanelPlugin,
             ScrollAreaPlugin,

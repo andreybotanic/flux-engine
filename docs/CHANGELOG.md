@@ -1,6 +1,15 @@
 ﻿# Changelog
 
+## 2026-05-14
+- `collapsible_block` переведён на кликабельный заголовок: сворачивание/разворачивание теперь срабатывает по клику в любую точку header-строки, а состояние показывается той же `select_arrow`-иконкой, что и в dropdown `select` (через `flip_y`).
+- Кнопка сворачивания обычных panel-header тоже переведена с `+/-` на ту же `select_arrow`-иконку внутри кнопки; направление иконки синхронизируется по `collapsed` через `flip_y`.
+- У content-части `collapsible_block` убрана верхняя граница рамки: рамка оставлена только по бокам и снизу, чтобы header и content визуально не разделялись двойной линией.
+- Для `toggle_switch` добавлен compact-layout в варианте без label: высота switch и внутренних элементов уменьшена, чтобы строки `Buoyancy/Show impulses` визуально совпадали по вертикальному ритму с input-строками.
+- Для panel viewport при активном скролле добавлен резерв ширины под scrollbar (`padding-right` увеличивается на ширину скроллбара), поэтому полоса прокрутки больше не перекрывает правый контент-отступ.
+
 ## 2026-05-13
+- Debug Panel переработана в иерархию сворачиваемых блоков (`Time`, `Gas simulation`, `Gas overlay`), переключатели `Buoyancy/Show impulses` переведены на `toggle_switch`, а диагностические метрики `anisotropy` и `radial waves` удалены из runtime/UI в пользу отдельной строки `mass error`.
+- Для сворачиваемых блоков Debug Panel убрана общая внешняя рамка: рамка теперь рисуется только у content-области и использует цвет header-строки; `Buoyancy/Show impulses` switch без label прижимаются к правому краю строки.
 - Исправлена генерация Plugin SDK документации: `cargo xtask generate-plugin-sdk-docs` теперь записывает `docs/plugin_sdk/src/*.md` в `UTF-8 with BOM`, а external `SDK Example` snippets встраиваются без ведущего BOM, поэтому в generated-файлах больше не появляется `п»ї` и снижается шум ложных git-изменений.
 - Исправлено размытие газа в `F1/F2` после перехода на глобальный linear sampler: runtime-текстуры газового оверлея (`Rgba32Float`) теперь явно используют `ImageSampler::nearest`, поэтому границы газа у твёрдых блоков снова рисуются чётко.
 - В инициализации Bevy `ImagePlugin` заменён `default_nearest()` на явный `default_sampler` с `ImageFilterMode::Linear` для `mag/min/mipmap`, чтобы файлы со сгенерированными mip-levels корректно фильтровались в рантайме.

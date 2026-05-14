@@ -13,13 +13,31 @@ use bevy::{
 };
 
 const PANEL_HEADER_HEIGHT: f32 = 34.0;
+const PANEL_CONTENT_PADDING_X: f32 = 10.0;
 const PANEL_CONTENT_PADDING_Y: f32 = 10.0;
+const PANEL_SCROLLBAR_WIDTH: f32 = 6.0;
+const PANEL_SCROLLBAR_RIGHT: f32 = 2.0;
 const PANEL_HEADER_BUTTON_SIZE: f32 = 24.0;
 const PANEL_HEADER_BUTTON_BG: Color = palette::PANEL_HEADER_BUTTON_BG;
 const PANEL_HEADER_TEXT: Color = palette::TEXT_PRIMARY;
 
 /// Default gap between panels stacked in the same corner.
 pub const DEFAULT_PANEL_STACK_GAP: f32 = 12.0;
+
+fn panel_content_padding(scroll_enabled: bool) -> UiRect {
+    let right_padding = PANEL_CONTENT_PADDING_X
+        + if scroll_enabled {
+            PANEL_SCROLLBAR_WIDTH
+        } else {
+            0.0
+        };
+    UiRect::new(
+        Val::Px(PANEL_CONTENT_PADDING_X),
+        Val::Px(right_padding),
+        Val::Px(PANEL_CONTENT_PADDING_Y),
+        Val::Px(PANEL_CONTENT_PADDING_Y),
+    )
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 /// Stores `PanelId` state.
@@ -87,6 +105,7 @@ pub enum PanelScrollPolicy {
 pub struct PanelSpec {
     pub id: PanelId,
     pub title: String,
+    pub collapse_icon: Option<Handle<Image>>,
     pub corner: PanelCorner,
     pub width: f32,
     pub margin_x: f32,

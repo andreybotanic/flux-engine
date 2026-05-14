@@ -308,6 +308,7 @@ fn setup_editor_ui(
         PanelSpec {
             id: DEBUG_PANEL_ID,
             title: "Debug Panel".to_string(),
+            collapse_icon: Some(icon_set.select_arrow.clone()),
             corner: PanelCorner::TopRight,
             width: DEBUG_PANEL_WIDTH,
             margin_x: DEBUG_PANEL_RIGHT,
@@ -327,6 +328,7 @@ fn setup_editor_ui(
         |parent| {
             spawn_debug_panel_content(
                 parent,
+                icon_set.select_arrow.clone(),
                 sim_hz_initial,
                 sim_hz_initial_text.clone(),
                 buoyancy_strength_initial,
@@ -355,6 +357,7 @@ fn setup_editor_ui(
         PanelSpec {
             id: GAS_TOOL_PANEL_ID,
             title: "Gas Panel".to_string(),
+            collapse_icon: Some(icon_set.select_arrow.clone()),
             corner: PanelCorner::TopRight,
             width: GAS_PANEL_WIDTH,
             margin_x: GAS_PANEL_RIGHT,
@@ -382,6 +385,7 @@ fn setup_editor_ui(
         PanelSpec {
             id: STRUCTURE_TOOL_PANEL_ID,
             title: "Structure Panel".to_string(),
+            collapse_icon: Some(icon_set.select_arrow.clone()),
             corner: PanelCorner::TopRight,
             width: STRUCTURE_PANEL_WIDTH,
             margin_x: STRUCTURE_PANEL_RIGHT,

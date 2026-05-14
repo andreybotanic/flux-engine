@@ -281,10 +281,37 @@ struct StructureSinkSection;
 struct StructureModeLabel;
 
 #[derive(Component)]
-struct BuoyancyToggleLabel;
+struct SimulationIterationsLabel;
 
 #[derive(Component)]
-struct SimulationPerfLabel;
+struct SimulationStepMsLabel;
+
+#[derive(Component)]
+struct SimulationStepAvgMsLabel;
+
+#[derive(Component)]
+struct SimulationPipeMsLabel;
+
+#[derive(Component)]
+struct SimulationPipeAvgMsLabel;
+
+#[derive(Component)]
+struct SimulationActualHzLabel;
+
+#[derive(Component)]
+struct SimulationGpuComputeMsLabel;
+
+#[derive(Component)]
+struct SimulationGpuUploadMsLabel;
+
+#[derive(Component)]
+struct SimulationGpuReadbackMsLabel;
+
+#[derive(Component)]
+struct SimulationGpuTotalMsLabel;
+
+#[derive(Component)]
+struct SimulationMassErrorLabel;
 
 #[derive(Component)]
 struct GasGammaInputField;
@@ -314,7 +341,16 @@ struct BuoyancyAlphaInputField;
 struct BuoyancyForceCapInputField;
 
 #[derive(Component)]
-struct WaveMetricsLabel;
+struct DebugGasOverlayBlockRoot;
+
+#[derive(Component)]
+struct DebugGpuTimeRow;
+
+#[derive(Component)]
+struct DebugBuoyancySwitch;
+
+#[derive(Component)]
+struct DebugImpulseSwitch;
 
 #[derive(Component)]
 struct BlueprintGhost;

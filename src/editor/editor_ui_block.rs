@@ -179,9 +179,13 @@ fn refresh_editor_ui(
         Res<SimulationPerfStats>,
     ),
     sim_step: Res<SimulationStep>,
+    ui_context: (
+        Res<DebugOverlaySettings>,
+        Res<crate::simulation::backend::SimulationBackendConfig>,
+        Res<OverlayMode>,
+    ),
     mut gas_simulation: ResMut<GasSimulationConfig>,
     mut sim_rate: ResMut<SimulationRateConfig>,
-    debug_overlay: Res<DebugOverlaySettings>,
     mut gas_visual_settings: ResMut<GasVisualSettings>,
     mut gas_settings: ResMut<GasToolSettings>,
     mut source_settings: ResMut<SourceStructureToolSettings>,
@@ -202,8 +206,9 @@ fn refresh_editor_ui(
         world_load_state,
         mut ui_scroll_block,
     ) = ui_state;
-    let (debug_metrics, sim_control, sim_perf) = sim_metrics;
+    let (debug_metrics, _sim_control, sim_perf) = sim_metrics;
     let selected_tool = active_tool.selected;
+    let (debug_overlay, sim_backend, overlay_mode) = ui_context;
     ui_scroll_block.block_panel_scrolling = main_menu.open;
 
     if let Some(selected) = select_fields.selected_index(GAS_SELECT_ADD_ID) {
@@ -292,6 +297,12 @@ fn refresh_editor_ui(
     }
 
     for (action, mut bg) in &mut ui.button_query {
+        if matches!(
+            action,
+            EditorUiAction::ToggleBuoyancy | EditorUiAction::ToggleShowMomentumVectors
+        ) {
+            continue;
+        }
         bg.0 = match action {
             EditorUiAction::SelectTool(action_tool) if Some(*action_tool) == selected_tool => {
                 BUTTON_ACTIVE
@@ -305,12 +316,6 @@ fn refresh_editor_ui(
                 BUTTON_ACTIVE
             }
             EditorUiAction::ToggleReplace if gas_settings.replace => BUTTON_ACTIVE,
-            EditorUiAction::ToggleBuoyancy if gas_simulation.solver_tuning.enable_buoyancy => {
-                BUTTON_ACTIVE
-            }
-            EditorUiAction::ToggleShowMomentumVectors if debug_overlay.show_momentum_vectors => {
-                BUTTON_ACTIVE
-            }
             _ => BUTTON_IDLE,
         };
     }
@@ -390,59 +395,65 @@ fn refresh_editor_ui(
         };
     }
 
+    let replace_text_value = if gas_settings.replace {
+        "Replace: On".to_string()
+    } else {
+        "Replace: Off".to_string()
+    };
+    let iterations_text_value = format_iterations_text(sim_step.0);
+    let step_ms_text_value = format!("{:.3}", sim_perf.last_step_ms);
+    let step_avg_ms_text_value = format!("{:.3}", sim_perf.avg_step_ms);
+    let pipe_ms_text_value = format!("{:.3}", sim_perf.last_pipe_step_ms);
+    let pipe_avg_ms_text_value = format!("{:.3}", sim_perf.avg_pipe_step_ms);
+    let actual_hz_text_value = format!("{:.1}", sim_perf.actual_hz);
+    let gpu_compute_ms_text_value = format!("{:.3}", sim_perf.last_gpu_compute_ms);
+    let gpu_upload_ms_text_value = format!("{:.3}", sim_perf.last_upload_to_gpu_ms);
+    let gpu_readback_ms_text_value = format!("{:.3}", sim_perf.last_readback_from_gpu_ms);
+    let gpu_total_ms_text_value = format!("{:.3}", sim_perf.last_step_total_ms);
+    let mass_error_text_value = format_mass_error_text(debug_metrics.mass_error);
+
     {
-        let mut replace_text = ui.text_set_primary.p0();
-        replace_text.0 = if gas_settings.replace {
-            "Replace: On".to_string()
-        } else {
-            "Replace: Off".to_string()
-        };
+        let mut buoyancy_switch = ui.toggle_switch_set.p0();
+        if buoyancy_switch.on != gas_simulation.solver_tuning.enable_buoyancy
+            || !buoyancy_switch.interactive
+            || !buoyancy_switch.label.is_empty()
+        {
+            buoyancy_switch.on = gas_simulation.solver_tuning.enable_buoyancy;
+            buoyancy_switch.interactive = true;
+            buoyancy_switch.label.clear();
+        }
     }
 
     {
-        let mut buoyancy_toggle_text = ui.text_set_primary.p1();
-        buoyancy_toggle_text.0 = if gas_simulation.solver_tuning.enable_buoyancy {
-            "Buoyancy: On".to_string()
-        } else {
-            "Buoyancy: Off".to_string()
-        };
+        let mut impulse_switch = ui.toggle_switch_set.p1();
+        if impulse_switch.on != debug_overlay.show_momentum_vectors
+            || !impulse_switch.interactive
+            || !impulse_switch.label.is_empty()
+        {
+            impulse_switch.on = debug_overlay.show_momentum_vectors;
+            impulse_switch.interactive = true;
+            impulse_switch.label.clear();
+        }
     }
 
     {
-        let mut perf_text = ui.text_set_primary.p2();
-        let speed_mult = sim_control.speed.multiplier();
-        perf_text.0 = format!(
-            "Iterations: {} | Step ms: {:.3} | avg: {:.3} | Pipe ms: {:.3} | avg: {:.3} | Target Hz: {} x {} = {:.1} | Actual Hz: {:.1} | GPU compute/upload/readback/total: {:.3}/{:.3}/{:.3}/{:.3} ms",
-            sim_step.0,
-            sim_perf.last_step_ms,
-            sim_perf.avg_step_ms,
-            sim_perf.last_pipe_step_ms,
-            sim_perf.avg_pipe_step_ms,
-            sim_rate.target_hz,
-            speed_mult,
-            sim_perf.target_hz_effective,
-            sim_perf.actual_hz,
-            sim_perf.last_gpu_compute_ms,
-            sim_perf.last_upload_to_gpu_ms,
-            sim_perf.last_readback_from_gpu_ms,
-            sim_perf.last_step_total_ms
-        );
+        let show_gpu_rows = gpu_time_rows_visible(sim_backend.backend);
+        for mut row_node in &mut ui.node_set.p2() {
+            row_node.display = if show_gpu_rows {
+                Display::Flex
+            } else {
+                Display::None
+            };
+        }
     }
 
     {
-        let mut metrics_text = ui.text_set_primary.p3();
-        let vectors_mode = if debug_overlay.show_momentum_vectors {
-            "Impulse vectors: On"
+        let mut overlay_root = ui.node_set.p3();
+        overlay_root.display = if overlay_mode.is_gas() {
+            Display::Flex
         } else {
-            "Impulse vectors: Off"
+            Display::None
         };
-        metrics_text.0 = format!(
-            "{} | Anisotropy: {:.4} | Radial waves: {:.4} | Mass err: {:.4}",
-            vectors_mode,
-            debug_metrics.anisotropy_score,
-            debug_metrics.radial_wave_score,
-            debug_metrics.mass_error
-        );
     }
 
     let structure_mode = match (selected_tool, editing_structure) {
@@ -468,10 +479,63 @@ fn refresh_editor_ui(
             "No structure selected".to_string()
         }
     };
+    for (
+        mut text,
+        replace,
+        iterations,
+        step_ms,
+        step_avg_ms,
+        pipe_ms,
+        pipe_avg_ms,
+        actual_hz,
+        gpu_compute_ms,
+        gpu_upload_ms,
+        gpu_readback_ms,
+        gpu_total_ms,
+        mass_error,
+        structure_mode_label,
+    ) in &mut ui.text_values
     {
-        let mut mode_text = ui.text_set_primary.p4();
-        mode_text.0 = structure_mode;
+        if replace.is_some() {
+            text.0 = replace_text_value.clone();
+        } else if iterations.is_some() {
+            text.0 = iterations_text_value.clone();
+        } else if step_ms.is_some() {
+            text.0 = step_ms_text_value.clone();
+        } else if step_avg_ms.is_some() {
+            text.0 = step_avg_ms_text_value.clone();
+        } else if pipe_ms.is_some() {
+            text.0 = pipe_ms_text_value.clone();
+        } else if pipe_avg_ms.is_some() {
+            text.0 = pipe_avg_ms_text_value.clone();
+        } else if actual_hz.is_some() {
+            text.0 = actual_hz_text_value.clone();
+        } else if gpu_compute_ms.is_some() {
+            text.0 = gpu_compute_ms_text_value.clone();
+        } else if gpu_upload_ms.is_some() {
+            text.0 = gpu_upload_ms_text_value.clone();
+        } else if gpu_readback_ms.is_some() {
+            text.0 = gpu_readback_ms_text_value.clone();
+        } else if gpu_total_ms.is_some() {
+            text.0 = gpu_total_ms_text_value.clone();
+        } else if mass_error.is_some() {
+            text.0 = mass_error_text_value.clone();
+        } else if structure_mode_label.is_some() {
+            text.0 = structure_mode.clone();
+        }
     }
+}
+
+fn format_iterations_text(iterations: u64) -> String {
+    iterations.to_string()
+}
+
+fn format_mass_error_text(mass_error: f32) -> String {
+    format!("{mass_error:.4}")
+}
+
+fn gpu_time_rows_visible(backend: crate::simulation::backend::SimulationBackend) -> bool {
+    matches!(backend, crate::simulation::backend::SimulationBackend::Gpu)
 }
 
 #[derive(SystemParam)]
@@ -509,15 +573,40 @@ struct RefreshEditorUiSystemParams<'w, 's> {
             Single<'w, &'static mut Visibility, With<MainMenuRoot>>,
         ),
     >,
-    text_set_primary: ParamSet<
+    text_values: Query<
         'w,
         's,
         (
-            Single<'w, &'static mut Text, With<GasReplaceLabel>>,
-            Single<'w, &'static mut Text, With<BuoyancyToggleLabel>>,
-            Single<'w, &'static mut Text, With<SimulationPerfLabel>>,
-            Single<'w, &'static mut Text, With<WaveMetricsLabel>>,
-            Single<'w, &'static mut Text, With<StructureModeLabel>>,
+            &'static mut Text,
+            Option<&'static GasReplaceLabel>,
+            Option<&'static SimulationIterationsLabel>,
+            Option<&'static SimulationStepMsLabel>,
+            Option<&'static SimulationStepAvgMsLabel>,
+            Option<&'static SimulationPipeMsLabel>,
+            Option<&'static SimulationPipeAvgMsLabel>,
+            Option<&'static SimulationActualHzLabel>,
+            Option<&'static SimulationGpuComputeMsLabel>,
+            Option<&'static SimulationGpuUploadMsLabel>,
+            Option<&'static SimulationGpuReadbackMsLabel>,
+            Option<&'static SimulationGpuTotalMsLabel>,
+            Option<&'static SimulationMassErrorLabel>,
+            Option<&'static StructureModeLabel>,
+        ),
+    >,
+    toggle_switch_set: ParamSet<
+        'w,
+        's,
+        (
+            Single<
+                'w,
+                &'static mut crate::ui::toggle_switch::ToggleSwitchRoot,
+                With<DebugBuoyancySwitch>,
+            >,
+            Single<
+                'w,
+                &'static mut crate::ui::toggle_switch::ToggleSwitchRoot,
+                With<DebugImpulseSwitch>,
+            >,
         ),
     >,
     node_set: ParamSet<
@@ -526,6 +615,31 @@ struct RefreshEditorUiSystemParams<'w, 's> {
         (
             Single<'w, &'static mut Node, With<StructureSourceSection>>,
             Single<'w, &'static mut Node, With<StructureSinkSection>>,
+            Query<'w, 's, &'static mut Node, With<DebugGpuTimeRow>>,
+            Single<'w, &'static mut Node, With<DebugGasOverlayBlockRoot>>,
         ),
     >,
+}
+
+#[cfg(test)]
+mod editor_ui_block_tests {
+    use super::{format_mass_error_text, gpu_time_rows_visible};
+
+    #[test]
+    fn gpu_time_rows_are_visible_only_for_gpu_backend() {
+        assert!(gpu_time_rows_visible(
+            crate::simulation::backend::SimulationBackend::Gpu
+        ));
+        assert!(!gpu_time_rows_visible(
+            crate::simulation::backend::SimulationBackend::Cpu
+        ));
+    }
+
+    #[test]
+    fn mass_error_text_only_contains_mass_error_metric() {
+        let text = format_mass_error_text(0.1234);
+        assert_eq!(text, "0.1234");
+        assert!(!text.contains("Anisotropy"));
+        assert!(!text.contains("Radial waves"));
+    }
 }

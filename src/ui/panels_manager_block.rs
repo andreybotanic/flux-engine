@@ -152,7 +152,6 @@ impl PanelManager {
                         }
 
                         if spec.controls.show_collapse {
-                            let collapse_text = if state.collapsed { "+" } else { "-" };
                             let entity = controls
                                 .spawn((
                                     Button,
@@ -170,12 +169,27 @@ impl PanelManager {
                                     },
                                 ))
                                 .with_children(|button| {
-                                    button.spawn((
-                                        Text::new(collapse_text),
-                                        TextFont::from_font_size(14.0),
-                                        TextColor(PANEL_HEADER_TEXT),
-                                        PanelCollapseButtonLabel { panel_id },
-                                    ));
+                                    if let Some(collapse_icon) = spec.collapse_icon.clone() {
+                                        let mut image_node = ImageNode::new(collapse_icon);
+                                        image_node.flip_y = !state.collapsed;
+                                        button.spawn((
+                                            image_node,
+                                            Node {
+                                                width: Val::Px(10.0),
+                                                height: Val::Px(6.0),
+                                                ..default()
+                                            },
+                                            PanelCollapseButtonArrow { panel_id },
+                                        ));
+                                    } else {
+                                        let collapse_text = if state.collapsed { "+" } else { "-" };
+                                        button.spawn((
+                                            Text::new(collapse_text),
+                                            TextFont::from_font_size(14.0),
+                                            TextColor(PANEL_HEADER_TEXT),
+                                            PanelCollapseButtonText { panel_id },
+                                        ));
+                                    }
                                 })
                                 .id();
                             let _ = entity;
@@ -216,7 +230,7 @@ impl PanelManager {
                 .spawn((
                     Node {
                         width: Val::Percent(100.0),
-                        padding: UiRect::all(Val::Px(10.0)),
+                        padding: panel_content_padding(false),
                         display: if state.collapsed {
                             Display::None
                         } else {
@@ -254,10 +268,10 @@ impl PanelManager {
                 root,
                 viewport,
                 ScrollAreaScrollbarStyle {
-                    right_px: 2.0,
+                    right_px: PANEL_SCROLLBAR_RIGHT,
                     top_px: PANEL_HEADER_HEIGHT + PANEL_CONTENT_PADDING_Y,
                     bottom_px: PANEL_CONTENT_PADDING_Y,
-                    width_px: 6.0,
+                    width_px: PANEL_SCROLLBAR_WIDTH,
                 },
             );
         });
@@ -320,7 +334,12 @@ struct PanelContentInner {
 }
 
 #[derive(Component, Clone, Copy)]
-struct PanelCollapseButtonLabel {
+struct PanelCollapseButtonText {
+    panel_id: PanelId,
+}
+
+#[derive(Component, Clone, Copy)]
+struct PanelCollapseButtonArrow {
     panel_id: PanelId,
 }
 

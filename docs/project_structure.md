@@ -123,7 +123,7 @@ FluxEngine/
 - `src/editor/mod.rs`: Публичные editor-типы/ресурсы и точка сборки editor-систем, включая `Pipe/Vent/Bridge` и состояние поворота моста.
 - `src/editor/overlay_setup_block.rs`: Инициализация визуальных editor-оверлеев.
 - `src/editor/ui_setup_block.rs`: Сборка editor-UI: панели, кнопки, поля и привязка виджетов.
-- `src/editor/ui_setup_debug_panels_block.rs`: Построение debug-панелей и строк параметров.
+- `src/editor/ui_setup_debug_panels_block.rs`: Построение контента `Debug Panel` с вложенными сворачиваемыми блоками (`Time`, `Gas simulation`, `Gas overlay`), switch-строками и полями параметров.
 - `src/editor/ui_setup_menu_button_factory_block.rs`: Фабрика кнопок модального меню.
 - `src/editor/ui_setup_setup_fn_block.rs`: Основная функция первичной сборки editor-UI, включая кнопку `Gases`, подпaнель выбора `Pipe/Vent/Bridge`, контейнеры экранов главного меню и layout экрана `Settings` со слайдером громкости.
 - `src/editor/ui_setup_structure_buttons_block.rs`: Вспомогательные фабрики кнопок инструментов/материалов.
@@ -226,6 +226,7 @@ FluxEngine/
 - `src/simulation/simulation_tests_block.rs`: Тесты конфигурации тика и структурных pre-step правил.
 - `src/ui/cell_inspector.rs`: Runtime-сборка и позиционирование HUD инспектора клетки как стека отдельных entity-блоков с общей тенью; plugin HUD теперь собирается через общий `BuildHudForCell` dispatch, включая built-in `flux.default`.
 - `src/ui/cell_inspector_model.rs`: Модель данных и formatter HUD инспектора клетки, включая config-driven контейнеры, solid-материалы как отдельные блоки и registry-driven отображение состава газа.
+- `src/ui/collapsible_block.rs`: Переиспользуемый UI-компонент сворачиваемого блока с кликабельным заголовком и `select_arrow`-иконкой состояния (как у dropdown `select`); рамка рисуется только вокруг content-области (цвет как у header), включая runtime-синхронизацию видимости и unit-тесты.
 - `src/ui/input_field.rs`: Публичные типы text-input и точка сборки input-систем.
 - `src/ui/input_field_helpers_block.rs`: Вспомогательная геометрия курсора текста и точный hit-test/каретка через `ComputedTextBlock`.
 - `src/ui/input_field_systems_block.rs`: Системы focus/keyboard/render/caret для текстовых полей.
@@ -233,7 +234,7 @@ FluxEngine/
 - `src/ui/modal_capture_block.rs`: Snapshot/capture runtime для modal backdrop-ов: offscreen-камера, resize target-а, blur world-snapshot и cache lifecycle.
 - `src/ui/modal_runtime_block.rs`: Выбор topmost модалки, cover-layout backdrop-изображений и переключение режимов `PanelFrosted` / `FullscreenBlur`.
 - `src/ui/modal_tests_block.rs`: Unit-тесты modal helper-ов, cover-layout и правил refresh/capture для world-snapshot backdrop.
-- `src/ui/mod.rs`: UI-плагин, wiring общих UI-систем и exports переиспользуемых UI-компонентов, включая `slider` и `toggle_switch`.
+- `src/ui/mod.rs`: UI-плагин, wiring общих UI-систем и exports переиспользуемых UI-компонентов, включая `slider`, `toggle_switch` и `collapsible_block`.
 - `src/ui/palette.rs`: Единая палитра цветов UI (панели, меню, текст, input/select, tooltip, HUD и тени HUD).
 - `src/ui/panels.rs`: Публичные типы panel-системы и композиция блоков панели.
 - `src/ui/panels_manager_block.rs`: Состояние и API PanelManager, hit-rect и управление панелями.
@@ -243,7 +244,7 @@ FluxEngine/
 - `src/ui/select_field.rs`: Dropdown/select-компонент для UI-панелей, динамическая перерисовка option buttons при смене списка и его тесты.
 - `src/ui/slider.rs`: Переиспользуемый slider-компонент (`min/max/step`, clamp/квантизация, click+drag по треку) и события изменения значения.
 - `src/ui/sim_controls.rs`: UI-контролы симуляции (pause/speed/hotkeys).
-- `src/ui/toggle_switch.rs`: Переиспользуемый двухпозиционный toggle-switch UI-компонент для включения/выключения настроек.
+- `src/ui/toggle_switch.rs`: Переиспользуемый двухпозиционный toggle-switch UI-компонент для включения/выключения настроек, включая compact-layout для строк без label.
 - `src/world/grid.rs`: Клеточная сетка мира, generic material ID wrapper, координатные утилиты и тесты.
 - `src/world/mod.rs`: Плагин мира и события изменений клеток.
 - `src/world/structures.rs`: Unified layer/descriptor-модель структур, generic structure/layer ID wrapper-ы, `PlacedStructureMap`, rotation, bridge-footprint compatibility helpers и pipe-cut state.

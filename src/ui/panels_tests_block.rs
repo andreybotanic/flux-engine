@@ -2,7 +2,11 @@
 mod tests {
     use std::collections::HashMap;
 
-    use super::{PanelScrollPolicy, PANEL_HEADER_HEIGHT};
+    use super::{
+        panel_content_padding, PanelScrollPolicy, PANEL_CONTENT_PADDING_X, PANEL_HEADER_HEIGHT,
+        PANEL_SCROLLBAR_WIDTH,
+    };
+    use bevy::prelude::Val;
 
     fn should_enable_scroll(
         policy: PanelScrollPolicy,
@@ -72,6 +76,10 @@ mod tests {
         inserted.iter().rev().copied().collect()
     }
 
+    fn collapse_arrow_flip_y(collapsed: bool) -> bool {
+        !collapsed
+    }
+
     #[test]
     fn top_corner_collapse_moves_next_panel_up() {
         let gap = 12.0;
@@ -117,5 +125,24 @@ mod tests {
             .last()
             .expect("visual list should not be empty");
         assert_eq!(*rightmost, "first");
+    }
+
+    #[test]
+    fn scroll_enabled_padding_reserves_scrollbar_width() {
+        let without_scroll = panel_content_padding(false);
+        let with_scroll = panel_content_padding(true);
+        assert_eq!(without_scroll.left, Val::Px(PANEL_CONTENT_PADDING_X));
+        assert_eq!(without_scroll.right, Val::Px(PANEL_CONTENT_PADDING_X));
+        assert_eq!(with_scroll.left, Val::Px(PANEL_CONTENT_PADDING_X));
+        assert_eq!(
+            with_scroll.right,
+            Val::Px(PANEL_CONTENT_PADDING_X + PANEL_SCROLLBAR_WIDTH)
+        );
+    }
+
+    #[test]
+    fn collapse_arrow_flip_matches_panel_collapsed_state() {
+        assert!(!collapse_arrow_flip_y(true));
+        assert!(collapse_arrow_flip_y(false));
     }
 }

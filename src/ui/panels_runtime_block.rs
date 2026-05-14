@@ -157,7 +157,8 @@ fn sync_panel_visual_state(
         &mut ScrollPosition,
         &mut ScrollAreaViewport,
     )>,
-    mut collapse_labels: Query<(&PanelCollapseButtonLabel, &mut Text)>,
+    mut collapse_texts: Query<(&PanelCollapseButtonText, &mut Text)>,
+    mut collapse_arrows: Query<(&PanelCollapseButtonArrow, &mut ImageNode)>,
     mut close_query: Query<&mut Visibility>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
@@ -174,6 +175,7 @@ fn sync_panel_visual_state(
         } else {
             Display::Flex
         };
+        node.padding = panel_content_padding(panel.state.scroll_enabled);
         node.overflow = if panel.state.scroll_enabled {
             Overflow::scroll_y()
         } else {
@@ -199,11 +201,17 @@ fn sync_panel_visual_state(
         }
     }
 
-    for (label, mut text) in &mut collapse_labels {
+    for (label, mut text) in &mut collapse_texts {
         let Some(panel) = panels.panels.get(&label.panel_id) else {
             continue;
         };
         text.0 = if panel.state.collapsed { "+" } else { "-" }.to_string();
+    }
+    for (arrow, mut image_node) in &mut collapse_arrows {
+        let Some(panel) = panels.panels.get(&arrow.panel_id) else {
+            continue;
+        };
+        image_node.flip_y = !panel.state.collapsed;
     }
 
     for panel in panels.panels.values() {

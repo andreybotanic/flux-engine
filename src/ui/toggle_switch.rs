@@ -1,5 +1,19 @@
 use bevy::prelude::*;
 
+const TOGGLE_ROOT_HEIGHT_DEFAULT: f32 = 38.0;
+const TOGGLE_ROOT_HEIGHT_COMPACT: f32 = 30.0;
+const TOGGLE_TRACK_HEIGHT_DEFAULT: f32 = 28.0;
+const TOGGLE_TRACK_HEIGHT_COMPACT: f32 = 24.0;
+const TOGGLE_KNOB_SIZE_DEFAULT: f32 = 22.0;
+const TOGGLE_KNOB_SIZE_COMPACT: f32 = 18.0;
+
+#[derive(Clone, Copy)]
+struct ToggleSwitchLayout {
+    root_height: f32,
+    track_height: f32,
+    knob_size: f32,
+}
+
 /// Runtime configuration for one reusable two-position toggle switch.
 #[derive(Clone, Debug)]
 pub struct ToggleSwitchConfig {
@@ -98,13 +112,19 @@ fn toggle_switch_root_bundle(
     config: &ToggleSwitchConfig,
     palette: ToggleSwitchPalette,
 ) -> (Node, BackgroundColor, ToggleSwitchRoot) {
+    let layout = toggle_switch_layout(config);
+    let root_justify = if config.label.is_empty() {
+        JustifyContent::FlexEnd
+    } else {
+        JustifyContent::Center
+    };
     (
         Node {
             width: Val::Px(154.0),
-            height: Val::Px(38.0),
+            height: Val::Px(layout.root_height),
             display: Display::Flex,
             flex_direction: FlexDirection::Row,
-            justify_content: JustifyContent::Center,
+            justify_content: root_justify,
             align_items: AlignItems::Center,
             align_self: AlignSelf::Center,
             column_gap: Val::Px(8.0),
@@ -124,6 +144,7 @@ fn spawn_toggle_switch_children(
     config: &ToggleSwitchConfig,
     palette: ToggleSwitchPalette,
 ) {
+    let layout = toggle_switch_layout(config);
     let track_bg = if !config.interactive {
         palette.track_disabled
     } else if config.on {
@@ -140,7 +161,7 @@ fn spawn_toggle_switch_children(
         .spawn((
             Node {
                 width: Val::Px(56.0),
-                height: Val::Px(28.0),
+                height: Val::Px(layout.track_height),
                 padding: UiRect::all(Val::Px(3.0)),
                 justify_content: knob_alignment,
                 align_items: AlignItems::Center,
@@ -152,8 +173,8 @@ fn spawn_toggle_switch_children(
         .with_children(|track| {
             track.spawn((
                 Node {
-                    width: Val::Px(22.0),
-                    height: Val::Px(22.0),
+                    width: Val::Px(layout.knob_size),
+                    height: Val::Px(layout.knob_size),
                     ..default()
                 },
                 BackgroundColor(palette.knob),
@@ -222,7 +243,11 @@ impl Plugin for ToggleSwitchPlugin {
 
 #[cfg(test)]
 mod tests {
-    use super::ToggleSwitchConfig;
+    use super::{
+        toggle_switch_layout, toggle_switch_root_bundle, ToggleSwitchConfig, ToggleSwitchPalette,
+        TOGGLE_KNOB_SIZE_COMPACT, TOGGLE_ROOT_HEIGHT_COMPACT, TOGGLE_TRACK_HEIGHT_COMPACT,
+    };
+    use bevy::prelude::JustifyContent;
 
     #[test]
     fn toggle_switch_config_keeps_visual_state() {
@@ -230,5 +255,37 @@ mod tests {
         assert!(config.on);
         assert!(!config.interactive);
         assert_eq!(config.label, "Locked");
+    }
+
+    #[test]
+    fn toggle_switch_without_label_is_right_aligned() {
+        let config = ToggleSwitchConfig::new(true, true, "");
+        let (node, _, _) = toggle_switch_root_bundle(&config, ToggleSwitchPalette::default());
+        assert_eq!(node.justify_content, JustifyContent::FlexEnd);
+    }
+
+    #[test]
+    fn toggle_switch_without_label_uses_compact_layout() {
+        let config = ToggleSwitchConfig::new(false, true, "");
+        let layout = toggle_switch_layout(&config);
+        assert_eq!(layout.root_height, TOGGLE_ROOT_HEIGHT_COMPACT);
+        assert_eq!(layout.track_height, TOGGLE_TRACK_HEIGHT_COMPACT);
+        assert_eq!(layout.knob_size, TOGGLE_KNOB_SIZE_COMPACT);
+    }
+}
+
+fn toggle_switch_layout(config: &ToggleSwitchConfig) -> ToggleSwitchLayout {
+    if config.label.is_empty() {
+        ToggleSwitchLayout {
+            root_height: TOGGLE_ROOT_HEIGHT_COMPACT,
+            track_height: TOGGLE_TRACK_HEIGHT_COMPACT,
+            knob_size: TOGGLE_KNOB_SIZE_COMPACT,
+        }
+    } else {
+        ToggleSwitchLayout {
+            root_height: TOGGLE_ROOT_HEIGHT_DEFAULT,
+            track_height: TOGGLE_TRACK_HEIGHT_DEFAULT,
+            knob_size: TOGGLE_KNOB_SIZE_DEFAULT,
+        }
     }
 }
