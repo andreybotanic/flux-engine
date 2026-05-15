@@ -45,9 +45,9 @@ mod tests {
     #[test]
     fn default_pressure_conversions_match_design() {
         let config = PipeSimulationConfig::default();
-        assert_eq!(world_pressure_pa(&config, 1), 1.0);
-        assert_eq!(pipe_pressure_pa(&config, 1), 25.0);
-        assert_eq!(pipe_pressure_pa(&config, 500), 12_500.0);
+        assert_eq!(world_pressure_pa(&config, 1), 0.2);
+        assert_eq!(pipe_pressure_pa(&config, 1), 5.0);
+        assert_eq!(pipe_pressure_pa(&config, 500), 2_500.0);
     }
 
     #[test]

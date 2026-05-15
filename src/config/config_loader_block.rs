@@ -31,9 +31,9 @@ struct SolverTuningToml {
 struct PipeToml {
     cell_volume_ratio: f32,
     cell_particle_pressure_pa: f32,
-    pipe_flux_gain: f32,
-    pipe_flux_damping: f32,
-    max_pipe_flux_particles_per_tick: f32,
+    pipe_step_interval_ticks: u32,
+    max_pipe_hop_particles_per_step: u32,
+    min_pipe_branch_residual_particles: u32,
     vent_discharge_coefficient: f32,
     max_vent_flux_particles_per_tick: f32,
     vent_choked_pressure_ratio: f32,

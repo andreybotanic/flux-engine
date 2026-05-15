@@ -149,7 +149,7 @@ fn handle_editor_mouse_input(
                         pipe_gas.sync_to_structures(&structures);
                         pipe_gas.clear_cell(&structures, cell.x, cell.y);
                         let _ = structures.clear_cell(cell.x, cell.y);
-                        pipe_flow_visuals.transfers.clear();
+                        pipe_flow_visuals.reset_flow();
                     }
                     if world.set_empty(cell.x, cell.y) {
                         world_changed.write(WorldCellChanged { cell });
@@ -171,7 +171,7 @@ fn handle_editor_mouse_input(
                     },
                 );
                 if changed_pipe_layout {
-                    pipe_flow_visuals.transfers.clear();
+                    pipe_flow_visuals.reset_flow();
                 }
             }
             PipeToolKind::Vent => {
@@ -180,7 +180,7 @@ fn handle_editor_mouse_input(
                 if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
                     if let Some(cell) = hovered_cell {
                         if structures.place_vent(cell.x, cell.y, &world) {
-                            pipe_flow_visuals.transfers.clear();
+                            pipe_flow_visuals.reset_flow();
                         }
                     }
                 }
@@ -194,7 +194,7 @@ fn handle_editor_mouse_input(
                             .place_bridge(cell, bridge_state.rotation, &world)
                             .is_some()
                         {
-                            pipe_flow_visuals.transfers.clear();
+                            pipe_flow_visuals.reset_flow();
                         }
                     }
                 }
@@ -215,7 +215,7 @@ fn handle_editor_mouse_input(
                 },
             );
             if removed_connection {
-                pipe_flow_visuals.transfers.clear();
+                pipe_flow_visuals.reset_flow();
             }
         }
         Some(EditorTool::AddGas) | Some(EditorTool::ClearGas) => {

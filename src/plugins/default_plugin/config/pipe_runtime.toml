@@ -1,9 +1,10 @@
-cell_volume_ratio = 25.0
-cell_particle_pressure_pa = 1.0
-pipe_flux_gain = 8000.0
-pipe_flux_damping = 0.993
-max_pipe_flux_particles_per_tick = 50000.0
+﻿cell_volume_ratio = 25.0
+cell_particle_pressure_pa = 0.2
+pipe_step_interval_ticks = 10
+max_pipe_hop_particles_per_step = 200000
+min_pipe_branch_residual_particles = 1
 vent_discharge_coefficient = 7.8
 max_vent_flux_particles_per_tick = 200000.0
 vent_choked_pressure_ratio = 0.53
 pressure_epsilon_pa = 0.01
+

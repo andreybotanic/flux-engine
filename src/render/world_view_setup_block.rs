@@ -683,6 +683,7 @@ fn bridge_visual_transform(
     transform
 }
 
+#[cfg(test)]
 fn pipe_overlay_slot_offset(slot: usize, total_slots: usize) -> Vec2 {
     if total_slots <= 1 {
         Vec2::ZERO
@@ -690,19 +691,6 @@ fn pipe_overlay_slot_offset(slot: usize, total_slots: usize) -> Vec2 {
         Vec2::new(0.0, CELL_SIZE * 0.18)
     } else {
         Vec2::new(0.0, -CELL_SIZE * 0.18)
-    }
-}
-
-fn pipe_overlay_slot_size(
-    config: &crate::plugins::default_plugin::pipe_runtime::PipeSimulationConfig,
-    total_particles: u32,
-    total_slots: usize,
-) -> f32 {
-    let base = pipe_gas_square_size(config, total_particles);
-    if total_slots <= 1 {
-        base
-    } else {
-        (base * 0.62).max(CELL_SIZE * 0.18)
     }
 }
 

@@ -39,13 +39,13 @@ pub(crate) fn pipe_flow_reset_needed(previous_paused: Option<bool>, current_paus
 }
 
 #[derive(Resource, Clone, Copy)]
-/// Stores configuration for the pressure-driven pipe simulation owned by `flux.default`.
+/// Stores configuration for the conveyor-style pipe simulation owned by `flux.default`.
 pub struct PipeSimulationConfig {
     pub cell_volume_ratio: f32,
     pub cell_particle_pressure_pa: f32,
-    pub pipe_flux_gain: f32,
-    pub pipe_flux_damping: f32,
-    pub max_pipe_flux_particles_per_tick: f32,
+    pub pipe_step_interval_ticks: u32,
+    pub max_pipe_hop_particles_per_step: u32,
+    pub min_pipe_branch_residual_particles: u32,
     pub vent_discharge_coefficient: f32,
     pub max_vent_flux_particles_per_tick: f32,
     pub vent_choked_pressure_ratio: f32,
@@ -56,10 +56,10 @@ impl Default for PipeSimulationConfig {
     fn default() -> Self {
         Self {
             cell_volume_ratio: 25.0,
-            cell_particle_pressure_pa: 1.0,
-            pipe_flux_gain: 8_000.0,
-            pipe_flux_damping: 0.993,
-            max_pipe_flux_particles_per_tick: 50_000.0,
+            cell_particle_pressure_pa: 0.2,
+            pipe_step_interval_ticks: 10,
+            max_pipe_hop_particles_per_step: 50_000,
+            min_pipe_branch_residual_particles: 1,
             vent_discharge_coefficient: 7.8,
             max_vent_flux_particles_per_tick: 200_000.0,
             vent_choked_pressure_ratio: 0.53,
@@ -126,14 +126,6 @@ impl PipeEdgeKey {
                 a: second,
                 b: first,
             }
-        }
-    }
-
-    fn sign_for(self, source: PipeNodeKey, target: PipeNodeKey) -> f32 {
-        if self.a == source && self.b == target {
-            1.0
-        } else {
-            -1.0
         }
     }
 }
@@ -415,17 +407,6 @@ impl PipeFluxField {
             .map(|edge| (edge, 0.0))
             .collect();
     }
-
-    fn signed_flux(&self, source: PipeNodeKey, target: PipeNodeKey) -> f32 {
-        let key = PipeEdgeKey::new(source, target);
-        self.flux_by_edge.get(&key).copied().unwrap_or(0.0) * key.sign_for(source, target)
-    }
-
-    fn set_signed_flux(&mut self, source: PipeNodeKey, target: PipeNodeKey, flux: f32) {
-        let key = PipeEdgeKey::new(source, target);
-        self.flux_by_edge
-            .insert(key, flux * key.sign_for(source, target));
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -442,7 +423,9 @@ pub enum PipeTransferVisualPath {
 /// Stores `PipeTransferRecord` state.
 pub struct PipeTransferRecord {
     pub from: UVec2,
+    pub from_kind: PipeContainerKind,
     pub to: UVec2,
+    pub to_kind: PipeContainerKind,
     pub gas_counts: Vec<u32>,
     pub total_amount: u32,
     pub visual_path: PipeTransferVisualPath,
@@ -452,6 +435,61 @@ pub struct PipeTransferRecord {
 /// Stores `PipeFlowVisualState` state.
 pub struct PipeFlowVisualState {
     pub transfers: Vec<PipeTransferRecord>,
+    pub previous_transfers: Vec<PipeTransferRecord>,
+    pub interval_ticks: u32,
+    pub tick_in_interval: u32,
+    pub flow_progress: f32,
+    pub hop_started_this_tick: bool,
+}
+
+impl PipeFlowVisualState {
+    /// Advances one simulation tick and returns whether this tick should execute a pipe hop.
+    pub fn begin_tick(&mut self, configured_interval_ticks: u32) -> bool {
+        let interval_ticks = configured_interval_ticks.max(1);
+        if self.interval_ticks != interval_ticks {
+            self.interval_ticks = interval_ticks;
+            self.tick_in_interval = 0;
+            self.flow_progress = 0.0;
+            self.hop_started_this_tick = false;
+        }
+
+        let is_hop_tick = self.tick_in_interval == 0;
+        self.hop_started_this_tick = is_hop_tick;
+        self.flow_progress = if interval_ticks <= 1 {
+            1.0
+        } else {
+            self.tick_in_interval as f32 / interval_ticks as f32
+        };
+        self.tick_in_interval = (self.tick_in_interval + 1) % interval_ticks;
+        is_hop_tick
+    }
+
+    /// Returns the current interpolation phase of the active conveyor interval.
+    pub fn flow_progress(&self) -> f32 {
+        self.flow_progress
+    }
+
+    /// Rotates transfer buffers when a new hop starts so rendering can keep the previous hop endpoint for one boundary tick.
+    pub fn begin_hop_recording(&mut self) {
+        self.previous_transfers = std::mem::take(&mut self.transfers);
+    }
+
+    /// Returns transfers/progress to render for this tick.
+    ///
+    /// Renderer always uses current hop transfers so the first boundary frame
+    /// (`progress = 0`) is visible and no animation step is skipped.
+    pub fn render_view(&self) -> (&[PipeTransferRecord], f32) {
+        (&self.transfers, self.flow_progress)
+    }
+
+    /// Clears transfer history and resets conveyor animation phase.
+    pub fn reset_flow(&mut self) {
+        self.transfers.clear();
+        self.previous_transfers.clear();
+        self.tick_in_interval = 0;
+        self.flow_progress = 0.0;
+        self.hop_started_this_tick = false;
+    }
 }
 
 /// Stores one displayable pipe container inside a hovered cell.
@@ -560,6 +598,32 @@ pub fn apply_pipe_network_step(
         visual_state,
         config,
     )
+}
+
+/// Builds `[DEBUG]` HUD lines for pipe/vent diagnostics in one hovered world cell.
+///
+/// The output mirrors intake gating used by the conveyor solver:
+/// direction, outlet, vent buffer block, pressure request and node capacity.
+pub fn build_pipe_debug_hud_lines_for_cell(
+    cell: UVec2,
+    structures: &PlacedStructureMap,
+    pipe_gas: &PipeGasField,
+    gas: &GasField,
+    config: &PipeSimulationConfig,
+    flow_state: &PipeFlowVisualState,
+) -> Vec<String> {
+    solver::build_pipe_debug_hud_lines_for_cell(
+        cell, structures, pipe_gas, gas, config, flow_state,
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn offer_based_intake_particles_for_test(
+    config: &PipeSimulationConfig,
+    offer_pa: f32,
+    path_count: u32,
+) -> u32 {
+    solver::offer_based_intake_particles_for_test(config, offer_pa, path_count)
 }
 
 /// Applies default plugin gas source/sink structures before the core cell-gas step.
@@ -788,13 +852,13 @@ fn pipe_node_display_species_counts(
     let mut outgoing = vec![0u32; gas_count];
 
     for transfer in &flow_state.transfers {
-        if transfer.to == cell {
+        if transfer.to == cell && transfer.to_kind == key.kind {
             for gas_index in 0..gas_count {
                 incoming[gas_index] = incoming[gas_index]
                     .saturating_add(transfer.gas_counts.get(gas_index).copied().unwrap_or(0));
             }
         }
-        if transfer.from == cell {
+        if transfer.from == cell && transfer.from_kind == key.kind {
             for gas_index in 0..gas_count {
                 outgoing[gas_index] = outgoing[gas_index]
                     .saturating_add(transfer.gas_counts.get(gas_index).copied().unwrap_or(0));
@@ -897,83 +961,6 @@ fn pipe_flux_topology_signature(
         edges,
         vent_nodes,
     }
-}
-
-fn split_integer_by_weights(total: u32, weights: &[f32]) -> Vec<u32> {
-    if total == 0 || weights.is_empty() {
-        return vec![0; weights.len()];
-    }
-    let sum = weights.iter().copied().sum::<f32>();
-    if sum <= f32::EPSILON {
-        let mut even = vec![0u32; weights.len()];
-        for index in 0..total as usize {
-            even[index % weights.len()] = even[index % weights.len()].saturating_add(1);
-        }
-        return even;
-    }
-
-    let mut base = vec![0u32; weights.len()];
-    let mut remainders = vec![0f32; weights.len()];
-    let mut used = 0u32;
-    for (index, weight) in weights.iter().copied().enumerate() {
-        let exact = total as f32 * (weight / sum);
-        let floor = exact.floor() as u32;
-        base[index] = floor;
-        remainders[index] = exact - floor as f32;
-        used = used.saturating_add(floor);
-    }
-
-    let mut remaining = total.saturating_sub(used);
-    while remaining > 0 {
-        let mut best_index = 0usize;
-        for index in 1..remainders.len() {
-            if remainders[index] > remainders[best_index] {
-                best_index = index;
-            }
-        }
-        base[best_index] = base[best_index].saturating_add(1);
-        remainders[best_index] = 0.0;
-        remaining -= 1;
-    }
-
-    base
-}
-
-fn split_bounded_integer_requests(total: u32, requests: &[u32]) -> Vec<u32> {
-    if total == 0 || requests.is_empty() {
-        return vec![0; requests.len()];
-    }
-    let mut accepted = split_integer_by_weights(
-        total,
-        &requests
-            .iter()
-            .map(|request| *request as f32)
-            .collect::<Vec<_>>(),
-    );
-    for (index, request) in requests.iter().copied().enumerate() {
-        accepted[index] = accepted[index].min(request);
-    }
-
-    let mut accepted_total: u32 = accepted.iter().copied().sum();
-    while accepted_total < total {
-        let mut changed = false;
-        for (index, request) in requests.iter().copied().enumerate() {
-            if accepted[index] >= request {
-                continue;
-            }
-            accepted[index] = accepted[index].saturating_add(1);
-            accepted_total = accepted_total.saturating_add(1);
-            changed = true;
-            if accepted_total == total {
-                break;
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
-
-    accepted
 }
 
 fn remove_species_proportional_counts(species: &mut [u32], amount: u32) -> Vec<u32> {

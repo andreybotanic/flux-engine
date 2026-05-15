@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use bevy::prelude::{UVec2, Vec2, Vec3, Vec4};
 
 use crate::{
@@ -5,8 +7,8 @@ use crate::{
     plugins::default_plugin::{
         is_gas_pipe_bridge_structure,
         pipe_runtime::{
-            pipe_cell_display_blocks_with_transfers, PipeContainerKind, PipeFlowVisualState,
-            PipeGasField, PipeSimulationConfig, PipeTransferRecord, PipeTransferVisualPath,
+            PipeContainerKind, PipeFlowVisualState, PipeGasField, PipeNodeKey,
+            PipeSimulationConfig, PipeTransferRecord, PipeTransferVisualPath,
         },
         OVERLAY_IMAGE_VENT_ICON_ID, OVERLAY_IMAGE_WHITE_ID, OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID,
     },
@@ -20,8 +22,7 @@ const NODE_BACKGROUND: &str = "background";
 const NODE_DIM_WORLD: &str = "dim_world";
 const NODE_BRIGHT_PIPES: &str = "bright_pipes";
 const NODE_PIPE_HIGHLIGHT: &str = "pipe_highlight";
-const NODE_PIPE_GAS: &str = "pipe_gas";
-const NODE_FLOW_PACKETS: &str = "flow_packets";
+const NODE_PIPE_CONTENT: &str = "pipe_content";
 const NODE_PORT_ICONS: &str = "port_icons";
 const NODE_OUTPUT: &str = "compose";
 
@@ -32,7 +33,7 @@ pub(crate) fn build_pipes_overlay_graph(
     pipe_config: &PipeSimulationConfig,
     gas_registry: &GasRegistry,
     flow_progress: f32,
-    paused: bool,
+    _paused: bool,
 ) -> flux_plugin_sdk::OverlayGraph {
     let pipe_tag = content_tag("flux.default.tag.pipe-network");
     let background = overlay_node(
@@ -74,26 +75,16 @@ pub(crate) fn build_pipes_overlay_graph(
             params: Vec::new(),
         }),
     );
-    let pipe_gas_node = overlay_node(
-        NODE_PIPE_GAS,
+    let pipe_content_node = overlay_node(
+        NODE_PIPE_CONTENT,
         Vec::new(),
-        flux_plugin_sdk::OverlayNodeKind::RenderImage(flux_image_node(pipe_gas_instances(
+        flux_plugin_sdk::OverlayNodeKind::RenderImage(flux_image_node(pipe_content_instances(
             structures,
             pipe_gas,
             flow_state,
             pipe_config,
             gas_registry,
-        ))),
-    );
-    let packets = overlay_node(
-        NODE_FLOW_PACKETS,
-        Vec::new(),
-        flux_plugin_sdk::OverlayNodeKind::RenderImage(flux_image_node(flow_packet_instances(
-            flow_state,
-            pipe_config,
-            gas_registry,
             flow_progress,
-            paused,
         ))),
     );
     let icons = overlay_node(
@@ -110,8 +101,7 @@ pub(crate) fn build_pipes_overlay_graph(
             NODE_DIM_WORLD,
             NODE_BRIGHT_PIPES,
             NODE_PIPE_HIGHLIGHT,
-            NODE_PIPE_GAS,
-            NODE_FLOW_PACKETS,
+            NODE_PIPE_CONTENT,
             NODE_PORT_ICONS,
         ],
         flux_plugin_sdk::OverlayNodeKind::Blend(flux_plugin_sdk::BlendNode {
@@ -125,8 +115,7 @@ pub(crate) fn build_pipes_overlay_graph(
             dim_world,
             bright_pipes,
             highlight,
-            pipe_gas_node,
-            packets,
+            pipe_content_node,
             icons,
             output,
         ],
@@ -134,89 +123,95 @@ pub(crate) fn build_pipes_overlay_graph(
     }
 }
 
-fn pipe_gas_instances(
+fn pipe_content_instances(
     structures: &PlacedStructureMap,
     pipe_gas: &PipeGasField,
     flow_state: &PipeFlowVisualState,
     pipe_config: &PipeSimulationConfig,
     gas_registry: &GasRegistry,
+    _flow_progress: f32,
 ) -> Vec<flux_plugin_sdk::OverlayImageInstance> {
     let mut instances = Vec::new();
-    for y in 0..WORLD_HEIGHT {
-        for x in 0..WORLD_WIDTH {
-            let blocks = pipe_cell_display_blocks_with_transfers(
-                structures, pipe_gas, flow_state, x, y, false,
-            );
-            let total_slots = blocks.len().max(1);
-            for (slot, block) in blocks.iter().enumerate() {
-                if block.total_particles == 0 {
-                    continue;
-                }
-                let outer_size =
-                    pipe_overlay_slot_size(pipe_config, block.total_particles, total_slots);
-                let inner_size = pipe_square_inner_size(outer_size);
-                let offset = pipe_overlay_block_offset(
-                    slot,
-                    total_slots,
-                    block.kind,
-                    structures,
-                    UVec2::new(x, y),
-                );
-                instances.push(cell_square_instance(x, y, offset, outer_size, Vec4::ONE));
-                instances.push(cell_square_instance(
-                    x,
-                    y,
-                    offset,
-                    inner_size,
-                    mixture_color(
-                        block.total_particles,
-                        &block.species_counts,
-                        gas_registry,
-                        0.92,
-                    ),
-                ));
-            }
+    let mut active_nodes = HashSet::<(PipeContainerKind, UVec2)>::new();
+    let (render_transfers, render_progress) = flow_state.render_view();
+    let packet_progress = render_progress.clamp(0.0, 1.0);
+    for transfer in render_transfers {
+        if transfer.total_amount == 0 {
+            continue;
         }
+        active_nodes.insert((transfer.from_kind, transfer.from));
+        active_nodes.insert((transfer.to_kind, transfer.to));
+        let position = flow_packet_position(transfer, packet_progress);
+        push_packet_instances(
+            &mut instances,
+            world_position_to_grid_local(position),
+            transfer.total_amount,
+            &transfer.gas_counts,
+            pipe_config,
+            gas_registry,
+        );
+    }
+
+    for node_id in 0..pipe_gas.node_count() {
+        let Some(node_key) = pipe_gas.node_key(node_id) else {
+            continue;
+        };
+        let node_cell = pipe_node_visual_cell(structures, node_key);
+        if active_nodes.contains(&(node_key.kind, node_cell)) {
+            continue;
+        }
+        let total_particles = pipe_gas.total_amount_particles(node_id);
+        if total_particles == 0 {
+            continue;
+        }
+        let species = (0..pipe_gas.gas_count())
+            .map(|gas_index| pipe_gas.amount_particles(node_id, gas_index))
+            .collect::<Vec<_>>();
+        push_packet_instances(
+            &mut instances,
+            world_position_to_grid_local(cell_center(node_cell.x, node_cell.y)),
+            total_particles,
+            &species,
+            pipe_config,
+            gas_registry,
+        );
     }
     instances
 }
 
-fn flow_packet_instances(
-    flow_state: &PipeFlowVisualState,
+fn push_packet_instances(
+    instances: &mut Vec<flux_plugin_sdk::OverlayImageInstance>,
+    position_in_grid: Vec2,
+    total_amount: u32,
+    gas_counts: &[u32],
     pipe_config: &PipeSimulationConfig,
     gas_registry: &GasRegistry,
-    flow_progress: f32,
-    paused: bool,
-) -> Vec<flux_plugin_sdk::OverlayImageInstance> {
-    if paused {
-        return Vec::new();
+) {
+    let outer_size = pipe_gas_square_size(pipe_config, total_amount);
+    let inner_size = pipe_square_inner_size(outer_size);
+    instances.push(grid_square_instance(
+        position_in_grid,
+        outer_size,
+        Vec4::ONE,
+    ));
+    instances.push(grid_square_instance(
+        position_in_grid,
+        inner_size,
+        mixture_color(total_amount, gas_counts, gas_registry, 0.92),
+    ));
+}
+
+fn pipe_node_visual_cell(structures: &PlacedStructureMap, key: PipeNodeKey) -> UVec2 {
+    match key.kind {
+        PipeContainerKind::Pipe => key.anchor,
+        PipeContainerKind::BridgePipe => structures
+            .iter()
+            .find(|structure| {
+                is_gas_pipe_bridge_structure(structure.kind) && structure.origin == key.anchor
+            })
+            .and_then(|bridge| bridge_center_cell(bridge.origin, bridge.rotation))
+            .unwrap_or(key.anchor),
     }
-    let mut instances = Vec::new();
-    for transfer in &flow_state.transfers {
-        if transfer.total_amount < 5 {
-            continue;
-        }
-        let outer_size = pipe_flow_square_size(pipe_config, transfer.total_amount);
-        let inner_size = pipe_square_inner_size(outer_size);
-        let position = flow_packet_position(transfer, flow_progress);
-        let position_in_grid = world_position_to_grid_local(position);
-        instances.push(grid_square_instance(
-            position_in_grid,
-            outer_size,
-            Vec4::ONE,
-        ));
-        instances.push(grid_square_instance(
-            position_in_grid,
-            inner_size,
-            mixture_color(
-                transfer.total_amount,
-                &transfer.gas_counts,
-                gas_registry,
-                0.84,
-            ),
-        ));
-    }
-    instances
 }
 
 fn port_icon_instances(
@@ -249,26 +244,6 @@ fn full_world_tint(role: ColorRole) -> flux_plugin_sdk::OverlayImageInstance {
             size_in_grid: Vec2::new(WORLD_WIDTH as f32, WORLD_HEIGHT as f32),
             rotation: 0.0,
             origin: Vec2::ZERO,
-        },
-        tint,
-    }
-}
-
-fn cell_square_instance(
-    x: u32,
-    y: u32,
-    offset_world: Vec2,
-    size_world: f32,
-    tint: Vec4,
-) -> flux_plugin_sdk::OverlayImageInstance {
-    flux_plugin_sdk::OverlayImageInstance {
-        image: flux_plugin_sdk::OverlayImageSource::Asset(content_id(OVERLAY_IMAGE_WHITE_ID)),
-        placement: flux_plugin_sdk::OverlayPlacement::CellLocal {
-            cell: UVec2::new(x, y),
-            anchor: Vec2::splat(0.5),
-            offset_in_cell: offset_world / CELL_SIZE,
-            size_in_cell: Vec2::splat(size_world / CELL_SIZE),
-            rotation: 0.0,
         },
         tint,
     }
@@ -342,12 +317,12 @@ fn flow_packet_position(transfer: &PipeTransferRecord, t: f32) -> Vec2 {
 }
 
 fn bridge_packet_position(transfer: &PipeTransferRecord, t: f32) -> Option<Vec2> {
-    let PipeTransferVisualPath::BridgeArc {
-        bridge_origin,
-        bridge_rotation,
-    } = transfer.visual_path
-    else {
-        return None;
+    let (bridge_origin, bridge_rotation) = match &transfer.visual_path {
+        PipeTransferVisualPath::BridgeArc {
+            bridge_origin,
+            bridge_rotation,
+        } => (*bridge_origin, *bridge_rotation),
+        _ => return None,
     };
     let center = bridge_center_cell(bridge_origin, bridge_rotation)?;
     let [first_port, second_port] = bridge_connection_cells(bridge_origin, bridge_rotation);
@@ -396,57 +371,8 @@ fn bridge_bend_direction(rotation: StructureRotation) -> Vec2 {
     }
 }
 
-fn pipe_overlay_block_offset(
-    slot: usize,
-    total_slots: usize,
-    kind: PipeContainerKind,
-    structures: &PlacedStructureMap,
-    cell: UVec2,
-) -> Vec2 {
-    let bridge_offset = structures
-        .iter()
-        .find_map(|structure| {
-            (is_gas_pipe_bridge_structure(structure.kind)
-                && bridge_center_cell(structure.origin, structure.rotation) == Some(cell))
-            .then_some(bridge_bend_direction(structure.rotation) * (CELL_SIZE * 0.18))
-        })
-        .unwrap_or_else(|| pipe_overlay_slot_offset(slot, total_slots));
-    match kind {
-        PipeContainerKind::BridgePipe => bridge_offset,
-        PipeContainerKind::Pipe if total_slots > 1 => -bridge_offset,
-        PipeContainerKind::Pipe => Vec2::ZERO,
-    }
-}
-
-fn pipe_overlay_slot_offset(slot: usize, total_slots: usize) -> Vec2 {
-    if total_slots <= 1 {
-        Vec2::ZERO
-    } else if slot == 0 {
-        Vec2::new(0.0, CELL_SIZE * 0.18)
-    } else {
-        Vec2::new(0.0, -CELL_SIZE * 0.18)
-    }
-}
-
-fn pipe_overlay_slot_size(
-    config: &PipeSimulationConfig,
-    total_particles: u32,
-    total_slots: usize,
-) -> f32 {
-    let base = pipe_gas_square_size(config, total_particles);
-    if total_slots <= 1 {
-        base
-    } else {
-        (base * 0.62).max(CELL_SIZE * 0.18)
-    }
-}
-
 fn pipe_gas_square_size(config: &PipeSimulationConfig, total_particles: u32) -> f32 {
     scaled_pipe_square_size(config, total_particles, 0.22, 0.63)
-}
-
-fn pipe_flow_square_size(config: &PipeSimulationConfig, total_particles: u32) -> f32 {
-    scaled_pipe_square_size(config, total_particles, 0.21, 0.504)
 }
 
 fn scaled_pipe_square_size(
@@ -507,11 +433,12 @@ enum ColorRole {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_pipes_overlay_graph, flow_packet_instances, world_position_to_grid_local};
+    use super::{build_pipes_overlay_graph, pipe_content_instances, world_position_to_grid_local};
     use crate::{
         config::{GasDefinition, GasRegistry},
         plugins::default_plugin::pipe_runtime::{
-            PipeFlowVisualState, PipeGasField, PipeSimulationConfig, PipeTransferRecord,
+            PipeContainerKind, PipeFlowVisualState, PipeGasField, PipeSimulationConfig,
+            PipeTransferRecord,
             PipeTransferVisualPath,
         },
         world::{grid::cell_center, structures::PlacedStructureMap},
@@ -542,18 +469,22 @@ mod tests {
         let flow_state = PipeFlowVisualState {
             transfers: vec![PipeTransferRecord {
                 from: UVec2::new(3, 4),
+                from_kind: PipeContainerKind::Pipe,
                 to: UVec2::new(4, 4),
+                to_kind: PipeContainerKind::Pipe,
                 gas_counts: vec![8],
                 total_amount: 8,
                 visual_path: PipeTransferVisualPath::Straight,
             }],
+            ..Default::default()
         };
-        let instances = flow_packet_instances(
+        let instances = pipe_content_instances(
+            &PlacedStructureMap::default(),
+            &PipeGasField::from_registry(&test_registry()),
             &flow_state,
             &PipeSimulationConfig::default(),
             &test_registry(),
             0.5,
-            false,
         );
         assert_eq!(instances.len(), 2);
         for instance in instances {
@@ -592,5 +523,48 @@ mod tests {
         graph
             .validate()
             .expect("paused overlay graph should stay valid even with empty packet/image layers");
+    }
+
+    #[test]
+    fn stationary_pipe_mass_without_transfers_still_renders_packet() {
+        let registry = test_registry();
+        let world = crate::world::grid::WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        let cell = UVec2::new(12, 9);
+        assert!(structures.place_pipe(cell.x, cell.y, &world));
+
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        pipe_gas.sync_to_structures(&structures);
+        let node_id = pipe_gas
+            .snapshot_state()
+            .nodes
+            .iter()
+            .position(|node| node.key.kind == PipeContainerKind::Pipe && node.key.anchor == cell)
+            .expect("pipe node");
+        pipe_gas.add_species_counts(node_id, &[9]);
+
+        let flow_state = PipeFlowVisualState::default();
+        let instances = pipe_content_instances(
+            &structures,
+            &pipe_gas,
+            &flow_state,
+            &PipeSimulationConfig::default(),
+            &registry,
+            0.5,
+        );
+        assert_eq!(instances.len(), 2, "stationary gas should render one packet");
+        let expected = Vec2::new(cell.x as f32 + 0.5, cell.y as f32 + 0.5);
+        for instance in instances {
+            let flux_plugin_sdk::OverlayPlacement::GridLocal {
+                position_in_grid, ..
+            } = instance.placement
+            else {
+                panic!("pipe packet must be rendered in grid-local space");
+            };
+            assert!(
+                (position_in_grid - expected).length() < 1e-4,
+                "stationary packet should stay centered in its pipe cell"
+            );
+        }
     }
 }

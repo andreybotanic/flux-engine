@@ -14,8 +14,7 @@ use crate::{
     editor::StructureEditState,
     input::camera::MainCamera,
     plugins::default_plugin::pipe_runtime::{
-        pipe_cell_display_blocks_with_transfers, PipeFlowVisualState, PipeGasField,
-        PipeSimulationConfig,
+        PipeFlowVisualState, PipeGasField, PipeSimulationConfig,
     },
     render::pipe_highlight_material::PipeHighlightRenderAssets,
     save::WorldLoadState,

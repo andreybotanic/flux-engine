@@ -457,7 +457,8 @@ mod tests {
             VisualPlacementConfig, WorldCellHudConfig,
         },
         plugins::default_plugin::pipe_runtime::{
-            PipeFlowVisualState, PipeGasField, PipeSimulationConfig, PipeTransferRecord,
+            PipeContainerKind, PipeFlowVisualState, PipeGasField, PipeSimulationConfig,
+            PipeTransferRecord,
             PipeTransferVisualPath,
         },
         simulation::gas::GasField,
@@ -997,11 +998,14 @@ mod tests {
         let flow_state = PipeFlowVisualState {
             transfers: vec![PipeTransferRecord {
                 from: UVec2::new(8, 9),
+                from_kind: PipeContainerKind::Pipe,
                 to: UVec2::new(9, 9),
+                to_kind: PipeContainerKind::Pipe,
                 gas_counts: vec![4, 1, 0],
                 total_amount: 5,
                 visual_path: PipeTransferVisualPath::Straight,
             }],
+            ..Default::default()
         };
 
         let text = flatten_blocks(&build_cell_inspector_blocks(
@@ -1035,11 +1039,14 @@ mod tests {
         let flow_state = PipeFlowVisualState {
             transfers: vec![PipeTransferRecord {
                 from: UVec2::new(8, 9),
+                from_kind: PipeContainerKind::Pipe,
                 to: UVec2::new(9, 9),
+                to_kind: PipeContainerKind::Pipe,
                 gas_counts: vec![4, 1, 0],
                 total_amount: 5,
                 visual_path: PipeTransferVisualPath::Straight,
             }],
+            ..Default::default()
         };
 
         let text = flatten_blocks(&build_cell_inspector_blocks(

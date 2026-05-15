@@ -6,8 +6,7 @@ mod tests {
         build_pipe_mask_image, build_vent_overlay_image, build_world_fade_mask_image, grid_fade,
         bridge_curve_progress_for_transfer,
         cursor_highlight_segments,
-        flow_packet_position, pipe_flow_packet_visual, pipe_flow_packet_visible,
-        pipe_flow_square_size, pipe_gas_square_size,
+        flow_packet_position, pipe_flow_packet_visible, pipe_gas_square_size,
         pipe_overlay_block_offset, pipe_overlay_block_visible,
         quadratic_bezier_point, straight_packet_position,
         pipe_highlight_visibility, vent_world_visibility, world_fade_alpha,
@@ -344,46 +343,16 @@ mod tests {
     }
 
     #[test]
-    fn pipe_flow_square_size_stays_smaller_than_static_square() {
-        let config = pipe_config();
-        let static_half = pipe_gas_square_size(&config, 500);
-        let flow_half = pipe_flow_square_size(&config, 500);
-        let flow_full = pipe_flow_square_size(&config, 1_000);
-        let flow_dense = pipe_flow_square_size(&config, 10_000);
-
-        assert!(flow_half > 0.0);
-        assert!(flow_full > flow_half);
-        assert!(flow_half < static_half);
-        assert!(flow_dense > flow_full);
-        assert!(flow_dense < super::CELL_SIZE * 0.504);
-    }
-
-    #[test]
     fn empty_pipe_overlay_blocks_are_hidden() {
         assert!(!pipe_overlay_block_visible(0));
         assert!(pipe_overlay_block_visible(1));
     }
 
     #[test]
-    fn pipe_flow_packet_visual_gets_brighter_and_less_transparent_with_more_gas() {
-        let config = pipe_config();
-        let low = pipe_flow_packet_visual(&config, 1);
-        let mid = pipe_flow_packet_visual(&config, 500);
-        let full = pipe_flow_packet_visual(&config, 1_000);
-        let denser = pipe_flow_packet_visual(&config, 10_000);
-
-        assert!(low.intensity < mid.intensity && mid.intensity < full.intensity);
-        assert!(low.fill_alpha < mid.fill_alpha && mid.fill_alpha < full.fill_alpha);
-        assert!(low.fill_alpha < 0.2);
-        assert!(denser.intensity > full.intensity);
-        assert!(denser.fill_alpha > full.fill_alpha);
-        assert!(denser.fill_alpha < 0.92);
-    }
-
-    #[test]
-    fn tiny_pipe_flow_packets_are_hidden_as_noise() {
+    fn non_zero_pipe_flow_packets_are_visible() {
         assert!(!pipe_flow_packet_visible(0));
-        assert!(!pipe_flow_packet_visible(4));
+        assert!(pipe_flow_packet_visible(1));
+        assert!(pipe_flow_packet_visible(4));
         assert!(pipe_flow_packet_visible(5));
         assert!(pipe_flow_packet_visible(12));
     }
@@ -400,11 +369,14 @@ mod tests {
         let flow_state = PipeFlowVisualState {
             transfers: vec![PipeTransferRecord {
                 from: UVec2::new(3, 4),
+                from_kind: PipeContainerKind::Pipe,
                 to: UVec2::new(4, 4),
+                to_kind: PipeContainerKind::Pipe,
                 gas_counts: vec![6, 2],
                 total_amount: 8,
                 visual_path: PipeTransferVisualPath::Straight,
             }],
+            ..Default::default()
         };
 
         assert_eq!(
@@ -470,7 +442,9 @@ mod tests {
             .is_some());
         let transfer = PipeTransferRecord {
             from: UVec2::new(11, 10),
+            from_kind: PipeContainerKind::BridgePipe,
             to: UVec2::new(10, 10),
+            to_kind: PipeContainerKind::BridgePipe,
             gas_counts: vec![5, 0],
             total_amount: 5,
             visual_path: PipeTransferVisualPath::BridgeArc {
@@ -507,7 +481,9 @@ mod tests {
             .is_some());
         let transfer = PipeTransferRecord {
             from: UVec2::new(10, 11),
+            from_kind: PipeContainerKind::BridgePipe,
             to: UVec2::new(10, 10),
+            to_kind: PipeContainerKind::BridgePipe,
             gas_counts: vec![5, 0],
             total_amount: 5,
             visual_path: PipeTransferVisualPath::BridgeArc {
@@ -561,7 +537,9 @@ mod tests {
 
         let left_to_center = PipeTransferRecord {
             from: first_port,
+            from_kind: PipeContainerKind::BridgePipe,
             to: center,
+            to_kind: PipeContainerKind::BridgePipe,
             gas_counts: vec![5, 0],
             total_amount: 5,
             visual_path: PipeTransferVisualPath::BridgeArc {
@@ -571,7 +549,9 @@ mod tests {
         };
         let center_to_right = PipeTransferRecord {
             from: center,
+            from_kind: PipeContainerKind::BridgePipe,
             to: second_port,
+            to_kind: PipeContainerKind::BridgePipe,
             gas_counts: vec![5, 0],
             total_amount: 5,
             visual_path: PipeTransferVisualPath::BridgeArc {
@@ -616,7 +596,9 @@ mod tests {
     fn non_bridge_transfers_keep_straight_packet_motion() {
         let transfer = PipeTransferRecord {
             from: UVec2::new(3, 4),
+            from_kind: PipeContainerKind::Pipe,
             to: UVec2::new(4, 4),
+            to_kind: PipeContainerKind::Pipe,
             gas_counts: vec![6, 2],
             total_amount: 8,
             visual_path: PipeTransferVisualPath::Straight,
@@ -640,7 +622,9 @@ mod tests {
             .is_some());
         let non_bridge_transfer = PipeTransferRecord {
             from: UVec2::new(11, 10),
+            from_kind: PipeContainerKind::Pipe,
             to: UVec2::new(11, 11),
+            to_kind: PipeContainerKind::Pipe,
             gas_counts: vec![3, 0],
             total_amount: 3,
             visual_path: PipeTransferVisualPath::Straight,
@@ -653,7 +637,9 @@ mod tests {
     fn plain_pipe_under_bridge_keeps_straight_packet_motion() {
         let transfer = PipeTransferRecord {
             from: UVec2::new(11, 10),
+            from_kind: PipeContainerKind::Pipe,
             to: UVec2::new(10, 10),
+            to_kind: PipeContainerKind::Pipe,
             gas_counts: vec![5, 0],
             total_amount: 5,
             visual_path: PipeTransferVisualPath::Straight,

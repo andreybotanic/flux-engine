@@ -1,4 +1,4 @@
-#[cfg(test)]
+﻿#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -52,10 +52,10 @@ f1_alpha = 0.88
             root.join("pipe_runtime.toml"),
             r#"
 cell_volume_ratio = 25.0
-cell_particle_pressure_pa = 1.0
-pipe_flux_gain = 180.0
-pipe_flux_damping = 0.82
-max_pipe_flux_particles_per_tick = 2000.0
+cell_particle_pressure_pa = 0.2
+pipe_step_interval_ticks = 10
+max_pipe_hop_particles_per_step = 2000
+min_pipe_branch_residual_particles = 1
 vent_discharge_coefficient = 110.0
 max_vent_flux_particles_per_tick = 1500.0
 vent_choked_pressure_ratio = 0.53
@@ -435,3 +435,4 @@ color = [0.8, 0.8, 1.0]
         let _ = fs::remove_dir_all(root);
     }
 }
+

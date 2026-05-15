@@ -10,13 +10,16 @@ use flux_plugin_sdk::{
 
 use crate::{
     plugins::{
-        default_plugin::pipe_runtime::{apply_gas_structures_pre_step, apply_pipe_network_step},
+        default_plugin::pipe_runtime::{
+            apply_gas_structures_pre_step, apply_pipe_network_step,
+            build_pipe_debug_hud_lines_for_cell,
+        },
         default_plugin::{
             build_pipes_overlay_graph, OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID, OVERLAY_PIPES_ID,
         },
         RuntimeHostContext,
     },
-    ui::cell_inspector_model::build_cell_inspector_blocks,
+    ui::cell_inspector_model::{build_cell_inspector_blocks, CellInspectorBlockView},
 };
 
 thread_local! {
@@ -61,7 +64,6 @@ pub struct FluxDefaultRuntimeSdkPlugin {
     pub time: TimeApi,
     pub input: InputApi,
     pub log: LoggerApi,
-    overlay_phase: f32,
 }
 
 impl Plugin for FluxDefaultRuntimeSdkPlugin {
@@ -76,7 +78,6 @@ impl Plugin for FluxDefaultRuntimeSdkPlugin {
             time: init.time_api(),
             input: init.input_api(),
             log: init.logger_api(),
-            overlay_phase: 0.0,
         })
     }
 
@@ -219,11 +220,8 @@ impl FluxDefaultRuntimeSdkPlugin {
 
     fn on_simulation_paused_changed(
         &mut self,
-        event: &SimulationPausedChangedEvent,
+        _event: &SimulationPausedChangedEvent,
     ) -> Result<(), PluginError> {
-        if event.paused {
-            clear_flow_visuals()?;
-        }
         Ok(())
     }
 
@@ -274,7 +272,7 @@ impl FluxDefaultRuntimeSdkPlugin {
                     .ok_or(PluginError::ApiUnavailable(
                         "flux.default.pipe_flow_visuals",
                     ))?;
-            Ok(build_cell_inspector_blocks(
+            let mut blocks = build_cell_inspector_blocks(
                 event.cell,
                 world,
                 gas,
@@ -288,7 +286,17 @@ impl FluxDefaultRuntimeSdkPlugin {
                 pipe_gas,
                 flow_state,
                 false,
-            ))
+            );
+            let debug_lines = build_pipe_debug_hud_lines_for_cell(
+                event.cell, structures, pipe_gas, gas, pipe_config, flow_state,
+            );
+            if !debug_lines.is_empty() {
+                blocks.push(CellInspectorBlockView {
+                    title: "[DEBUG] Pipe/Vent".to_string(),
+                    lines: debug_lines,
+                });
+            }
+            Ok(blocks)
         })?;
 
         for (index, block) in blocks.into_iter().enumerate() {
@@ -307,7 +315,6 @@ impl FluxDefaultRuntimeSdkPlugin {
             return Ok(());
         }
         let paused = self.time.is_paused().unwrap_or(true);
-        self.overlay_phase = next_overlay_phase(self.overlay_phase, paused);
         let graph = with_bound_context("flux.default.render_overlay", |context| {
             let structures = context
                 .structures
@@ -327,13 +334,14 @@ impl FluxDefaultRuntimeSdkPlugin {
             let pipe_config = context
                 .pipe_config
                 .ok_or(PluginError::ApiUnavailable("flux.default.pipe_config"))?;
+            let flow_progress = flow_state.flow_progress();
             Ok(build_pipes_overlay_graph(
                 structures,
                 pipe_gas,
                 flow_state,
                 pipe_config,
                 context.gas_registry,
-                self.overlay_phase,
+                flow_progress,
                 paused,
             ))
         })?;
@@ -352,22 +360,8 @@ fn reset_runtime_state(clear_pipe_gas: bool) -> Result<(), PluginError> {
             pipe_flux.clear_all();
         }
         if let Some(flow_visuals) = context.pipe_flow_visuals.as_deref_mut() {
-            flow_visuals.transfers.clear();
+            flow_visuals.reset_flow();
         }
-        Ok(())
-    })
-}
-
-fn clear_flow_visuals() -> Result<(), PluginError> {
-    with_bound_context("flux.default.clear_flow_visuals", |context| {
-        let flow_visuals =
-            context
-                .pipe_flow_visuals
-                .as_deref_mut()
-                .ok_or(PluginError::ApiUnavailable(
-                    "flux.default.pipe_flow_visuals",
-                ))?;
-        flow_visuals.transfers.clear();
         Ok(())
     })
 }
@@ -377,29 +371,12 @@ fn hud_block_id(index: usize) -> flux_plugin_sdk::ContentId {
         .expect("default HUD content ids must stay valid")
 }
 
-fn next_overlay_phase(current: f32, paused: bool) -> f32 {
-    if paused {
-        current
-    } else {
-        (current + 0.12).fract()
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::next_overlay_phase;
+    use super::FluxDefaultRuntimeSdkPlugin;
 
     #[test]
-    fn paused_overlay_keeps_phase_stable() {
-        assert_eq!(next_overlay_phase(0.37, true), 0.37);
-    }
-
-    #[test]
-    fn running_overlay_advances_phase_and_wraps() {
-        let advanced = next_overlay_phase(0.25, false);
-        assert!((advanced - 0.37).abs() < 1e-6);
-
-        let wrapped = next_overlay_phase(0.95, false);
-        assert!((wrapped - 0.07).abs() < 1e-6);
+    fn plugin_type_is_constructible() {
+        let _ = std::mem::size_of::<FluxDefaultRuntimeSdkPlugin>();
     }
 }

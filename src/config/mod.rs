@@ -393,9 +393,9 @@ impl GameConfig {
         let pipe_simulation = PipeSimulationConfig {
             cell_volume_ratio: pipe.cell_volume_ratio,
             cell_particle_pressure_pa: pipe.cell_particle_pressure_pa,
-            pipe_flux_gain: pipe.pipe_flux_gain,
-            pipe_flux_damping: pipe.pipe_flux_damping,
-            max_pipe_flux_particles_per_tick: pipe.max_pipe_flux_particles_per_tick,
+            pipe_step_interval_ticks: pipe.pipe_step_interval_ticks,
+            max_pipe_hop_particles_per_step: pipe.max_pipe_hop_particles_per_step,
+            min_pipe_branch_residual_particles: pipe.min_pipe_branch_residual_particles,
             vent_discharge_coefficient: pipe.vent_discharge_coefficient,
             max_vent_flux_particles_per_tick: pipe.max_vent_flux_particles_per_tick,
             vent_choked_pressure_ratio: pipe.vent_choked_pressure_ratio,

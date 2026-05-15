@@ -601,13 +601,13 @@ pub(crate) fn sync_pipe_overlay_visuals(
     overlay_mode: Res<OverlayMode>,
     world_load_state: Res<WorldLoadState>,
     graph_scene: Option<Res<super::overlay_graph_runtime::OverlayGraphSceneState>>,
-    structures: Res<PlacedStructureMap>,
-    pipe_gas: Res<PipeGasField>,
-    flow_state: Res<PipeFlowVisualState>,
-    pipe_config: Res<PipeSimulationConfig>,
-    gas_registry: Res<GasRegistry>,
-    visual_settings: Res<GasVisualSettings>,
-    main_view_settings: Res<GasMainViewVisualConfig>,
+    _structures: Res<PlacedStructureMap>,
+    _pipe_gas: Res<PipeGasField>,
+    _flow_state: Res<PipeFlowVisualState>,
+    _pipe_config: Res<PipeSimulationConfig>,
+    _gas_registry: Res<GasRegistry>,
+    _visual_settings: Res<GasVisualSettings>,
+    _main_view_settings: Res<GasMainViewVisualConfig>,
     pipe_entities: Res<PipeEntities>,
     mut visuals: ParamSet<(
         Query<
@@ -649,99 +649,14 @@ pub(crate) fn sync_pipe_overlay_visuals(
         let Some(border_entities) = pipe_entities.gas_overlay_borders.get(&(*x, *y)) else {
             continue;
         };
-        let display_blocks = if show_pipe_overlay {
-            pipe_cell_display_blocks_with_transfers(
-                &structures,
-                &pipe_gas,
-                &flow_state,
-                *x,
-                *y,
-                false,
-            )
-        } else {
-            Vec::new()
-        };
-
         for slot in 0..overlay_entities.len() {
             let overlay_entity = overlay_entities[slot];
             let border_entity = border_entities[slot];
-            let block = display_blocks
-                .get(slot)
-                .filter(|block| pipe_overlay_block_visible(block.total_particles));
-            let total_slots = display_blocks.len().min(overlay_entities.len());
-            let cell_center = crate::world::grid::cell_center(*x, *y);
-
-            if let Some(block) = block {
-                let total_f = block.total_particles as f32;
-                let mut weighted_rgb = Vec3::ZERO;
-                for gas_index in 0..block.species_counts.len() {
-                    let amount = block.species_counts[gas_index] as f32;
-                    if amount <= 0.0 {
-                        continue;
-                    }
-                    if let Some(gas_def) = gas_registry.get(gas_index) {
-                        weighted_rgb += Vec3::from_array(gas_def.color) * amount;
-                    }
-                }
-                let mix_rgb = if weighted_rgb.length_squared() <= f32::EPSILON {
-                    Vec3::ZERO
-                } else {
-                    weighted_rgb / total_f.max(1.0)
-                };
-                let visual = gas_visual_intensity(
-                    total_f,
-                    visual_settings.gamma,
-                    main_view_settings.max_particles_for_max_intensity,
-                    1.0,
-                    0.12,
-                );
-                let rgb = (mix_rgb * visual).clamp(Vec3::ZERO, Vec3::ONE);
-                let outer_size =
-                    pipe_overlay_slot_size(&pipe_config, block.total_particles, total_slots);
-                let inner_size = pipe_square_inner_size(outer_size);
-                let offset = pipe_overlay_block_offset(
-                    slot,
-                    total_slots,
-                    block.kind,
-                    &structures,
-                    UVec2::new(*x, *y),
-                );
-                {
-                    let mut gas_query = visuals.p0();
-                    let Ok((mut sprite, mut transform, mut visibility)) =
-                        gas_query.get_mut(overlay_entity)
-                    else {
-                        continue;
-                    };
-                    sprite.custom_size = Some(Vec2::splat(inner_size));
-                    sprite.color = Color::linear_rgba(
-                        rgb.x,
-                        rgb.y,
-                        rgb.z,
-                        (0.42 + visual * 0.5).clamp(0.0, 1.0),
-                    );
-                    transform.translation = (cell_center + offset).extend(1.05);
-                    *visibility = Visibility::Visible;
-                }
-                {
-                    let mut border_query = visuals.p1();
-                    let Ok((mut border_sprite, mut transform, mut border_visibility)) =
-                        border_query.get_mut(border_entity)
-                    else {
-                        continue;
-                    };
-                    border_sprite.custom_size = Some(Vec2::splat(outer_size));
-                    border_sprite.color = Color::srgba(1.0, 1.0, 1.0, 0.96);
-                    transform.translation = (cell_center + offset).extend(1.04);
-                    *border_visibility = Visibility::Visible;
-                }
-            } else {
-                if let Ok((_, _, mut visibility)) = visuals.p0().get_mut(overlay_entity) {
-                    *visibility = Visibility::Hidden;
-                }
-                if let Ok((_, _, mut border_visibility)) = visuals.p1().get_mut(border_entity) {
-                    *border_visibility = Visibility::Hidden;
-                }
+            if let Ok((_, _, mut visibility)) = visuals.p0().get_mut(overlay_entity) {
+                *visibility = Visibility::Hidden;
+            }
+            if let Ok((_, _, mut border_visibility)) = visuals.p1().get_mut(border_entity) {
+                *border_visibility = Visibility::Hidden;
             }
         }
     }
@@ -760,10 +675,12 @@ pub(crate) fn sync_pipe_overlay_visuals(
     }
 }
 
+#[cfg(test)]
 fn pipe_overlay_block_visible(total_particles: u32) -> bool {
     total_particles > 0
 }
 
+#[cfg(test)]
 fn pipe_overlay_block_offset(
     slot: usize,
     total_slots: usize,
@@ -782,6 +699,7 @@ fn pipe_overlay_block_offset(
     }
 }
 
+#[cfg(test)]
 fn bridge_rotation_for_center_cell(
     structures: &PlacedStructureMap,
     cell: UVec2,
@@ -801,10 +719,10 @@ pub(crate) fn sync_pipe_flow_packets(
     graph_scene: Option<Res<super::overlay_graph_runtime::OverlayGraphSceneState>>,
     structures: Res<PlacedStructureMap>,
     flow_state: Res<PipeFlowVisualState>,
-    control: Res<crate::simulation::SimulationControl>,
     pipe_config: Res<PipeSimulationConfig>,
     gas_registry: Res<GasRegistry>,
-    time: Res<Time>,
+    visual_settings: Res<GasVisualSettings>,
+    main_view_settings: Res<GasMainViewVisualConfig>,
     mut pipe_entities: ResMut<PipeEntities>,
 ) {
     for entity in pipe_entities.flow_packets.drain(..) {
@@ -815,13 +733,12 @@ pub(crate) fn sync_pipe_flow_packets(
         world_load_state.has_world,
         *overlay_mode,
         graph_scene.as_deref(),
-        control.paused,
         structures.is_changed(),
     ) {
         return;
     }
 
-    let progress = (time.elapsed_secs() * 2.0).fract();
+    let progress = flow_state.flow_progress().clamp(0.0, 1.0);
     for transfer in &flow_state.transfers {
         if !pipe_flow_packet_visible(transfer.total_amount) {
             continue;
@@ -842,14 +759,20 @@ pub(crate) fn sync_pipe_flow_packets(
         } else {
             weighted_rgb / total.max(1.0)
         };
-        let packet_visual = pipe_flow_packet_visual(&pipe_config, transfer.total_amount);
-        let rgb = (mix_rgb * packet_visual.intensity).clamp(Vec3::ZERO, Vec3::ONE);
-        let outer_size = pipe_flow_square_size(&pipe_config, transfer.total_amount);
+        let visual = gas_visual_intensity(
+            total,
+            visual_settings.gamma,
+            main_view_settings.max_particles_for_max_intensity,
+            1.0,
+            0.12,
+        );
+        let rgb = (mix_rgb * visual).clamp(Vec3::ZERO, Vec3::ONE);
+        let outer_size = pipe_gas_square_size(&pipe_config, transfer.total_amount);
         let inner_size = pipe_square_inner_size(outer_size);
         let border_entity = commands
             .spawn((
                 Sprite::from_color(
-                    Color::srgba(1.0, 1.0, 1.0, 1.0),
+                    Color::srgba(1.0, 1.0, 1.0, 0.96),
                     Vec2::splat(outer_size),
                 ),
                 Transform::from_translation(position.extend(1.22)),
@@ -859,7 +782,12 @@ pub(crate) fn sync_pipe_flow_packets(
         let entity = commands
             .spawn((
                 Sprite::from_color(
-                    Color::linear_rgba(rgb.x, rgb.y, rgb.z, packet_visual.fill_alpha),
+                    Color::linear_rgba(
+                        rgb.x,
+                        rgb.y,
+                        rgb.z,
+                        (0.42 + visual * 0.5).clamp(0.0, 1.0),
+                    ),
                     Vec2::splat(inner_size),
                 ),
                 Transform::from_translation(position.extend(1.23)),
@@ -875,12 +803,10 @@ fn pipe_flow_packets_enabled(
     has_world: bool,
     overlay_mode: OverlayMode,
     graph_scene: Option<&super::overlay_graph_runtime::OverlayGraphSceneState>,
-    paused: bool,
     structures_changed: bool,
 ) -> bool {
     has_world
         && legacy_pipes_overlay_active(overlay_mode, graph_scene)
-        && !paused
         && !structures_changed
 }
 
@@ -986,31 +912,8 @@ fn pipe_gas_square_size(config: &PipeSimulationConfig, total_particles: u32) -> 
     scaled_pipe_square_size(config, total_particles, 0.22, 0.63)
 }
 
-fn pipe_flow_square_size(
-    config: &PipeSimulationConfig,
-    moved_particles: u32,
-) -> f32 {
-    scaled_pipe_square_size(config, moved_particles, 0.21, 0.504)
-}
-
-struct PipeFlowPacketVisualParams {
-    intensity: f32,
-    fill_alpha: f32,
-}
-
-fn pipe_flow_packet_visual(
-    config: &PipeSimulationConfig,
-    moved_particles: u32,
-) -> PipeFlowPacketVisualParams {
-    let eased = pipe_pressure_visual_ratio(config, moved_particles);
-    PipeFlowPacketVisualParams {
-        intensity: (0.08 + eased * 0.92).clamp(0.0, 1.0),
-        fill_alpha: (0.12 + eased * 0.80).clamp(0.0, 0.92),
-    }
-}
-
 fn pipe_flow_packet_visible(moved_particles: u32) -> bool {
-    moved_particles >= 5
+    moved_particles > 0
 }
 
 fn scaled_pipe_square_size(
