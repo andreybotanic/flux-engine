@@ -24,7 +24,8 @@ FluxEngine/
 |   |-- flux_plugin_abi/     # Внутренний ABI/glue crate для runtime DLL handshake и dispatch.
 |   `-- flux_plugin_sdk/     # Публичный Rust-first SDK для авторов runtime-плагинов.
 |-- docs/                    # Проектная документация.
-|   `-- plugin_sdk/          # mdBook-сайт Plugin SDK с ручными guide-главами и generated API reference.
+|   |-- plugin_sdk/          # mdBook-сайт Plugin SDK с ручными guide-главами и generated API reference.
+|   `-- technical_overview/  # Детализированные технические разделы (архитектура, симуляция, рендер, SDK) с индексом в `docs/technical_overview.md`.
 |-- plugins/                 # Runtime drop-in каталог packaged plugins (`*.fluxplugin`) рядом с игрой.
 |-- plugins_dev/             # Runtime dev-каталог expanded plugin-папок `plugins_dev/<plugin_id>/`.
 |-- src/                     # Исходный код Rust.
@@ -97,7 +98,14 @@ FluxEngine/
 - `docs/plugin_sdk/theme/sdk.css`: Кастомные стили интерактивных SDK API-блоков, бейджей и фильтра.
 - `docs/plugin_sdk/theme/sdk.js`: Кастомная интерактивность Plugin SDK book: фильтр API items и copy-кнопки для code blocks.
 - `docs/project_structure.md`: Карта структуры проекта: дерево папок + зоны ответственности файлов.
-- `docs/technical_overview.md`: Техническая архитектура, подсистемы и инженерные ограничения.
+- `docs/technical_overview.md`: Общий технический обзор и индекс ссылок на детализированные файлы `docs/technical_overview/*.md`.
+- `docs/technical_overview/01_architecture_and_plugins.md`: Архитектура приложения, plugin bootstrap, content registry, build workflow и dev reload.
+- `docs/technical_overview/02_gas_simulation_and_pipe_runtime.md`: Free-gas модель, node-based pipe runtime, pipe pre-step и контракт pipe-hop с backpressure.
+- `docs/technical_overview/03_editor_save_ui_and_hud.md`: Технические детали editor UI, save-flow, меню и HUD инспектора клетки.
+- `docs/technical_overview/04_backends_render_and_camera.md`: GPU/CPU backend-политика, parity/perf, рендер `F1/F2/F3` и камера.
+- `docs/technical_overview/05_config_data_flow_and_mvp_limits.md`: Конфигурация, high-level поток данных и текущие ограничения MVP.
+- `docs/technical_overview/06_pipe_content_animation.md`: Изолированное описание визуального pipe content animation в `F3`.
+- `docs/technical_overview/07_plugin_sdk_and_overlay_graph.md`: Текущий контракт Plugin SDK v5 и overlay graph runtime pipeline.
 - `plugin_state.toml`: Локальный runtime-файл пользовательских настроек plugin enable-state; хранится в корне проекта и игнорируется через `.gitignore`.
 - `plugins/.gitkeep`: Фиксирует пустой runtime-каталог для packaged plugins; реальные `.fluxplugin` игнорируются через `.gitignore`.
 - `plugins_dev/.gitkeep`: Фиксирует пустой runtime-каталог expanded dev plugins; реальные папки плагинов игнорируются через `.gitignore`.
