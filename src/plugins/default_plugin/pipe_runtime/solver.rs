@@ -8,11 +8,6 @@ use super::{
 };
 
 #[derive(Clone, Copy, Debug)]
-enum VentRequestDirection {
-    WorldToPipe,
-}
-
-#[derive(Clone, Copy, Debug)]
 struct DirectedPipeCandidate {
     source_index: usize,
     target_index: usize,
@@ -49,17 +44,17 @@ struct DirectedPipeRequest {
 }
 
 #[derive(Clone, Debug)]
-struct VentContext {
+struct PortContext {
     node_index: usize,
+    kind: PipeRuntimePortKind,
     world_cells: Vec<UVec2>,
     world_pressure: f32,
 }
 
 #[derive(Clone, Debug)]
-struct VentRequest {
+struct PortIntakeRequest {
     node_index: usize,
     requested_amount: u32,
-    direction: VentRequestDirection,
     world_cells: Vec<UVec2>,
 }
 
@@ -109,30 +104,30 @@ pub(super) fn apply_pipe_network_step(
         .collect::<Vec<_>>();
     let mut next_pipe_species = species_before_vent.clone();
 
-    let vent_contexts = collect_vent_contexts(&runtime, gas, config);
-    let mut vent_buffers = drain_vent_pipe_nodes_to_buffer(&vent_contexts, &mut next_pipe_species);
+    let port_contexts = collect_port_contexts(&runtime, gas, config);
+    let mut vent_buffers = drain_vent_pipe_nodes_to_buffer(&port_contexts, &mut next_pipe_species);
     let buffered_outlet_nodes = vent_buffers
         .iter()
         .map(|entry| entry.node_index)
         .collect::<HashSet<_>>();
-    let intake_vent_world_pressures =
-        build_vent_world_pressure_lut(runtime.nodes.len(), &vent_contexts);
-    let intake_vent_offers =
-        build_vent_pressure_offer_lut(&runtime, &intake_vent_world_pressures, config);
+    let intake_port_world_pressures =
+        build_port_world_pressure_lut(runtime.nodes.len(), &port_contexts);
+    let intake_port_offers =
+        build_port_pressure_offer_lut(&runtime, &intake_port_world_pressures, config);
     let (intake_edge_demand_pa, intake_outgoing_request_counts) =
-        build_edge_offer_demands(&runtime, &intake_vent_offers, config);
+        build_edge_offer_demands(&runtime, &intake_port_offers, config);
     let intake_allowed_direction = segment_allowed_direction_map(
         &runtime,
         &intake_edge_demand_pa,
-        &intake_vent_world_pressures,
+        &intake_port_world_pressures,
         config,
     );
     let forward_demand_intake_nodes =
-        vent_nodes_with_forward_direction(&runtime, &intake_allowed_direction);
-    let unblocked_intake_requests = build_vent_requests(
+        port_nodes_with_forward_direction(&runtime, &intake_allowed_direction);
+    let unblocked_intake_requests = build_port_intake_requests(
         &runtime,
-        &vent_contexts,
-        &intake_vent_offers,
+        &port_contexts,
+        &intake_port_offers,
         &intake_outgoing_request_counts,
         &forward_demand_intake_nodes,
         &HashSet::new(),
@@ -150,29 +145,24 @@ pub(super) fn apply_pipe_network_step(
         .collect::<HashSet<_>>();
     let stopped_segment_edges =
         segment_edges_for_blocked_intake_nodes(&runtime, &blocked_intake_direction_nodes);
-    let vent_intake_requests = build_vent_requests(
+    let port_intake_requests = build_port_intake_requests(
         &runtime,
-        &vent_contexts,
-        &intake_vent_offers,
+        &port_contexts,
+        &intake_port_offers,
         &intake_outgoing_request_counts,
         &forward_demand_intake_nodes,
         &buffered_outlet_nodes,
         &intake_allowed_direction,
         config,
-    )
-    .into_iter()
-    .filter(|request| matches!(request.direction, VentRequestDirection::WorldToPipe))
-    .collect::<Vec<_>>();
+    );
 
     let mut world_changed = false;
-    for request in &vent_intake_requests {
+    for request in &port_intake_requests {
         if request.requested_amount == 0 {
             continue;
         }
-        let per_hop_capacity = config
-            .max_pipe_hop_particles_per_step
-            .saturating_mul(runtime.nodes[request.node_index].neighbors.len().max(1) as u32)
-            .max(1);
+        let per_hop_capacity =
+            node_per_hop_capacity(config, runtime.nodes[request.node_index].neighbors.len());
         let already_in_node: u32 = next_pipe_species[request.node_index].iter().copied().sum();
         let room_left = per_hop_capacity.saturating_sub(already_in_node);
         if room_left == 0 {
@@ -217,6 +207,7 @@ pub(super) fn apply_pipe_network_step(
         build_pipe_transfer_requests(&segment_locked_candidates, &planning_totals, config);
 
     let mut planned_species = next_pipe_species.clone();
+    let mut planned_pipe_incoming_totals = vec![0u32; pipe_gas.node_count()];
     for request in &accepted_pipe_requests {
         if stopped_segment_edges.contains(&UndirectedPipeEdge::new(
             request.source_index,
@@ -234,12 +225,15 @@ pub(super) fn apply_pipe_network_step(
         if moved.iter().all(|count| *count == 0) {
             continue;
         }
+        let moved_total = moved.iter().copied().sum::<u32>();
+        planned_pipe_incoming_totals[request.target_index] =
+            planned_pipe_incoming_totals[request.target_index].saturating_add(moved_total);
         visual_state.transfers.push(PipeTransferRecord {
             from: runtime.nodes[request.source_index].visual_cell,
             from_kind: pipe_gas.keys[request.source_index].kind,
             to: runtime.nodes[request.target_index].visual_cell,
             to_kind: pipe_gas.keys[request.target_index].kind,
-            total_amount: moved.iter().copied().sum(),
+            total_amount: moved_total,
             gas_counts: moved,
             visual_path: transfer_visual_path(
                 pipe_gas.keys[request.source_index],
@@ -248,6 +242,13 @@ pub(super) fn apply_pipe_network_step(
             ),
         });
     }
+    visual_state.transfers.extend(build_pump_transfer_requests(
+        &runtime,
+        pipe_gas,
+        &mut planned_species,
+        &planned_pipe_incoming_totals,
+        config,
+    ));
 
     pipe_changed || world_changed
 }
@@ -278,39 +279,39 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
         .collect::<Vec<_>>();
     let mut next_pipe_species = species_before.clone();
 
-    let vent_contexts = collect_vent_contexts(&runtime, gas, config);
-    let vent_context_by_node = vent_contexts
+    let port_contexts = collect_port_contexts(&runtime, gas, config);
+    let port_context_by_node = port_contexts
         .iter()
         .map(|context| (context.node_index, context.clone()))
         .collect::<HashMap<_, _>>();
-    let vent_buffers = drain_vent_pipe_nodes_to_buffer(&vent_contexts, &mut next_pipe_species);
+    let vent_buffers = drain_vent_pipe_nodes_to_buffer(&port_contexts, &mut next_pipe_species);
     let buffered_outlet_nodes = vent_buffers
         .iter()
         .map(|entry| entry.node_index)
         .collect::<HashSet<_>>();
     let totals_before_intake = totals_from_species(&next_pipe_species);
-    let vent_world_pressures = build_vent_world_pressure_lut(runtime.nodes.len(), &vent_contexts);
-    let vent_offers = build_vent_pressure_offer_lut(&runtime, &vent_world_pressures, config);
+    let port_world_pressures = build_port_world_pressure_lut(runtime.nodes.len(), &port_contexts);
+    let port_offers = build_port_pressure_offer_lut(&runtime, &port_world_pressures, config);
     let (edge_demand_pa, outgoing_request_counts) =
-        build_edge_offer_demands(&runtime, &vent_offers, config);
+        build_edge_offer_demands(&runtime, &port_offers, config);
     let allowed_direction =
-        segment_allowed_direction_map(&runtime, &edge_demand_pa, &vent_world_pressures, config);
+        segment_allowed_direction_map(&runtime, &edge_demand_pa, &port_world_pressures, config);
     let forward_demand_intake_nodes =
-        vent_nodes_with_forward_direction(&runtime, &allowed_direction);
-    let unblocked_intake_requests = build_vent_requests(
+        port_nodes_with_forward_direction(&runtime, &allowed_direction);
+    let unblocked_intake_requests = build_port_intake_requests(
         &runtime,
-        &vent_contexts,
-        &vent_offers,
+        &port_contexts,
+        &port_offers,
         &outgoing_request_counts,
         &forward_demand_intake_nodes,
         &HashSet::new(),
         &allowed_direction,
         config,
     );
-    let blocked_intake_requests = build_vent_requests(
+    let blocked_intake_requests = build_port_intake_requests(
         &runtime,
-        &vent_contexts,
-        &vent_offers,
+        &port_contexts,
+        &port_offers,
         &outgoing_request_counts,
         &forward_demand_intake_nodes,
         &buffered_outlet_nodes,
@@ -337,7 +338,7 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
         .collect::<HashMap<_, _>>();
 
     let mut lines = Vec::new();
-    lines.push("[DEBUG] Pipe/Vent".to_string());
+    lines.push("[DEBUG] Pipe/Port".to_string());
     lines.push(format!(
         "ph i={} t={} p={:.3} h={}",
         flow_state
@@ -373,8 +374,8 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
         lines.push(format!("m pre={} eval={}", pre_total, eval_total,));
         if let Some(segment) = segments.iter().find(|segment| segment.contains(&node_id)) {
             if let (Some(start), Some(end)) = (segment.first().copied(), segment.last().copied()) {
-                let start_world = vent_world_pressures.get(start).copied().flatten();
-                let end_world = vent_world_pressures.get(end).copied().flatten();
+                let start_world = port_world_pressures.get(start).copied().flatten();
+                let end_world = port_world_pressures.get(end).copied().flatten();
                 let direction = segment_direction_label(segment, &allowed_direction);
                 lines.push(format!(
                     "seg n{}->n{} d={} Ps={:.0} Pe={:.0}",
@@ -417,12 +418,12 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
             &flow_state.transfers,
         );
 
-        if node.vent_cell.is_none() {
-            lines.push("vent: none".to_string());
+        let Some(port) = node.port else {
+            lines.push("port: none".to_string());
             continue;
-        }
-        let Some(context) = vent_context_by_node.get(&node_id) else {
-            lines.push("vent: missing context".to_string());
+        };
+        let Some(context) = port_context_by_node.get(&node_id) else {
+            lines.push("port: missing context".to_string());
             continue;
         };
         let world_particles = context
@@ -431,7 +432,7 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
             .map(|world_cell| gas.total_amount_rounded(world_cell.x, world_cell.y))
             .sum::<u32>();
         let world_pressure = context.world_pressure;
-        let offer = vent_offers.get(node_id).copied().unwrap_or(0.0);
+        let offer = port_offers.get(node_id).copied().unwrap_or(0.0);
         let has_forward_outlet = count_forward_outlet_edges(
             &runtime,
             node_id,
@@ -446,7 +447,11 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
             .copied()
             .unwrap_or(0)
             .max(1);
-        let offer_intake = if offer < 0.0 {
+        let offer_intake = if offer < 0.0
+            && matches!(
+                port.kind,
+                PipeRuntimePortKind::Vent | PipeRuntimePortKind::PumpIn
+            ) {
             offer_based_intake_particles(config, -offer, outgoing_request_count)
         } else {
             0
@@ -456,10 +461,7 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
             .copied()
             .unwrap_or(0);
         let intake_after_buffer = blocked_requests_by_node.get(&node_id).copied().unwrap_or(0);
-        let per_hop_capacity = config
-            .max_pipe_hop_particles_per_step
-            .saturating_mul(node.neighbors.len().max(1) as u32)
-            .max(1);
+        let per_hop_capacity = node_per_hop_capacity(config, node.neighbors.len());
         let already_in_node = next_pipe_species
             .get(node_id)
             .map(|species| species.iter().copied().sum())
@@ -472,7 +474,8 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
             && room_left > 0
             && world_particles > 0;
         lines.push(format!(
-            "v wp={:.0} wt={} of={:.0} n={} o={} fd={} b={} bd={}",
+            "p {:?} wp={:.0} wt={} of={:.0} n={} o={} fd={} b={} bd={}",
+            port.kind,
             world_pressure,
             world_particles,
             offer,
@@ -664,20 +667,30 @@ fn commit_planned_pipe_transfers(
     changed
 }
 
-fn collect_vent_contexts(
+fn collect_port_contexts(
     runtime: &PipeRuntime,
     gas: &GasField,
     config: &PipeSimulationConfig,
-) -> Vec<VentContext> {
+) -> Vec<PortContext> {
     let mut contexts = Vec::new();
     for (node_index, node) in runtime.nodes.iter().enumerate() {
-        let Some(cell) = node.vent_cell else {
+        let Some(port) = node.port else {
             continue;
         };
-        let world_cells = collect_vent_world_cells(cell);
-        let (world_pressure, _) = sampled_world_reservoir(gas, config, &world_cells);
-        contexts.push(VentContext {
+        let world_cells = collect_port_world_cells(port);
+        let world_pressure = match port.kind {
+            PipeRuntimePortKind::Vent => {
+                let (world_pressure, _) = sampled_world_reservoir(gas, config, &world_cells);
+                world_pressure
+            }
+            PipeRuntimePortKind::PumpIn => config.pump_input_pressure_pa,
+            PipeRuntimePortKind::PumpOut => {
+                max_pipe_pressure_for_node(config, node.neighbors.len())
+            }
+        };
+        contexts.push(PortContext {
             node_index,
+            kind: port.kind,
             world_cells,
             world_pressure,
         });
@@ -686,11 +699,14 @@ fn collect_vent_contexts(
 }
 
 fn drain_vent_pipe_nodes_to_buffer(
-    vent_contexts: &[VentContext],
+    port_contexts: &[PortContext],
     next_pipe_species: &mut [Vec<u32>],
 ) -> Vec<VentBufferEntry> {
     let mut buffers = Vec::new();
-    for context in vent_contexts {
+    for context in port_contexts {
+        if context.kind != PipeRuntimePortKind::Vent {
+            continue;
+        }
         let Some(node_species) = next_pipe_species.get_mut(context.node_index) else {
             continue;
         };
@@ -708,47 +724,46 @@ fn drain_vent_pipe_nodes_to_buffer(
     buffers
 }
 
-fn build_vent_world_pressure_lut(
+fn build_port_world_pressure_lut(
     node_count: usize,
-    vent_contexts: &[VentContext],
+    port_contexts: &[PortContext],
 ) -> Vec<Option<f32>> {
     let mut lut = vec![None; node_count];
-    for context in vent_contexts {
+    for context in port_contexts {
         if context.node_index >= lut.len() {
             continue;
         }
-        lut[context.node_index] = Some(context.world_pressure.max(0.0));
+        lut[context.node_index] = Some(context.world_pressure);
     }
     lut
 }
 
-fn build_vent_pressure_offer_lut(
+fn build_port_pressure_offer_lut(
     runtime: &PipeRuntime,
-    vent_world_pressures: &[Option<f32>],
+    port_world_pressures: &[Option<f32>],
     config: &PipeSimulationConfig,
 ) -> Vec<f32> {
     let mut offers = vec![0.0f32; runtime.nodes.len()];
     let epsilon = config.pressure_epsilon_pa.max(0.0);
     for component in collect_runtime_components(runtime) {
-        let mut vents = Vec::<(usize, f32)>::new();
+        let mut ports = Vec::<(usize, f32)>::new();
         for node_index in component {
-            if runtime.nodes[node_index].vent_cell.is_none() {
+            if runtime.nodes[node_index].port.is_none() {
                 continue;
             }
-            let pressure = vent_world_pressures
+            let pressure = port_world_pressures
                 .get(node_index)
                 .and_then(|value| *value)
-                .unwrap_or(0.0)
-                .max(0.0);
-            vents.push((node_index, pressure));
+                .unwrap_or(0.0);
+            ports.push((node_index, pressure));
         }
-        if vents.len() < 2 {
+        if ports.len() < 2 {
             continue;
         }
-        let pressure_sum = vents.iter().map(|(_, pressure)| *pressure).sum::<f32>();
-        let vent_count = vents.len() as f32;
-        for (node_index, pressure) in vents {
-            let offer = pressure_sum - pressure * vent_count;
+        let pressure_sum = ports.iter().map(|(_, pressure)| *pressure).sum::<f32>();
+        let port_count = ports.len() as f32;
+        for (node_index, pressure) in ports {
+            let offer = pressure_sum - pressure * port_count;
             offers[node_index] = if offer.abs() <= epsilon { 0.0 } else { offer };
         }
     }
@@ -757,7 +772,7 @@ fn build_vent_pressure_offer_lut(
 
 fn build_edge_offer_demands(
     runtime: &PipeRuntime,
-    vent_offers: &[f32],
+    port_offers: &[f32],
     config: &PipeSimulationConfig,
 ) -> (HashMap<(usize, usize), f32>, Vec<u32>) {
     let mut demand = HashMap::<(usize, usize), f32>::new();
@@ -767,10 +782,10 @@ fn build_edge_offer_demands(
         let mut sources = Vec::<(usize, f32)>::new();
         let mut sinks = Vec::<(usize, f32)>::new();
         for node_index in component {
-            if runtime.nodes[node_index].vent_cell.is_none() {
+            if runtime.nodes[node_index].port.is_none() {
                 continue;
             }
-            let offer = vent_offers.get(node_index).copied().unwrap_or(0.0);
+            let offer = port_offers.get(node_index).copied().unwrap_or(0.0);
             if offer < -epsilon {
                 sources.push((node_index, -offer));
             } else if offer > epsilon {
@@ -883,11 +898,11 @@ fn shortest_path_nodes(runtime: &PipeRuntime, start: usize, goal: usize) -> Opti
     None
 }
 
-fn nearest_vent_distance_lut(runtime: &PipeRuntime) -> Vec<Option<u32>> {
+fn nearest_port_distance_lut(runtime: &PipeRuntime) -> Vec<Option<u32>> {
     let mut distance: Vec<Option<u32>> = vec![None; runtime.nodes.len()];
     let mut queue = VecDeque::new();
     for (node_index, node) in runtime.nodes.iter().enumerate() {
-        if node.vent_cell.is_none() {
+        if node.port.is_none() {
             continue;
         }
         distance[node_index] = Some(0);
@@ -927,7 +942,7 @@ fn edge_has_downstream_outlet(
 
     let mut found_outlet = false;
     while let Some(node_index) = queue.pop_front() {
-        if runtime.nodes[node_index].vent_cell.is_some() {
+        if runtime.nodes[node_index].port.is_some() {
             found_outlet = true;
             break;
         }
@@ -967,14 +982,14 @@ fn count_forward_outlet_edges(
         .count()
 }
 
-fn vent_nodes_with_forward_direction(
+fn port_nodes_with_forward_direction(
     runtime: &PipeRuntime,
     allowed_direction: &HashMap<(usize, usize), bool>,
 ) -> HashSet<usize> {
     let mut intake_nodes = HashSet::new();
     let mut outlet_cache = HashMap::new();
     for (node_index, node) in runtime.nodes.iter().enumerate() {
-        if node.vent_cell.is_none() {
+        if node.port.is_none() {
             continue;
         }
         if count_forward_outlet_edges(runtime, node_index, allowed_direction, &mut outlet_cache) > 0
@@ -1058,12 +1073,12 @@ fn build_pipe_transfer_requests(
 fn segment_allowed_direction_map(
     runtime: &PipeRuntime,
     edge_demand_pa: &HashMap<(usize, usize), f32>,
-    vent_world_pressures: &[Option<f32>],
+    port_world_pressures: &[Option<f32>],
     config: &PipeSimulationConfig,
 ) -> HashMap<(usize, usize), bool> {
     let mut allowed_direction = HashMap::new();
     let epsilon = config.pressure_epsilon_pa.max(0.0);
-    let vent_distance = nearest_vent_distance_lut(runtime);
+    let port_distance = nearest_port_distance_lut(runtime);
     for segment in collect_pipe_segments(runtime) {
         let Some(start) = segment.first().copied() else {
             continue;
@@ -1091,11 +1106,11 @@ fn segment_allowed_direction_map(
             Some(false)
         } else {
             let start_world_pressure = runtime.nodes[start]
-                .vent_cell
-                .and_then(|_| vent_world_pressures.get(start).copied().flatten());
+                .port
+                .and_then(|_| port_world_pressures.get(start).copied().flatten());
             let end_world_pressure = runtime.nodes[end]
-                .vent_cell
-                .and_then(|_| vent_world_pressures.get(end).copied().flatten());
+                .port
+                .and_then(|_| port_world_pressures.get(end).copied().flatten());
             match (start_world_pressure, end_world_pressure) {
                 (Some(start_pressure), Some(end_pressure))
                     if start_pressure - end_pressure > epsilon =>
@@ -1108,8 +1123,8 @@ fn segment_allowed_direction_map(
                     Some(false)
                 }
                 _ => {
-                    let start_distance = vent_distance.get(start).and_then(|value| *value);
-                    let end_distance = vent_distance.get(end).and_then(|value| *value);
+                    let start_distance = port_distance.get(start).and_then(|value| *value);
+                    let end_distance = port_distance.get(end).and_then(|value| *value);
                     match (start_distance, end_distance) {
                         (Some(start_steps), Some(end_steps)) if start_steps > end_steps => {
                             Some(true)
@@ -1274,24 +1289,30 @@ fn walk_segment(
 }
 
 fn is_segment_boundary_node(runtime: &PipeRuntime, node_index: usize) -> bool {
-    runtime.nodes[node_index].vent_cell.is_some() || runtime.nodes[node_index].neighbors.len() != 2
+    runtime.nodes[node_index].port.is_some() || runtime.nodes[node_index].neighbors.len() != 2
 }
 
-fn build_vent_requests(
+fn build_port_intake_requests(
     runtime: &PipeRuntime,
-    vent_contexts: &[VentContext],
-    vent_offers: &[f32],
+    port_contexts: &[PortContext],
+    port_offers: &[f32],
     outgoing_request_counts: &[u32],
     forward_demand_nodes: &HashSet<usize>,
     blocked_intake_nodes: &HashSet<usize>,
     allowed_direction: &HashMap<(usize, usize), bool>,
     config: &PipeSimulationConfig,
-) -> Vec<VentRequest> {
+) -> Vec<PortIntakeRequest> {
     let mut requests = Vec::new();
     let mut outlet_cache = HashMap::new();
     let epsilon = config.pressure_epsilon_pa.max(0.0);
 
-    for context in vent_contexts {
+    for context in port_contexts {
+        if !matches!(
+            context.kind,
+            PipeRuntimePortKind::Vent | PipeRuntimePortKind::PumpIn
+        ) {
+            continue;
+        }
         let node_index = context.node_index;
         if blocked_intake_nodes.contains(&node_index) || !forward_demand_nodes.contains(&node_index)
         {
@@ -1302,7 +1323,7 @@ fn build_vent_requests(
         if forward_outlet_edges == 0 {
             continue;
         }
-        let offer = vent_offers.get(node_index).copied().unwrap_or(0.0);
+        let offer = port_offers.get(node_index).copied().unwrap_or(0.0);
         if offer >= -epsilon {
             continue;
         }
@@ -1313,10 +1334,9 @@ fn build_vent_requests(
             .max(1);
         let intake_request = offer_based_intake_particles(config, -offer, split_paths);
         if intake_request > 0 {
-            requests.push(VentRequest {
+            requests.push(PortIntakeRequest {
                 node_index,
                 requested_amount: intake_request,
-                direction: VentRequestDirection::WorldToPipe,
                 world_cells: context.world_cells.clone(),
             });
         }
@@ -1378,8 +1398,77 @@ fn remove_species_exact_counts(source: &mut [u32], requested: &[u32]) -> Vec<u32
     removed
 }
 
-fn collect_vent_world_cells(center: UVec2) -> Vec<UVec2> {
-    vec![center]
+fn build_pump_transfer_requests(
+    runtime: &PipeRuntime,
+    pipe_gas: &PipeGasField,
+    planned_species: &mut [Vec<u32>],
+    planned_pipe_incoming_totals: &[u32],
+    config: &PipeSimulationConfig,
+) -> Vec<PipeTransferRecord> {
+    let mut transfers = Vec::new();
+    for pump in &runtime.pumps {
+        let (Some(input_node), Some(output_node)) = (pump.input_node, pump.output_node) else {
+            continue;
+        };
+        if input_node == output_node {
+            continue;
+        }
+        let projected_output_total = planned_species[output_node]
+            .iter()
+            .copied()
+            .sum::<u32>()
+            .saturating_add(
+                planned_pipe_incoming_totals
+                    .get(output_node)
+                    .copied()
+                    .unwrap_or(0),
+            );
+        let room_left = node_per_hop_capacity(config, runtime.nodes[output_node].neighbors.len())
+            .saturating_sub(projected_output_total);
+        if room_left == 0 {
+            continue;
+        }
+        let input_total = planned_species[input_node].iter().copied().sum::<u32>();
+        let transfer_amount = input_total.min(room_left);
+        if transfer_amount == 0 {
+            continue;
+        }
+        let moved =
+            remove_species_proportional_counts(&mut planned_species[input_node], transfer_amount);
+        if moved.iter().all(|count| *count == 0) {
+            continue;
+        }
+        add_species_counts(&mut planned_species[output_node], &moved);
+        transfers.push(PipeTransferRecord {
+            from: runtime.nodes[input_node].visual_cell,
+            from_kind: pipe_gas.keys[input_node].kind,
+            to: runtime.nodes[output_node].visual_cell,
+            to_kind: pipe_gas.keys[output_node].kind,
+            gas_counts: moved.clone(),
+            total_amount: moved.iter().copied().sum(),
+            visual_path: PipeTransferVisualPath::Straight,
+        });
+    }
+    transfers
+}
+
+fn collect_port_world_cells(port: PipeRuntimePort) -> Vec<UVec2> {
+    match port.kind {
+        PipeRuntimePortKind::Vent => vec![port.world_cell],
+        PipeRuntimePortKind::PumpIn | PipeRuntimePortKind::PumpOut => vec![port.world_cell],
+    }
+}
+
+fn node_per_hop_capacity(config: &PipeSimulationConfig, neighbor_count: usize) -> u32 {
+    config
+        .max_pipe_hop_particles_per_step
+        .saturating_mul(neighbor_count.max(1) as u32)
+        .max(1)
+}
+
+fn max_pipe_pressure_for_node(config: &PipeSimulationConfig, neighbor_count: usize) -> f32 {
+    let _ = neighbor_count;
+    pipe_pressure_pa(config, u32::MAX)
 }
 
 fn sampled_world_reservoir(

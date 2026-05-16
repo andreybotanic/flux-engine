@@ -116,6 +116,11 @@ fn structure_tags(kind: StructureKind) -> Vec<flux_plugin_sdk::ContentTag> {
             content_tag("flux.default.tag.pipe-port"),
             content_tag(crate::plugins::content::CORE_TAG_STRUCTURE_PIPE_BRIDGE),
         ],
+        ENTITY_GAS_PUMP_ID => vec![
+            content_tag("flux.default.tag.pipe-network"),
+            content_tag("flux.default.tag.pipe-port"),
+            content_tag("flux.default.tag.gas-pump"),
+        ],
         ENTITY_GAS_SOURCE_ID => vec![
             content_tag("flux.default.tag.gas-source"),
             content_tag(crate::plugins::content::CORE_TAG_STRUCTURE_GAS_SOURCE),
@@ -253,6 +258,7 @@ fn structure_layers(kind: StructureKind, rotation: StructureRotation) -> Structu
         ENTITY_GAS_SOURCE_ID => one_cell_structure(content_marker(ENTITY_GAS_SOURCE_ID)),
         ENTITY_GAS_SINK_ID => one_cell_structure(content_marker(ENTITY_GAS_SINK_ID)),
         ENTITY_GAS_PIPE_BRIDGE_ID => bridge_layers(rotation),
+        ENTITY_GAS_PUMP_ID => pump_layers(rotation),
         _ => one_cell_structure(content_marker(kind.as_str())),
     }
 }
@@ -299,6 +305,40 @@ fn bridge_layers(rotation: StructureRotation) -> StructureDescriptor {
     }
 }
 
+fn pump_layers(rotation: StructureRotation) -> StructureDescriptor {
+    let (input_cell, output_cell) = pump_connection_local_cells(rotation);
+    StructureDescriptor {
+        layers: vec![
+            StructureLayer {
+                kind: APPEARANCE_LAYER,
+                cells: pump_local_cells(rotation)
+                    .into_iter()
+                    .map(|local_cell| LayerCellSpec {
+                        local_cell,
+                        marker_kind: content_marker(ENTITY_GAS_PUMP_ID),
+                        collision: LayerCollisionKind::RenderOnly,
+                    })
+                    .collect(),
+            },
+            StructureLayer {
+                kind: gas_pipe_connections_layer(),
+                cells: vec![
+                    LayerCellSpec {
+                        local_cell: input_cell,
+                        marker_kind: gas_pipe_connection_in_marker(),
+                        collision: LayerCollisionKind::Special,
+                    },
+                    LayerCellSpec {
+                        local_cell: output_cell,
+                        marker_kind: gas_pipe_connection_out_marker(),
+                        collision: LayerCollisionKind::Special,
+                    },
+                ],
+            },
+        ],
+    }
+}
+
 fn bridge_local_cells(rotation: StructureRotation) -> Vec<IVec2> {
     match rotation {
         StructureRotation::Deg0 | StructureRotation::Deg180 => {
@@ -318,5 +358,25 @@ fn bridge_connection_local_cells(rotation: StructureRotation) -> Vec<IVec2> {
         StructureRotation::Deg90 | StructureRotation::Deg270 => {
             vec![IVec2::new(0, 0), IVec2::new(0, 2)]
         }
+    }
+}
+
+fn pump_local_cells(rotation: StructureRotation) -> Vec<IVec2> {
+    match rotation {
+        StructureRotation::Deg0 | StructureRotation::Deg180 => {
+            vec![IVec2::new(0, 0), IVec2::new(1, 0)]
+        }
+        StructureRotation::Deg90 | StructureRotation::Deg270 => {
+            vec![IVec2::new(0, 0), IVec2::new(0, 1)]
+        }
+    }
+}
+
+fn pump_connection_local_cells(rotation: StructureRotation) -> (IVec2, IVec2) {
+    match rotation {
+        StructureRotation::Deg0 => (IVec2::new(0, 0), IVec2::new(1, 0)),
+        StructureRotation::Deg90 => (IVec2::new(0, 0), IVec2::new(0, 1)),
+        StructureRotation::Deg180 => (IVec2::new(1, 0), IVec2::new(0, 0)),
+        StructureRotation::Deg270 => (IVec2::new(0, 1), IVec2::new(0, 0)),
     }
 }

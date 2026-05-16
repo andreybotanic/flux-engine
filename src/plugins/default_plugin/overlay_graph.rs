@@ -5,12 +5,13 @@ use bevy::prelude::{UVec2, Vec2, Vec3, Vec4};
 use crate::{
     config::GasRegistry,
     plugins::default_plugin::{
-        is_gas_pipe_bridge_structure,
+        is_gas_pipe_bridge_structure, is_gas_pump_structure,
         pipe_runtime::{
             PipeContainerKind, PipeFlowVisualState, PipeGasField, PipeNodeKey,
             PipeSimulationConfig, PipeTransferRecord, PipeTransferVisualPath,
         },
-        OVERLAY_IMAGE_VENT_ICON_ID, OVERLAY_IMAGE_WHITE_ID, OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID,
+        OVERLAY_IMAGE_GAS_IN_ICON_ID, OVERLAY_IMAGE_GAS_OUT_ICON_ID, OVERLAY_IMAGE_VENT_ICON_ID,
+        OVERLAY_IMAGE_WHITE_ID, OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID,
     },
     world::{
         grid::{cell_center, world_origin, CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH},
@@ -220,14 +221,19 @@ fn port_icon_instances(
     let mut instances = Vec::new();
     for structure in structures.iter() {
         if crate::plugins::default_plugin::is_vent_structure(structure.kind) {
-            instances.push(port_icon_at(structure.origin));
+            instances.push(port_icon_at(structure.origin, OVERLAY_IMAGE_VENT_ICON_ID));
             continue;
         }
-        if !is_gas_pipe_bridge_structure(structure.kind) {
+        if is_gas_pipe_bridge_structure(structure.kind) {
+            for cell in bridge_connection_cells(structure.origin, structure.rotation) {
+                instances.push(port_icon_at(cell, OVERLAY_IMAGE_VENT_ICON_ID));
+            }
             continue;
         }
-        for cell in bridge_connection_cells(structure.origin, structure.rotation) {
-            instances.push(port_icon_at(cell));
+        if is_gas_pump_structure(structure.kind) {
+            let (input_cell, output_cell) = pump_port_cells(structure.origin, structure.rotation);
+            instances.push(port_icon_at(input_cell, OVERLAY_IMAGE_GAS_IN_ICON_ID));
+            instances.push(port_icon_at(output_cell, OVERLAY_IMAGE_GAS_OUT_ICON_ID));
         }
     }
     instances
@@ -271,9 +277,9 @@ fn world_position_to_grid_local(position: Vec2) -> Vec2 {
     (position - world_origin()) / CELL_SIZE
 }
 
-fn port_icon_at(cell: UVec2) -> flux_plugin_sdk::OverlayImageInstance {
+fn port_icon_at(cell: UVec2, image_id: &str) -> flux_plugin_sdk::OverlayImageInstance {
     flux_plugin_sdk::OverlayImageInstance {
-        image: flux_plugin_sdk::OverlayImageSource::Asset(content_id(OVERLAY_IMAGE_VENT_ICON_ID)),
+        image: flux_plugin_sdk::OverlayImageSource::Asset(content_id(image_id)),
         placement: flux_plugin_sdk::OverlayPlacement::CellLocal {
             cell,
             anchor: Vec2::splat(0.5),
@@ -359,6 +365,15 @@ fn bridge_connection_cells(origin: UVec2, rotation: StructureRotation) -> [UVec2
         StructureRotation::Deg90 | StructureRotation::Deg270 => {
             [origin, UVec2::new(origin.x, origin.y + 2)]
         }
+    }
+}
+
+fn pump_port_cells(origin: UVec2, rotation: StructureRotation) -> (UVec2, UVec2) {
+    match rotation {
+        StructureRotation::Deg0 => (origin, UVec2::new(origin.x + 1, origin.y)),
+        StructureRotation::Deg90 => (origin, UVec2::new(origin.x, origin.y + 1)),
+        StructureRotation::Deg180 => (UVec2::new(origin.x + 1, origin.y), origin),
+        StructureRotation::Deg270 => (UVec2::new(origin.x, origin.y + 1), origin),
     }
 }
 

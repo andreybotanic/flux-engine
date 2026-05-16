@@ -1,8 +1,8 @@
 use super::{
     apply_pipe_network_step, bridge_port_cells, offer_based_intake_particles_for_test,
     pipe_cell_display_blocks_with_transfers, PipeCellDisplayBlock, PipeContainerKind,
-    PipeFlowVisualState, PipeFluxField, PipeGasField, PipeSimulationConfig, PipeTransferRecord,
-    PipeTransferVisualPath,
+    PipeFlowVisualState, PipeFluxField, PipeGasField, PipeRuntime, PipeSimulationConfig,
+    PipeTransferRecord, PipeTransferVisualPath,
 };
 use crate::{
     config::{GasDefinition, GasRegistry},
@@ -260,6 +260,401 @@ fn has_directional_transfer(visuals: &PipeFlowVisualState, from: UVec2, to: UVec
         .transfers
         .iter()
         .any(|transfer| transfer.total_amount > 0 && transfer.from == from && transfer.to == to)
+}
+
+fn pump_ports(origin: UVec2, rotation: StructureRotation) -> (UVec2, UVec2) {
+    match rotation {
+        StructureRotation::Deg0 => (origin, UVec2::new(origin.x + 1, origin.y)),
+        StructureRotation::Deg90 => (origin, UVec2::new(origin.x, origin.y + 1)),
+        StructureRotation::Deg180 => (UVec2::new(origin.x + 1, origin.y), origin),
+        StructureRotation::Deg270 => (UVec2::new(origin.x, origin.y + 1), origin),
+    }
+}
+
+#[test]
+fn pump_input_draws_flow_from_vent_for_low_and_high_pressures() {
+    for vent_pressure_pa in [1.0f32, 1_000_000.0f32] {
+        let registry = registry();
+        let gas_index = registry.index_of("h2").expect("h2 index");
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        let config = pipe_config();
+
+        let pump_origin = UVec2::new(40, 40);
+        let (pump_in, _pump_out) = pump_ports(pump_origin, StructureRotation::Deg0);
+        let vent_cell = UVec2::new(pump_in.x - 2, pump_in.y);
+        let middle_cell = UVec2::new(pump_in.x - 1, pump_in.y);
+
+        assert!(structures
+            .place_gas_pump(pump_origin, StructureRotation::Deg0, &world)
+            .is_some());
+        for cell in [vent_cell, middle_cell, pump_in] {
+            assert!(structures.place_pipe(cell.x, cell.y, &world));
+        }
+        assert!(structures.place_vent(vent_cell.x, vent_cell.y, &world));
+
+        let mut gas = GasField::from_registry(&registry);
+        set_area_pressure(
+            &mut gas,
+            gas_index,
+            vent_cell.x,
+            vent_cell.y,
+            vent_cell.x,
+            vent_cell.y,
+            vent_pressure_pa,
+            &config,
+        );
+        gas.recompute_total_density_buffer(&world);
+
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        pipe_gas.sync_to_structures(&structures);
+        let pump_input_node = pipe_node_id(&pipe_gas, PipeContainerKind::Pipe, pump_in);
+
+        let mut pipe_flux = PipeFluxField::default();
+        let mut visuals = PipeFlowVisualState::default();
+        let mut saw_flow_to_pump = false;
+        let mut saw_reverse = false;
+        run_pipe_ticks_with_observer(
+            (config.pipe_step_interval_ticks as usize) * 8,
+            &world,
+            &structures,
+            &mut gas,
+            &mut pipe_gas,
+            &mut pipe_flux,
+            &mut visuals,
+            &config,
+            |state| {
+                saw_flow_to_pump |= has_directional_transfer(state, middle_cell, pump_in);
+                saw_reverse |= has_directional_transfer(state, pump_in, middle_cell);
+            },
+        );
+
+        assert!(
+            saw_flow_to_pump,
+            "expected vent->pump_in transfer for vent pressure {vent_pressure_pa} Pa"
+        );
+        assert!(
+            !saw_reverse,
+            "did not expect reverse transfer from pump_in for vent pressure {vent_pressure_pa} Pa"
+        );
+        assert!(
+            pipe_gas.total_amount_particles(pump_input_node) > 0,
+            "pump input node should accumulate intake for vent pressure {vent_pressure_pa} Pa"
+        );
+    }
+}
+
+#[test]
+fn pump_output_pushes_flow_to_vent_for_low_and_high_pressures() {
+    for vent_pressure_pa in [1.0f32, 1_000_000.0f32] {
+        let registry = registry();
+        let gas_index = registry.index_of("h2").expect("h2 index");
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        let config = pipe_config();
+
+        let pump_origin = UVec2::new(48, 40);
+        let (pump_in, pump_out) = pump_ports(pump_origin, StructureRotation::Deg0);
+        let vent_cell = UVec2::new(pump_out.x + 1, pump_out.y);
+
+        assert!(structures
+            .place_gas_pump(pump_origin, StructureRotation::Deg0, &world)
+            .is_some());
+        for cell in [pump_in, pump_out, vent_cell] {
+            assert!(structures.place_pipe(cell.x, cell.y, &world));
+        }
+        assert!(structures.place_vent(vent_cell.x, vent_cell.y, &world));
+
+        let mut gas = GasField::from_registry(&registry);
+        set_area_pressure(
+            &mut gas,
+            gas_index,
+            vent_cell.x,
+            vent_cell.y,
+            vent_cell.x,
+            vent_cell.y,
+            vent_pressure_pa,
+            &config,
+        );
+        gas.recompute_total_density_buffer(&world);
+
+        let mut pipe_gas = PipeGasField::from_registry(&registry);
+        pipe_gas.sync_to_structures(&structures);
+        let pump_input_node = pipe_node_id(&pipe_gas, PipeContainerKind::Pipe, pump_in);
+        pipe_gas.add_species_counts(pump_input_node, &[120_000, 0, 0]);
+
+        let mut pipe_flux = PipeFluxField::default();
+        let mut visuals = PipeFlowVisualState::default();
+        let mut saw_flow_from_pump = false;
+        let mut saw_reverse = false;
+        run_pipe_ticks_with_observer(
+            (config.pipe_step_interval_ticks as usize) * 10,
+            &world,
+            &structures,
+            &mut gas,
+            &mut pipe_gas,
+            &mut pipe_flux,
+            &mut visuals,
+            &config,
+            |state| {
+                saw_flow_from_pump |= has_directional_transfer(state, pump_out, vent_cell);
+                saw_reverse |= has_directional_transfer(state, vent_cell, pump_out);
+            },
+        );
+
+        assert!(
+            saw_flow_from_pump,
+            "expected pump_out->vent transfer for vent pressure {vent_pressure_pa} Pa"
+        );
+        assert!(
+            !saw_reverse,
+            "did not expect reverse transfer into pump_out for vent pressure {vent_pressure_pa} Pa"
+        );
+    }
+}
+
+#[test]
+fn pump_without_output_pipe_is_blocked() {
+    let registry = registry();
+    let world = WorldGrid::default();
+    let mut structures = PlacedStructureMap::default();
+    let config = pipe_config();
+
+    let pump_origin = UVec2::new(30, 30);
+    let (pump_in, _pump_out) = pump_ports(pump_origin, StructureRotation::Deg0);
+    assert!(structures
+        .place_gas_pump(pump_origin, StructureRotation::Deg0, &world)
+        .is_some());
+    assert!(structures.place_pipe(pump_in.x, pump_in.y, &world));
+
+    let mut gas = GasField::from_registry(&registry);
+    let mut pipe_gas = PipeGasField::from_registry(&registry);
+    pipe_gas.sync_to_structures(&structures);
+    let input_node = pipe_node_id(&pipe_gas, PipeContainerKind::Pipe, pump_in);
+    pipe_gas.add_species_counts(input_node, &[30_000, 0, 0]);
+
+    let mut pipe_flux = PipeFluxField::default();
+    let mut visuals = PipeFlowVisualState::default();
+    run_pipe_ticks(
+        (config.pipe_step_interval_ticks as usize) * 4,
+        &world,
+        &structures,
+        &mut gas,
+        &mut pipe_gas,
+        &mut pipe_flux,
+        &mut visuals,
+        &config,
+    );
+
+    assert_eq!(
+        pipe_gas.total_amount_particles(input_node),
+        30_000,
+        "pump must not move gas when output pipe is disconnected"
+    );
+}
+
+#[test]
+fn pump_output_capacity_causes_partial_transfer_then_full_stop() {
+    let registry = registry();
+    let world = WorldGrid::default();
+    let mut structures = PlacedStructureMap::default();
+    let config = pipe_config();
+
+    let pump_origin = UVec2::new(34, 30);
+    let (pump_in, pump_out) = pump_ports(pump_origin, StructureRotation::Deg0);
+    assert!(structures
+        .place_gas_pump(pump_origin, StructureRotation::Deg0, &world)
+        .is_some());
+    assert!(structures.place_pipe(pump_in.x, pump_in.y, &world));
+    assert!(structures.place_pipe(pump_out.x, pump_out.y, &world));
+
+    let mut gas = GasField::from_registry(&registry);
+    let mut pipe_gas = PipeGasField::from_registry(&registry);
+    pipe_gas.sync_to_structures(&structures);
+    let input_node = pipe_node_id(&pipe_gas, PipeContainerKind::Pipe, pump_in);
+    let output_node = pipe_node_id(&pipe_gas, PipeContainerKind::Pipe, pump_out);
+    pipe_gas.add_species_counts(input_node, &[80_000, 0, 0]);
+
+    let mut pipe_flux = PipeFluxField::default();
+    let mut visuals = PipeFlowVisualState::default();
+
+    run_pipe_ticks(
+        config.pipe_step_interval_ticks as usize,
+        &world,
+        &structures,
+        &mut gas,
+        &mut pipe_gas,
+        &mut pipe_flux,
+        &mut visuals,
+        &config,
+    );
+    assert_eq!(
+        pipe_gas.total_amount_particles(output_node),
+        0,
+        "first hop should only plan pump transfer, not commit it"
+    );
+    assert_eq!(
+        pipe_gas.total_amount_particles(input_node),
+        80_000,
+        "first hop should keep source mass until the next commit hop"
+    );
+    assert!(
+        has_directional_transfer(&visuals, pump_in, pump_out),
+        "pump transfer must be present in flow visuals on planning hop"
+    );
+
+    run_pipe_ticks(
+        config.pipe_step_interval_ticks as usize,
+        &world,
+        &structures,
+        &mut gas,
+        &mut pipe_gas,
+        &mut pipe_flux,
+        &mut visuals,
+        &config,
+    );
+    assert_eq!(
+        pipe_gas.total_amount_particles(output_node),
+        50_000,
+        "second hop should commit the previously planned partial transfer"
+    );
+    assert_eq!(
+        pipe_gas.total_amount_particles(input_node),
+        30_000,
+        "source should be reduced after commit hop"
+    );
+
+    run_pipe_ticks(
+        config.pipe_step_interval_ticks as usize,
+        &world,
+        &structures,
+        &mut gas,
+        &mut pipe_gas,
+        &mut pipe_flux,
+        &mut visuals,
+        &config,
+    );
+    assert_eq!(
+        pipe_gas.total_amount_particles(output_node),
+        50_000,
+        "output node should stay full when there is no downstream relief"
+    );
+    assert_eq!(
+        pipe_gas.total_amount_particles(input_node),
+        30_000,
+        "input node should stop draining after output reaches capacity"
+    );
+}
+
+#[test]
+fn pump_transfer_visual_is_emitted_from_input_to_output() {
+    let registry = registry();
+    let world = WorldGrid::default();
+    let mut structures = PlacedStructureMap::default();
+    let config = pipe_config();
+
+    let pump_origin = UVec2::new(60, 30);
+    let (pump_in, pump_out) = pump_ports(pump_origin, StructureRotation::Deg0);
+    assert!(structures
+        .place_gas_pump(pump_origin, StructureRotation::Deg0, &world)
+        .is_some());
+    assert!(structures.place_pipe(pump_in.x, pump_in.y, &world));
+    assert!(structures.place_pipe(pump_out.x, pump_out.y, &world));
+
+    let mut gas = GasField::from_registry(&registry);
+    let mut pipe_gas = PipeGasField::from_registry(&registry);
+    pipe_gas.sync_to_structures(&structures);
+    let input_node = pipe_node_id(&pipe_gas, PipeContainerKind::Pipe, pump_in);
+    pipe_gas.add_species_counts(input_node, &[10_000, 0, 0]);
+
+    let mut pipe_flux = PipeFluxField::default();
+    let mut visuals = PipeFlowVisualState::default();
+    run_pipe_ticks(
+        config.pipe_step_interval_ticks as usize,
+        &world,
+        &structures,
+        &mut gas,
+        &mut pipe_gas,
+        &mut pipe_flux,
+        &mut visuals,
+        &config,
+    );
+
+    assert!(
+        has_directional_transfer(&visuals, pump_in, pump_out),
+        "expected flow visual transfer from pump input to pump output"
+    );
+}
+
+#[test]
+fn pump_runtime_topology_has_no_internal_pipe_edge_between_ports() {
+    let registry = registry();
+    let world = WorldGrid::default();
+    let mut structures = PlacedStructureMap::default();
+
+    let pump_origin = UVec2::new(24, 24);
+    let (pump_in, pump_out) = pump_ports(pump_origin, StructureRotation::Deg0);
+    assert!(structures
+        .place_gas_pump(pump_origin, StructureRotation::Deg0, &world)
+        .is_some());
+    assert!(structures.place_pipe(pump_in.x, pump_in.y, &world));
+    assert!(structures.place_pipe(pump_out.x, pump_out.y, &world));
+
+    let mut pipe_gas = PipeGasField::from_registry(&registry);
+    pipe_gas.sync_to_structures(&structures);
+    let input_node = pipe_node_id(&pipe_gas, PipeContainerKind::Pipe, pump_in);
+    let output_node = pipe_node_id(&pipe_gas, PipeContainerKind::Pipe, pump_out);
+    let runtime = PipeRuntime::from_structures(&structures, &pipe_gas);
+
+    assert!(
+        !runtime.nodes[input_node].neighbors.contains(&output_node),
+        "pump input and output nodes must not be connected as a regular pipe edge"
+    );
+    assert!(
+        !runtime.nodes[output_node].neighbors.contains(&input_node),
+        "pump output and input nodes must not be connected as a regular pipe edge"
+    );
+}
+
+#[test]
+fn pump_transfer_preserves_total_pipe_mass_without_internal_storage() {
+    let registry = registry();
+    let world = WorldGrid::default();
+    let mut structures = PlacedStructureMap::default();
+    let config = pipe_config();
+
+    let pump_origin = UVec2::new(28, 34);
+    let (pump_in, pump_out) = pump_ports(pump_origin, StructureRotation::Deg0);
+    assert!(structures
+        .place_gas_pump(pump_origin, StructureRotation::Deg0, &world)
+        .is_some());
+    assert!(structures.place_pipe(pump_in.x, pump_in.y, &world));
+    assert!(structures.place_pipe(pump_out.x, pump_out.y, &world));
+
+    let mut gas = GasField::from_registry(&registry);
+    let mut pipe_gas = PipeGasField::from_registry(&registry);
+    pipe_gas.sync_to_structures(&structures);
+    let input_node = pipe_node_id(&pipe_gas, PipeContainerKind::Pipe, pump_in);
+    pipe_gas.add_species_counts(input_node, &[12_345, 0, 0]);
+
+    let mut pipe_flux = PipeFluxField::default();
+    let mut visuals = PipeFlowVisualState::default();
+    run_pipe_ticks(
+        (config.pipe_step_interval_ticks as usize) * 5,
+        &world,
+        &structures,
+        &mut gas,
+        &mut pipe_gas,
+        &mut pipe_flux,
+        &mut visuals,
+        &config,
+    );
+
+    let total_pipe_mass = total_pipe_mass(&pipe_gas, 0);
+    assert_eq!(
+        total_pipe_mass, 12_345,
+        "pump should not create or lose gas and should not store gas outside pipe nodes"
+    );
 }
 
 #[test]

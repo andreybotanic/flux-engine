@@ -82,6 +82,12 @@ fn setup_editor_ui(
             )
             .expect("bridge silhouette is registered"),
         ),
+        pump_silhouette: asset_server.load(
+            crate::plugins::default_plugin::structure_silhouette_path(
+                crate::plugins::default_plugin::gas_pump_structure_kind(),
+            )
+            .expect("pump silhouette is registered"),
+        ),
         source_silhouette: asset_server.load(
             crate::plugins::default_plugin::structure_silhouette_path(
                 crate::plugins::default_plugin::gas_source_structure_kind(),
@@ -1120,7 +1126,7 @@ fn collect_pipe_variants_for_category(
     content_registry: &crate::plugins::ContentRegistry,
     asset_server: &AssetServer,
     category_id: &ContentId,
-) -> Vec<(String, PipeToolKind, Handle<Image>)> {
+) -> Vec<(String, PipeToolKind, Handle<Image>, f32)> {
     let mut descriptors = content_registry
         .structures()
         .values()
@@ -1140,6 +1146,8 @@ fn collect_pipe_variants_for_category(
                 == crate::plugins::default_plugin::gas_pipe_bridge_structure_kind()
             {
                 Some(PipeToolKind::Bridge)
+            } else if descriptor.kind == crate::plugins::default_plugin::gas_pump_structure_kind() {
+                Some(PipeToolKind::Pump)
             } else {
                 None
             }?;
@@ -1148,10 +1156,13 @@ fn collect_pipe_variants_for_category(
             } else {
                 descriptor.id.as_str().to_string()
             };
+            let size = descriptor.visual.size_in_cells;
+            let aspect_ratio = size.x.max(1) as f32 / size.y.max(1) as f32;
             Some((
                 label,
                 pipe_kind,
                 asset_server.load(descriptor.sprite.image_path.as_str()),
+                aspect_ratio,
             ))
         })
         .collect()

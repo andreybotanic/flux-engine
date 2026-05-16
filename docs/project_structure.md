@@ -120,7 +120,7 @@ FluxEngine/
 - `src/config/mod.rs`: Публичные конфиг-типы, включая `AudioSettingsState`; compatibility `GasRegistry` поверх plugin-owned substance registry, runtime-реестры base/visual/layout/HUD-метаданных и входная точка загрузки конфигов.
 - `src/debug/mod.rs`: Debug-режимы, оверлейные метрики и диагностические ресурсы.
 - `src/editor/editor_ui_block.rs`: Runtime-обработка editor UI: tooltip, state sync, динамический category-toolbar (`Cells/Gases/+plugin categories`), и visibility/close-логика category-панелей.
-- `src/editor/input_block.rs`: Мышь/кисть/выделение и применение инструментов к миру через `Construct` + активную категорию (`Cells`/`Gases`), unified pipe/structure-сеть и мост.
+- `src/editor/input_block.rs`: Мышь/кисть/выделение и применение инструментов к миру через `Construct` + активную категорию (`Cells`/`Gases`), unified pipe/structure-сеть, поворот и размещение `GasPipeBridge`/`GasPump`.
 - `src/editor/main_menu_actions_block.rs`: Обработчики действий меню: save/load/new/exit/plugins/reload/confirm, очередь preview-capture и post-save follow-up сценарии.
 - `src/editor/main_menu_block.rs`: Композиция логики main menu (escape/actions/ui refresh), включая экран `Settings`.
 - `src/editor/main_menu_escape_block.rs`: Обработка Esc и переходов состояний меню/инструментов, включая возврат из `Plugins` и `Settings` к root screen.
@@ -157,11 +157,11 @@ FluxEngine/
 - `src/plugins/default_plugin/assets/shaders/pipe_highlight_material.wgsl`: Plugin-owned WGSL-шейдер `Material2d` для яркой подсветки труб в `F3/Pipes`.
 - `src/plugins/default_plugin/assets/world/pipe_mask_*.{png,ktx2}`: Source+runtime файловые спрайты труб для всех connection-mask вариантов, загружаемые через `flux_default://world/...`.
 - `src/plugins/default_plugin/assets/world/pipe_silhouette_mask_*.{png,ktx2}`: Source+runtime silhouette-спрайты труб для ghost-preview.
-- `src/plugins/default_plugin/assets/world/bridge*.*`, `gas_*.*`, `silhouette_*.*`, `tile_*.*`: World source PNG и runtime `.ktx2` спрайты default plugin-а для стен, структур, мостов и pipe overlay.
+- `src/plugins/default_plugin/assets/world/bridge*.*`, `gas_*.*`, `gas_pump*.*`, `silhouette_*.*`, `tile_*.*`: World source PNG и runtime `.ktx2` спрайты default plugin-а для стен, структур (включая насос), мостов и pipe overlay.
 - `src/plugins/default_plugin/config/cell_types.toml`: Настройки визуала/параметров default-клеток и HUD-конфиг world-клетки для свободного газа.
 - `src/plugins/default_plugin/config/gases/*.toml`: Optional data-конфиги default plugin gas substances; при пустой папке базовые `H2/O2/CO2` берутся из built-in default plugin definitions.
 - `src/plugins/default_plugin/config/pipe_runtime.toml`: Runtime-настройки конвейерной pipe-модели default plugin-а (cadence hop-step, branch residual, vent-параметры и pressure-конверсия).
-- `src/plugins/default_plugin/config/structures/*.toml`: Конфиги appearance и HUD-метаданных встроенных стен и структур (`label`, `draw_priority`, `size_in_cells`, `hud.sort_order` и substance-контейнеры).
+- `src/plugins/default_plugin/config/structures/*.toml`: Конфиги appearance и HUD-метаданных встроенных стен и структур (`label`, `draw_priority`, `size_in_cells`, `hud.sort_order` и substance-контейнеры), включая `gas_pump.toml`.
 - `src/plugins/flux_stage1_sample_plugin/Cargo.toml`: Отдельный `cdylib` crate минимального non-content sample plugin-а на `flux_plugin_sdk`.
 - `src/plugins/flux_stage1_sample_plugin/package_template/manifest.toml`: Шаблон packaged plugin manifest для sample DLL, используемый позитивным e2e-тестом.
 - `src/plugins/flux_stage1_sample_plugin/package_template/config/sample.toml`: Минимальный config-файл sample plugin package.
@@ -225,11 +225,11 @@ FluxEngine/
 - `src/simulation/parity.rs`: Публичные parity API и сценарии сравнения CPU/GPU.
 - `src/simulation/parity_runtime_block.rs`: Runtime parity-метрики, прогоны сценариев и gate-оценка.
 - `src/simulation/parity_tests_block.rs`: Тесты parity-порогов, smoke и GPU-регрессий.
-- `src/plugins/default_plugin/pipe_runtime.rs`: Node-based `PipeGasField`, runtime-only `PipeFluxField`, `PipeFlowVisualState` с фазой конвейера, публичный фасад pipe runtime/visual API, support-plugin и wiring тестов pipe-сети; сам pre-step dispatch идёт через built-in SDK runtime.
+- `src/plugins/default_plugin/pipe_runtime.rs`: Node-based `PipeGasField`, runtime-only `PipeFluxField`, `PipeFlowVisualState`, runtime-топология pipe-портов (`Vent/PumpIn/PumpOut`) и публичный фасад pipe runtime/visual API; сам pre-step dispatch идёт через built-in SDK runtime.
 - `src/plugins/default_plugin/pipe_runtime/pressure.rs`: Helper-ы перевода `particles -> pressure` и форматирования давления для HUD/pipe-рендера.
 - `src/plugins/default_plugin/pipe_runtime/scenarios.rs`: Общий builder пяти канонических pipe-сценариев для save-утилиты и acceptance-тестов.
-- `src/plugins/default_plugin/pipe_runtime/solver.rs`: Внутренний конвейерный transport solver pipe-сети (`offer -> demand -> match -> commit`) с edge-level downstream outlet check, backpressure-остановкой тупиковых веток, vent budget-ами и записью hop-трансферов в `PipeFlowVisualState`.
-- `src/plugins/default_plugin/pipe_runtime/tests.rs`: Acceptance/regression тесты pipe-модели: blocked/backpressure сценарии, возобновление потока после разблокировки, а также multi-vent stress-проверки `100 Pa / 1 kPa / 1 MPa` в smoke/full режимах.
+- `src/plugins/default_plugin/pipe_runtime/solver.rs`: Внутренний конвейерный transport solver pipe-сети (`offer -> demand -> match -> commit`) с edge-level downstream outlet check, backpressure-остановкой тупиковых веток, vent/pump port-offer расчётом и отдельной pump transfer phase с ограничением `room_left`.
+- `src/plugins/default_plugin/pipe_runtime/tests.rs`: Acceptance/regression тесты pipe-модели: blocked/backpressure сценарии, multi-vent stress (`smoke/full`) и отдельные pump-регрессии на направление потока, блокировку выхода, отсутствие внутреннего pipe-ребра и ограничение переноса по `room_left`.
 - `src/simulation/runtime_tick_block.rs`: Runtime-шаги core-симуляции свободного газа, GPU/CPU подшаги и perf-метрики; pipe pre-step выполняется default plugin runtime-ом до этого шага.
 - `src/simulation/simulation_tests_block.rs`: Тесты конфигурации тика и структурных pre-step правил.
 - `src/ui/cell_inspector.rs`: Runtime-сборка и позиционирование HUD инспектора клетки как стека отдельных entity-блоков с общей тенью; plugin HUD теперь собирается через общий `BuildHudForCell` dispatch, включая built-in `flux.default`.

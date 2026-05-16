@@ -7,4 +7,5 @@ vent_discharge_coefficient = 7.8
 max_vent_flux_particles_per_tick = 200000.0
 vent_choked_pressure_ratio = 0.53
 pressure_epsilon_pa = 0.01
+pump_input_pressure_pa = -100.0
 

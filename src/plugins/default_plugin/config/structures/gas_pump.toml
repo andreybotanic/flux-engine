@@ -1,0 +1,6 @@
+label = "Pump"
+draw_priority = 115
+size_in_cells = [2, 1]
+
+[hud]
+sort_order = 35

@@ -17,6 +17,7 @@ fn default_plugin_content_ids_roundtrip_legacy_enums() {
         crate::plugins::default_plugin::gas_source_structure_kind(),
         crate::plugins::default_plugin::gas_sink_structure_kind(),
         crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+        crate::plugins::default_plugin::gas_pump_structure_kind(),
     ] {
         let id = structure_kind_content_id(kind);
         assert_eq!(structure_kind_from_content_id(&id), Some(kind));
@@ -35,7 +36,7 @@ fn default_plugin_registry_contains_all_builtin_content() {
         .provider_plugins()
         .contains(&PluginId::default_plugin()));
     assert_eq!(registry.cells().len(), 3);
-    assert_eq!(registry.structures().len(), 5);
+    assert_eq!(registry.structures().len(), 6);
     assert_eq!(registry.overlays().len(), 3);
     assert_eq!(registry.substances().len(), 3);
     assert!(registry
@@ -86,6 +87,10 @@ fn default_plugin_hud_order_matches_legacy_blocks() {
         20
     )));
     assert!(orders.contains(&(crate::plugins::default_plugin::vent_structure_kind(), 30)));
+    assert!(orders.contains(&(
+        crate::plugins::default_plugin::gas_pump_structure_kind(),
+        35
+    )));
     assert!(orders.contains(&(
         crate::plugins::default_plugin::gas_source_structure_kind(),
         40

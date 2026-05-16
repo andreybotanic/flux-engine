@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
@@ -50,6 +50,7 @@ pub struct PipeSimulationConfig {
     pub max_vent_flux_particles_per_tick: f32,
     pub vent_choked_pressure_ratio: f32,
     pub pressure_epsilon_pa: f32,
+    pub pump_input_pressure_pa: f32,
 }
 
 impl Default for PipeSimulationConfig {
@@ -64,6 +65,7 @@ impl Default for PipeSimulationConfig {
             max_vent_flux_particles_per_tick: 200_000.0,
             vent_choked_pressure_ratio: 0.53,
             pressure_epsilon_pa: 0.01,
+            pump_input_pressure_pa: -100.0,
         }
     }
 }
@@ -134,7 +136,7 @@ impl PipeEdgeKey {
 struct PipeFluxTopologySignature {
     node_keys: Vec<PipeNodeKey>,
     edges: Vec<PipeEdgeKey>,
-    vent_nodes: Vec<PipeNodeKey>,
+    port_nodes: Vec<(PipeNodeKey, PipeRuntimePortKind)>,
 }
 
 #[derive(Resource, Clone)]
@@ -678,11 +680,31 @@ pub fn apply_gas_structures_pre_step(
 struct PipeRuntimeNode {
     visual_cell: UVec2,
     neighbors: Vec<usize>,
-    vent_cell: Option<UVec2>,
+    port: Option<PipeRuntimePort>,
 }
 
 struct PipeRuntime {
     nodes: Vec<PipeRuntimeNode>,
+    pumps: Vec<PipeRuntimePump>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum PipeRuntimePortKind {
+    Vent,
+    PumpIn,
+    PumpOut,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct PipeRuntimePort {
+    kind: PipeRuntimePortKind,
+    world_cell: UVec2,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct PipeRuntimePump {
+    input_node: Option<usize>,
+    output_node: Option<usize>,
 }
 
 impl PipeRuntime {
@@ -708,7 +730,7 @@ impl PipeRuntime {
                     }
                 },
                 neighbors: Vec::new(),
-                vent_cell: None,
+                port: None,
             })
             .collect::<Vec<_>>();
 
@@ -728,6 +750,18 @@ impl PipeRuntime {
                 (key.kind == PipeContainerKind::BridgePipe).then_some((key.anchor, node_id))
             })
             .collect::<HashMap<_, _>>();
+        let mut pump_ports = Vec::new();
+        let mut blocked_internal_edges = HashSet::new();
+        for structure in structures.iter() {
+            if !crate::plugins::default_plugin::is_gas_pump_structure(structure.kind) {
+                continue;
+            }
+            let (input_cell, output_cell) = pump_port_cells(structure.origin, structure.rotation);
+            pump_ports.push((structure.id, input_cell, output_cell));
+            if let Some(edge) = normalized_cell_edge(input_cell, output_cell) {
+                blocked_internal_edges.insert(edge);
+            }
+        }
 
         for (cell, node_id) in &pipe_by_cell {
             for neighbor_cell in orthogonal_neighbors(*cell) {
@@ -737,6 +771,11 @@ impl PipeRuntime {
                 if structures.is_pipe_cut(*cell, neighbor_cell) {
                     continue;
                 }
+                if let Some(edge) = normalized_cell_edge(*cell, neighbor_cell) {
+                    if blocked_internal_edges.contains(&edge) {
+                        continue;
+                    }
+                }
                 push_unique(&mut nodes[*node_id].neighbors, neighbor_id);
             }
         }
@@ -744,7 +783,10 @@ impl PipeRuntime {
         for structure in structures.iter() {
             if crate::plugins::default_plugin::is_vent_structure(structure.kind) {
                 if let Some(node_id) = pipe_by_cell.get(&structure.origin).copied() {
-                    nodes[node_id].vent_cell = Some(structure.origin);
+                    nodes[node_id].port = Some(PipeRuntimePort {
+                        kind: PipeRuntimePortKind::Vent,
+                        world_cell: structure.origin,
+                    });
                 }
             } else if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind) {
                 let Some(bridge_node_id) = bridge_by_origin.get(&structure.origin).copied() else {
@@ -758,8 +800,31 @@ impl PipeRuntime {
                 }
             }
         }
+        let pumps = pump_ports
+            .into_iter()
+            .map(|(_pump_id, input_cell, output_cell)| {
+                let input_node = pipe_by_cell.get(&input_cell).copied();
+                let output_node = pipe_by_cell.get(&output_cell).copied();
+                if let Some(node_id) = input_node {
+                    nodes[node_id].port = Some(PipeRuntimePort {
+                        kind: PipeRuntimePortKind::PumpIn,
+                        world_cell: input_cell,
+                    });
+                }
+                if let Some(node_id) = output_node {
+                    nodes[node_id].port = Some(PipeRuntimePort {
+                        kind: PipeRuntimePortKind::PumpOut,
+                        world_cell: output_cell,
+                    });
+                }
+                PipeRuntimePump {
+                    input_node,
+                    output_node,
+                }
+            })
+            .collect::<Vec<_>>();
 
-        Self { nodes }
+        Self { nodes, pumps }
     }
 }
 
@@ -884,6 +949,28 @@ fn bridge_port_cells(origin: UVec2, rotation: StructureRotation) -> Vec<UVec2> {
     }
 }
 
+fn pump_port_cells(origin: UVec2, rotation: StructureRotation) -> (UVec2, UVec2) {
+    match rotation {
+        StructureRotation::Deg0 => (origin, UVec2::new(origin.x + 1, origin.y)),
+        StructureRotation::Deg90 => (origin, UVec2::new(origin.x, origin.y + 1)),
+        StructureRotation::Deg180 => (UVec2::new(origin.x + 1, origin.y), origin),
+        StructureRotation::Deg270 => (UVec2::new(origin.x, origin.y + 1), origin),
+    }
+}
+
+fn normalized_cell_edge(a: UVec2, b: UVec2) -> Option<[UVec2; 2]> {
+    let dx = a.x as i32 - b.x as i32;
+    let dy = a.y as i32 - b.y as i32;
+    if dx.abs() + dy.abs() != 1 {
+        return None;
+    }
+    Some(if (a.y, a.x) <= (b.y, b.x) {
+        [a, b]
+    } else {
+        [b, a]
+    })
+}
+
 fn transfer_visual_path(
     source_key: PipeNodeKey,
     target_key: PipeNodeKey,
@@ -939,11 +1026,11 @@ fn pipe_flux_topology_signature(
     pipe_gas: &PipeGasField,
 ) -> PipeFluxTopologySignature {
     let mut edges = Vec::new();
-    let mut vent_nodes = Vec::new();
+    let mut port_nodes = Vec::new();
     for (node_id, node) in runtime.nodes.iter().enumerate() {
         let source_key = pipe_gas.keys[node_id];
-        if node.vent_cell.is_some() {
-            vent_nodes.push(source_key);
+        if let Some(port) = node.port {
+            port_nodes.push((source_key, port.kind));
         }
         for neighbor in node.neighbors.iter().copied() {
             let target_key = pipe_gas.keys[neighbor];
@@ -953,11 +1040,11 @@ fn pipe_flux_topology_signature(
         }
     }
     edges.sort();
-    vent_nodes.sort();
+    port_nodes.sort();
     PipeFluxTopologySignature {
         node_keys: pipe_gas.keys.clone(),
         edges,
-        vent_nodes,
+        port_nodes,
     }
 }
 

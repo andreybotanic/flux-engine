@@ -267,6 +267,26 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             bridge_hud_block(),
             "GasPipeBridge",
         ),
+        structure_descriptor_for(
+            ENTITY_GAS_PUMP_ID,
+            gas_pump_structure_kind(),
+            "gas_pump.toml",
+            "Pump",
+            115,
+            UVec2::new(2, 1),
+            "flux_default://world/gas_pump.ktx2",
+            Some("flux_default://world/gas_pump_silhouette.ktx2"),
+            None,
+            vec![
+                StructureRotation::Deg0,
+                StructureRotation::Deg90,
+                StructureRotation::Deg180,
+                StructureRotation::Deg270,
+            ],
+            Some(CATEGORY_GASES_ID),
+            title_only_hud_block(35),
+            "GasPump",
+        ),
     ]
 }
 
@@ -307,6 +327,7 @@ pub fn structure_kind_from_content_id(id: &ContentId) -> Option<StructureKind> {
         ENTITY_GAS_SOURCE_ID => Some(gas_source_structure_kind()),
         ENTITY_GAS_SINK_ID => Some(gas_sink_structure_kind()),
         ENTITY_GAS_PIPE_BRIDGE_ID => Some(gas_pipe_bridge_structure_kind()),
+        ENTITY_GAS_PUMP_ID => Some(gas_pump_structure_kind()),
         _ => None,
     }
 }
@@ -392,6 +413,7 @@ pub fn structure_label(kind: StructureKind) -> &'static str {
         ENTITY_GAS_SOURCE_ID => "Gas Source",
         ENTITY_GAS_SINK_ID => "Gas Sink",
         ENTITY_GAS_PIPE_BRIDGE_ID => "Bridge",
+        ENTITY_GAS_PUMP_ID => "Pump",
         _ => "Structure",
     }
 }
@@ -445,6 +467,7 @@ pub fn structure_sprite_path(kind: StructureKind) -> &'static str {
         ENTITY_GAS_SOURCE_ID => "flux_default://world/tile_gas_source.ktx2",
         ENTITY_GAS_SINK_ID => "flux_default://world/tile_gas_sink.ktx2",
         ENTITY_GAS_PIPE_BRIDGE_ID => "flux_default://world/bridge.ktx2",
+        ENTITY_GAS_PUMP_ID => "flux_default://world/gas_pump.ktx2",
         _ => "flux_default://world/pipe_mask_00.ktx2",
     }
 }
@@ -457,6 +480,7 @@ pub fn structure_silhouette_path(kind: StructureKind) -> Option<&'static str> {
         ENTITY_GAS_SOURCE_ID => Some("flux_default://world/tile_gas_source.ktx2"),
         ENTITY_GAS_SINK_ID => Some("flux_default://world/tile_gas_sink.ktx2"),
         ENTITY_GAS_PIPE_BRIDGE_ID => Some("flux_default://world/bridge_silhouette.ktx2"),
+        ENTITY_GAS_PUMP_ID => Some("flux_default://world/gas_pump_silhouette.ktx2"),
         _ => None,
     }
 }
@@ -469,6 +493,7 @@ pub fn structure_tool_icon_path(kind: StructureKind) -> &'static str {
         ENTITY_GAS_SOURCE_ID => "flux_default://ui/tool_gas_source.ktx2",
         ENTITY_GAS_SINK_ID => "flux_default://ui/tool_gas_sink.ktx2",
         ENTITY_GAS_PIPE_BRIDGE_ID => "flux_default://ui/tool_bridge.ktx2",
+        ENTITY_GAS_PUMP_ID => "flux_default://ui/tool_pipe.ktx2",
         _ => "flux_default://ui/tool_pipe.ktx2",
     }
 }
@@ -476,6 +501,16 @@ pub fn structure_tool_icon_path(kind: StructureKind) -> &'static str {
 /// Returns the overlay sprite path registered for pipe connection markers.
 pub fn pipe_connection_overlay_sprite_path() -> &'static str {
     "flux_default://world/gas_in_out.ktx2"
+}
+
+/// Returns the overlay sprite path registered for one-way `gas_in` markers.
+pub fn pipe_connection_in_overlay_sprite_path() -> &'static str {
+    "flux_default://world/gas_in.ktx2"
+}
+
+/// Returns the overlay sprite path registered for one-way `gas_out` markers.
+pub fn pipe_connection_out_overlay_sprite_path() -> &'static str {
+    "flux_default://world/gas_out.ktx2"
 }
 
 /// Returns the registered pipe mask sprite path for one connection mask.
@@ -522,6 +557,14 @@ pub fn structure_state_sprite_transform(
     if is_gas_pipe_bridge_structure(kind) && (state.value() & 1) == 1 {
         return flux_plugin_sdk::EntitySpriteTransform::Rot90;
     }
+    if is_gas_pump_structure(kind) {
+        return match state.value() & 0b11 {
+            1 => flux_plugin_sdk::EntitySpriteTransform::Rot90,
+            2 => flux_plugin_sdk::EntitySpriteTransform::Rot180,
+            3 => flux_plugin_sdk::EntitySpriteTransform::Rot270,
+            _ => flux_plugin_sdk::EntitySpriteTransform::None,
+        };
+    }
     flux_plugin_sdk::EntitySpriteTransform::None
 }
 
@@ -552,6 +595,7 @@ pub fn legacy_structure_kind_code(kind: StructureKind) -> Option<u8> {
         ENTITY_GAS_SOURCE_ID => Some(2),
         ENTITY_GAS_SINK_ID => Some(3),
         ENTITY_GAS_PIPE_BRIDGE_ID => Some(4),
+        ENTITY_GAS_PUMP_ID => Some(5),
         _ => None,
     }
 }
@@ -564,6 +608,7 @@ pub fn legacy_structure_kind_from_code(code: u8) -> Option<StructureKind> {
         2 => Some(gas_source_structure_kind()),
         3 => Some(gas_sink_structure_kind()),
         4 => Some(gas_pipe_bridge_structure_kind()),
+        5 => Some(gas_pump_structure_kind()),
         _ => None,
     }
 }
@@ -591,6 +636,11 @@ pub fn is_gas_sink_structure(kind: StructureKind) -> bool {
 /// Returns true when the id is the default gas pipe bridge content item.
 pub fn is_gas_pipe_bridge_structure(kind: StructureKind) -> bool {
     kind == gas_pipe_bridge_structure_kind()
+}
+
+/// Returns true when the id is the default gas pump content item.
+pub fn is_gas_pump_structure(kind: StructureKind) -> bool {
+    kind == gas_pump_structure_kind()
 }
 
 /// Returns true when a structure can be edited by the default source/sink editor.

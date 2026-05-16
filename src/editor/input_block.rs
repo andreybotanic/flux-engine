@@ -98,9 +98,16 @@ fn handle_editor_mouse_input(
         && world_load_state.has_world
         && active_tool.selected == Some(EditorTool::Construct)
         && selected_category_kind == Some(EntityCategoryKind::Gases)
-        && pipe_settings.selected == PipeToolKind::Bridge
+        && matches!(
+            pipe_settings.selected,
+            PipeToolKind::Bridge | PipeToolKind::Pump
+        )
     {
-        bridge_state.rotation = bridge_state.rotation.next_bridge_rotation();
+        bridge_state.rotation = match pipe_settings.selected {
+            PipeToolKind::Bridge => bridge_state.rotation.next_bridge_rotation(),
+            PipeToolKind::Pump => bridge_state.rotation.rotated_right(),
+            _ => bridge_state.rotation,
+        };
     }
 
     if main_menu.open || !world_load_state.has_world {
@@ -218,6 +225,20 @@ fn handle_editor_mouse_input(
                     if let Some(cell) = hovered_cell {
                         if structures
                             .place_bridge(cell, bridge_state.rotation, &world)
+                            .is_some()
+                        {
+                            pipe_flow_visuals.reset_flow();
+                        }
+                    }
+                }
+            }
+            PipeToolKind::Pump => {
+                clear_active_tool_state(&mut selection_drag, &mut brush_drag);
+                structure_edit.selected_cell = None;
+                if mouse_buttons.just_pressed(MouseButton::Left) && !blocked_by_ui {
+                    if let Some(cell) = hovered_cell {
+                        if structures
+                            .place_gas_pump(cell, bridge_state.rotation, &world)
                             .is_some()
                         {
                             pipe_flow_visuals.reset_flow();
@@ -640,6 +661,7 @@ fn update_editor_cursor_overlays(
                 PipeToolKind::Pipe => icon_set.pipe_silhouette.clone(),
                 PipeToolKind::Vent => icon_set.vent_silhouette.clone(),
                 PipeToolKind::Bridge => icon_set.bridge_silhouette.clone(),
+                PipeToolKind::Pump => icon_set.pump_silhouette.clone(),
                 })
             }
             Some(EditorTool::CreateGasSource) => Some(icon_set.source_silhouette.clone()),
@@ -737,7 +759,10 @@ fn update_editor_cursor_overlays(
                         size_in_cells.y.saturating_sub(1) as f32 * CELL_SIZE * 0.5,
                     );
                 ghost_sprite.color = if selected_category_kind == Some(EntityCategoryKind::Gases)
-                    && pipe_settings.selected == PipeToolKind::Bridge
+                    && matches!(
+                        pipe_settings.selected,
+                        PipeToolKind::Bridge | PipeToolKind::Pump
+                    )
                 {
                     Color::srgba(1.0, 1.0, 1.0, 0.82)
                 } else {
@@ -745,7 +770,7 @@ fn update_editor_cursor_overlays(
                 };
                 let mut transform = Transform::from_translation(translation.extend(1.8));
                 transform.rotation = match (active_tool.selected, pipe_settings.selected) {
-                    (Some(EditorTool::Construct), PipeToolKind::Bridge)
+                    (Some(EditorTool::Construct), PipeToolKind::Bridge | PipeToolKind::Pump)
                         if selected_category_kind == Some(EntityCategoryKind::Gases) =>
                     {
                         match bridge_state.rotation {
@@ -1067,6 +1092,7 @@ fn selected_pipe_structure_kind(
         PipeToolKind::Pipe => crate::plugins::default_plugin::pipe_structure_kind(),
         PipeToolKind::Vent => crate::plugins::default_plugin::vent_structure_kind(),
         PipeToolKind::Bridge => crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
+        PipeToolKind::Pump => crate::plugins::default_plugin::gas_pump_structure_kind(),
     }
 }
 

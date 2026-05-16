@@ -120,6 +120,7 @@ enum PipeToolKind {
     Pipe,
     Vent,
     Bridge,
+    Pump,
 }
 
 #[derive(Resource, Default)]
@@ -597,6 +598,7 @@ struct EditorIconSet {
     pipe_silhouette: Handle<Image>,
     vent_silhouette: Handle<Image>,
     bridge_silhouette: Handle<Image>,
+    pump_silhouette: Handle<Image>,
     source_silhouette: Handle<Image>,
     sink_silhouette: Handle<Image>,
     select_arrow: Handle<Image>,

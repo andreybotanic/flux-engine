@@ -60,6 +60,7 @@ vent_discharge_coefficient = 110.0
 max_vent_flux_particles_per_tick = 1500.0
 vent_choked_pressure_ratio = 0.53
 pressure_epsilon_pa = 0.01
+pump_input_pressure_pa = -100.0
 "#,
         )
         .expect("write pipe runtime");
@@ -111,6 +112,10 @@ visible_on_hover = "same_cell"
             (
                 "gas_pipe_bridge.toml",
                 "label = \"Bridge\"\ndraw_priority = 110\nsize_in_cells = [3, 1]\n\n[hud]\nsort_order = 20\n\n[[hud.substance_containers]]\nsubstance = \"gas\"\nbacking = \"pipe_node\"\nkind = \"bridge_pipe\"\nvisible_on_hover = \"container_cell\"\n",
+            ),
+            (
+                "gas_pump.toml",
+                "label = \"Pump\"\ndraw_priority = 115\nsize_in_cells = [2, 1]\n\n[hud]\nsort_order = 35\n",
             ),
             (
                 "boundary.toml",

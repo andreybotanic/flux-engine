@@ -23,7 +23,7 @@ use crate::{
     simulation::SimulationStep,
     world::{
         grid::{cell_center, linear_index, world_origin, CellKind, WorldGrid, CELL_SIZE},
-        structures::{bridge_center_cell, PlacedStructure, PlacedStructureMap, StructureRotation},
+        structures::{PlacedStructure, PlacedStructureMap},
     },
 };
 
@@ -31,6 +31,8 @@ const OVERLAY_ENTITY_BASE_Z: f32 = 1.10;
 const OVERLAY_LAYER_STEP_Z: f32 = 0.02;
 const DEFAULT_WHITE_IMAGE_ID: &str = "flux.default.overlay.image.white";
 const DEFAULT_VENT_ICON_IMAGE_ID: &str = "flux.default.overlay.image.vent_icon";
+const DEFAULT_GAS_IN_ICON_IMAGE_ID: &str = "flux.default.overlay.image.gas_in_icon";
+const DEFAULT_GAS_OUT_ICON_IMAGE_ID: &str = "flux.default.overlay.image.gas_out_icon";
 const DEFAULT_PIPE_HIGHLIGHT_MATERIAL_ID: &str = "flux.default.overlay.material.pipe_highlight";
 
 #[derive(Resource, Clone)]
@@ -533,7 +535,9 @@ fn render_image_layer(
         let (translation, size, rotation) = overlay_instance_transform(&instance.placement);
         let icon_z_bonus = match &instance.image {
             flux_plugin_sdk::OverlayImageSource::Asset(id)
-                if id.as_str() == DEFAULT_VENT_ICON_IMAGE_ID =>
+                if id.as_str() == DEFAULT_VENT_ICON_IMAGE_ID
+                    || id.as_str() == DEFAULT_GAS_IN_ICON_IMAGE_ID
+                    || id.as_str() == DEFAULT_GAS_OUT_ICON_IMAGE_ID =>
             {
                 0.0005
             }
@@ -582,7 +586,17 @@ fn resolve_overlay_image_handle(
         flux_plugin_sdk::OverlayImageSource::Asset(id)
             if id.as_str() == DEFAULT_VENT_ICON_IMAGE_ID =>
         {
-            Some(world_visuals.vent_overlay.clone())
+            Some(world_visuals.port_overlay_bidir.clone())
+        }
+        flux_plugin_sdk::OverlayImageSource::Asset(id)
+            if id.as_str() == DEFAULT_GAS_IN_ICON_IMAGE_ID =>
+        {
+            Some(world_visuals.port_overlay_in.clone())
+        }
+        flux_plugin_sdk::OverlayImageSource::Asset(id)
+            if id.as_str() == DEFAULT_GAS_OUT_ICON_IMAGE_ID =>
+        {
+            Some(world_visuals.port_overlay_out.clone())
         }
         flux_plugin_sdk::OverlayImageSource::Asset(id) => {
             let _ = descriptor;
@@ -699,19 +713,47 @@ fn build_structure_draw_ranks(
 }
 
 fn structure_transform(structure: &PlacedStructure, z: f32) -> Transform {
-    if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind) {
-        let center =
-            bridge_center_cell(structure.origin, structure.rotation).unwrap_or(structure.origin);
-        let mut transform = Transform::from_translation(cell_center(center.x, center.y).extend(z));
-        transform.rotation = match structure.rotation {
-            StructureRotation::Deg0 => Quat::IDENTITY,
-            StructureRotation::Deg90 => Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
-            StructureRotation::Deg180 => Quat::from_rotation_z(std::f32::consts::PI),
-            StructureRotation::Deg270 => Quat::from_rotation_z(std::f32::consts::PI * 1.5),
-        };
-        transform
-    } else {
-        Transform::from_translation(cell_center(structure.origin.x, structure.origin.y).extend(z))
+    let mut transform = Transform::from_translation(structure_visual_center(structure).extend(z));
+    apply_state_sprite_transform(
+        &mut transform,
+        crate::plugins::default_plugin::structure_state_sprite_transform(
+            structure.kind,
+            structure.state,
+        ),
+    );
+    transform
+}
+
+fn structure_visual_center(structure: &PlacedStructure) -> Vec2 {
+    let descriptor = structure.descriptor();
+    let Some((min, max)) = descriptor.local_bounds() else {
+        return cell_center(structure.origin.x, structure.origin.y);
+    };
+    let local_center = Vec2::new((min.x + max.x) as f32 * 0.5, (min.y + max.y) as f32 * 0.5);
+    cell_center(structure.origin.x, structure.origin.y) + local_center * CELL_SIZE
+}
+
+fn apply_state_sprite_transform(
+    transform: &mut Transform,
+    state_transform: flux_plugin_sdk::EntitySpriteTransform,
+) {
+    match state_transform {
+        flux_plugin_sdk::EntitySpriteTransform::None => {}
+        flux_plugin_sdk::EntitySpriteTransform::Rot90 => {
+            transform.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
+        }
+        flux_plugin_sdk::EntitySpriteTransform::Rot180 => {
+            transform.rotation = Quat::from_rotation_z(std::f32::consts::PI);
+        }
+        flux_plugin_sdk::EntitySpriteTransform::Rot270 => {
+            transform.rotation = Quat::from_rotation_z(std::f32::consts::PI * 1.5);
+        }
+        flux_plugin_sdk::EntitySpriteTransform::FlipX => {
+            transform.scale.x *= -1.0;
+        }
+        flux_plugin_sdk::EntitySpriteTransform::FlipY => {
+            transform.scale.y *= -1.0;
+        }
     }
 }
 
@@ -775,9 +817,9 @@ fn local_appearance_z(draw_priority: i32, draw_rank: usize) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{local_appearance_z, pipe_connection_mask};
+    use super::{local_appearance_z, pipe_connection_mask, structure_transform};
     use crate::world::{
-        grid::WorldGrid,
+        grid::{cell_center, WorldGrid},
         structures::{PlacedStructureMap, StructureRotation},
     };
     use bevy::math::UVec2;
@@ -802,5 +844,24 @@ mod tests {
 
         let center_mask = pipe_connection_mask(&structures, UVec2::new(21, 20));
         assert_eq!(center_mask, 0b1010, "center pipe must connect left/right");
+    }
+
+    #[test]
+    fn pump_structure_transform_is_centered_between_two_cells() {
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        let origin = UVec2::new(30, 30);
+        let _ = structures
+            .place_gas_pump(origin, StructureRotation::Deg0, &world)
+            .expect("pump should be placeable");
+        let pump = structures
+            .iter()
+            .find(|structure| crate::plugins::default_plugin::is_gas_pump_structure(structure.kind))
+            .expect("pump structure");
+        let transform = structure_transform(pump, 1.0);
+        let expected =
+            (cell_center(origin.x, origin.y) + cell_center(origin.x + 1, origin.y)) * 0.5;
+        assert!((transform.translation.x - expected.x).abs() < 0.001);
+        assert!((transform.translation.y - expected.y).abs() < 0.001);
     }
 }

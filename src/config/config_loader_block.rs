@@ -38,6 +38,7 @@ struct PipeToml {
     max_vent_flux_particles_per_tick: f32,
     vent_choked_pressure_ratio: f32,
     pressure_epsilon_pa: f32,
+    pump_input_pressure_pa: f32,
 }
 
 #[derive(Deserialize)]

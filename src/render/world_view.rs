@@ -297,7 +297,9 @@ pub(crate) struct WorldVisualAssets {
     backdrop_noise: Handle<Image>,
     boundary: Handle<Image>,
     pub(crate) pipe_masks: Vec<Handle<Image>>,
-    pub(crate) vent_overlay: Handle<Image>,
+    pub(crate) port_overlay_bidir: Handle<Image>,
+    pub(crate) port_overlay_in: Handle<Image>,
+    pub(crate) port_overlay_out: Handle<Image>,
     pub(crate) pipe_highlight: PipeHighlightRenderAssets,
 }
 

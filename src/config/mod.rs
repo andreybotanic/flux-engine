@@ -400,6 +400,7 @@ impl GameConfig {
             max_vent_flux_particles_per_tick: pipe.max_vent_flux_particles_per_tick,
             vent_choked_pressure_ratio: pipe.vent_choked_pressure_ratio,
             pressure_epsilon_pa: pipe.pressure_epsilon_pa,
+            pump_input_pressure_pa: pipe.pump_input_pressure_pa,
         };
 
         let gas_visual = GasVisualSettings {

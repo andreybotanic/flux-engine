@@ -12,7 +12,7 @@
 
 - Основной runtime-ресурс для размещаемых объектов один: `PlacedStructureMap`.
 - `PlacedStructureMap` является generic storage-слоем: он индексирует placed structures по `PlacedStructureId` и generic `StructureKind`, не по enum-вариантам default content.
-- Набор игровых структур, доступных в текущей сборке (`Pipe`, `Vent`, `GasSource`, `GasSink`, `GasPipeBridge`), поставляется locked default plugin-ом `flux.default` через stable IDs, descriptors и facade-предикаты.
+- Набор игровых структур, доступных в текущей сборке (`Pipe`, `Vent`, `GasPump`, `GasSource`, `GasSink`, `GasPipeBridge`), поставляется locked default plugin-ом `flux.default` через stable IDs, descriptors и facade-предикаты.
 - Каждая размещённая структура описывается через `PlacedStructure { id, kind, origin, rotation, params }`, где `kind` является generic content-id wrapper-ом.
 - Для описания внешнего вида и ограничений используется общий descriptor-контракт из `src/world/structures.rs`:
   - `LayerKind`,
@@ -28,6 +28,7 @@
 - Для визуализации отдельно зафиксирован `sprite size in cells`: в большинстве случаев он совпадает с footprint, но у моста базовый спрайт всегда считается горизонтальным `3x1`, а вертикальный вариант получается только поворотом transform-а без растяжения.
 - В текущем наборе структур это означает:
   - `1x1` для обычных одноклеточных объектов (`Pipe`, `Vent`, `GasSource`, `GasSink`, world solids);
+  - `2x1` или `1x2` для `GasPump`;
   - `3x1` или `1x3` только для `GasPipeBridge`.
 - Мирные `Solid`-клетки не переводились в `PlacedStructureMap`, но используют тот же descriptor-подход через `cell_material_descriptor(...)`, чтобы placement-check и рендер использовали одинаковые правила слоёв.
 - Core отвечает за generic geometry/collision/snapshot операции, а default-specific predicates, IDs, sort order и descriptor metadata берутся через facade `flux.default`. Старые convenience helper-ы для pipe/source/sink/bridge пока сохранены как compatibility API и делегируют на default plugin facade.
@@ -38,13 +39,17 @@
   - мост может визуально пересекать другие объекты;
   - вентиляция и край моста конфликтуют именно потому, что оба занимают special-клетку слоя `GasPipeConnections`.
 
-### Source / Sink / Vent / Bridge как структуры
+### Source / Sink / Vent / Pump / Bridge как структуры
 
 - `GasSource` и `GasSink` теперь тоже хранятся в `PlacedStructureMap`, а их параметры живут в `StructureParams`.
 - Редактируемыми считаются только `GasSource` и `GasSink`; для этого есть helper `editable_structure_at(...)`.
 - `Vent` хранится как самостоятельная структура и использует два слоя:
   - `Appearance`;
   - `GasPipeConnections`.
+- `GasPump` хранится как самостоятельная поворотная структура `2x1`:
+  - в `GasPipeConnections` входная клетка маркируется `gas_in`, выходная — `gas_out`;
+  - pump-порты участвуют в pipe-overlay так же, как другие pipe-порты;
+  - насос не создаёт собственного внутреннего контейнера газа, а переносит газ между уже существующими pipe-node.
 - `GasPipeBridge` — первая многоклеточная структура:
   - размещение `1x3` или `3x1`;
   - rotation через `StructureRotation`;
@@ -84,6 +89,7 @@
 - Граф pipe-сети строится runtime-ом из descriptors/structure-footprints:
   - соседние обычные трубы соединяются по ортогональному соседству;
   - вентиляция подключается только к pipe-node своей клетки;
+  - насос публикует два порта (`PumpIn`/`PumpOut`) на своих клетках, но не создаёт внутреннего pipe-ребра между ними;
   - мост подключается наружу только через крайние клетки;
   - автоматического same-cell соединения между pipe под мостом и bridge-node нет.
 - Ножницы (`pipe_cuts`) теперь являются частью `PlacedStructureMap`; они режут только внешние соединения между соседними pipe-node и не ломают внутреннюю топологию моста.
@@ -120,6 +126,7 @@
   - `max_vent_flux_particles_per_tick`,
   - `vent_choked_pressure_ratio`,
   - `pressure_epsilon_pa`.
+  - `pump_input_pressure_pa`.
 - `SimulationPerfStats` дополнительно хранит `last_pipe_step_ms` и `avg_pipe_step_ms`, а debug-панель показывает отдельное время расчёта труб рядом с общим временем simulation step.
 - `DefaultPluginSupportPlugin` после миграции оставлен только как lightweight support-plugin для инициализации `PipeSimulationConfig`, `PipeGasField`, `PipeFluxField` и `PipeFlowVisualState`; сам runtime execution `flux.default` через него больше не идёт.
 - Debug Panel использует стандартный panel-режим `AutoHalfScreen`: её общая высота ограничивается половиной доступной высоты окна с учётом верхнего/нижнего отступа, а при превышении этого лимита включается общий scrollbar.
@@ -142,6 +149,9 @@
   2. На тиках без hop (`N-1` из `N`) новый `pipe -> pipe` перенос не выполняется.
   3. На hop-тике solver выполняет явный pipeline `offer -> demand -> match -> commit`:
      - для каждой connected pipe-сети сначала считаются external vent-offer значения `offer_i = Σ_j (P_j - P_i)` только по внешним давлениям вентиляций сети;
+     - в том же расчёте порты насоса участвуют как отдельные типы:
+       - `PumpIn` получает фиксированное отрицательное давление `pump_input_pressure_pa`,
+       - `PumpOut` получает максимально допустимое pipe-давление;
     - intake выполняют только вентиляции с отрицательным offer (`offer_i < 0`), а дальше используется линейная формула от `x_pa = delta_per_path = abs(offer_i) / n_outgoing_requests`:
       `x_particles = x_pa / cell_particle_pressure_pa`,
       `request = round(x_particles / 25)`,
@@ -159,7 +169,12 @@
      Intake из мира разрешён только vent-узлам с forward-demand по этому пересчитанному направлению и не выполняется для vent-узлов, которые уже сливают свою pipe-массу в buffer в том же hop.
      Если vent-узел должен был быть intake-узлом по новому направлению, но в этом hop имеет buffer (и поэтому intake пропущен), направление всего соответствующего сегмента сбрасывается на текущий hop (сегмент останавливается до следующего пересчёта).
      Обмен работает строго локально по одной world-клетке вентиляции; компонентный/комнатный direct-reservoir за один hop не используется.
-  7. Все species-переносы остаются дискретными и детерминированными; изменения записываются в `PipeGasField`, а принятые hop-переносы — в `PipeFlowVisualState`.
+  7. На hop-тике solver планирует переносы сразу для обычных pipe-рёбер и для насоса:
+     - для насоса планируется `PumpIn -> PumpOut` в объёме `min(input_total, room_left(output))`;
+     - при отсутствии выходной трубы или `room_left == 0` перенос не планируется (блокировка насоса);
+     - planned-перенос насоса пишется в `PipeFlowVisualState.transfers`, поэтому в `F3` виден такой же moving packet на интервале `N` тиков.
+  8. Коммит переносов (и pipe-рёбер, и насоса) выполняется на следующем hop-старте через `previous_transfers`, поэтому перенос внутри насоса не является мгновенным и следует общему конвейерному cadence.
+  9. Все species-переносы остаются дискретными и детерминированными; итоговые изменения записываются в `PipeGasField`.
 - Такой контракт сохраняет читаемый «фронт» в длинных трубах, но убирает мгновенный проброс по сети и стабилизирует multi-vent сценарии под разными pressure-tier режимами.
 
 ### Детерминированная целочисленная математика переноса

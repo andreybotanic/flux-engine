@@ -38,8 +38,13 @@ pub fn setup_world_view(
         .map(|mask| asset_server.load(crate::plugins::default_plugin::pipe_mask_sprite_path(mask)))
         .collect::<Vec<_>>();
     let vent_world = asset_server.load(vent_world_path);
-    let vent_overlay =
+    let port_overlay_bidir =
         asset_server.load(crate::plugins::default_plugin::pipe_connection_overlay_sprite_path());
+    let port_overlay_in =
+        asset_server.load(crate::plugins::default_plugin::pipe_connection_in_overlay_sprite_path());
+    let port_overlay_out = asset_server.load(
+        crate::plugins::default_plugin::pipe_connection_out_overlay_sprite_path(),
+    );
     let pipe_highlight = crate::render::pipe_highlight_material::PipeHighlightRenderAssets {
         quad: meshes.add(bevy::math::primitives::Rectangle::new(CELL_SIZE, CELL_SIZE)),
         materials: pipe_masks
@@ -66,7 +71,9 @@ pub fn setup_world_view(
         backdrop_noise: asset_server.load("sprites/world/backdrop_noise.png"),
         boundary: asset_server.load(boundary_sprite_path),
         pipe_masks,
-        vent_overlay,
+        port_overlay_bidir,
+        port_overlay_in,
+        port_overlay_out,
         pipe_highlight,
     };
     commands.insert_resource(visuals.clone());
@@ -461,7 +468,7 @@ fn spawn_structure_pipe_visuals(
             let overlay_entity = commands
                 .spawn((
                     Sprite {
-                        image: visuals.vent_overlay.clone(),
+                        image: visuals.port_overlay_bidir.clone(),
                         custom_size: Some(Vec2::splat(CELL_SIZE * 0.92)),
                         color: pipe_overlay_vent_tint(),
                         ..default()
@@ -492,13 +499,41 @@ fn spawn_structure_pipe_visuals(
                         commands
                             .spawn((
                                 Sprite {
-                                    image: visuals.vent_overlay.clone(),
+                                    image: visuals.port_overlay_bidir.clone(),
                                     custom_size: Some(Vec2::splat(CELL_SIZE * 0.92)),
                                     color: pipe_overlay_vent_tint(),
                                     ..default()
                                 },
                                 Transform::from_translation(
                                     cell_center(connection_cell.x, connection_cell.y).extend(1.15),
+                                ),
+                                Visibility::Hidden,
+                                PipeVentOverlayVisual,
+                            ))
+                            .id()
+                    });
+            }
+    } else if crate::plugins::default_plugin::is_gas_pump_structure(structure.kind) {
+            let (input_cell, output_cell) =
+                pump_port_cells_for_render(structure.origin, structure.rotation);
+            for (cell, image) in [
+                (input_cell, visuals.port_overlay_in.clone()),
+                (output_cell, visuals.port_overlay_out.clone()),
+            ] {
+                entities
+                    .vent_overlays
+                    .entry((cell.x, cell.y))
+                    .or_insert_with(|| {
+                        commands
+                            .spawn((
+                                Sprite {
+                                    image,
+                                    custom_size: Some(Vec2::splat(CELL_SIZE * 0.92)),
+                                    color: pipe_overlay_vent_tint(),
+                                    ..default()
+                                },
+                                Transform::from_translation(
+                                    cell_center(cell.x, cell.y).extend(1.15),
                                 ),
                                 Visibility::Hidden,
                                 PipeVentOverlayVisual,
@@ -570,6 +605,15 @@ fn bridge_connection_cells_for_render(origin: UVec2, rotation: StructureRotation
             UVec2::new(origin.x, origin.y),
             UVec2::new(origin.x, origin.y + 2),
         ],
+    }
+}
+
+fn pump_port_cells_for_render(origin: UVec2, rotation: StructureRotation) -> (UVec2, UVec2) {
+    match rotation {
+        StructureRotation::Deg0 => (origin, UVec2::new(origin.x + 1, origin.y)),
+        StructureRotation::Deg90 => (origin, UVec2::new(origin.x, origin.y + 1)),
+        StructureRotation::Deg180 => (UVec2::new(origin.x + 1, origin.y), origin),
+        StructureRotation::Deg270 => (UVec2::new(origin.x, origin.y + 1), origin),
     }
 }
 

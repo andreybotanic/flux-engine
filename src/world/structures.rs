@@ -396,6 +396,13 @@ impl PlacedStructureMap {
         })
     }
 
+    /// Returns true when any pump occupies the cell.
+    pub fn has_pump_at(&self, x: u32, y: u32) -> bool {
+        self.structures_at(x, y)
+            .into_iter()
+            .any(|structure| crate::plugins::default_plugin::is_gas_pump_structure(structure.kind))
+    }
+
     /// Returns true when any structure in the cell blocks solid placement.
     pub fn blocks_solid_placement(&self, x: u32, y: u32) -> bool {
         self.structures_at(x, y).into_iter().any(|structure| {
@@ -544,6 +551,23 @@ impl PlacedStructureMap {
             origin,
             rotation,
             bridge_packed_state_for_rotation(rotation),
+            StructureParams::None,
+            world,
+        )
+    }
+
+    /// Places a gas pump if its footprint is valid.
+    pub fn place_gas_pump(
+        &mut self,
+        origin: UVec2,
+        rotation: StructureRotation,
+        world: &WorldGrid,
+    ) -> Option<PlacedStructureId> {
+        self.place_structure(
+            crate::plugins::default_plugin::gas_pump_structure_kind(),
+            origin,
+            rotation,
+            pump_packed_state_for_rotation(rotation),
             StructureParams::None,
             world,
         )
@@ -1093,7 +1117,9 @@ pub fn structure_sprite_size_in_cells(
     let base_size = crate::plugins::default_plugin::structure_content_descriptor(kind)
         .visual
         .size_in_cells;
-    if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(kind) {
+    if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(kind)
+        || crate::plugins::default_plugin::is_gas_pump_structure(kind)
+    {
         let _ = rotation;
         base_size
     } else {
@@ -1163,6 +1189,15 @@ fn bridge_packed_state_for_rotation(rotation: StructureRotation) -> PackedState 
     match rotation {
         StructureRotation::Deg0 | StructureRotation::Deg180 => PackedState(0),
         StructureRotation::Deg90 | StructureRotation::Deg270 => PackedState(1),
+    }
+}
+
+fn pump_packed_state_for_rotation(rotation: StructureRotation) -> PackedState {
+    match rotation {
+        StructureRotation::Deg0 => PackedState(0),
+        StructureRotation::Deg90 => PackedState(1),
+        StructureRotation::Deg180 => PackedState(2),
+        StructureRotation::Deg270 => PackedState(3),
     }
 }
 

@@ -233,7 +233,7 @@ fn spawn_cells_variant_panel_content(
 
 fn spawn_gases_variant_panel_content(
     parent: &mut ChildSpawnerCommands,
-    variants: &[(String, PipeToolKind, Handle<Image>)],
+    variants: &[(String, PipeToolKind, Handle<Image>, f32)],
 ) {
     for row_variants in variants.chunks(TOOL_VARIANT_PANEL_COLUMNS) {
         parent
@@ -244,12 +244,13 @@ fn spawn_gases_variant_panel_content(
                 ..default()
             },))
             .with_children(|row| {
-                for (label, pipe_tool, icon) in row_variants.iter() {
+                for (label, pipe_tool, icon, aspect_ratio) in row_variants.iter() {
                     spawn_pipe_tool_button(
                         row,
                         label.clone(),
                         *pipe_tool,
                         icon.clone(),
+                        *aspect_ratio,
                         TOOL_VARIANT_BUTTON_SIZE,
                         TOOL_VARIANT_ICON_SIZE,
                     );
@@ -372,9 +373,11 @@ fn spawn_pipe_tool_button(
     label: String,
     pipe_tool: PipeToolKind,
     icon: Handle<Image>,
+    icon_aspect_ratio: f32,
     button_size: f32,
     icon_size: f32,
 ) {
+    let (icon_width, icon_height) = fit_icon_into_square(icon_size, icon_aspect_ratio);
     parent
         .spawn((
             Button,
@@ -395,11 +398,39 @@ fn spawn_pipe_tool_button(
             button.spawn((
                 ImageNode::new(icon),
                 Node {
-                    width: Val::Px(icon_size),
-                    height: Val::Px(icon_size),
+                    width: Val::Px(icon_width),
+                    height: Val::Px(icon_height),
                     ..default()
                 },
             ));
         });
+}
+
+fn fit_icon_into_square(max_size: f32, aspect_ratio: f32) -> (f32, f32) {
+    let ratio = aspect_ratio.max(0.01);
+    if ratio >= 1.0 {
+        (max_size, max_size / ratio)
+    } else {
+        (max_size * ratio, max_size)
+    }
+}
+
+#[cfg(test)]
+mod ui_setup_structure_buttons_tests {
+    use super::fit_icon_into_square;
+
+    #[test]
+    fn fit_icon_into_square_preserves_wide_aspect() {
+        let (w, h) = fit_icon_into_square(48.0, 3.0);
+        assert!((w - 48.0).abs() < 0.001);
+        assert!((h - 16.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn fit_icon_into_square_preserves_tall_aspect() {
+        let (w, h) = fit_icon_into_square(48.0, 0.5);
+        assert!((w - 24.0).abs() < 0.001);
+        assert!((h - 48.0).abs() < 0.001);
+    }
 }
 

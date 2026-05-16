@@ -28,6 +28,8 @@ pub const ENTITY_GAS_SOURCE_ID: &str = "flux.default.entity.gas_source";
 pub const ENTITY_GAS_SINK_ID: &str = "flux.default.entity.gas_sink";
 /// Stable content id for the default gas pipe bridge entity.
 pub const ENTITY_GAS_PIPE_BRIDGE_ID: &str = "flux.default.entity.gas_pipe_bridge";
+/// Stable content id for the default gas pump entity.
+pub const ENTITY_GAS_PUMP_ID: &str = "flux.default.entity.gas_pump";
 /// Stable content id for the default main overlay mode.
 pub const OVERLAY_MAIN_ID: &str = "flux.default.overlay.main";
 /// Stable content id for the default gas overlay mode.
@@ -38,6 +40,10 @@ pub const OVERLAY_PIPES_ID: &str = "flux.default.overlay.pipes";
 pub const OVERLAY_IMAGE_WHITE_ID: &str = "flux.default.overlay.image.white";
 /// Stable image id for the vent/bridge port overlay icon used by `F3`.
 pub const OVERLAY_IMAGE_VENT_ICON_ID: &str = "flux.default.overlay.image.vent_icon";
+/// Stable image id for the one-way pump input port icon used by `F3`.
+pub const OVERLAY_IMAGE_GAS_IN_ICON_ID: &str = "flux.default.overlay.image.gas_in_icon";
+/// Stable image id for the one-way pump output port icon used by `F3`.
+pub const OVERLAY_IMAGE_GAS_OUT_ICON_ID: &str = "flux.default.overlay.image.gas_out_icon";
 /// Stable material id for the pipe highlight shader used by `F3`.
 pub const OVERLAY_MATERIAL_PIPE_HIGHLIGHT_ID: &str = "flux.default.overlay.material.pipe_highlight";
 /// Stable substance id for default hydrogen gas.
@@ -50,6 +56,8 @@ pub const SUBSTANCE_CO2_ID: &str = "flux.default.substance.co2";
 const LAYER_GAS_PIPE_CONNECTIONS_ID: &str = "flux.default.layer.gas_pipe_connections";
 const MARKER_GAS_PIPE_CONNECTION_BIDIRECTIONAL_ID: &str =
     "flux.default.marker.gas_pipe_connection_bidirectional";
+const MARKER_GAS_PIPE_CONNECTION_IN_ID: &str = "flux.default.marker.gas_pipe_connection_in";
+const MARKER_GAS_PIPE_CONNECTION_OUT_ID: &str = "flux.default.marker.gas_pipe_connection_out";
 /// Bevy asset source name used for assets owned by the built-in default plugin.
 pub const DEFAULT_PLUGIN_ASSET_SOURCE: &str = "flux_default";
 /// Repository-relative root for assets owned by the built-in default plugin.
@@ -107,6 +115,11 @@ pub const fn gas_pipe_bridge_structure_kind() -> StructureKind {
     StructureKind::new(ENTITY_GAS_PIPE_BRIDGE_ID)
 }
 
+/// Returns the default plugin gas pump structure id wrapper.
+pub const fn gas_pump_structure_kind() -> StructureKind {
+    StructureKind::new(ENTITY_GAS_PUMP_ID)
+}
+
 /// Returns the default plugin pipe overlay mode.
 pub const fn pipes_overlay_mode() -> OverlayMode {
     OverlayMode::plugin(OVERLAY_PIPES_ID)
@@ -130,4 +143,14 @@ pub const fn content_marker(id: &'static str) -> LayerMarkerKind {
 /// Returns the marker used by default pipe connection cells.
 pub const fn gas_pipe_connection_bidirectional_marker() -> LayerMarkerKind {
     LayerMarkerKind::new(MARKER_GAS_PIPE_CONNECTION_BIDIRECTIONAL_ID)
+}
+
+/// Returns the marker used by default one-way `gas_in` pipe connection cells.
+pub const fn gas_pipe_connection_in_marker() -> LayerMarkerKind {
+    LayerMarkerKind::new(MARKER_GAS_PIPE_CONNECTION_IN_ID)
+}
+
+/// Returns the marker used by default one-way `gas_out` pipe connection cells.
+pub const fn gas_pipe_connection_out_marker() -> LayerMarkerKind {
+    LayerMarkerKind::new(MARKER_GAS_PIPE_CONNECTION_OUT_ID)
 }
