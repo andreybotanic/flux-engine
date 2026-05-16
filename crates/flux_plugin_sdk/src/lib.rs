@@ -19,7 +19,7 @@ pub use events::*;
 pub use ids::*;
 pub use overlay_graph::*;
 pub use plugin::{Plugin, PluginInit};
-pub use registrar::{Handler, Registrar};
+pub use registrar::{Handler, Registrar, RegistrationPhase};
 
 pub(crate) use dispatch_state_builder::DispatchStateBuilder;
 

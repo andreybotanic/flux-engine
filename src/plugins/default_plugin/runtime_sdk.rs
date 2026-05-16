@@ -288,7 +288,12 @@ impl FluxDefaultRuntimeSdkPlugin {
                 false,
             );
             let debug_lines = build_pipe_debug_hud_lines_for_cell(
-                event.cell, structures, pipe_gas, gas, pipe_config, flow_state,
+                event.cell,
+                structures,
+                pipe_gas,
+                gas,
+                pipe_config,
+                flow_state,
             );
             if !debug_lines.is_empty() {
                 blocks.push(CellInspectorBlockView {

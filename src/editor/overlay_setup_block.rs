@@ -1,15 +1,6 @@
-fn setup_editor_overlays(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let brick_silhouette = asset_server.load(
-        crate::plugins::default_plugin::cell_silhouette_path(crate::plugins::default_plugin::brick_cell_material())
-            .expect("brick silhouette is registered"),
-    );
+fn setup_editor_overlays(mut commands: Commands) {
     commands.spawn((
-        Sprite {
-            image: brick_silhouette,
-            custom_size: Some(Vec2::splat(CELL_SIZE)),
-            color: crate::ui::palette::TEXT_ON_DARK,
-            ..default()
-        },
+        Sprite::from_color(Color::NONE, Vec2::splat(CELL_SIZE)),
         Transform::from_xyz(0.0, 0.0, 1.8),
         Visibility::Hidden,
         BlueprintGhost,

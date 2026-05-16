@@ -6,8 +6,8 @@ use crate::{
     registrar::MemoryRegistration,
     runtime_host::{abi_runtime_host_binding, RuntimeHostBinding},
     scope, BuiltinEventPayload, EntityApi, GasApi, InputApi, LoggerApi, OverlayApi,
-    PluginApiVersion, PluginError, PluginEvent, PluginId, PluginPaths, Registrar, SaveApi, TimeApi,
-    UiApi, WorldApi,
+    PluginApiVersion, PluginError, PluginEvent, PluginId, PluginPaths, Registrar,
+    RegistrationPhase, SaveApi, TimeApi, UiApi, WorldApi,
 };
 
 /// Public runtime plugin contract implemented by plugin authors.
@@ -15,8 +15,21 @@ pub trait Plugin: Sized + 'static {
     /// Creates one plugin instance.
     fn new(init: PluginInit) -> Result<Self, PluginError>;
 
-    /// Registers plugin content and event subscriptions.
+    /// Legacy registration entrypoint.
+    ///
+    /// This method remains the default content-registration callback and keeps
+    /// backward compatibility for plugins that implemented only one phase.
     fn register(&mut self, registrar: &mut Registrar<Self>) -> Result<(), PluginError>;
+
+    /// Registers plugin-owned entity categories.
+    fn register_categories(&mut self, _registrar: &mut Registrar<Self>) -> Result<(), PluginError> {
+        Ok(())
+    }
+
+    /// Registers plugin-owned content and event subscriptions.
+    fn register_content(&mut self, registrar: &mut Registrar<Self>) -> Result<(), PluginError> {
+        self.register(registrar)
+    }
 }
 
 /// Data available to one plugin during construction.
@@ -178,6 +191,7 @@ pub struct PluginRuntime<P: Plugin> {
     plugin_id: PluginId,
     plugin: P,
     handlers: Vec<DispatchRegistration<P>>,
+    known_entity_categories: Vec<crate::EntityCategoryRef>,
     _marker: PhantomData<P>,
 }
 
@@ -199,6 +213,7 @@ impl<P: Plugin> PluginRuntime<P> {
                 plugin_id,
                 plugin,
                 handlers: Vec::new(),
+                known_entity_categories: Vec::new(),
                 _marker: PhantomData,
             })
         });
@@ -225,8 +240,10 @@ impl<P: Plugin> PluginRuntime<P> {
         let runtime = &mut *plugin.cast::<Self>();
         let registrar = &mut *registrar;
         let mut public_registrar = Registrar::new(runtime.plugin_id.clone(), registrar);
-        match runtime.plugin.register(&mut public_registrar) {
+        public_registrar.seed_entity_categories(&runtime.known_entity_categories);
+        match run_plugin_registration_phase(&mut runtime.plugin, &mut public_registrar) {
             Ok(()) => {
+                runtime.known_entity_categories = public_registrar.entity_categories();
                 runtime.handlers = public_registrar
                     .finish()
                     .into_iter()
@@ -325,8 +342,20 @@ impl<P: Plugin> BuiltinPluginRuntime<P> {
     /// Runs plugin registration into the in-memory built-in registrar.
     pub fn register(&mut self) -> Result<(), PluginError> {
         let mut registration = MemoryRegistration::default();
-        let mut registrar = Registrar::new_memory(self.plugin_id.clone(), &mut registration);
-        self.plugin.register(&mut registrar)?;
+        {
+            let mut registrar = Registrar::new_memory(
+                self.plugin_id.clone(),
+                &mut registration,
+                RegistrationPhase::Categories,
+            );
+            run_plugin_registration_phase(&mut self.plugin, &mut registrar)?;
+        }
+        let mut registrar = Registrar::new_memory(
+            self.plugin_id.clone(),
+            &mut registration,
+            RegistrationPhase::Content,
+        );
+        run_plugin_registration_phase(&mut self.plugin, &mut registrar)?;
         self.handlers = registrar
             .finish()
             .into_iter()
@@ -369,5 +398,16 @@ impl<P: Plugin> BuiltinPluginRuntime<P> {
         scope::with_runtime_scope(runtime_host, state, || unsafe {
             (handler.builtin_dispatch)(&mut self.plugin, handler.handler, payload)
         })
+    }
+}
+
+fn run_plugin_registration_phase<P: Plugin>(
+    plugin: &mut P,
+    registrar: &mut Registrar<P>,
+) -> Result<(), PluginError> {
+    if registrar.is_category_phase() {
+        plugin.register_categories(registrar)
+    } else {
+        plugin.register_content(registrar)
     }
 }

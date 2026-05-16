@@ -1,4 +1,17 @@
-﻿use crate::plugins::ContentId;
+use crate::plugins::ContentId;
+
+/// Plugin-provided entity category description.
+///
+/// # Fields
+/// - `id`: Stable content id of the category.
+/// - `label`: Human-readable category label shown in construction UI.
+/// - `icon_path`: Relative asset path to the category icon.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntityCategoryDescriptor {
+    pub id: ContentId,
+    pub label: String,
+    pub icon_path: String,
+}
 
 /// Plugin-provided HUD block for a hovered world cell.
 ///

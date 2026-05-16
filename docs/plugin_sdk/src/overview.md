@@ -9,7 +9,7 @@ FluxEngine поддерживает runtime-плагины, которые об�
 
 Встроенный `flux.default` всегда включён, заблокирован и предоставляет базовый content игры. Внешние плагины могут регистрировать свой content и подписки во время handshake.
 
-Текущая стабильная внешняя граница — Rust-first SDK v5:
+Текущая стабильная внешняя граница — Rust-first SDK v6:
 
 - публичный SDK живёт в `crates/flux_plugin_sdk`;
 - внутренний ABI/glue живёт в `crates/flux_plugin_abi`;

@@ -1,7 +1,7 @@
-id = "flux.sample_content"
+﻿id = "flux.sample_content"
 display_name = "Flux Stage7 Sample Content Plugin"
 version = "1.0.0"
-api_version = 5
+api_version = 7
 dll = "bin/flux_stage7_sample_content_plugin.dll"
 configs = "config"
 assets = "assets"

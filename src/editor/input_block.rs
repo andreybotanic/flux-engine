@@ -7,6 +7,8 @@ fn handle_editor_mouse_input(
     ),
     tool_state: (
         ResMut<ActiveEditorTool>,
+        Res<ActiveEntityCategory>,
+        Res<EntityCategoryUiRegistry>,
         Res<CellToolSettings>,
         Res<PipeToolSettings>,
         ResMut<BridgePlacementState>,
@@ -20,6 +22,7 @@ fn handle_editor_mouse_input(
         Res<GasToolSettings>,
         Res<GasRegistry>,
         Res<PanelManager>,
+        Res<MainToolbarLayout>,
         ResMut<SelectFieldState>,
     ),
     mut field_state: ParamSet<(
@@ -43,6 +46,8 @@ fn handle_editor_mouse_input(
     let (mouse_buttons, keyboard, window, camera_query) = input_state;
     let (
         mut active_tool,
+        active_entity_category,
+        category_ui_registry,
         cell_settings,
         pipe_settings,
         mut bridge_state,
@@ -52,7 +57,8 @@ fn handle_editor_mouse_input(
         world_load_state,
         debug_mode,
     ) = tool_state;
-    let (gas_settings, gas_registry, panel_manager, mut select_fields) = ui_tool_state;
+    let (gas_settings, gas_registry, panel_manager, main_toolbar_layout, mut select_fields) =
+        ui_tool_state;
     let (
         mut world,
         mut structures,
@@ -65,6 +71,11 @@ fn handle_editor_mouse_input(
         mut world_changed,
         mut plugin_events,
     ) = data_state;
+    let selected_category_kind = active_entity_category
+        .selected
+        .as_ref()
+        .and_then(|category_id| category_ui_registry.by_id(category_id))
+        .map(|descriptor| descriptor.kind);
 
     if !main_menu.open && world_load_state.has_world {
         for key in [KeyCode::KeyX, KeyCode::KeyC] {
@@ -85,7 +96,8 @@ fn handle_editor_mouse_input(
     if keyboard.just_pressed(KeyCode::KeyR)
         && !main_menu.open
         && world_load_state.has_world
-        && active_tool.selected == Some(EditorTool::Gases)
+        && active_tool.selected == Some(EditorTool::Construct)
+        && selected_category_kind == Some(EntityCategoryKind::Gases)
         && pipe_settings.selected == PipeToolKind::Bridge
     {
         bridge_state.rotation = bridge_state.rotation.next_bridge_rotation();
@@ -104,7 +116,7 @@ fn handle_editor_mouse_input(
                 cursor,
                 &window,
                 debug_mode.active,
-                active_tool.selected,
+                *main_toolbar_layout,
                 main_menu.open,
                 Some(&panel_manager),
             )
@@ -122,27 +134,32 @@ fn handle_editor_mouse_input(
         hovered_world_cell,
         blocked_by_ui,
         active_tool.selected,
+        active_entity_category.selected.as_ref(),
         &mut plugin_events,
     );
 
     match active_tool.selected {
-        Some(EditorTool::BuildSolid) => {
+        Some(EditorTool::Construct) if selected_category_kind == Some(EntityCategoryKind::Cells) => {
             structure_edit.selected_cell = None;
-            apply_brush_tool(
-                &mouse_buttons,
-                blocked_by_ui,
-                hovered_cell,
-                &mut brush_drag,
-                |cell| {
-                    if structures.blocks_solid_placement(cell.x, cell.y) {
-                        return;
-                    }
-                    if world.set_solid_with_material(cell.x, cell.y, cell_settings.material) {
-                        gas.clear_cell(cell.x, cell.y);
-                        world_changed.write(WorldCellChanged { cell });
-                    }
-                },
-            );
+            if let Some(selected_material) = cell_settings.material {
+                apply_brush_tool(
+                    &mouse_buttons,
+                    blocked_by_ui,
+                    hovered_cell,
+                    &mut brush_drag,
+                    |cell| {
+                        if structures.blocks_solid_placement(cell.x, cell.y) {
+                            return;
+                        }
+                        if world.set_solid_with_material(cell.x, cell.y, selected_material) {
+                            gas.clear_cell(cell.x, cell.y);
+                            world_changed.write(WorldCellChanged { cell });
+                        }
+                    },
+                );
+            } else {
+                clear_active_tool_state(&mut selection_drag, &mut brush_drag);
+            }
         }
         Some(EditorTool::EraseSolid) => {
             structure_edit.selected_cell = None;
@@ -165,7 +182,8 @@ fn handle_editor_mouse_input(
                 },
             );
         }
-        Some(EditorTool::Gases) => match pipe_settings.selected {
+        Some(EditorTool::Construct) if selected_category_kind == Some(EntityCategoryKind::Gases) => {
+            match pipe_settings.selected {
             PipeToolKind::Pipe => {
                 structure_edit.selected_cell = None;
                 let mut changed_pipe_layout = false;
@@ -207,7 +225,12 @@ fn handle_editor_mouse_input(
                     }
                 }
             }
-        },
+            }
+        }
+        Some(EditorTool::Construct) => {
+            structure_edit.selected_cell = None;
+            clear_active_tool_state(&mut selection_drag, &mut brush_drag);
+        }
         Some(EditorTool::Scissors) => {
             structure_edit.selected_cell = None;
             let mut removed_connection = false;
@@ -523,6 +546,8 @@ fn update_editor_cursor_overlays(
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     active_tool: Res<ActiveEditorTool>,
+    active_entity_category: Res<ActiveEntityCategory>,
+    category_ui_registry: Res<EntityCategoryUiRegistry>,
     cell_settings: Res<CellToolSettings>,
     pipe_settings: Res<PipeToolSettings>,
     bridge_state: Res<BridgePlacementState>,
@@ -530,7 +555,14 @@ fn update_editor_cursor_overlays(
     cell_visual_layouts: Res<crate::config::CellVisualPlacementConfigMap>,
     main_menu: Res<MainMenuState>,
     world_load_state: Res<WorldLoadState>,
-    overlay_ui_state: (Res<EditorIconSet>, Res<DebugMode>, Res<PanelManager>),
+    overlay_ui_state: (
+        Res<EditorIconSet>,
+        Res<DebugMode>,
+        Res<PanelManager>,
+        Res<MainToolbarLayout>,
+        Res<AssetServer>,
+        Res<crate::plugins::ContentRegistry>,
+    ),
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut overlay_set: ParamSet<(
         Single<(&mut Transform, &mut Visibility, &mut Sprite), With<BlueprintGhost>>,
@@ -539,7 +571,13 @@ fn update_editor_cursor_overlays(
     )>,
     mut overlay_text: Single<&mut Text, With<EraseCursorOverlayText>>,
 ) {
-    let (icon_set, debug_mode, panel_manager) = overlay_ui_state;
+    let (icon_set, debug_mode, panel_manager, main_toolbar_layout, asset_server, content_registry) =
+        overlay_ui_state;
+    let selected_category_kind = active_entity_category
+        .selected
+        .as_ref()
+        .and_then(|category_id| category_ui_registry.by_id(category_id))
+        .map(|descriptor| descriptor.kind);
 
     if !world_load_state.has_world {
         {
@@ -567,7 +605,7 @@ fn update_editor_cursor_overlays(
                 cursor,
                 &window,
                 debug_mode.active,
-                active_tool.selected,
+                *main_toolbar_layout,
                 main_menu.open,
                 Some(&panel_manager),
             )
@@ -581,18 +619,29 @@ fn update_editor_cursor_overlays(
         let mut blueprint = overlay_set.p0();
         let (ghost_transform, ghost_visibility, ghost_sprite) = &mut *blueprint;
         let ghost_image = match active_tool.selected {
-            Some(EditorTool::BuildSolid) => Some(
-                if cell_settings.material == crate::plugins::default_plugin::metal_cell_material() {
-                    icon_set.metal_silhouette.clone()
-                } else {
-                    icon_set.brick_silhouette.clone()
-                },
-            ),
-            Some(EditorTool::Gases) => Some(match pipe_settings.selected {
+            Some(EditorTool::Construct)
+                if selected_category_kind == Some(EntityCategoryKind::Cells) =>
+            {
+                cell_settings.material.and_then(|material| {
+                    content_registry
+                    .cell_by_material(material)
+                    .map(|descriptor| {
+                        let ghost_path = descriptor
+                            .sprite
+                            .silhouette_path
+                            .as_deref()
+                            .unwrap_or(descriptor.sprite.image_path.as_str());
+                        asset_server.load(ghost_path)
+                    })
+                })
+            }
+            Some(EditorTool::Construct) if selected_category_kind == Some(EntityCategoryKind::Gases) => {
+                Some(match pipe_settings.selected {
                 PipeToolKind::Pipe => icon_set.pipe_silhouette.clone(),
                 PipeToolKind::Vent => icon_set.vent_silhouette.clone(),
                 PipeToolKind::Bridge => icon_set.bridge_silhouette.clone(),
-            }),
+                })
+            }
             Some(EditorTool::CreateGasSource) => Some(icon_set.source_silhouette.clone()),
             Some(EditorTool::CreateGasSink) => Some(icon_set.sink_silhouette.clone()),
             _ => None,
@@ -601,17 +650,28 @@ fn update_editor_cursor_overlays(
             if let (Some(image), Some(cell)) = (ghost_image, world_cell) {
                 ghost_sprite.image = image;
                 let size_in_cells = match active_tool.selected {
-                    Some(EditorTool::BuildSolid) => {
-                        crate::world::structures::cell_material_sprite_size_in_cells(
-                            cell_settings.material,
-                            &cell_visual_layouts,
+                    Some(EditorTool::Construct)
+                        if selected_category_kind == Some(EntityCategoryKind::Cells) =>
+                    {
+                        cell_settings
+                            .material
+                            .map(|material| {
+                                crate::world::structures::cell_material_sprite_size_in_cells(
+                                    material,
+                                    &cell_visual_layouts,
+                                )
+                            })
+                            .unwrap_or(UVec2::ONE)
+                    }
+                    Some(EditorTool::Construct)
+                        if selected_category_kind == Some(EntityCategoryKind::Gases) =>
+                    {
+                        crate::world::structures::structure_footprint_size_in_cells(
+                            selected_pipe_structure_kind(pipe_settings.selected),
+                            bridge_state.rotation,
+                            &structure_visuals,
                         )
                     }
-                    Some(EditorTool::Gases) => crate::world::structures::structure_footprint_size_in_cells(
-                        selected_pipe_structure_kind(pipe_settings.selected),
-                        bridge_state.rotation,
-                        &structure_visuals,
-                    ),
                     Some(EditorTool::CreateGasSource) => {
                         crate::world::structures::structure_footprint_size_in_cells(
                             crate::plugins::default_plugin::gas_source_structure_kind(),
@@ -629,17 +689,28 @@ fn update_editor_cursor_overlays(
                     _ => UVec2::ONE,
                 };
                 let sprite_size_in_cells = match active_tool.selected {
-                    Some(EditorTool::BuildSolid) => {
-                        crate::world::structures::cell_material_sprite_size_in_cells(
-                            cell_settings.material,
-                            &cell_visual_layouts,
+                    Some(EditorTool::Construct)
+                        if selected_category_kind == Some(EntityCategoryKind::Cells) =>
+                    {
+                        cell_settings
+                            .material
+                            .map(|material| {
+                                crate::world::structures::cell_material_sprite_size_in_cells(
+                                    material,
+                                    &cell_visual_layouts,
+                                )
+                            })
+                            .unwrap_or(UVec2::ONE)
+                    }
+                    Some(EditorTool::Construct)
+                        if selected_category_kind == Some(EntityCategoryKind::Gases) =>
+                    {
+                        crate::world::structures::structure_sprite_size_in_cells(
+                            selected_pipe_structure_kind(pipe_settings.selected),
+                            bridge_state.rotation,
+                            &structure_visuals,
                         )
                     }
-                    Some(EditorTool::Gases) => crate::world::structures::structure_sprite_size_in_cells(
-                        selected_pipe_structure_kind(pipe_settings.selected),
-                        bridge_state.rotation,
-                        &structure_visuals,
-                    ),
                     Some(EditorTool::CreateGasSource) => {
                         crate::world::structures::structure_sprite_size_in_cells(
                             crate::plugins::default_plugin::gas_source_structure_kind(),
@@ -665,18 +736,25 @@ fn update_editor_cursor_overlays(
                         size_in_cells.x.saturating_sub(1) as f32 * CELL_SIZE * 0.5,
                         size_in_cells.y.saturating_sub(1) as f32 * CELL_SIZE * 0.5,
                     );
-                ghost_sprite.color = match pipe_settings.selected {
-                    PipeToolKind::Bridge => Color::srgba(1.0, 1.0, 1.0, 0.82),
-                    _ => Color::WHITE,
+                ghost_sprite.color = if selected_category_kind == Some(EntityCategoryKind::Gases)
+                    && pipe_settings.selected == PipeToolKind::Bridge
+                {
+                    Color::srgba(1.0, 1.0, 1.0, 0.82)
+                } else {
+                    Color::WHITE
                 };
                 let mut transform = Transform::from_translation(translation.extend(1.8));
                 transform.rotation = match (active_tool.selected, pipe_settings.selected) {
-                    (Some(EditorTool::Gases), PipeToolKind::Bridge) => match bridge_state.rotation {
+                    (Some(EditorTool::Construct), PipeToolKind::Bridge)
+                        if selected_category_kind == Some(EntityCategoryKind::Gases) =>
+                    {
+                        match bridge_state.rotation {
                         StructureRotation::Deg0 => Quat::IDENTITY,
                         StructureRotation::Deg90 => Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
                         StructureRotation::Deg180 => Quat::from_rotation_z(std::f32::consts::PI),
                         StructureRotation::Deg270 => Quat::from_rotation_z(std::f32::consts::PI * 1.5),
-                    },
+                        }
+                    }
                     _ => Quat::IDENTITY,
                 };
                 **ghost_transform = transform;
@@ -771,6 +849,7 @@ fn emit_plugin_mouse_cell_events(
     hovered_world_cell: Option<(Vec2, UVec2)>,
     is_over_ui: bool,
     selected_tool: Option<EditorTool>,
+    selected_category_id: Option<&ContentId>,
     plugin_events: &mut EventWriter<PluginRuntimeEvent>,
 ) {
     let (Some(screen_position), Some((world_position, cell))) =
@@ -784,7 +863,7 @@ fn emit_plugin_mouse_cell_events(
         ctrl: keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight),
         alt: keyboard.pressed(KeyCode::AltLeft) || keyboard.pressed(KeyCode::AltRight),
     };
-    let active_tool_id = active_tool_content_id(selected_tool);
+    let active_tool_id = active_tool_content_id(selected_tool, selected_category_id);
     for (button, event_builder) in [
         (
             MouseButton::Left,
@@ -864,10 +943,17 @@ fn mouse_button_to_plugin(button: MouseButton) -> PluginMouseButton {
     }
 }
 
-fn active_tool_content_id(selected_tool: Option<EditorTool>) -> Option<ContentId> {
+fn active_tool_content_id(
+    selected_tool: Option<EditorTool>,
+    selected_category_id: Option<&ContentId>,
+) -> Option<ContentId> {
+    if selected_tool == Some(EditorTool::Construct) {
+        return selected_category_id
+            .cloned()
+            .or_else(|| ContentId::parse(CONSTRUCT_TOOL_CONTENT_ID).ok());
+    }
     let raw = match selected_tool? {
-        EditorTool::BuildSolid => "flux.core.tool.build_solid",
-        EditorTool::Gases => "flux.default.tool.gases",
+        EditorTool::Construct => CONSTRUCT_TOOL_CONTENT_ID,
         EditorTool::EraseSolid => "flux.core.tool.erase_solid",
         EditorTool::Scissors => "flux.default.tool.scissors",
         EditorTool::AddGas => "flux.core.tool.add_gas",
@@ -921,10 +1007,20 @@ pub(crate) fn is_cursor_over_ui(
     cursor: Vec2,
     window: &Window,
     debug_mode_active: bool,
-    _selected_tool: Option<EditorTool>,
+    main_toolbar_layout: MainToolbarLayout,
     main_menu_open: bool,
     panel_manager: Option<&PanelManager>,
 ) -> bool {
+    let toolbar_width = if main_toolbar_layout.width > 0.0 {
+        main_toolbar_layout.width
+    } else {
+        MAIN_TOOLBAR_PADDING * 2.0
+    };
+    let toolbar_height = if main_toolbar_layout.height > 0.0 {
+        main_toolbar_layout.height
+    } else {
+        MAIN_TOOLBAR_HEIGHT
+    };
     let mut rects = vec![
         UiRectPx::top_left(
             12.0,
@@ -935,8 +1031,8 @@ pub(crate) fn is_cursor_over_ui(
         UiRectPx::top_left(
             MAIN_TOOLBAR_LEFT,
             window.height() - MAIN_TOOLBAR_BOTTOM - MAIN_TOOLBAR_HEIGHT,
-            MAIN_TOOLBAR_WIDTH,
-            MAIN_TOOLBAR_HEIGHT,
+            toolbar_width,
+            toolbar_height,
         ),
     ];
 

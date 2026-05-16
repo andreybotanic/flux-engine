@@ -1,6 +1,8 @@
 use std::ffi::c_void;
 
-pub const ENGINE_PLUGIN_API_VERSION_VALUE: u32 = 5;
+pub const ENGINE_PLUGIN_API_VERSION_VALUE: u32 = 7;
+pub const FLUX_REGISTRATION_PHASE_CATEGORIES: u32 = 1;
+pub const FLUX_REGISTRATION_PHASE_CONTENT: u32 = 2;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,11 +86,31 @@ pub struct FluxGasSubstanceDescriptor {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
+pub struct FluxEntityStateDescriptor {
+    pub state: u16,
+    pub sprite_path: FluxUtf8Slice,
+    pub transform: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
 pub struct FluxEntityDescriptor {
     pub id: FluxUtf8Slice,
     pub label: FluxUtf8Slice,
     pub icon_path: FluxUtf8Slice,
     pub silhouette_path: FluxUtf8Slice,
+    pub category_id: FluxUtf8Slice,
+    pub default_state: u16,
+    pub states: *const FluxEntityStateDescriptor,
+    pub states_len: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FluxEntityCategoryDescriptor {
+    pub id: FluxUtf8Slice,
+    pub label: FluxUtf8Slice,
+    pub icon_path: FluxUtf8Slice,
 }
 
 #[repr(C)]
@@ -147,6 +169,11 @@ pub(crate) type FluxRegisterEntityFn = unsafe extern "C" fn(
     descriptor: *const FluxEntityDescriptor,
 ) -> FluxStatus;
 
+pub(crate) type FluxRegisterEntityCategoryFn = unsafe extern "C" fn(
+    context: *mut c_void,
+    descriptor: *const FluxEntityCategoryDescriptor,
+) -> FluxStatus;
+
 pub(crate) type FluxRegisterToolFn =
     unsafe extern "C" fn(context: *mut c_void, descriptor: *const FluxToolDescriptor) -> FluxStatus;
 
@@ -181,12 +208,14 @@ pub struct FluxRegistrar {
     pub struct_size: u32,
     pub api_version: u32,
     pub register_gas_substance_fn: Option<FluxRegisterGasSubstanceFn>,
+    pub register_entity_category_fn: Option<FluxRegisterEntityCategoryFn>,
     pub register_entity_fn: Option<FluxRegisterEntityFn>,
     pub register_tool_fn: Option<FluxRegisterToolFn>,
     pub register_panel_fn: Option<FluxRegisterPanelFn>,
     pub register_overlay_fn: Option<FluxRegisterOverlayFn>,
     pub register_save_chunk_fn: Option<FluxRegisterSaveChunkFn>,
     pub register_subscription_fn: Option<FluxRegisterSubscriptionFn>,
+    pub registration_phase: u32,
     pub registration_context: *mut c_void,
     pub register_overlay_material_fn: Option<FluxRegisterOverlayMaterialFn>,
 }

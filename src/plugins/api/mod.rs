@@ -12,4 +12,4 @@ pub use runtime::{
     RuntimeOverlayDescriptor, SaveChunkDescriptor,
 };
 pub use save_api::{SaveChunk, SaveChunkStore};
-pub use ui_api::{HudBlock, ToolDescriptor};
+pub use ui_api::{EntityCategoryDescriptor, HudBlock, ToolDescriptor};

@@ -231,6 +231,21 @@ pub enum StructureParams {
     GasSink { amount: u32 },
 }
 
+/// Stores one compact entity visual/topology state payload.
+///
+/// # Fields
+/// - `0`: Opaque plugin-defined state bits serialized as raw `u16`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PackedState(pub u16);
+
+impl PackedState {
+    /// Returns the raw packed state value.
+    pub fn value(self) -> u16 {
+        self.0
+    }
+}
+
 /// Stores the stable id of one placed structure instance.
 ///
 /// # Fields
@@ -245,6 +260,7 @@ pub struct PlacedStructure {
     pub kind: StructureKind,
     pub origin: UVec2,
     pub rotation: StructureRotation,
+    pub state: PackedState,
     pub params: StructureParams,
     occupied_cells: Vec<UVec2>,
 }
@@ -272,6 +288,7 @@ pub struct PlacedStructureSnapshotEntry {
     pub kind: StructureKind,
     pub origin: UVec2,
     pub rotation: StructureRotation,
+    pub state: PackedState,
     pub params: StructureParams,
 }
 
@@ -388,14 +405,20 @@ impl PlacedStructureMap {
 
     /// Places a plain pipe if the cell is valid and not already occupied by one.
     pub fn place_pipe(&mut self, x: u32, y: u32, world: &WorldGrid) -> bool {
-        self.place_structure(
+        let placed = self.place_structure(
             crate::plugins::default_plugin::pipe_structure_kind(),
             UVec2::new(x, y),
             StructureRotation::Deg0,
+            PackedState(0),
             StructureParams::None,
             world,
-        )
-        .is_some()
+        );
+        if placed.is_some() {
+            self.refresh_pipe_states_around_cells(&[UVec2::new(x, y)]);
+            true
+        } else {
+            false
+        }
     }
 
     /// Applies one continuous pipe stroke and only connects cells along that stroke.
@@ -423,7 +446,10 @@ impl PlacedStructureMap {
                 continue;
             };
             stroke_pairs.insert(normalized);
-            changed |= self.remove_pipe_cut(pair[0], pair[1]);
+            if self.remove_pipe_cut(pair[0], pair[1]) {
+                changed = true;
+                self.refresh_pipe_states_around_cells(&[pair[0], pair[1]]);
+            }
         }
 
         for cell in newly_placed {
@@ -437,10 +463,16 @@ impl PlacedStructureMap {
                 if stroke_pairs.contains(&pair) {
                     continue;
                 }
-                changed |= self.add_pipe_cut(cell, neighbor);
+                if self.add_pipe_cut(cell, neighbor) {
+                    changed = true;
+                    self.refresh_pipe_states_around_cells(&[cell, neighbor]);
+                }
             }
         }
 
+        if changed {
+            self.refresh_pipe_states_around_cells(path);
+        }
         changed
     }
 
@@ -450,6 +482,7 @@ impl PlacedStructureMap {
             crate::plugins::default_plugin::vent_structure_kind(),
             UVec2::new(x, y),
             StructureRotation::Deg0,
+            PackedState(0),
             StructureParams::None,
             world,
         )
@@ -472,6 +505,7 @@ impl PlacedStructureMap {
             crate::plugins::default_plugin::gas_source_structure_kind(),
             UVec2::new(x, y),
             StructureRotation::Deg0,
+            PackedState(0),
             StructureParams::GasSource { gas_index, amount },
             world,
         )
@@ -492,6 +526,7 @@ impl PlacedStructureMap {
             crate::plugins::default_plugin::gas_sink_structure_kind(),
             UVec2::new(x, y),
             StructureRotation::Deg0,
+            PackedState(0),
             StructureParams::GasSink { amount },
             world,
         )
@@ -508,6 +543,7 @@ impl PlacedStructureMap {
             crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
             origin,
             rotation,
+            bridge_packed_state_for_rotation(rotation),
             StructureParams::None,
             world,
         )
@@ -574,10 +610,22 @@ impl PlacedStructureMap {
             return false;
         };
         let removed = self.structures.remove(index);
+        let removed_is_pipe = crate::plugins::default_plugin::is_pipe_structure(removed.kind);
         for cell in removed.occupied_cells() {
             let ids = &mut self.cell_index[linear_index(cell.x, cell.y)];
             ids.retain(|candidate| *candidate != id);
-            self.pipe_cuts.retain(|cut| !cut.touches(cell));
+            if removed_is_pipe {
+                self.pipe_cuts.retain(|cut| !cut.touches(cell));
+            }
+        }
+        if removed_is_pipe {
+            self.refresh_pipe_states_around_cells(&removed.occupied_cells);
+        } else if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(removed.kind) {
+            let mut affected = removed.occupied_cells.clone();
+            if let Some(center) = bridge_center_cell(removed.origin, removed.rotation) {
+                affected.push(center);
+            }
+            self.refresh_pipe_states_around_cells(&affected);
         }
         true
     }
@@ -599,7 +647,11 @@ impl PlacedStructureMap {
         let Some(cut) = PipeCut::new(a, b) else {
             return false;
         };
-        self.pipe_cuts.insert(cut)
+        let changed = self.pipe_cuts.insert(cut);
+        if changed {
+            self.refresh_pipe_states_around_cells(&[a, b]);
+        }
+        changed
     }
 
     /// Removes a previously recorded scissors cut between two adjacent cells.
@@ -607,7 +659,11 @@ impl PlacedStructureMap {
         let Some(cut) = PipeCut::new(a, b) else {
             return false;
         };
-        self.pipe_cuts.remove(&cut)
+        let changed = self.pipe_cuts.remove(&cut);
+        if changed {
+            self.refresh_pipe_states_around_cells(&[a, b]);
+        }
+        changed
     }
 
     /// Returns true when a scissors cut blocks the cell adjacency.
@@ -615,6 +671,62 @@ impl PlacedStructureMap {
         PipeCut::new(a, b)
             .map(|cut| self.pipe_cuts.contains(&cut))
             .unwrap_or(false)
+    }
+
+    fn refresh_pipe_states_around_cells(&mut self, cells: &[UVec2]) {
+        let mut affected_ids = std::collections::BTreeSet::new();
+        for cell in cells {
+            for neighbor in orthogonal_neighbors_including_self(*cell) {
+                for id in self.structure_ids_at(neighbor.x, neighbor.y) {
+                    affected_ids.insert(*id);
+                }
+            }
+        }
+
+        for id in affected_ids {
+            let Some(index) = self
+                .structures
+                .iter()
+                .position(|structure| structure.id == id)
+            else {
+                continue;
+            };
+            if !crate::plugins::default_plugin::is_pipe_structure(self.structures[index].kind) {
+                continue;
+            }
+            let origin = self.structures[index].origin;
+            let mask = self.pipe_connection_mask_for_cell(origin);
+            self.structures[index].state = PackedState(mask as u16);
+        }
+    }
+
+    fn pipe_connection_mask_for_cell(&self, cell: UVec2) -> u8 {
+        let mut mask = 0u8;
+        if cell.y > 0 {
+            let neighbor = UVec2::new(cell.x, cell.y - 1);
+            if self.has_pipe_at(neighbor.x, neighbor.y) && !self.is_pipe_cut(cell, neighbor) {
+                mask |= 0b0001;
+            }
+        }
+        if cell.x + 1 < WORLD_WIDTH {
+            let neighbor = UVec2::new(cell.x + 1, cell.y);
+            if self.has_pipe_at(neighbor.x, neighbor.y) && !self.is_pipe_cut(cell, neighbor) {
+                mask |= 0b0010;
+            }
+        }
+        if cell.y + 1 < WORLD_HEIGHT {
+            let neighbor = UVec2::new(cell.x, cell.y + 1);
+            if self.has_pipe_at(neighbor.x, neighbor.y) && !self.is_pipe_cut(cell, neighbor) {
+                mask |= 0b0100;
+            }
+        }
+        if cell.x > 0 {
+            let neighbor = UVec2::new(cell.x - 1, cell.y);
+            if self.has_pipe_at(neighbor.x, neighbor.y) && !self.is_pipe_cut(cell, neighbor) {
+                mask |= 0b1000;
+            }
+        }
+        mask
     }
 
     /// Saves the placed-structure state.
@@ -626,6 +738,7 @@ impl PlacedStructureMap {
                 kind: structure.kind,
                 origin: structure.origin,
                 rotation: structure.rotation,
+                state: structure.state,
                 params: structure.params,
             })
             .collect::<Vec<_>>();
@@ -635,6 +748,7 @@ impl PlacedStructureMap {
                 entry.origin.x,
                 kind_sort_key(entry.kind),
                 rotation_sort_key(entry.rotation),
+                entry.state.value(),
                 params_sort_key(entry.params),
             )
         });
@@ -659,6 +773,7 @@ impl PlacedStructureMap {
                 entry.kind,
                 entry.origin,
                 entry.rotation,
+                entry.state,
                 entry.params,
                 world,
             )
@@ -731,6 +846,7 @@ impl PlacedStructureMap {
         kind: StructureKind,
         origin: UVec2,
         rotation: StructureRotation,
+        state: PackedState,
         params: StructureParams,
         descriptor: &StructureDescriptor,
         world: &WorldGrid,
@@ -738,7 +854,7 @@ impl PlacedStructureMap {
         if !self.can_place_structure_with_descriptor(kind, origin, descriptor, world) {
             return None;
         }
-        self.insert_structure(kind, origin, rotation, params, descriptor)
+        self.insert_structure(kind, origin, rotation, state, params, descriptor)
     }
 
     fn place_structure(
@@ -746,6 +862,7 @@ impl PlacedStructureMap {
         kind: StructureKind,
         origin: UVec2,
         rotation: StructureRotation,
+        state: PackedState,
         params: StructureParams,
         world: &WorldGrid,
     ) -> Option<PlacedStructureId> {
@@ -753,7 +870,7 @@ impl PlacedStructureMap {
             return None;
         }
         let descriptor = structure_descriptor(kind, rotation);
-        self.insert_structure(kind, origin, rotation, params, &descriptor)
+        self.insert_structure(kind, origin, rotation, state, params, &descriptor)
     }
 
     fn insert_structure(
@@ -761,6 +878,7 @@ impl PlacedStructureMap {
         kind: StructureKind,
         origin: UVec2,
         rotation: StructureRotation,
+        state: PackedState,
         params: StructureParams,
         descriptor: &StructureDescriptor,
     ) -> Option<PlacedStructureId> {
@@ -779,6 +897,7 @@ impl PlacedStructureMap {
             kind,
             origin,
             rotation,
+            state,
             params,
             occupied_cells,
         };
@@ -1040,6 +1159,13 @@ pub fn bridge_connection_local_cells(rotation: StructureRotation) -> Vec<IVec2> 
     }
 }
 
+fn bridge_packed_state_for_rotation(rotation: StructureRotation) -> PackedState {
+    match rotation {
+        StructureRotation::Deg0 | StructureRotation::Deg180 => PackedState(0),
+        StructureRotation::Deg90 | StructureRotation::Deg270 => PackedState(1),
+    }
+}
+
 fn layer_collision_blocked(
     structures: &PlacedStructureMap,
     world: &WorldGrid,
@@ -1114,6 +1240,13 @@ fn orthogonal_neighbors(cell: UVec2) -> Vec<UVec2> {
     neighbors
 }
 
+fn orthogonal_neighbors_including_self(cell: UVec2) -> Vec<UVec2> {
+    let mut cells = Vec::with_capacity(5);
+    cells.push(cell);
+    cells.extend(orthogonal_neighbors(cell));
+    cells
+}
+
 fn kind_sort_key(kind: StructureKind) -> u8 {
     crate::plugins::default_plugin::default_structure_sort_key(kind)
 }
@@ -1138,8 +1271,8 @@ fn params_sort_key(params: StructureParams) -> (u8, u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::{
-        bridge_connection_local_cells, bridge_local_cells, cell_material_descriptor,
-        cell_material_sprite_size_in_cells, structure_descriptor,
+        bridge_center_cell, bridge_connection_local_cells, bridge_local_cells,
+        cell_material_descriptor, cell_material_sprite_size_in_cells, structure_descriptor,
         structure_footprint_size_in_cells, structure_sprite_size_in_cells, LayerCollisionKind,
         PlacedStructureMap, StructureRotation, APPEARANCE_LAYER,
     };
@@ -1397,6 +1530,25 @@ mod tests {
     }
 
     #[test]
+    fn placing_bridge_keeps_single_structure_entry_without_plain_pipe() {
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        let origin = bevy::prelude::UVec2::new(30, 30);
+        let bridge_id = structures
+            .place_bridge(origin, StructureRotation::Deg0, &world)
+            .expect("bridge placement");
+        let center = bridge_center_cell(origin, StructureRotation::Deg0).expect("bridge center");
+
+        assert_eq!(structures.iter().count(), 1);
+        let bridge = structures.structure(bridge_id).expect("placed bridge");
+        assert_eq!(
+            bridge.kind,
+            crate::plugins::default_plugin::gas_pipe_bridge_structure_kind()
+        );
+        assert!(!structures.has_pipe_at(center.x, center.y));
+    }
+
+    #[test]
     fn bridge_clears_as_whole_structure_from_any_occupied_cell() {
         let world = WorldGrid::default();
         let mut structures = PlacedStructureMap::default();
@@ -1411,6 +1563,46 @@ mod tests {
         assert!(structures.structures_at(40, 40).is_empty());
         assert!(structures.structures_at(41, 40).is_empty());
         assert!(structures.structures_at(42, 40).is_empty());
+    }
+
+    #[test]
+    fn removing_bridge_does_not_clear_pipe_cut_on_underlying_pipes() {
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        let left = bevy::prelude::UVec2::new(60, 60);
+        let right = bevy::prelude::UVec2::new(61, 60);
+
+        assert!(structures.place_pipe(left.x, left.y, &world));
+        assert!(structures.place_pipe(right.x, right.y, &world));
+        assert!(structures.add_pipe_cut(left, right));
+        let left_before = structures
+            .structures_at(left.x, left.y)
+            .into_iter()
+            .find(|structure| crate::plugins::default_plugin::is_pipe_structure(structure.kind))
+            .expect("left pipe exists")
+            .state
+            .value();
+
+        let bridge = structures
+            .place_bridge(left, StructureRotation::Deg0, &world)
+            .expect("bridge placement");
+        assert!(structures.remove_structure(bridge));
+
+        assert!(
+            structures.is_pipe_cut(left, right),
+            "bridge removal must not delete existing scissors cuts for plain pipes"
+        );
+        let left_after = structures
+            .structures_at(left.x, left.y)
+            .into_iter()
+            .find(|structure| crate::plugins::default_plugin::is_pipe_structure(structure.kind))
+            .expect("left pipe exists after bridge removal")
+            .state
+            .value();
+        assert_eq!(
+            left_after, left_before,
+            "underlying pipe state must remain stable after bridge removal"
+        );
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 Runtime DLL-плагин проходит один и тот же цикл:
 
-1. Движок читает `manifest.toml` и проверяет `api_version = 5`.
+1. Движок читает `manifest.toml` и проверяет `api_version = 6`.
 2. Движок загружает DLL из безопасной временной копии plugin root.
 3. Движок вызывает `flux_plugin_api_version`.
 4. Движок вызывает `flux_plugin_create` и получает opaque handle.

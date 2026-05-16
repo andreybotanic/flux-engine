@@ -438,8 +438,7 @@ mod tests {
         config::{GasDefinition, GasRegistry},
         plugins::default_plugin::pipe_runtime::{
             PipeContainerKind, PipeFlowVisualState, PipeGasField, PipeSimulationConfig,
-            PipeTransferRecord,
-            PipeTransferVisualPath,
+            PipeTransferRecord, PipeTransferVisualPath,
         },
         world::{grid::cell_center, structures::PlacedStructureMap},
     };
@@ -552,7 +551,11 @@ mod tests {
             &registry,
             0.5,
         );
-        assert_eq!(instances.len(), 2, "stationary gas should render one packet");
+        assert_eq!(
+            instances.len(),
+            2,
+            "stationary gas should render one packet"
+        );
         let expected = Vec2::new(cell.x as f32 + 0.5, cell.y as f32 + 0.5);
         for instance in instances {
             let flux_plugin_sdk::OverlayPlacement::GridLocal {

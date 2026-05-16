@@ -4,6 +4,7 @@ pub fn setup_world_view(
     simulation_images: Res<GasSimulationImages>,
     world: Res<WorldGrid>,
     structures: Res<PlacedStructureMap>,
+    content_registry: Res<ContentRegistry>,
     world_load_state: Res<WorldLoadState>,
     overlay_mode: Res<OverlayMode>,
     asset_server: Res<AssetServer>,
@@ -15,13 +16,28 @@ pub fn setup_world_view(
     cell_visual_layouts: Res<crate::config::CellVisualPlacementConfigMap>,
     structure_visuals: Res<crate::config::StructureVisualConfigMap>,
 ) {
+    let boundary_material = content_registry
+        .cell_by_tag(crate::plugins::content::CORE_TAG_CELL_BOUNDARY)
+        .map(|descriptor| descriptor.material)
+        .or_else(|| boundary_material_from_world(&world))
+        .or_else(|| content_registry.cells().values().next().map(|descriptor| descriptor.material))
+        .expect("world rendering requires at least one registered cell material");
+    let boundary_sprite_path = wall_sprite_path_for_material(&content_registry, boundary_material);
+    let vent_world_path = structure_sprite_path_for_tag(
+        &content_registry,
+        crate::plugins::content::CORE_TAG_STRUCTURE_VENT,
+    )
+    .unwrap_or_else(|| "sprites/ui/tool_gases.ktx2".to_string());
+    let bridge_world_path = structure_sprite_path_for_tag(
+        &content_registry,
+        crate::plugins::content::CORE_TAG_STRUCTURE_PIPE_BRIDGE,
+    )
+    .unwrap_or_else(|| "sprites/ui/tool_gases.ktx2".to_string());
     let show_world = world_load_state.has_world;
     let pipe_masks = (0u8..=0b1111)
         .map(|mask| asset_server.load(crate::plugins::default_plugin::pipe_mask_sprite_path(mask)))
         .collect::<Vec<_>>();
-    let vent_world = asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
-        crate::plugins::default_plugin::vent_structure_kind(),
-    ));
+    let vent_world = asset_server.load(vent_world_path);
     let vent_overlay =
         asset_server.load(crate::plugins::default_plugin::pipe_connection_overlay_sprite_path());
     let pipe_highlight = crate::render::pipe_highlight_material::PipeHighlightRenderAssets {
@@ -42,34 +58,14 @@ pub fn setup_world_view(
         ),
         bridge_material: pipe_highlight_materials.add(
             crate::render::pipe_highlight_material::PipeHighlightMaterial::from_pipe_mask(
-                asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
-                    crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
-                )),
+                asset_server.load(bridge_world_path),
             ),
         ),
     };
     let visuals = WorldVisualAssets {
         backdrop_noise: asset_server.load("sprites/world/backdrop_noise.png"),
-        brick: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
-            crate::plugins::default_plugin::brick_cell_material(),
-        )),
-        metal: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
-            crate::plugins::default_plugin::metal_cell_material(),
-        )),
-        boundary: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
-            crate::plugins::default_plugin::boundary_cell_material(),
-        )),
-        source: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
-            crate::plugins::default_plugin::gas_source_structure_kind(),
-        )),
-        sink: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
-            crate::plugins::default_plugin::gas_sink_structure_kind(),
-        )),
-        bridge: asset_server.load(crate::plugins::default_plugin::structure_sprite_path(
-            crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
-        )),
+        boundary: asset_server.load(boundary_sprite_path),
         pipe_masks,
-        vent_world,
         vent_overlay,
         pipe_highlight,
     };
@@ -172,7 +168,8 @@ pub fn setup_world_view(
             if let CellKind::Solid(material) = world.cell(x, y) {
                 let entity = spawn_wall_sprite(
                     &mut commands,
-                    &visuals,
+                    &content_registry,
+                    &asset_server,
                     &cell_visuals,
                     &cell_visual_layouts,
                     x,
@@ -185,13 +182,14 @@ pub fn setup_world_view(
         }
     }
     commands.insert_resource(wall_entities);
-    let boundary_main_tint = cell_visuals.main_tint(crate::plugins::default_plugin::boundary_cell_material());
-    let boundary_gas_tint = cell_visuals.gas_tint(crate::plugins::default_plugin::boundary_cell_material());
+    let boundary_main_tint = cell_visuals.main_tint(boundary_material);
+    let boundary_gas_tint = cell_visuals.gas_tint(boundary_material);
     spawn_outer_border_layers(
         &mut commands,
         &visuals,
         boundary_main_tint,
         boundary_gas_tint,
+        boundary_material,
         &cell_visual_layouts,
         show_world,
     );
@@ -199,17 +197,21 @@ pub fn setup_world_view(
     let structure_draw_ranks = build_structure_draw_ranks(&structures, &structure_visuals);
     let mut structure_entities = GasStructureEntities::default();
     for structure in structures.iter() {
-        if let Some((cell, entity)) =
+        if let Some(entity) =
             spawn_structure_sprite(
                 &mut commands,
                 &visuals,
+                &content_registry,
+                &asset_server,
                 &structure_visuals,
                 structure,
                 *structure_draw_ranks.get(&structure.id).unwrap_or(&0),
                 show_world,
             )
         {
-            structure_entities.by_cell.insert(cell, entity);
+            structure_entities
+                .by_id
+                .insert(structure_visual_key(structure), entity);
         }
     }
     commands.insert_resource(structure_entities);
@@ -247,6 +249,7 @@ fn spawn_outer_border_layers(
     visuals: &WorldVisualAssets,
     boundary_main_tint: Color,
     boundary_gas_tint: Color,
+    boundary_material: CellMaterial,
     cell_visual_layouts: &crate::config::CellVisualPlacementConfigMap,
     show_world: bool,
 ) {
@@ -254,7 +257,7 @@ fn spawn_outer_border_layers(
     let min_y = 0_i32;
     let max_x = WORLD_WIDTH as i32 - 1;
     let max_y = WORLD_HEIGHT as i32 - 1;
-    let boundary_priority = cell_visual_layouts.get(crate::plugins::default_plugin::boundary_cell_material()).draw_priority;
+    let boundary_priority = cell_visual_layouts.get(boundary_material).draw_priority;
     let mut draw_rank = 0usize;
 
     for layer in 1..=OUTER_BORDER_LAYERS {
@@ -276,7 +279,7 @@ fn spawn_outer_border_layers(
                     Sprite {
                         image: visuals.boundary.clone(),
                         custom_size: Some(size_in_world(
-                            cell_visual_layouts.get(crate::plugins::default_plugin::boundary_cell_material()).size_in_cells,
+                            cell_visual_layouts.get(boundary_material).size_in_cells,
                         )),
                         color: boundary_main_tint,
                         ..default()
@@ -303,7 +306,8 @@ fn spawn_outer_border_layers(
 
 fn spawn_wall_sprite(
     commands: &mut Commands,
-    visuals: &WorldVisualAssets,
+    content_registry: &ContentRegistry,
+    asset_server: &AssetServer,
     cell_visuals: &CellTypeVisualConfig,
     cell_visual_layouts: &crate::config::CellVisualPlacementConfigMap,
     x: u32,
@@ -311,12 +315,10 @@ fn spawn_wall_sprite(
     material: CellMaterial,
     show_world: bool,
 ) -> Entity {
-    let image = if material == crate::plugins::default_plugin::boundary_cell_material() {
-        visuals.boundary.clone()
-    } else if material == crate::plugins::default_plugin::metal_cell_material() {
-        visuals.metal.clone()
+    let image = if let Some(descriptor) = content_registry.cell_by_material(material) {
+        asset_server.load(descriptor.sprite.image_path.as_str())
     } else {
-        visuals.brick.clone()
+        asset_server.load(wall_sprite_path_for_material(content_registry, material))
     };
     let main_tint = cell_visuals.main_tint(material);
     let gas_tint = cell_visuals.gas_tint(material);
@@ -347,22 +349,52 @@ fn spawn_wall_sprite(
         .id()
 }
 
+fn boundary_material_from_world(world: &WorldGrid) -> Option<CellMaterial> {
+    match world.cell(0, 0) {
+        CellKind::Solid(material) => Some(material),
+        CellKind::Empty => None,
+    }
+}
+
+fn wall_sprite_path_for_material(
+    content_registry: &ContentRegistry,
+    material: CellMaterial,
+) -> String {
+    content_registry
+        .cell_by_material(material)
+        .map(|descriptor| descriptor.sprite.image_path.clone())
+        .unwrap_or_else(|| crate::plugins::default_plugin::cell_sprite_path(material).to_string())
+}
+
 fn spawn_structure_sprite(
     commands: &mut Commands,
     visuals: &WorldVisualAssets,
+    content_registry: &ContentRegistry,
+    asset_server: &AssetServer,
     structure_visuals: &crate::config::StructureVisualConfigMap,
     structure: &PlacedStructure,
     draw_rank: usize,
     show_world: bool,
-) -> Option<((u32, u32), Entity)> {
-    let image = if crate::plugins::default_plugin::is_gas_source_structure(structure.kind) {
-        visuals.source.clone()
-    } else if crate::plugins::default_plugin::is_gas_sink_structure(structure.kind) {
-        visuals.sink.clone()
-    } else {
-        return None;
-    };
+) -> Option<Entity> {
+    let _descriptor = content_registry.structure_by_kind(structure.kind)?;
+    let _ = visuals;
+    let image = asset_server.load(
+        crate::plugins::default_plugin::structure_state_sprite_path(
+            structure.kind,
+            structure.state,
+        ),
+    );
     let visual_layout = structure_visuals.get(structure.kind);
+    let mut transform = Transform::from_translation(
+        structure_visual_center(structure).extend(appearance_z(visual_layout.draw_priority, draw_rank)),
+    );
+    apply_state_sprite_transform(
+        &mut transform,
+        crate::plugins::default_plugin::structure_state_sprite_transform(
+            structure.kind,
+            structure.state,
+        ),
+    );
     let entity = commands
         .spawn((
             Sprite {
@@ -377,10 +409,7 @@ fn spawn_structure_sprite(
                 color: Color::WHITE,
                 ..default()
             },
-            Transform::from_translation(
-                cell_center(structure.origin.x, structure.origin.y)
-                    .extend(appearance_z(visual_layout.draw_priority, draw_rank)),
-            ),
+            transform,
             if show_world {
                 Visibility::Visible
             } else {
@@ -389,7 +418,7 @@ fn spawn_structure_sprite(
             GasStructureVisual,
         ))
         .id();
-    Some(((structure.origin.x, structure.origin.y), entity))
+    Some(entity)
 }
 
 fn spawn_structure_pipe_visuals(
@@ -404,39 +433,13 @@ fn spawn_structure_pipe_visuals(
     overlay_mode: OverlayMode,
     legacy_pipes_overlay: bool,
 ) {
-    let visual_layout = structure_visuals.get(structure.kind);
-    let appearance_z = appearance_z(visual_layout.draw_priority, draw_rank);
-    let pipe_visual = PipeWorldVisual {
-        appearance_z,
-        main_tint: Color::srgba(0.42, 0.50, 0.56, 0.96),
-        gas_tint: Color::srgba(0.74, 0.82, 0.88, 0.96),
-        pipe_tint: Color::srgba(0.96, 0.985, 1.0, 1.0),
-    };
+    let _ = (structure_visuals, draw_rank);
     if crate::plugins::default_plugin::is_pipe_structure(structure.kind) {
             let x = structure.origin.x;
             let y = structure.origin.y;
             let center = cell_center(x, y);
-            let mask = pipe_connection_mask(structures, UVec2::new(x, y)) as usize;
-            let entity = commands
-                .spawn((
-                    Sprite {
-                        image: visuals.pipe_masks[mask].clone(),
-                        custom_size: Some(size_in_world(
-                            crate::world::structures::structure_sprite_size_in_cells(
-                                structure.kind,
-                                structure.rotation,
-                                structure_visuals,
-                            ),
-                        )),
-                        color: pipe_sprite_tint(overlay_mode, &pipe_visual, legacy_pipes_overlay),
-                        ..default()
-                    },
-                    Transform::from_translation(center.extend(appearance_z)),
-                    world_layer_visibility(show_world),
-                    pipe_visual,
-                ))
-                .id();
-            entities.pipes.insert((x, y), entity);
+            let _ = structures;
+            let mask = (structure.state.value() & 0b1111) as usize;
 
             let highlight_entity =
                 crate::render::pipe_highlight_material::spawn_pipe_highlight_entity(
@@ -455,27 +458,6 @@ fn spawn_structure_pipe_visuals(
             let x = structure.origin.x;
             let y = structure.origin.y;
             let center = cell_center(x, y);
-            let world_entity = commands
-                .spawn((
-                    Sprite {
-                        image: visuals.vent_world.clone(),
-                        custom_size: Some(size_in_world(
-                            crate::world::structures::structure_sprite_size_in_cells(
-                                structure.kind,
-                                structure.rotation,
-                                structure_visuals,
-                            ),
-                        )),
-                        color: Color::WHITE,
-                        ..default()
-                    },
-                    Transform::from_translation(center.extend(appearance_z)),
-                    vent_world_visibility(show_world, overlay_mode),
-                    VentWorldVisual,
-                ))
-                .id();
-            entities.vents.insert((x, y), world_entity);
-
             let overlay_entity = commands
                 .spawn((
                     Sprite {
@@ -491,24 +473,10 @@ fn spawn_structure_pipe_visuals(
                 .id();
             entities.vent_overlays.insert((x, y), overlay_entity);
     } else if crate::plugins::default_plugin::is_gas_pipe_bridge_structure(structure.kind) {
-            let Some(center_cell) = bridge_center_cell_for_render(structure.origin, structure.rotation)
+            let Some(center_cell) = crate::world::structures::bridge_center_cell(structure.origin, structure.rotation)
             else {
                 return;
             };
-            let entity = commands
-                .spawn((
-                    Sprite {
-                        image: visuals.bridge.clone(),
-                        custom_size: Some(bridge_visual_size(structure.rotation, structure_visuals)),
-                        color: pipe_sprite_tint(overlay_mode, &pipe_visual, legacy_pipes_overlay),
-                        ..default()
-                    },
-                    bridge_visual_transform(center_cell, structure.rotation, appearance_z),
-                    world_layer_visibility(show_world),
-                    pipe_visual,
-                ))
-                .id();
-            entities.bridges.insert(structure.id, entity);
             spawn_pipe_gas_overlay_slots(
                 commands,
                 entities,
@@ -592,56 +560,6 @@ fn spawn_pipe_gas_overlay_slots(
     entities.gas_overlay_borders.insert((x, y), borders);
 }
 
-fn pipe_connection_mask(structures: &PlacedStructureMap, cell: UVec2) -> u8 {
-    let mut mask = 0u8;
-    // Match the legacy pipe-mask bit convention used by the sprite atlas:
-    // `0b0001` is the upper arm and `0b0100` is the lower arm.
-    if cell.y > 0 {
-        let neighbor = UVec2::new(cell.x, cell.y - 1);
-        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
-            mask |= 0b0001;
-        }
-    }
-    if cell.x + 1 < WORLD_WIDTH {
-        let neighbor = UVec2::new(cell.x + 1, cell.y);
-        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
-            mask |= 0b0010;
-        }
-    }
-    if cell.y + 1 < WORLD_HEIGHT {
-        let neighbor = UVec2::new(cell.x, cell.y + 1);
-        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
-            mask |= 0b0100;
-        }
-    }
-    if cell.x > 0 {
-        let neighbor = UVec2::new(cell.x - 1, cell.y);
-        if structures.has_pipe_at(neighbor.x, neighbor.y) && !structures.is_pipe_cut(cell, neighbor) {
-            mask |= 0b1000;
-        }
-    }
-    mask
-}
-
-fn bridge_center_cell_for_render(origin: UVec2, rotation: StructureRotation) -> Option<UVec2> {
-    match rotation {
-        StructureRotation::Deg0 | StructureRotation::Deg180 => {
-            if origin.x + 1 < WORLD_WIDTH {
-                Some(UVec2::new(origin.x + 1, origin.y))
-            } else {
-                None
-            }
-        }
-        StructureRotation::Deg90 | StructureRotation::Deg270 => {
-            if origin.y + 1 < WORLD_HEIGHT {
-                Some(UVec2::new(origin.x, origin.y + 1))
-            } else {
-                None
-            }
-        }
-    }
-}
-
 fn bridge_connection_cells_for_render(origin: UVec2, rotation: StructureRotation) -> Vec<UVec2> {
     match rotation {
         StructureRotation::Deg0 | StructureRotation::Deg180 => vec![
@@ -655,6 +573,7 @@ fn bridge_connection_cells_for_render(origin: UVec2, rotation: StructureRotation
     }
 }
 
+#[cfg(test)]
 fn bridge_visual_size(
     rotation: StructureRotation,
     structure_visuals: &crate::config::StructureVisualConfigMap,
@@ -667,6 +586,7 @@ fn bridge_visual_size(
     Vec2::new(size.x.max(1) as f32 * CELL_SIZE, size.y.max(1) as f32 * CELL_SIZE)
 }
 
+#[cfg(test)]
 fn bridge_visual_transform(
     center_cell: UVec2,
     rotation: StructureRotation,
@@ -737,6 +657,42 @@ fn pipe_highlight_z() -> f32 {
     0.97
 }
 
+fn structure_visual_center(structure: &PlacedStructure) -> Vec2 {
+    let descriptor = structure.descriptor();
+    let Some((min, max)) = descriptor.local_bounds() else {
+        return cell_center(structure.origin.x, structure.origin.y);
+    };
+    let local_center = Vec2::new(
+        (min.x + max.x) as f32 * 0.5,
+        (min.y + max.y) as f32 * 0.5,
+    );
+    cell_center(structure.origin.x, structure.origin.y) + local_center * CELL_SIZE
+}
+
+fn apply_state_sprite_transform(
+    transform: &mut Transform,
+    state_transform: flux_plugin_sdk::EntitySpriteTransform,
+) {
+    match state_transform {
+        flux_plugin_sdk::EntitySpriteTransform::None => {}
+        flux_plugin_sdk::EntitySpriteTransform::Rot90 => {
+            transform.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
+        }
+        flux_plugin_sdk::EntitySpriteTransform::Rot180 => {
+            transform.rotation = Quat::from_rotation_z(std::f32::consts::PI);
+        }
+        flux_plugin_sdk::EntitySpriteTransform::Rot270 => {
+            transform.rotation = Quat::from_rotation_z(std::f32::consts::PI * 1.5);
+        }
+        flux_plugin_sdk::EntitySpriteTransform::FlipX => {
+            transform.scale.x *= -1.0;
+        }
+        flux_plugin_sdk::EntitySpriteTransform::FlipY => {
+            transform.scale.y *= -1.0;
+        }
+    }
+}
+
 fn appearance_z(draw_priority: i32, draw_rank: usize) -> f32 {
     const APPEARANCE_BASE_Z: f32 = 0.20;
     const APPEARANCE_PRIORITY_STEP: f32 = 0.0001;
@@ -787,8 +743,9 @@ fn vent_world_visibility(show_world: bool, overlay_mode: OverlayMode) -> Visibil
 pub(crate) fn sync_wall_visuals(
     mut commands: Commands,
     world: Res<WorldGrid>,
+    content_registry: Res<ContentRegistry>,
     world_load_state: Res<WorldLoadState>,
-    visuals: Res<WorldVisualAssets>,
+    asset_server: Res<AssetServer>,
     cell_visuals: Res<CellTypeVisualConfig>,
     cell_visual_layouts: Res<crate::config::CellVisualPlacementConfigMap>,
     mut wall_entities: ResMut<WallEntities>,
@@ -804,7 +761,8 @@ pub(crate) fn sync_wall_visuals(
             (CellKind::Solid(material), None) => {
                 let entity = spawn_wall_sprite(
                     &mut commands,
-                    &visuals,
+                    &content_registry,
+                    &asset_server,
                     &cell_visuals,
                     &cell_visual_layouts,
                     x,
@@ -822,7 +780,8 @@ pub(crate) fn sync_wall_visuals(
                 commands.entity(entity).despawn();
                 let next_entity = spawn_wall_sprite(
                     &mut commands,
-                    &visuals,
+                    &content_registry,
+                    &asset_server,
                     &cell_visuals,
                     &cell_visual_layouts,
                     x,
@@ -840,8 +799,10 @@ pub(crate) fn sync_wall_visuals(
 pub(crate) fn sync_gas_structure_visuals(
     mut commands: Commands,
     structures: Res<PlacedStructureMap>,
+    content_registry: Res<ContentRegistry>,
     world_load_state: Res<WorldLoadState>,
     visuals: Res<WorldVisualAssets>,
+    asset_server: Res<AssetServer>,
     structure_visuals: Res<crate::config::StructureVisualConfigMap>,
     mut structure_entities: ResMut<GasStructureEntities>,
 ) {
@@ -849,10 +810,10 @@ pub(crate) fn sync_gas_structure_visuals(
         return;
     }
 
-    for entity in structure_entities.by_cell.values().copied() {
+    for entity in structure_entities.by_id.values().copied() {
         commands.entity(entity).despawn();
     }
-    structure_entities.by_cell.clear();
+    structure_entities.by_id.clear();
 
     if !world_load_state.has_world {
         return;
@@ -860,18 +821,35 @@ pub(crate) fn sync_gas_structure_visuals(
 
     let structure_draw_ranks = build_structure_draw_ranks(&structures, &structure_visuals);
     for structure in structures.iter() {
-        if let Some((cell, entity)) = spawn_structure_sprite(
+        if let Some(entity) = spawn_structure_sprite(
             &mut commands,
             &visuals,
+            &content_registry,
+            &asset_server,
             &structure_visuals,
             structure,
             *structure_draw_ranks.get(&structure.id).unwrap_or(&0),
             world_load_state.has_world,
         )
         {
-            structure_entities.by_cell.insert(cell, entity);
+            structure_entities
+                .by_id
+                .insert(structure_visual_key(structure), entity);
         }
     }
+}
+
+fn structure_visual_key(structure: &PlacedStructure) -> PlacedStructureId {
+    structure.id
+}
+
+fn structure_sprite_path_for_tag(
+    content_registry: &ContentRegistry,
+    raw_tag: &str,
+) -> Option<String> {
+    content_registry
+        .structure_by_tag(raw_tag)
+        .map(|descriptor| descriptor.sprite.image_path.clone())
 }
 
 pub(crate) fn sync_pipe_world_visuals(

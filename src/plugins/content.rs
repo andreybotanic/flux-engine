@@ -15,6 +15,21 @@ use crate::{
     },
 };
 
+/// Core tag marking one solid cell content item.
+pub const CORE_TAG_CELL_SOLID: &str = "flux.core.tag.cell.solid";
+/// Core tag marking one boundary cell content item.
+pub const CORE_TAG_CELL_BOUNDARY: &str = "flux.core.tag.cell.boundary";
+/// Core tag marking one pipe structure content item.
+pub const CORE_TAG_STRUCTURE_PIPE: &str = "flux.core.tag.structure.pipe";
+/// Core tag marking one vent structure content item.
+pub const CORE_TAG_STRUCTURE_VENT: &str = "flux.core.tag.structure.vent";
+/// Core tag marking one bridge structure content item.
+pub const CORE_TAG_STRUCTURE_PIPE_BRIDGE: &str = "flux.core.tag.structure.pipe_bridge";
+/// Core tag marking one gas-source structure content item.
+pub const CORE_TAG_STRUCTURE_GAS_SOURCE: &str = "flux.core.tag.structure.gas_source";
+/// Core tag marking one gas-sink structure content item.
+pub const CORE_TAG_STRUCTURE_GAS_SINK: &str = "flux.core.tag.structure.gas_sink";
+
 /// Canonical identifier of one gameplay content item registered by a plugin.
 ///
 /// # Fields
@@ -56,6 +71,21 @@ pub struct SpriteMetadata {
     pub overlay_path: Option<String>,
 }
 
+/// Describes one registered entity category for the construction UI.
+///
+/// # Fields
+/// - `id`: Stable category id.
+/// - `plugin_id`: Plugin that owns this category.
+/// - `label`: Human-readable category title shown in toolbar/panels.
+/// - `icon_path`: Relative asset path to the category icon.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntityCategoryDescriptor {
+    pub id: ContentId,
+    pub plugin_id: PluginId,
+    pub label: String,
+    pub icon_path: String,
+}
+
 /// Describes how legacy save/runtime state still stores one content item.
 ///
 /// # Variants
@@ -79,6 +109,7 @@ pub enum LegacyStorageDescriptor {
 /// - `visual`: Visual placement metadata used by world rendering and UI.
 /// - `layer_descriptor`: Layer occupancy descriptor used for collision and rendering.
 /// - `sprite`: Sprite metadata used to render the material in the world and tool UI.
+/// - `category_id`: Optional registered entity category id used by construction UI.
 /// - `storage`: Legacy storage mapping used for save compatibility.
 /// - `tags`: Public render/content tags used by overlay selectors.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -90,6 +121,7 @@ pub struct CellContentDescriptor {
     pub visual: VisualPlacementConfig,
     pub layer_descriptor: StructureDescriptor,
     pub sprite: SpriteMetadata,
+    pub category_id: Option<ContentId>,
     pub storage: LegacyStorageDescriptor,
     pub tags: Vec<flux_plugin_sdk::ContentTag>,
 }
@@ -105,6 +137,7 @@ pub struct CellContentDescriptor {
 /// - `layer_descriptors`: Layer descriptors keyed by supported rotation.
 /// - `allowed_rotations`: Rotations that the structure may be placed with.
 /// - `sprite`: Sprite metadata used to render the structure in the world and tool UI.
+/// - `category_id`: Optional registered entity category id used by construction UI.
 /// - `hud`: HUD block configuration used when hovering this structure.
 /// - `storage`: Legacy storage mapping used for save compatibility.
 /// - `tags`: Public render/content tags used by overlay selectors.
@@ -118,6 +151,7 @@ pub struct StructureContentDescriptor {
     pub layer_descriptors: BTreeMap<StructureRotation, StructureDescriptor>,
     pub allowed_rotations: Vec<StructureRotation>,
     pub sprite: SpriteMetadata,
+    pub category_id: Option<ContentId>,
     pub hud: HudBlockConfig,
     pub storage: LegacyStorageDescriptor,
     pub tags: Vec<flux_plugin_sdk::ContentTag>,
@@ -156,6 +190,7 @@ pub struct OverlayContentDescriptor {
 ///
 /// # Fields
 /// - `provider_plugins`: Set of plugin ids that contribute gameplay content.
+/// - `entity_categories`: Registered entity categories keyed by stable category id.
 /// - `cells`: Registered cell descriptors keyed by stable content id.
 /// - `structures`: Registered structure descriptors keyed by stable content id.
 /// - `overlays`: Registered overlay descriptors keyed by stable content id.
@@ -164,6 +199,7 @@ pub struct OverlayContentDescriptor {
 #[derive(Resource, Clone, Debug, Default)]
 pub struct ContentRegistry {
     provider_plugins: BTreeSet<PluginId>,
+    entity_categories: BTreeMap<ContentId, EntityCategoryDescriptor>,
     cells: BTreeMap<ContentId, CellContentDescriptor>,
     structures: BTreeMap<ContentId, StructureContentDescriptor>,
     overlays: BTreeMap<ContentId, OverlayContentDescriptor>,
@@ -176,6 +212,13 @@ impl ContentRegistry {
     ///
     pub fn register_provider_plugin(&mut self, plugin_id: PluginId) {
         self.provider_plugins.insert(plugin_id);
+    }
+
+    /// Registers one entity category descriptor.
+    ///
+    pub fn register_entity_category(&mut self, descriptor: EntityCategoryDescriptor) {
+        self.entity_categories
+            .insert(descriptor.id.clone(), descriptor);
     }
 
     /// Registers one cell material descriptor.
@@ -212,6 +255,18 @@ impl ContentRegistry {
     ///
     pub fn provider_plugins(&self) -> &BTreeSet<PluginId> {
         &self.provider_plugins
+    }
+
+    /// Returns every registered entity category by stable category id.
+    ///
+    pub fn entity_categories(&self) -> &BTreeMap<ContentId, EntityCategoryDescriptor> {
+        &self.entity_categories
+    }
+
+    /// Returns one registered entity category by stable category id.
+    ///
+    pub fn entity_category(&self, id: &ContentId) -> Option<&EntityCategoryDescriptor> {
+        self.entity_categories.get(id)
     }
 
     /// Returns every registered cell descriptor by stable content id.
@@ -252,12 +307,32 @@ impl ContentRegistry {
             .find(|descriptor| descriptor.material == material)
     }
 
+    /// Finds the first registered cell descriptor that has one requested core/plugin tag.
+    pub fn cell_by_tag(&self, raw_tag: &str) -> Option<&CellContentDescriptor> {
+        let Ok(tag) = flux_plugin_sdk::ContentTag::parse(raw_tag) else {
+            return None;
+        };
+        self.cells
+            .values()
+            .find(|descriptor| descriptor.tags.iter().any(|candidate| candidate == &tag))
+    }
+
     /// Finds a registered structure descriptor by the legacy runtime kind.
     ///
     pub fn structure_by_kind(&self, kind: StructureKind) -> Option<&StructureContentDescriptor> {
         self.structures
             .values()
             .find(|descriptor| descriptor.kind == kind)
+    }
+
+    /// Finds the first registered structure descriptor that has one requested core/plugin tag.
+    pub fn structure_by_tag(&self, raw_tag: &str) -> Option<&StructureContentDescriptor> {
+        let Ok(tag) = flux_plugin_sdk::ContentTag::parse(raw_tag) else {
+            return None;
+        };
+        self.structures
+            .values()
+            .find(|descriptor| descriptor.tags.iter().any(|candidate| candidate == &tag))
     }
 
     /// Finds a registered overlay descriptor by the legacy runtime mode.

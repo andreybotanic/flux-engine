@@ -1,6 +1,6 @@
 ﻿# Overlay graph pipeline
 
-В SDK v5 plugin-controlled overlay рендерится только через declarative graph.
+В SDK v6 plugin-controlled overlay рендерится только через declarative graph.
 
 ## Как это работает
 

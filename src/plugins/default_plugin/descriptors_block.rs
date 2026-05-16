@@ -5,6 +5,7 @@ fn cell_descriptor_for(
     label: &str,
     image_path: &str,
     silhouette_path: Option<&str>,
+    category_id: Option<&str>,
     storage_code: u8,
 ) -> CellContentDescriptor {
     CellContentDescriptor {
@@ -19,6 +20,7 @@ fn cell_descriptor_for(
         },
         layer_descriptor: cell_layers(material),
         sprite: sprite(image_path, silhouette_path, None),
+        category_id: category_id.map(content_id),
         storage: LegacyStorageDescriptor::WorldCellCode(storage_code),
         tags: cell_tags(material),
     }
@@ -35,6 +37,7 @@ fn structure_descriptor_for(
     silhouette_path: Option<&str>,
     overlay_path: Option<&str>,
     allowed_rotations: Vec<StructureRotation>,
+    category_id: Option<&str>,
     hud: HudBlockConfig,
     storage_kind: &'static str,
 ) -> StructureContentDescriptor {
@@ -51,6 +54,7 @@ fn structure_descriptor_for(
         layer_descriptors: structure_layers_by_rotation(kind),
         allowed_rotations,
         sprite: sprite(image_path, silhouette_path, overlay_path),
+        category_id: category_id.map(content_id),
         hud,
         storage: LegacyStorageDescriptor::PlacedStructureKind(storage_kind),
         tags: structure_tags(kind),
@@ -82,9 +86,13 @@ fn content_tag(raw: &str) -> flux_plugin_sdk::ContentTag {
 }
 
 fn cell_tags(material: CellMaterial) -> Vec<flux_plugin_sdk::ContentTag> {
-    let mut tags = vec![content_tag("flux.default.tag.solid")];
+    let mut tags = vec![
+        content_tag("flux.default.tag.solid"),
+        content_tag(crate::plugins::content::CORE_TAG_CELL_SOLID),
+    ];
     if material == boundary_cell_material() {
         tags.push(content_tag("flux.default.tag.boundary"));
+        tags.push(content_tag(crate::plugins::content::CORE_TAG_CELL_BOUNDARY));
     }
     tags
 }
@@ -94,19 +102,28 @@ fn structure_tags(kind: StructureKind) -> Vec<flux_plugin_sdk::ContentTag> {
         ENTITY_PIPE_ID => vec![
             content_tag("flux.default.tag.pipe-network"),
             content_tag("flux.default.tag.pipe"),
+            content_tag(crate::plugins::content::CORE_TAG_STRUCTURE_PIPE),
         ],
         ENTITY_VENT_ID => vec![
             content_tag("flux.default.tag.pipe-network"),
             content_tag("flux.default.tag.pipe-port"),
             content_tag("flux.default.tag.vent"),
+            content_tag(crate::plugins::content::CORE_TAG_STRUCTURE_VENT),
         ],
         ENTITY_GAS_PIPE_BRIDGE_ID => vec![
             content_tag("flux.default.tag.pipe-network"),
             content_tag("flux.default.tag.pipe-bridge"),
             content_tag("flux.default.tag.pipe-port"),
+            content_tag(crate::plugins::content::CORE_TAG_STRUCTURE_PIPE_BRIDGE),
         ],
-        ENTITY_GAS_SOURCE_ID => vec![content_tag("flux.default.tag.gas-source")],
-        ENTITY_GAS_SINK_ID => vec![content_tag("flux.default.tag.gas-sink")],
+        ENTITY_GAS_SOURCE_ID => vec![
+            content_tag("flux.default.tag.gas-source"),
+            content_tag(crate::plugins::content::CORE_TAG_STRUCTURE_GAS_SOURCE),
+        ],
+        ENTITY_GAS_SINK_ID => vec![
+            content_tag("flux.default.tag.gas-sink"),
+            content_tag(crate::plugins::content::CORE_TAG_STRUCTURE_GAS_SINK),
+        ],
         _ => Vec::new(),
     }
 }

@@ -17,8 +17,9 @@ use crate::{
     },
     plugins::{
         content::{
-            CellContentDescriptor, ContentId, ContentRegistry, LegacyStorageDescriptor,
-            OverlayContentDescriptor, SpriteMetadata, StructureContentDescriptor,
+            CellContentDescriptor, ContentId, ContentRegistry, EntityCategoryDescriptor,
+            LegacyStorageDescriptor, OverlayContentDescriptor, SpriteMetadata,
+            StructureContentDescriptor,
         },
         PluginId, SubstanceDefinition, SubstanceId,
     },
@@ -26,8 +27,8 @@ use crate::{
     world::{
         grid::CellMaterial,
         structures::{
-            LayerCellSpec, LayerCollisionKind, LayerMarkerKind, StructureDescriptor, StructureKind,
-            StructureLayer, StructureRotation, APPEARANCE_LAYER,
+            LayerCellSpec, LayerCollisionKind, LayerMarkerKind, PackedState, StructureDescriptor,
+            StructureKind, StructureLayer, StructureRotation, APPEARANCE_LAYER,
         },
     },
 };
@@ -68,6 +69,9 @@ pub fn default_content_registry() -> ContentRegistry {
 /// Registers the default plugin provider and all built-in content descriptors.
 pub fn register_default_content(registry: &mut ContentRegistry) {
     registry.register_provider_plugin(PluginId::default_plugin());
+    for descriptor in default_entity_category_descriptors() {
+        registry.register_entity_category(descriptor);
+    }
     registry.set_world_cell_hud(default_world_cell_hud());
     for descriptor in default_cell_descriptors() {
         registry.register_cell(descriptor);
@@ -81,6 +85,34 @@ pub fn register_default_content(registry: &mut ContentRegistry) {
     for definition in default_substance_definitions() {
         registry.register_substance(definition);
     }
+}
+
+/// Returns every entity category descriptor registered by `flux.default`.
+pub fn default_entity_category_descriptors() -> Vec<EntityCategoryDescriptor> {
+    vec![
+        EntityCategoryDescriptor {
+            id: content_id(CATEGORY_CELLS_ID),
+            plugin_id: PluginId::default_plugin(),
+            label: "Cells".to_string(),
+            icon_path: "sprites/ui/tool_build.ktx2".to_string(),
+        },
+        EntityCategoryDescriptor {
+            id: content_id(CATEGORY_GASES_ID),
+            plugin_id: PluginId::default_plugin(),
+            label: "Gases".to_string(),
+            icon_path: "sprites/ui/tool_gases.ktx2".to_string(),
+        },
+    ]
+}
+
+/// Returns the stable category id for the default `Cells` category.
+pub fn cells_category_content_id() -> ContentId {
+    content_id(CATEGORY_CELLS_ID)
+}
+
+/// Returns the stable category id for the default `Gases` category.
+pub fn gases_category_content_id() -> ContentId {
+    content_id(CATEGORY_GASES_ID)
 }
 
 /// Returns every built-in gas substance definition registered by `flux.default`.
@@ -123,13 +155,14 @@ pub fn default_world_cell_hud() -> WorldCellHudConfig {
 
 /// Returns every cell material descriptor registered by `flux.default`.
 pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
-    vec![
+    let mut descriptors = vec![
         cell_descriptor_for(
             CELL_BOUNDARY_ID,
             boundary_cell_material(),
             "boundary.toml",
             "Boundary",
             "flux_default://world/tile_boundary.ktx2",
+            None,
             None,
             1,
         ),
@@ -140,6 +173,7 @@ pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
             "Brick",
             "flux_default://world/tile_brick.ktx2",
             Some("flux_default://world/silhouette_brick.ktx2"),
+            Some(CATEGORY_CELLS_ID),
             2,
         ),
         cell_descriptor_for(
@@ -149,9 +183,59 @@ pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
             "Metal",
             "flux_default://world/tile_metal.ktx2",
             Some("flux_default://world/silhouette_metal.ktx2"),
+            Some(CATEGORY_CELLS_ID),
             3,
         ),
-    ]
+    ];
+
+    let extra_cells = [
+        (CELL_BRICK_01_ID, "Brick Alpha", true),
+        (CELL_BRICK_02_ID, "Brick Beta", true),
+        (CELL_BRICK_03_ID, "Brick Gamma", true),
+        (CELL_BRICK_04_ID, "Brick Delta", true),
+        (CELL_BRICK_05_ID, "Brick Epsilon", true),
+        (CELL_BRICK_06_ID, "Brick Zeta", true),
+        (CELL_BRICK_07_ID, "Brick Eta", true),
+        (CELL_BRICK_08_ID, "Brick Theta", true),
+        (CELL_BRICK_09_ID, "Brick Iota", true),
+        (CELL_BRICK_10_ID, "Brick Kappa", true),
+        (CELL_METAL_01_ID, "Metal Alpha", false),
+        (CELL_METAL_02_ID, "Metal Beta", false),
+        (CELL_METAL_03_ID, "Metal Gamma", false),
+        (CELL_METAL_04_ID, "Metal Delta", false),
+        (CELL_METAL_05_ID, "Metal Epsilon", false),
+        (CELL_METAL_06_ID, "Metal Zeta", false),
+        (CELL_METAL_07_ID, "Metal Eta", false),
+        (CELL_METAL_08_ID, "Metal Theta", false),
+        (CELL_METAL_09_ID, "Metal Iota", false),
+        (CELL_METAL_10_ID, "Metal Kappa", false),
+    ];
+    for (index, (id, label, is_brick)) in extra_cells.iter().enumerate() {
+        let (config_file, image, silhouette) = if *is_brick {
+            (
+                "brick.toml",
+                "flux_default://world/tile_brick.ktx2",
+                Some("flux_default://world/silhouette_brick.ktx2"),
+            )
+        } else {
+            (
+                "metal.toml",
+                "flux_default://world/tile_metal.ktx2",
+                Some("flux_default://world/silhouette_metal.ktx2"),
+            )
+        };
+        descriptors.push(cell_descriptor_for(
+            id,
+            CellMaterial::new(id),
+            config_file,
+            label,
+            image,
+            silhouette,
+            Some(CATEGORY_CELLS_ID),
+            (4 + index) as u8,
+        ));
+    }
+    descriptors
 }
 
 /// Returns every structure descriptor registered by `flux.default`.
@@ -168,6 +252,7 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             Some("flux_default://world/pipe_silhouette_mask_00.ktx2"),
             None,
             vec![StructureRotation::Deg0],
+            Some(CATEGORY_GASES_ID),
             pipe_hud_block(),
             "Pipe",
         ),
@@ -182,6 +267,7 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             Some("flux_default://world/silhouette_vent.ktx2"),
             Some("flux_default://world/gas_in_out.ktx2"),
             vec![StructureRotation::Deg0],
+            Some(CATEGORY_GASES_ID),
             title_only_hud_block(30),
             "Vent",
         ),
@@ -196,6 +282,7 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             Some("flux_default://world/tile_gas_source.ktx2"),
             None,
             vec![StructureRotation::Deg0],
+            None,
             title_only_hud_block(40),
             "GasSource",
         ),
@@ -210,6 +297,7 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             Some("flux_default://world/tile_gas_sink.ktx2"),
             None,
             vec![StructureRotation::Deg0],
+            None,
             title_only_hud_block(50),
             "GasSink",
         ),
@@ -224,6 +312,7 @@ pub fn default_structure_descriptors() -> Vec<StructureContentDescriptor> {
             Some("flux_default://world/bridge_silhouette.ktx2"),
             Some("flux_default://world/gas_in_out.ktx2"),
             vec![StructureRotation::Deg0, StructureRotation::Deg90],
+            Some(CATEGORY_GASES_ID),
             bridge_hud_block(),
             "GasPipeBridge",
         ),
@@ -250,7 +339,9 @@ pub fn cell_material_from_content_id(id: &ContentId) -> Option<CellMaterial> {
         CELL_BOUNDARY_ID => Some(boundary_cell_material()),
         CELL_BRICK_ID => Some(brick_cell_material()),
         CELL_METAL_ID => Some(metal_cell_material()),
-        _ => None,
+        _ => extra_cell_materials()
+            .into_iter()
+            .find(|material| material.as_str() == id.as_str()),
     }
 }
 
@@ -336,6 +427,9 @@ pub fn structure_layer_descriptor(
 
 /// Returns the label registered for a legacy cell material.
 pub fn cell_label(material: CellMaterial) -> &'static str {
+    if let Some(extra_label) = extra_cell_label(material) {
+        return extra_label;
+    }
     match material.as_str() {
         CELL_BOUNDARY_ID => "Boundary",
         CELL_BRICK_ID => "Brick",
@@ -358,29 +452,41 @@ pub fn structure_label(kind: StructureKind) -> &'static str {
 
 /// Returns the sprite path registered for a legacy cell material.
 pub fn cell_sprite_path(material: CellMaterial) -> &'static str {
+    if is_brick_family_cell(material) {
+        return "flux_default://world/tile_brick.ktx2";
+    }
+    if is_metal_family_cell(material) {
+        return "flux_default://world/tile_metal.ktx2";
+    }
     match material.as_str() {
         CELL_BOUNDARY_ID => "flux_default://world/tile_boundary.ktx2",
-        CELL_BRICK_ID => "flux_default://world/tile_brick.ktx2",
-        CELL_METAL_ID => "flux_default://world/tile_metal.ktx2",
         _ => "flux_default://world/tile_brick.ktx2",
     }
 }
 
 /// Returns the silhouette sprite path registered for a legacy cell material.
 pub fn cell_silhouette_path(material: CellMaterial) -> Option<&'static str> {
+    if is_brick_family_cell(material) {
+        return Some("flux_default://world/silhouette_brick.ktx2");
+    }
+    if is_metal_family_cell(material) {
+        return Some("flux_default://world/silhouette_metal.ktx2");
+    }
     match material.as_str() {
         CELL_BOUNDARY_ID => None,
-        CELL_BRICK_ID => Some("flux_default://world/silhouette_brick.ktx2"),
-        CELL_METAL_ID => Some("flux_default://world/silhouette_metal.ktx2"),
         _ => None,
     }
 }
 
 /// Returns the UI tool icon path registered for a legacy cell material.
 pub fn cell_tool_icon_path(material: CellMaterial) -> &'static str {
+    if is_brick_family_cell(material) {
+        return "flux_default://ui/tool_brick.ktx2";
+    }
+    if is_metal_family_cell(material) {
+        return "flux_default://ui/tool_metal.ktx2";
+    }
     match material.as_str() {
-        CELL_BRICK_ID => "flux_default://ui/tool_brick.ktx2",
-        CELL_METAL_ID => "flux_default://ui/tool_metal.ktx2",
         _ => "flux_default://ui/tool_brick.ktx2",
     }
 }
@@ -449,8 +555,31 @@ pub fn legacy_cell_kind_code(cell: crate::world::grid::CellKind) -> Option<u8> {
         crate::world::grid::CellKind::Solid(material) if material == metal_cell_material() => {
             Some(3)
         }
-        crate::world::grid::CellKind::Solid(_) => None,
+        crate::world::grid::CellKind::Solid(material) => extra_cell_materials()
+            .iter()
+            .position(|candidate| *candidate == material)
+            .map(|index| (4 + index) as u8),
     }
+}
+
+/// Returns the primary sprite path for a concrete structure packed state.
+pub fn structure_state_sprite_path(kind: StructureKind, state: PackedState) -> String {
+    if is_pipe_structure(kind) {
+        let mask = (state.value() & 0b1111) as u8;
+        return pipe_mask_sprite_path(mask);
+    }
+    structure_sprite_path(kind).to_string()
+}
+
+/// Returns the sprite transform for a concrete structure packed state.
+pub fn structure_state_sprite_transform(
+    kind: StructureKind,
+    state: PackedState,
+) -> flux_plugin_sdk::EntitySpriteTransform {
+    if is_gas_pipe_bridge_structure(kind) && (state.value() & 1) == 1 {
+        return flux_plugin_sdk::EntitySpriteTransform::Rot90;
+    }
+    flux_plugin_sdk::EntitySpriteTransform::None
 }
 
 /// Decodes one legacy numeric world-cell code.
@@ -460,8 +589,74 @@ pub fn legacy_cell_kind_from_code(code: u8) -> Option<crate::world::grid::CellKi
         1 => Some(crate::world::grid::CellKind::Solid(boundary_cell_material())),
         2 => Some(crate::world::grid::CellKind::Solid(brick_cell_material())),
         3 => Some(crate::world::grid::CellKind::Solid(metal_cell_material())),
-        _ => None,
+        _ => extra_cell_materials()
+            .get(code.saturating_sub(4) as usize)
+            .copied()
+            .map(crate::world::grid::CellKind::Solid),
     }
+}
+
+fn extra_cell_label(material: CellMaterial) -> Option<&'static str> {
+    const EXTRA_LABELS: [&str; 20] = [
+        "Brick Alpha",
+        "Brick Beta",
+        "Brick Gamma",
+        "Brick Delta",
+        "Brick Epsilon",
+        "Brick Zeta",
+        "Brick Eta",
+        "Brick Theta",
+        "Brick Iota",
+        "Brick Kappa",
+        "Metal Alpha",
+        "Metal Beta",
+        "Metal Gamma",
+        "Metal Delta",
+        "Metal Epsilon",
+        "Metal Zeta",
+        "Metal Eta",
+        "Metal Theta",
+        "Metal Iota",
+        "Metal Kappa",
+    ];
+    let index = extra_cell_materials()
+        .iter()
+        .position(|candidate| *candidate == material)?;
+    EXTRA_LABELS.get(index).copied()
+}
+
+fn is_brick_family_cell(material: CellMaterial) -> bool {
+    material == brick_cell_material()
+        || matches!(
+            material.as_str(),
+            CELL_BRICK_01_ID
+                | CELL_BRICK_02_ID
+                | CELL_BRICK_03_ID
+                | CELL_BRICK_04_ID
+                | CELL_BRICK_05_ID
+                | CELL_BRICK_06_ID
+                | CELL_BRICK_07_ID
+                | CELL_BRICK_08_ID
+                | CELL_BRICK_09_ID
+                | CELL_BRICK_10_ID
+        )
+}
+
+fn is_metal_family_cell(material: CellMaterial) -> bool {
+    material == metal_cell_material()
+        || matches!(
+            material.as_str(),
+            CELL_METAL_01_ID
+                | CELL_METAL_02_ID
+                | CELL_METAL_03_ID
+                | CELL_METAL_04_ID
+                | CELL_METAL_05_ID
+                | CELL_METAL_06_ID
+                | CELL_METAL_07_ID
+                | CELL_METAL_08_ID
+                | CELL_METAL_09_ID
+                | CELL_METAL_10_ID
+        )
 }
 
 /// Encodes one default plugin structure kind using the legacy numeric save code.

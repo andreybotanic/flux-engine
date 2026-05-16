@@ -1,8 +1,21 @@
 ﻿# Changelog
 
 ## 2026-05-16
+- Введена типизированная модель категорий сущностей (`EntityCategoryDescriptor`, `EntityCategoryRef`) и двухфазная глобальная регистрация контента: сначала категории всех enabled plugins, затем их контент.
+- Порядок bootstrap регистрации плагинов изменён: category id теперь глобально уникальны, конфликт id приводит к fail bootstrap с диагностикой, а ссылки сущностей на неизвестные категории отклоняются.
+- ABI/SDK обновлены до версии `v7`: `FluxEntityDescriptor` получил `default_state + states[]`, `PackedState` передаётся как raw `u16`, обновлены engine/plugin manifests.
+- Основной editor-toolbar переведён на динамические категории (`Cells`, `Gases`, plugin categories) в рамках инструмента `Construct`; панели вариантов открываются по активной категории и поддерживают close/reopen поведение.
+- Default plugin расширен дополнительными 20 cell-сущностями (`Brick*`/`Metal*`) с уникальными именами для проверки scroll/масштабирования category-panel.
 - На main-toolbar увеличен размер иконок инструментов `Build/Gases` до `32px` при размере кнопки `48px`.
 - В панели вариантов инструмента `Build` иконки материалов переведены с силуэтных превью на обычные спрайты клеток.
+- Исправлен выбор world-спрайта для дополнительных `Cells`: рендер стен теперь берёт спрайт по `ContentRegistry` материалу, поэтому `Metal*` больше не отображаются как `Brick`; предпросмотр силуэта под курсором синхронизирован с material-family.
+- Введены core role-теги контента (`flux.core.tag.*`) для cell/structure ролей (`boundary`, `pipe`, `vent`, `pipe_bridge`, `gas_source`, `gas_sink`); `ContentRegistry` получил lookup по тегу (`cell_by_tag`, `structure_by_tag`), а world/editor-рендер начал использовать зарегистрированные дескрипторы вместо прямого выбора `metal/brick` по hardcoded id.
+- `PlacedStructure` переведён на `entity + PackedState(u16)`: pipe-структуры хранят mask-state `0..15`, bridge хранит orientation-state `0/1`; state сериализуется в save chunk.
+- Удалён дублирующий legacy world-render для `pipe/vent/bridge`: world-спрайт теперь рисуется одним общим путём `state -> sprite(+transform)` без второй спец-ветки.
+- Save schema повышена до `7`, `placed_structures` chunk повышен до `v3`; старые сейвы без `PackedState` считаются несовместимыми и не мигрируются.
+- Исправлен трекинг world-визуалов структур: `GasStructureEntities` теперь индексируется по `PlacedStructureId`, поэтому при совпадении origin (например, `pipe + vent` в одной клетке) старые спрайты не «осиротевают», не дублируются и корректно удаляются вместе со структурой.
+- Исправлено чтение списка сейвов: повреждённый или частично записанный `meta.toml` в одном слоте больше не ломает весь список, такие слоты пропускаются, а валидные продолжают отображаться.
+- Исправлено удаление моста/вентиляции поверх труб: удаление не затрагивает `pipe_cuts` (разрывы `Scissors`) для обычных труб, поэтому состояние соседних труб больше не меняется «случайно».
 
 ## 2026-05-15
 - Полностью переработан основной toolbar editor: оставлены только `Build/Gases`, увеличены размеры кнопок/иконок (`+20%`), удвоен межкнопочный gap и убран фон панели (видны только кнопки).
@@ -382,3 +395,4 @@
 - Pipe runtime: component relay is now normalized by the actual pressure head between vents, so low head no longer keeps the whole pipe artificially saturated while long high-head runs still carry pressure across distance.
 - Pipe runtime: synchronized inlet relay now propagates free-space requests backward through already filled pipe segments, so a filled chain can shift forward in one tick and the inlet vent can refill the first segment immediately after it frees capacity.
 - Pipe runtime/render: multi-vent components now keep sustained flow from component-level head instead of stalling on local vent-cell equalization, and moving pipe packets were reduced by 20% relative to the previous maximum size.
+

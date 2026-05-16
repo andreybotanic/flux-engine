@@ -899,12 +899,8 @@ unsafe fn read_abi_utf8(slice: FluxUtf8Slice) -> Result<String, ()> {
 }
 
 fn cell_material_for_entity_kind(kind_id: &str) -> Option<CellMaterial> {
-    match kind_id {
-        default_plugin::CELL_BRICK_ID => Some(default_plugin::brick_cell_material()),
-        default_plugin::CELL_METAL_ID => Some(default_plugin::metal_cell_material()),
-        default_plugin::CELL_BOUNDARY_ID => Some(default_plugin::boundary_cell_material()),
-        _ => None,
-    }
+    let content_id = ContentId::parse(kind_id).ok()?;
+    default_plugin::cell_material_from_content_id(&content_id)
 }
 
 fn decode_rotation(raw: u32) -> StructureRotation {
@@ -927,8 +923,11 @@ fn encode_speed(speed: SimulationSpeed) -> u32 {
 fn editor_tool_from_id(tool_id: &str) -> Option<EditorTool> {
     Some(match tool_id {
         "" => return None,
-        "flux.core.tool.build_solid" => EditorTool::BuildSolid,
-        "flux.default.tool.gases" => EditorTool::Gases,
+        "flux.core.tool.construct"
+        | "flux.core.tool.build_solid"
+        | "flux.default.tool.gases"
+        | default_plugin::CATEGORY_CELLS_ID
+        | default_plugin::CATEGORY_GASES_ID => EditorTool::Construct,
         "flux.core.tool.erase_solid" => EditorTool::EraseSolid,
         "flux.default.tool.scissors" => EditorTool::Scissors,
         "flux.core.tool.add_gas" => EditorTool::AddGas,

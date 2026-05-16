@@ -234,6 +234,7 @@ fn build_runtime_registries(
     let mut loaded_plugins = vec![default_loaded_plugin()];
     let mut content_registry = default_content_registry();
     let mut entries = vec![default_registry_entry()];
+    let mut pending_loaded_plugins = Vec::new();
 
     let mut plugin_ids = BTreeSet::new();
     plugin_ids.extend(source_groups.keys().cloned());
@@ -248,7 +249,7 @@ fn build_runtime_registries(
         let is_enabled = enabled_set.is_enabled(&plugin_id);
         let mut loaded_plugin = None;
 
-        let mut registry_entry = match selected_kind {
+        let registry_entry = match selected_kind {
             Some(PluginSourceKind::Packaged) => {
                 if let Some(source) = source_group.packaged {
                     if is_enabled {
@@ -280,19 +281,40 @@ fn build_runtime_registries(
         };
 
         if let Some(loaded) = loaded_plugin {
-            match register_loaded_plugin_content(&mut content_registry, &loaded) {
-                Ok(()) => loaded_plugins.push(loaded),
-                Err(error) => {
-                    registry_entry.status = PluginRuntimeStatus::Error;
-                    registry_entry.error_message = Some(error);
-                }
-            }
+            pending_loaded_plugins.push(loaded);
         }
         entries.push(registry_entry);
     }
 
     for rejected in anonymous_rejections {
         entries.push(anonymous_rejected_registry_entry(rejected));
+    }
+
+    let mut category_phase_loaded = Vec::new();
+    for loaded in pending_loaded_plugins {
+        match register_loaded_plugin_categories(&mut content_registry, &loaded) {
+            Ok(()) => category_phase_loaded.push(loaded),
+            Err(error) => {
+                if let Some(entry) = registry_entry_for_plugin_mut(&mut entries, &loaded.plugin_id)
+                {
+                    entry.status = PluginRuntimeStatus::Error;
+                    entry.error_message = Some(error);
+                }
+            }
+        }
+    }
+
+    for loaded in category_phase_loaded {
+        match register_loaded_plugin_content(&mut content_registry, &loaded) {
+            Ok(()) => loaded_plugins.push(loaded),
+            Err(error) => {
+                if let Some(entry) = registry_entry_for_plugin_mut(&mut entries, &loaded.plugin_id)
+                {
+                    entry.status = PluginRuntimeStatus::Error;
+                    entry.error_message = Some(error);
+                }
+            }
+        }
     }
 
     loaded_plugins.sort_by(loaded_plugin_sort_key);
@@ -304,6 +326,15 @@ fn build_runtime_registries(
         content_registry,
         registry_state,
     )
+}
+
+fn registry_entry_for_plugin_mut<'a>(
+    entries: &'a mut [PluginRegistryEntry],
+    plugin_id: &PluginId,
+) -> Option<&'a mut PluginRegistryEntry> {
+    entries
+        .iter_mut()
+        .find(|entry| entry.plugin_id.as_ref() == Some(plugin_id))
 }
 
 fn select_source_kind(
@@ -510,12 +541,86 @@ fn loaded_metadata_from_source(
     }
 }
 
+fn register_loaded_plugin_categories(
+    content_registry: &mut ContentRegistry,
+    loaded: &LoadedPluginMetadata,
+) -> Result<(), String> {
+    if !loaded.content {
+        return Ok(());
+    }
+
+    for category in &loaded.registration.entity_categories {
+        if let Some(existing) = content_registry.entity_category(&category.id) {
+            return Err(format!(
+                "plugin '{}' category '{}' conflicts with already registered category from plugin '{}'",
+                loaded.plugin_id, category.id, existing.plugin_id
+            ));
+        }
+        content_registry.register_entity_category(crate::plugins::EntityCategoryDescriptor {
+            id: category.id.clone(),
+            plugin_id: loaded.plugin_id.clone(),
+            label: category.label.clone(),
+            icon_path: category.icon_path.clone(),
+        });
+    }
+    Ok(())
+}
+
 fn register_loaded_plugin_content(
     content_registry: &mut ContentRegistry,
     loaded: &LoadedPluginMetadata,
 ) -> Result<(), String> {
     if !loaded.content {
         return Ok(());
+    }
+
+    for entity in &loaded.registration.entities {
+        if entity.states.is_empty() {
+            return Err(format!(
+                "plugin '{}' entity '{}' has no states; at least one state is required",
+                loaded.plugin_id, entity.id
+            ));
+        }
+        let mut seen_states = std::collections::BTreeSet::new();
+        for state in &entity.states {
+            if state.sprite_path.trim().is_empty() {
+                return Err(format!(
+                    "plugin '{}' entity '{}' has one state with empty sprite path",
+                    loaded.plugin_id, entity.id
+                ));
+            }
+            if !seen_states.insert(state.state.value()) {
+                return Err(format!(
+                    "plugin '{}' entity '{}' has duplicate state {}",
+                    loaded.plugin_id,
+                    entity.id,
+                    state.state.value()
+                ));
+            }
+        }
+        if !seen_states.contains(&entity.default_state.value()) {
+            return Err(format!(
+                "plugin '{}' entity '{}' default_state {} is missing in states table",
+                loaded.plugin_id,
+                entity.id,
+                entity.default_state.value()
+            ));
+        }
+        if let Some(category) = &entity.category {
+            let category_id =
+                crate::plugins::ContentId::parse(category.id().as_str()).map_err(|error| {
+                    format!(
+                        "plugin '{}' entity '{}' has invalid category id: {}",
+                        loaded.plugin_id, entity.id, error
+                    )
+                })?;
+            if content_registry.entity_category(&category_id).is_none() {
+                return Err(format!(
+                    "plugin '{}' entity '{}' references unknown category '{}'",
+                    loaded.plugin_id, entity.id, category_id
+                ));
+            }
+        }
     }
 
     let mut next_substances = content_registry
@@ -620,9 +725,15 @@ mod tests {
     use zip::{write::SimpleFileOptions, ZipWriter};
 
     use crate::plugins::{
-        registry::{bootstrap_plugin_registry, PluginBootstrapConfig},
+        api::ui_api::EntityCategoryDescriptor,
+        registration::PluginRuntimeRegistration,
+        registry::{
+            bootstrap_plugin_registry, register_loaded_plugin_categories,
+            register_loaded_plugin_content, PluginBootstrapConfig,
+        },
+        source::PluginSourceKind,
         state::PluginRuntimeStatus,
-        PluginId,
+        LoadedPluginMetadata, PluginId, PluginVersion,
     };
 
     fn make_temp_root(prefix: &str) -> PathBuf {
@@ -792,12 +903,13 @@ mod tests {
             r#"id = "{plugin_id}"
 display_name = "Duplicate Test"
 version = "1.0.0"
-api_version = 4
+api_version = {}
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"
 content = false
-"#
+"#,
+            crate::plugins::ENGINE_PLUGIN_API_VERSION_VALUE
         );
         writer
             .start_file("manifest.toml", options)
@@ -813,6 +925,24 @@ content = false
         dev_mode: bool,
     ) -> crate::plugins::registry::PluginBootstrapOutput {
         bootstrap_plugin_registry(&PluginBootstrapConfig::from_repo_root(root, dev_mode))
+    }
+
+    fn loaded_content_plugin(
+        plugin_id: &str,
+        registration: PluginRuntimeRegistration,
+    ) -> LoadedPluginMetadata {
+        LoadedPluginMetadata {
+            plugin_id: PluginId::parse(plugin_id).expect("valid plugin id"),
+            display_name: plugin_id.to_string(),
+            version: PluginVersion::parse("1.0.0").expect("version"),
+            source_kind: PluginSourceKind::Dev,
+            content: true,
+            locked: false,
+            source_name: plugin_id.to_string(),
+            source_path: None,
+            manifest: None,
+            registration,
+        }
     }
 
     #[test]
@@ -1015,6 +1145,180 @@ flux.sample_content = true
         );
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_registry_rejects_duplicate_category_id_across_plugins() {
+        let mut content_registry = crate::plugins::default_plugin::default_content_registry();
+        let category_id =
+            crate::plugins::ContentId::parse("flux.sample.category.shared").expect("category id");
+        let registration_a = PluginRuntimeRegistration {
+            entity_categories: vec![EntityCategoryDescriptor {
+                id: category_id.clone(),
+                label: "Shared".to_string(),
+                icon_path: "sprites/ui/tool_build.ktx2".to_string(),
+            }],
+            ..Default::default()
+        };
+        let registration_b = PluginRuntimeRegistration {
+            entity_categories: vec![EntityCategoryDescriptor {
+                id: category_id,
+                label: "Shared".to_string(),
+                icon_path: "sprites/ui/tool_gases.ktx2".to_string(),
+            }],
+            ..Default::default()
+        };
+        let plugin_a = loaded_content_plugin("flux.sample_a", registration_a);
+        let plugin_b = loaded_content_plugin("flux.sample_b", registration_b);
+
+        register_loaded_plugin_categories(&mut content_registry, &plugin_a)
+            .expect("first category registration");
+        let error = register_loaded_plugin_categories(&mut content_registry, &plugin_b)
+            .expect_err("duplicate category id must fail");
+        assert!(error.contains("conflicts"));
+    }
+
+    #[test]
+    fn plugin_registry_allows_content_to_use_category_from_other_plugin() {
+        let mut content_registry = crate::plugins::default_plugin::default_content_registry();
+        let category_id =
+            crate::plugins::ContentId::parse("flux.sample.category.shared").expect("category id");
+        let category_owner = loaded_content_plugin(
+            "flux.sample_owner",
+            PluginRuntimeRegistration {
+                entity_categories: vec![EntityCategoryDescriptor {
+                    id: category_id.clone(),
+                    label: "Shared".to_string(),
+                    icon_path: "sprites/ui/tool_build.ktx2".to_string(),
+                }],
+                ..Default::default()
+            },
+        );
+        let category_ref = flux_plugin_sdk::EntityCategoryRef::new(
+            flux_plugin_sdk::ContentId::parse(category_id.as_str()).expect("sdk category id"),
+        );
+        let content_user = loaded_content_plugin(
+            "flux.sample_user",
+            PluginRuntimeRegistration {
+                entities: vec![flux_plugin_sdk::EntityDescriptor {
+                    id: flux_plugin_sdk::ContentId::parse("flux.sample_user.entity.widget")
+                        .expect("entity id"),
+                    label: "Widget".to_string(),
+                    icon_path: "sprites/ui/tool_build.ktx2".to_string(),
+                    silhouette_path: None,
+                    default_state: flux_plugin_sdk::PackedState(0),
+                    states: vec![flux_plugin_sdk::EntityStateDescriptor {
+                        state: flux_plugin_sdk::PackedState(0),
+                        sprite_path: "sprites/world/widget_00.ktx2".to_string(),
+                        transform: flux_plugin_sdk::EntitySpriteTransform::None,
+                    }],
+                    category: Some(category_ref),
+                    tags: Vec::new(),
+                }],
+                ..Default::default()
+            },
+        );
+
+        register_loaded_plugin_categories(&mut content_registry, &category_owner)
+            .expect("owner categories");
+        register_loaded_plugin_categories(&mut content_registry, &content_user)
+            .expect("user categories");
+        register_loaded_plugin_content(&mut content_registry, &content_user)
+            .expect("category from another plugin must be visible");
+        assert!(content_registry
+            .provider_plugins()
+            .contains(&content_user.plugin_id));
+    }
+
+    #[test]
+    fn plugin_registry_rejects_unknown_entity_category_reference() {
+        let mut content_registry = crate::plugins::default_plugin::default_content_registry();
+        let unknown_ref = flux_plugin_sdk::EntityCategoryRef::new(
+            flux_plugin_sdk::ContentId::parse("flux.missing.category").expect("sdk category id"),
+        );
+        let plugin = loaded_content_plugin(
+            "flux.sample_unknown",
+            PluginRuntimeRegistration {
+                entities: vec![flux_plugin_sdk::EntityDescriptor {
+                    id: flux_plugin_sdk::ContentId::parse("flux.sample_unknown.entity.widget")
+                        .expect("entity id"),
+                    label: "Widget".to_string(),
+                    icon_path: "sprites/ui/tool_build.ktx2".to_string(),
+                    silhouette_path: None,
+                    default_state: flux_plugin_sdk::PackedState(0),
+                    states: vec![flux_plugin_sdk::EntityStateDescriptor {
+                        state: flux_plugin_sdk::PackedState(0),
+                        sprite_path: "sprites/world/widget_00.ktx2".to_string(),
+                        transform: flux_plugin_sdk::EntitySpriteTransform::None,
+                    }],
+                    category: Some(unknown_ref),
+                    tags: Vec::new(),
+                }],
+                ..Default::default()
+            },
+        );
+
+        let error = register_loaded_plugin_content(&mut content_registry, &plugin)
+            .expect_err("unknown category must fail");
+        assert!(error.contains("references unknown category"));
+    }
+
+    #[test]
+    fn plugin_registry_rejects_entity_without_states() {
+        let mut content_registry = crate::plugins::default_plugin::default_content_registry();
+        let plugin = loaded_content_plugin(
+            "flux.sample_no_states",
+            PluginRuntimeRegistration {
+                entities: vec![flux_plugin_sdk::EntityDescriptor {
+                    id: flux_plugin_sdk::ContentId::parse("flux.sample_no_states.entity.widget")
+                        .expect("entity id"),
+                    label: "Widget".to_string(),
+                    icon_path: "sprites/ui/tool_build.ktx2".to_string(),
+                    silhouette_path: None,
+                    default_state: flux_plugin_sdk::PackedState(0),
+                    states: Vec::new(),
+                    category: None,
+                    tags: Vec::new(),
+                }],
+                ..Default::default()
+            },
+        );
+
+        let error = register_loaded_plugin_content(&mut content_registry, &plugin)
+            .expect_err("entity without states must fail");
+        assert!(error.contains("has no states"));
+    }
+
+    #[test]
+    fn plugin_registry_rejects_entity_with_missing_default_state() {
+        let mut content_registry = crate::plugins::default_plugin::default_content_registry();
+        let plugin = loaded_content_plugin(
+            "flux.sample_bad_default_state",
+            PluginRuntimeRegistration {
+                entities: vec![flux_plugin_sdk::EntityDescriptor {
+                    id: flux_plugin_sdk::ContentId::parse(
+                        "flux.sample_bad_default_state.entity.widget",
+                    )
+                    .expect("entity id"),
+                    label: "Widget".to_string(),
+                    icon_path: "sprites/ui/tool_build.ktx2".to_string(),
+                    silhouette_path: None,
+                    default_state: flux_plugin_sdk::PackedState(7),
+                    states: vec![flux_plugin_sdk::EntityStateDescriptor {
+                        state: flux_plugin_sdk::PackedState(0),
+                        sprite_path: "sprites/world/widget_00.ktx2".to_string(),
+                        transform: flux_plugin_sdk::EntitySpriteTransform::None,
+                    }],
+                    category: None,
+                    tags: Vec::new(),
+                }],
+                ..Default::default()
+            },
+        );
+
+        let error = register_loaded_plugin_content(&mut content_registry, &plugin)
+            .expect_err("missing default state must fail");
+        assert!(error.contains("default_state"));
     }
 
     #[test]

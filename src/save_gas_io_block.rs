@@ -181,6 +181,7 @@ fn write_placed_structures_chunk(
             StructureRotation::Deg180 => 2,
             StructureRotation::Deg270 => 3,
         });
+        bytes.extend_from_slice(&entry.state.value().to_le_bytes());
         match entry.params {
             StructureParams::None => {
                 bytes.push(0);
@@ -268,6 +269,7 @@ fn read_placed_structures_chunk(
                 )))
             }
         };
+        let state = PackedState(read_u16(&mut cursor)?);
         let params = match read_exact_array::<1>(&mut cursor)?[0] {
             0 => StructureParams::None,
             1 => StructureParams::GasSource {
@@ -298,6 +300,7 @@ fn read_placed_structures_chunk(
             kind,
             origin,
             rotation,
+            state,
             params,
         });
     }

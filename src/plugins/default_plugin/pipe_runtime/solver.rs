@@ -28,9 +28,15 @@ struct UndirectedPipeEdge {
 impl UndirectedPipeEdge {
     fn new(first: usize, second: usize) -> Self {
         if first <= second {
-            Self { a: first, b: second }
+            Self {
+                a: first,
+                b: second,
+            }
         } else {
-            Self { a: second, b: first }
+            Self {
+                a: second,
+                b: first,
+            }
         }
     }
 }
@@ -167,10 +173,7 @@ pub(super) fn apply_pipe_network_step(
             .max_pipe_hop_particles_per_step
             .saturating_mul(runtime.nodes[request.node_index].neighbors.len().max(1) as u32)
             .max(1);
-        let already_in_node: u32 = next_pipe_species[request.node_index]
-            .iter()
-            .copied()
-            .sum();
+        let already_in_node: u32 = next_pipe_species[request.node_index].iter().copied().sum();
         let room_left = per_hop_capacity.saturating_sub(already_in_node);
         if room_left == 0 {
             continue;
@@ -189,7 +192,8 @@ pub(super) fn apply_pipe_network_step(
     }
 
     for entry in vent_buffers.iter_mut() {
-        world_changed |= add_particles_to_world_cells(gas, &entry.world_cells, &entry.species_counts, world);
+        world_changed |=
+            add_particles_to_world_cells(gas, &entry.world_cells, &entry.species_counts, world);
     }
 
     for node_id in 0..pipe_gas.node_count() {
@@ -289,12 +293,8 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
     let vent_offers = build_vent_pressure_offer_lut(&runtime, &vent_world_pressures, config);
     let (edge_demand_pa, outgoing_request_counts) =
         build_edge_offer_demands(&runtime, &vent_offers, config);
-    let allowed_direction = segment_allowed_direction_map(
-        &runtime,
-        &edge_demand_pa,
-        &vent_world_pressures,
-        config,
-    );
+    let allowed_direction =
+        segment_allowed_direction_map(&runtime, &edge_demand_pa, &vent_world_pressures, config);
     let forward_demand_intake_nodes =
         vent_nodes_with_forward_direction(&runtime, &allowed_direction);
     let unblocked_intake_requests = build_vent_requests(
@@ -340,10 +340,16 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
     lines.push("[DEBUG] Pipe/Vent".to_string());
     lines.push(format!(
         "ph i={} t={} p={:.3} h={}",
-        flow_state.interval_ticks.max(config.pipe_step_interval_ticks.max(1)),
+        flow_state
+            .interval_ticks
+            .max(config.pipe_step_interval_ticks.max(1)),
         flow_state.tick_in_interval,
         flow_state.flow_progress(),
-        if flow_state.hop_started_this_tick { 1 } else { 0 }
+        if flow_state.hop_started_this_tick {
+            1
+        } else {
+            0
+        }
     ));
 
     let mut edge_outlet_cache = HashMap::new();
@@ -364,11 +370,7 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
             pipe_pressure_pa(config, eval_total),
             node.neighbors.len()
         ));
-        lines.push(format!(
-            "m pre={} eval={}",
-            pre_total,
-            eval_total,
-        ));
+        lines.push(format!("m pre={} eval={}", pre_total, eval_total,));
         if let Some(segment) = segments.iter().find(|segment| segment.contains(&node_id)) {
             if let (Some(start), Some(end)) = (segment.first().copied(), segment.last().copied()) {
                 let start_world = vent_world_pressures.get(start).copied().flatten();
@@ -393,18 +395,10 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
                 .get(&(node_id, neighbor))
                 .copied()
                 .unwrap_or(false);
-            let has_outlet = edge_has_downstream_outlet(
-                &runtime,
-                node_id,
-                neighbor,
-                &mut edge_outlet_cache,
-            );
-            let demand = edge_demand_pa
-                .get(&(node_id, neighbor))
-                .copied();
-            let demand_reverse = edge_demand_pa
-                .get(&(neighbor, node_id))
-                .copied();
+            let has_outlet =
+                edge_has_downstream_outlet(&runtime, node_id, neighbor, &mut edge_outlet_cache);
+            let demand = edge_demand_pa.get(&(node_id, neighbor)).copied();
+            let demand_reverse = edge_demand_pa.get(&(neighbor, node_id)).copied();
             lines.push(format!(
                 "e->n{} a={} o={} df={} dr={}",
                 neighbor,
@@ -457,7 +451,10 @@ pub(super) fn build_pipe_debug_hud_lines_for_cell(
         } else {
             0
         };
-        let intake_unblocked = unblocked_requests_by_node.get(&node_id).copied().unwrap_or(0);
+        let intake_unblocked = unblocked_requests_by_node
+            .get(&node_id)
+            .copied()
+            .unwrap_or(0);
         let intake_after_buffer = blocked_requests_by_node.get(&node_id).copied().unwrap_or(0);
         let per_hop_capacity = config
             .max_pipe_hop_particles_per_step
@@ -529,7 +526,8 @@ fn append_live_transfer_lines_for_node(
     previous_transfers: &[PipeTransferRecord],
     current_transfers: &[PipeTransferRecord],
 ) {
-    let committed = summarize_transfer_directions_for_node(previous_transfers, node_cell, node_kind);
+    let committed =
+        summarize_transfer_directions_for_node(previous_transfers, node_cell, node_kind);
     let planned = summarize_transfer_directions_for_node(current_transfers, node_cell, node_kind);
     lines.push(format!("tr prev:{} plan:{}", committed, planned));
 }
@@ -644,7 +642,10 @@ fn commit_planned_pipe_transfers(
         else {
             continue;
         };
-        let Some(target_index) = node_by_visual.get(&(transfer.to_kind, transfer.to)).copied() else {
+        let Some(target_index) = node_by_visual
+            .get(&(transfer.to_kind, transfer.to))
+            .copied()
+        else {
             continue;
         };
 
@@ -779,7 +780,11 @@ fn build_edge_offer_demands(
         if sources.is_empty() || sinks.is_empty() {
             continue;
         }
-        let total_sink_demand = sinks.iter().map(|(_, sink)| *sink).sum::<f32>().max(epsilon);
+        let total_sink_demand = sinks
+            .iter()
+            .map(|(_, sink)| *sink)
+            .sum::<f32>()
+            .max(epsilon);
         for (source_node, source_supply) in sources {
             let mut outgoing_request_neighbors = HashSet::new();
             for (sink_node, sink_demand) in &sinks {
@@ -972,7 +977,8 @@ fn vent_nodes_with_forward_direction(
         if node.vent_cell.is_none() {
             continue;
         }
-        if count_forward_outlet_edges(runtime, node_index, allowed_direction, &mut outlet_cache) > 0 {
+        if count_forward_outlet_edges(runtime, node_index, allowed_direction, &mut outlet_cache) > 0
+        {
             intake_nodes.insert(node_index);
         }
     }
@@ -1070,8 +1076,14 @@ fn segment_allowed_direction_map(
         for edge in segment.windows(2) {
             let source = edge[0];
             let target = edge[1];
-            forward_demand += edge_demand_pa.get(&(source, target)).copied().unwrap_or(0.0);
-            backward_demand += edge_demand_pa.get(&(target, source)).copied().unwrap_or(0.0);
+            forward_demand += edge_demand_pa
+                .get(&(source, target))
+                .copied()
+                .unwrap_or(0.0);
+            backward_demand += edge_demand_pa
+                .get(&(target, source))
+                .copied()
+                .unwrap_or(0.0);
         }
         let use_forward = if forward_demand > backward_demand + epsilon {
             Some(true)
@@ -1099,7 +1111,9 @@ fn segment_allowed_direction_map(
                     let start_distance = vent_distance.get(start).and_then(|value| *value);
                     let end_distance = vent_distance.get(end).and_then(|value| *value);
                     match (start_distance, end_distance) {
-                        (Some(start_steps), Some(end_steps)) if start_steps > end_steps => Some(true),
+                        (Some(start_steps), Some(end_steps)) if start_steps > end_steps => {
+                            Some(true)
+                        }
                         (Some(start_steps), Some(end_steps)) if end_steps > start_steps => {
                             Some(false)
                         }
@@ -1139,14 +1153,8 @@ fn lock_candidates_to_allowed_direction(
         for edge in segment.windows(2) {
             let a = edge[0];
             let b = edge[1];
-            let forward_allowed = allowed_direction
-                .get(&(a, b))
-                .copied()
-                .unwrap_or(false);
-            let backward_allowed = allowed_direction
-                .get(&(b, a))
-                .copied()
-                .unwrap_or(false);
+            let forward_allowed = allowed_direction.get(&(a, b)).copied().unwrap_or(false);
+            let backward_allowed = allowed_direction.get(&(b, a)).copied().unwrap_or(false);
             let (source, target) = if forward_allowed {
                 (a, b)
             } else if backward_allowed {
@@ -1289,12 +1297,8 @@ fn build_vent_requests(
         {
             continue;
         }
-        let forward_outlet_edges = count_forward_outlet_edges(
-            runtime,
-            node_index,
-            allowed_direction,
-            &mut outlet_cache,
-        );
+        let forward_outlet_edges =
+            count_forward_outlet_edges(runtime, node_index, allowed_direction, &mut outlet_cache);
         if forward_outlet_edges == 0 {
             continue;
         }
@@ -1333,14 +1337,14 @@ fn offer_based_intake_particles(
     let reduced_delta_pa = offer_pa / split_paths;
     let reduced_delta_particles = reduced_delta_pa / config.cell_particle_pressure_pa.max(1e-6);
     let requested_linear = reduced_delta_particles / config.cell_volume_ratio.max(1.0);
-    let max_flux = config.max_vent_flux_particles_per_tick.max(0.0).min(200_000.0);
+    let max_flux = config
+        .max_vent_flux_particles_per_tick
+        .max(0.0)
+        .min(200_000.0);
     if max_flux <= 0.0 {
         return 0;
     }
-    let mut requested = requested_linear
-        .max(0.0)
-        .min(max_flux)
-        .round() as u32;
+    let mut requested = requested_linear.max(0.0).min(max_flux).round() as u32;
     if reduced_delta_particles >= 5.0 && requested == 0 {
         requested = 1;
     }
@@ -1483,9 +1487,7 @@ fn split_bounded_integer_requests(total: u32, requests: &[u32]) -> Vec<u32> {
 
     if used < total {
         remainders.sort_by(|(index_a, rem_a), (index_b, rem_b)| {
-            rem_b
-                .cmp(rem_a)
-                .then_with(|| index_a.cmp(index_b))
+            rem_b.cmp(rem_a).then_with(|| index_a.cmp(index_b))
         });
         let mut remaining = total - used;
         for (index, _) in remainders {
@@ -1545,5 +1547,3 @@ fn split_integer_by_weights(total: u32, weights: &[f32]) -> Vec<u32> {
 
     split
 }
-
-

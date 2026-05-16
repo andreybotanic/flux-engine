@@ -254,6 +254,7 @@ mod tests {
     use zip::{write::SimpleFileOptions, ZipWriter};
 
     use super::scan_packaged_plugin_contracts;
+    use crate::plugins::ENGINE_PLUGIN_API_VERSION_VALUE;
 
     fn make_temp_plugins_root(prefix: &str) -> PathBuf {
         let unique = format!(
@@ -278,12 +279,13 @@ mod tests {
             r#"id = "{manifest_id}"
 display_name = "Duplicate Test"
 version = "1.0.0"
-api_version = 4
+api_version = {}
 dll = "bin/test.dll"
 configs = "config"
 assets = "assets"
 content = false
-"#
+"#,
+            ENGINE_PLUGIN_API_VERSION_VALUE
         );
         writer
             .start_file("manifest.toml", options)

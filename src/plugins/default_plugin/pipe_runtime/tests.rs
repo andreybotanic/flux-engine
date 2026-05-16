@@ -564,25 +564,9 @@ fn non_boundary_cells_shift_full_mass_to_next_cell_on_next_hop() {
 
     let mut gas = GasField::from_registry(&registry);
     set_area_pressure(
-        &mut gas,
-        gas_index,
-        start_x,
-        y,
-        start_x,
-        y,
-        100_000.0,
-        &config,
+        &mut gas, gas_index, start_x, y, start_x, y, 100_000.0, &config,
     );
-    set_area_pressure(
-        &mut gas,
-        gas_index,
-        end_x,
-        y,
-        end_x,
-        y,
-        0.0,
-        &config,
-    );
+    set_area_pressure(&mut gas, gas_index, end_x, y, end_x, y, 0.0, &config);
     gas.recompute_total_density_buffer(&world);
 
     let mut pipe_gas = PipeGasField::from_registry(&registry);
@@ -613,7 +597,9 @@ fn non_boundary_cells_shift_full_mass_to_next_cell_on_next_hop() {
             .transfers
             .iter()
             .filter(|transfer| transfer.total_amount > 0)
-            .all(|transfer| transfer.to.x == transfer.from.x + 1 && transfer.to.y == transfer.from.y),
+            .all(
+                |transfer| transfer.to.x == transfer.from.x + 1 && transfer.to.y == transfer.from.y
+            ),
         "expected all planned conveyor transfers to move strictly in +X direction"
     );
 
@@ -804,7 +790,9 @@ fn room_to_empty_room_pipe_front_fills_without_hop_gaps() {
         }
 
         let front_len = (start_x..=end_x)
-            .take_while(|x| pipe_node_total(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(*x, y)) > 0)
+            .take_while(|x| {
+                pipe_node_total(&pipe_gas, PipeContainerKind::Pipe, UVec2::new(*x, y)) > 0
+            })
             .count();
         front_lengths.push(front_len);
         source_totals.push(pipe_node_total(
@@ -1082,14 +1070,7 @@ fn sink_vent_drains_arrived_hop_mass_before_world_release() {
 
     let mut gas = GasField::from_registry(&registry);
     set_area_pressure(
-        &mut gas,
-        gas_index,
-        start_x,
-        y,
-        start_x,
-        y,
-        250_000.0,
-        &config,
+        &mut gas, gas_index, start_x, y, start_x, y, 250_000.0, &config,
     );
     set_area_pressure(&mut gas, gas_index, end_x, y, end_x, y, 0.0, &config);
     gas.recompute_total_density_buffer(&world);
@@ -1120,9 +1101,7 @@ fn sink_vent_drains_arrived_hop_mass_before_world_release() {
             continue;
         }
         let committed_into_sink = visuals.previous_transfers.iter().any(|transfer| {
-            transfer.total_amount > 0
-                && transfer.from == sink_upstream
-                && transfer.to == sink_cell
+            transfer.total_amount > 0 && transfer.from == sink_upstream && transfer.to == sink_cell
         });
         if committed_into_sink {
             saw_commit_into_sink = true;
@@ -1168,14 +1147,7 @@ fn intake_stage_recomputes_segment_direction_when_room_pressures_flip() {
 
     let mut gas = GasField::from_registry(&registry);
     set_area_pressure(
-        &mut gas,
-        gas_index,
-        start_x,
-        y,
-        start_x,
-        y,
-        200_000.0,
-        &config,
+        &mut gas, gas_index, start_x, y, start_x, y, 200_000.0, &config,
     );
     set_area_pressure(&mut gas, gas_index, end_x, y, end_x, y, 0.0, &config);
     gas.recompute_total_density_buffer(&world);
@@ -1213,16 +1185,7 @@ fn intake_stage_recomputes_segment_direction_when_room_pressures_flip() {
     );
 
     set_area_pressure(&mut gas, gas_index, start_x, y, start_x, y, 0.0, &config);
-    set_area_pressure(
-        &mut gas,
-        gas_index,
-        end_x,
-        y,
-        end_x,
-        y,
-        200_000.0,
-        &config,
-    );
+    set_area_pressure(&mut gas, gas_index, end_x, y, end_x, y, 200_000.0, &config);
     gas.recompute_total_density_buffer(&world);
 
     let mut saw_reversed_after_flip = false;
@@ -1280,14 +1243,7 @@ fn segment_does_not_plan_reverse_while_external_gradient_sign_is_stable() {
 
     let mut gas = GasField::from_registry(&registry);
     set_area_pressure(
-        &mut gas,
-        gas_index,
-        start_x,
-        y,
-        start_x,
-        y,
-        200_000.0,
-        &config,
+        &mut gas, gas_index, start_x, y, start_x, y, 200_000.0, &config,
     );
     set_area_pressure(&mut gas, gas_index, end_x, y, end_x, y, 0.0, &config);
     gas.recompute_total_density_buffer(&world);
@@ -1383,14 +1339,7 @@ fn intake_offer_uses_only_external_vent_pressures_on_three_vent_branch() {
         &config,
     );
     set_area_pressure(
-        &mut gas,
-        gas_index,
-        top_vent.x,
-        top_vent.y,
-        top_vent.x,
-        top_vent.y,
-        0.0,
-        &config,
+        &mut gas, gas_index, top_vent.x, top_vent.y, top_vent.x, top_vent.y, 0.0, &config,
     );
     set_area_pressure(
         &mut gas,
@@ -1453,20 +1402,18 @@ fn intake_offer_uses_only_external_vent_pressures_on_three_vent_branch() {
         "left vent intake must follow external vent offers with linear delta/25 mapping and min-one rule"
     );
     assert_eq!(
-        bottom_after_first_hop,
-        250,
+        bottom_after_first_hop, 250,
         "neutral-offer bottom vent must not intake on the first hop"
     );
     assert_eq!(
-        top_after_first_hop,
-        0,
+        top_after_first_hop, 0,
         "sink vent must not intake from world when its offer is positive"
     );
 
     assert!(
-        hop_transfers
-            .first()
-            .is_some_and(|hop| hop.iter().any(|(from, to, _)| *from == left_vent && *to == UVec2::new(32, 40))),
+        hop_transfers.first().is_some_and(|hop| hop
+            .iter()
+            .any(|(from, to, _)| *from == left_vent && *to == UVec2::new(32, 40))),
         "first hop must start conveyor flow from the negative-offer vent"
     );
     assert!(
@@ -1526,14 +1473,7 @@ fn intake_split_uses_outgoing_requests_not_sink_count() {
         &config,
     );
     set_area_pressure(
-        &mut gas,
-        gas_index,
-        sink_top.x,
-        sink_top.y,
-        sink_top.x,
-        sink_top.y,
-        0.0,
-        &config,
+        &mut gas, gas_index, sink_top.x, sink_top.y, sink_top.x, sink_top.y, 0.0, &config,
     );
     set_area_pressure(
         &mut gas,
@@ -1600,24 +1540,10 @@ fn low_pressure_offer_uses_linear_intake_mapping() {
 
     let mut gas = GasField::from_registry(&registry);
     set_area_pressure(
-        &mut gas,
-        gas_index,
-        source.x,
-        source.y,
-        source.x,
-        source.y,
-        24.0,
-        &config,
+        &mut gas, gas_index, source.x, source.y, source.x, source.y, 24.0, &config,
     );
     set_area_pressure(
-        &mut gas,
-        gas_index,
-        sink.x,
-        sink.y,
-        sink.x,
-        sink.y,
-        0.0,
-        &config,
+        &mut gas, gas_index, sink.x, sink.y, sink.x, sink.y, 0.0, &config,
     );
     gas.recompute_total_density_buffer(&world);
 
@@ -1666,13 +1592,31 @@ fn linear_intake_curve_matches_baseline_rules() {
     let p40_n1 = offer_based_intake_particles_for_test(&config, 40.0, 1);
     let p40_n2 = offer_based_intake_particles_for_test(&config, 40.0, 2);
 
-    assert_eq!(p1, 1, "delta=1Pa equals 5 particles, so min-one rule must apply");
-    assert_eq!(p4, 1, "delta=4Pa should round to one particle after Pa->particles conversion");
+    assert_eq!(
+        p1, 1,
+        "delta=1Pa equals 5 particles, so min-one rule must apply"
+    );
+    assert_eq!(
+        p4, 1,
+        "delta=4Pa should round to one particle after Pa->particles conversion"
+    );
     assert_eq!(p5, 1, "delta=5Pa should keep one particle");
-    assert_eq!(p10, 2, "delta=10Pa should map to two particles on delta_particles/25 baseline");
-    assert_eq!(p30, 6, "delta=30Pa should map to six particles on delta_particles/25 baseline");
-    assert_eq!(p50, 10, "delta=50Pa should map to ten particles on delta_particles/25 baseline");
-    assert_eq!(p1k, 200, "delta=1000Pa should map to 200 particles for delta_particles/25 baseline");
+    assert_eq!(
+        p10, 2,
+        "delta=10Pa should map to two particles on delta_particles/25 baseline"
+    );
+    assert_eq!(
+        p30, 6,
+        "delta=30Pa should map to six particles on delta_particles/25 baseline"
+    );
+    assert_eq!(
+        p50, 10,
+        "delta=50Pa should map to ten particles on delta_particles/25 baseline"
+    );
+    assert_eq!(
+        p1k, 200,
+        "delta=1000Pa should map to 200 particles for delta_particles/25 baseline"
+    );
     assert_eq!(p10m, 200_000, "intake must clamp to hard 200000 cap");
     assert!(
         p100m == 200_000,
@@ -1701,24 +1645,10 @@ fn delta_30_single_outgoing_path_intake_is_at_least_one() {
 
     let mut gas = GasField::from_registry(&registry);
     set_area_pressure(
-        &mut gas,
-        gas_index,
-        source.x,
-        source.y,
-        source.x,
-        source.y,
-        30.0,
-        &config,
+        &mut gas, gas_index, source.x, source.y, source.x, source.y, 30.0, &config,
     );
     set_area_pressure(
-        &mut gas,
-        gas_index,
-        sink.x,
-        sink.y,
-        sink.x,
-        sink.y,
-        0.0,
-        &config,
+        &mut gas, gas_index, sink.x, sink.y, sink.x, sink.y, 0.0, &config,
     );
     gas.recompute_total_density_buffer(&world);
 
@@ -2027,7 +1957,10 @@ fn flow_progress_reaches_destination_within_interval() {
         hop_ticks[1..10].iter().all(|is_hop| !*is_hop),
         "intermediate ticks must only advance interpolation",
     );
-    assert!(hop_ticks[10], "next interval must start with a new hop tick");
+    assert!(
+        hop_ticks[10],
+        "next interval must start with a new hop tick"
+    );
     assert!((observed_progress[0] - 0.0).abs() < 1e-6);
     assert!((observed_progress[9] - 0.9).abs() < 1e-6);
     assert!((observed_progress[10] - 0.0).abs() < 1e-6);

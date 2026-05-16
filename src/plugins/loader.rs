@@ -12,19 +12,20 @@ use zip::ZipArchive;
 
 use crate::plugins::{
     abi::{
-        build_host_api, build_registrar, event_kind_from_abi, FluxEntityDescriptor,
-        FluxGasSubstanceDescriptor, FluxOverlayDescriptor, FluxOverlayMaterialDescriptor,
-        FluxPluginApiVersionFn, FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginDispatchFn,
-        FluxPluginHandle, FluxPluginRegisterFn, FluxSaveChunkDescriptor, FluxStatus,
-        FluxSubscriptionDescriptor, FluxToolDescriptor, FluxUtf8Slice,
-        FLUX_PLUGIN_API_VERSION_EXPORT_NAME, FLUX_PLUGIN_CREATE_EXPORT_NAME,
-        FLUX_PLUGIN_DESTROY_EXPORT_NAME, FLUX_PLUGIN_DISPATCH_EXPORT_NAME,
-        FLUX_PLUGIN_REGISTER_EXPORT_NAME,
+        build_host_api, build_registrar, event_kind_from_abi, FluxEntityCategoryDescriptor,
+        FluxEntityDescriptor, FluxEntityStateDescriptor, FluxGasSubstanceDescriptor,
+        FluxOverlayDescriptor, FluxOverlayMaterialDescriptor, FluxPluginApiVersionFn,
+        FluxPluginCreateFn, FluxPluginDestroyFn, FluxPluginDispatchFn, FluxPluginHandle,
+        FluxPluginRegisterFn, FluxSaveChunkDescriptor, FluxStatus, FluxSubscriptionDescriptor,
+        FluxToolDescriptor, FluxUtf8Slice, FLUX_PLUGIN_API_VERSION_EXPORT_NAME,
+        FLUX_PLUGIN_CREATE_EXPORT_NAME, FLUX_PLUGIN_DESTROY_EXPORT_NAME,
+        FLUX_PLUGIN_DISPATCH_EXPORT_NAME, FLUX_PLUGIN_REGISTER_EXPORT_NAME,
+        FLUX_REGISTRATION_PHASE_CATEGORIES, FLUX_REGISTRATION_PHASE_CONTENT,
     },
     api::{
         render_api::OverlayRenderPolicy,
         runtime::{RuntimeOverlayDescriptor, SaveChunkDescriptor},
-        ui_api::ToolDescriptor,
+        ui_api::{EntityCategoryDescriptor, ToolDescriptor},
     },
     diagnostics::PluginContractError,
     id::{PluginApiVersion, ENGINE_PLUGIN_API_VERSION},
@@ -227,22 +228,36 @@ pub fn validate_runtime_registration(
     manifest: &PluginManifest,
     registration: &PluginRuntimeRegistration,
 ) -> Result<(), PluginContractError> {
+    use std::collections::BTreeSet;
+
     validate_subscription_registration(&registration.subscriptions)?;
-    if !manifest.content && !registration.gas_substances.is_empty() {
+    if !manifest.content
+        && (!registration.gas_substances.is_empty()
+            || !registration.entity_categories.is_empty()
+            || !registration.entities.is_empty())
+    {
         return Err(PluginContractError::Abi(format!(
             "plugin '{}' has content = false but registered runtime content",
             manifest.id
         )));
     }
-    if registration.gas_substances.is_empty() {
-        return Ok(());
+    let mut category_ids = BTreeSet::new();
+    for category in &registration.entity_categories {
+        if !category_ids.insert(category.id.clone()) {
+            return Err(PluginContractError::Abi(format!(
+                "plugin '{}' registered duplicate entity category '{}'",
+                manifest.id, category.id
+            )));
+        }
     }
-    SubstanceRegistry::new(registration.gas_substances.clone()).map_err(|error| {
-        PluginContractError::Abi(format!(
-            "plugin '{}' registered invalid gas substances: {}",
-            manifest.id, error
-        ))
-    })?;
+    if !registration.gas_substances.is_empty() {
+        SubstanceRegistry::new(registration.gas_substances.clone()).map_err(|error| {
+            PluginContractError::Abi(format!(
+                "plugin '{}' registered invalid gas substances: {}",
+                manifest.id, error
+            ))
+        })?;
+    }
     Ok(())
 }
 
@@ -392,6 +407,7 @@ fn instantiate_runtime_plugin_from_root(
 
         let mut registrar = build_registrar(
             Some(register_noop_gas_substance_callback),
+            Some(register_noop_entity_category_callback),
             Some(register_noop_entity_callback),
             Some(register_noop_tool_callback),
             None,
@@ -399,6 +415,7 @@ fn instantiate_runtime_plugin_from_root(
             Some(register_noop_overlay_material_callback),
             Some(register_noop_save_chunk_callback),
             Some(register_noop_subscription_callback),
+            FLUX_REGISTRATION_PHASE_CONTENT,
             ptr::null_mut(),
         );
         let register_status = register_fn(plugin_handle, &mut registrar);
@@ -650,8 +667,34 @@ fn validate_plugin_root(
         }
 
         host_error_message.clear();
-        let mut registrar = build_registrar(
+        let mut categories_registrar = build_registrar(
+            Some(register_noop_gas_substance_callback),
+            Some(register_entity_category_callback),
+            Some(register_noop_entity_callback),
+            Some(register_noop_tool_callback),
+            None,
+            Some(register_noop_overlay_callback),
+            Some(register_noop_overlay_material_callback),
+            Some(register_noop_save_chunk_callback),
+            Some(register_noop_subscription_callback),
+            FLUX_REGISTRATION_PHASE_CATEGORIES,
+            (&mut registration_collector as *mut PluginRegistrationCollector).cast::<c_void>(),
+        );
+        let categories_status = register_fn(plugin_handle, &mut categories_registrar);
+        if !categories_status.is_ok() {
+            destroy_fn(plugin_handle);
+            return Err(status_error(
+                "flux_plugin_register",
+                categories_status,
+                &host_error_message,
+                PluginContractError::Abi,
+            ));
+        }
+
+        host_error_message.clear();
+        let mut content_registrar = build_registrar(
             Some(register_gas_substance_callback),
+            Some(register_noop_entity_category_callback),
             Some(register_entity_callback),
             Some(register_tool_callback),
             None,
@@ -659,14 +702,15 @@ fn validate_plugin_root(
             Some(register_overlay_material_callback),
             Some(register_save_chunk_callback),
             Some(register_subscription_callback),
+            FLUX_REGISTRATION_PHASE_CONTENT,
             (&mut registration_collector as *mut PluginRegistrationCollector).cast::<c_void>(),
         );
-        let register_status = register_fn(plugin_handle, &mut registrar);
-        if !register_status.is_ok() {
+        let content_status = register_fn(plugin_handle, &mut content_registrar);
+        if !content_status.is_ok() {
             destroy_fn(plugin_handle);
             return Err(status_error(
                 "flux_plugin_register",
-                register_status,
+                content_status,
                 &host_error_message,
                 PluginContractError::Abi,
             ));
@@ -709,6 +753,27 @@ unsafe extern "C" fn register_gas_substance_callback(
     match gas_substance_from_abi(&collector.plugin_id, &*descriptor) {
         Ok(definition) => {
             collector.registration.gas_substances.push(definition);
+            FluxStatus::OK
+        }
+        Err(error) => {
+            collector.error_message = Some(error);
+            FluxStatus::FAILED
+        }
+    }
+}
+
+unsafe extern "C" fn register_entity_category_callback(
+    context: *mut c_void,
+    descriptor: *const FluxEntityCategoryDescriptor,
+) -> FluxStatus {
+    if context.is_null() || descriptor.is_null() {
+        return FluxStatus::INVALID_ARGUMENT;
+    }
+
+    let collector = &mut *(context.cast::<PluginRegistrationCollector>());
+    match entity_category_descriptor_from_abi(&*descriptor) {
+        Ok(descriptor) => {
+            collector.registration.entity_categories.push(descriptor);
             FluxStatus::OK
         }
         Err(error) => {
@@ -885,6 +950,17 @@ unsafe extern "C" fn register_noop_gas_substance_callback(
     }
 }
 
+unsafe extern "C" fn register_noop_entity_category_callback(
+    _context: *mut c_void,
+    descriptor: *const FluxEntityCategoryDescriptor,
+) -> FluxStatus {
+    if descriptor.is_null() {
+        FluxStatus::INVALID_ARGUMENT
+    } else {
+        FluxStatus::OK
+    }
+}
+
 unsafe extern "C" fn register_noop_entity_callback(
     _context: *mut c_void,
     descriptor: *const FluxEntityDescriptor,
@@ -951,18 +1027,83 @@ unsafe extern "C" fn register_noop_subscription_callback(
     }
 }
 
+unsafe fn entity_category_descriptor_from_abi(
+    descriptor: &FluxEntityCategoryDescriptor,
+) -> Result<EntityCategoryDescriptor, String> {
+    let id = read_abi_utf8(descriptor.id, "entity category id")?;
+    let label = read_abi_utf8(descriptor.label, "entity category label")?;
+    let icon_path = read_abi_utf8(descriptor.icon_path, "entity category icon path")?;
+    Ok(EntityCategoryDescriptor {
+        id: ContentId::parse(&id)?,
+        label,
+        icon_path,
+    })
+}
+
 unsafe fn entity_descriptor_from_abi(
     descriptor: &FluxEntityDescriptor,
 ) -> Result<flux_plugin_sdk::EntityDescriptor, String> {
+    use std::collections::BTreeSet;
+
     let id = read_abi_utf8(descriptor.id, "entity id")?;
     let label = read_abi_utf8(descriptor.label, "entity label")?;
     let icon_path = read_abi_utf8(descriptor.icon_path, "entity icon path")?;
     let silhouette_path = read_abi_utf8(descriptor.silhouette_path, "entity silhouette path")?;
+    let category_id = read_abi_utf8(descriptor.category_id, "entity category id")?;
+    let raw_states = read_abi_states(descriptor.states, descriptor.states_len)?;
+    if raw_states.is_empty() {
+        return Err(format!(
+            "entity '{}' must register at least one visual state",
+            id
+        ));
+    }
+    let mut states = Vec::with_capacity(raw_states.len());
+    let mut state_values = BTreeSet::new();
+    for state in raw_states {
+        let sprite_path = read_abi_utf8(state.sprite_path, "entity state sprite path")?;
+        if sprite_path.trim().is_empty() {
+            return Err(format!(
+                "entity '{}' has one state with empty sprite path",
+                id
+            ));
+        }
+        let packed_state = flux_plugin_sdk::PackedState(state.state);
+        if !state_values.insert(packed_state.value()) {
+            return Err(format!(
+                "entity '{}' registered duplicate packed state {}",
+                id,
+                packed_state.value()
+            ));
+        }
+        states.push(flux_plugin_sdk::EntityStateDescriptor {
+            state: packed_state,
+            sprite_path,
+            transform: decode_entity_sprite_transform(state.transform)?,
+        });
+    }
+    let default_state = flux_plugin_sdk::PackedState(descriptor.default_state);
+    if !state_values.contains(&default_state.value()) {
+        return Err(format!(
+            "entity '{}' default_state {} is missing from states table",
+            id,
+            default_state.value()
+        ));
+    }
+
     Ok(flux_plugin_sdk::EntityDescriptor {
         id: flux_plugin_sdk::ContentId::parse(&id)?,
         label,
         icon_path,
         silhouette_path: (!silhouette_path.trim().is_empty()).then_some(silhouette_path),
+        default_state,
+        states,
+        category: if category_id.trim().is_empty() {
+            None
+        } else {
+            Some(flux_plugin_sdk::EntityCategoryRef::new(
+                flux_plugin_sdk::ContentId::parse(&category_id)?,
+            ))
+        },
         tags: Vec::new(),
     })
 }
@@ -1062,6 +1203,33 @@ unsafe fn read_abi_utf8(slice: FluxUtf8Slice, field_name: &str) -> Result<String
     std::str::from_utf8(bytes)
         .map(str::to_string)
         .map_err(|error| format!("{field_name} is not valid UTF-8: {error}"))
+}
+
+unsafe fn read_abi_states<'a>(
+    states: *const FluxEntityStateDescriptor,
+    states_len: usize,
+) -> Result<&'a [FluxEntityStateDescriptor], String> {
+    if states_len == 0 {
+        return Ok(&[]);
+    }
+    if states.is_null() {
+        return Err("entity states pointer is null while states_len > 0".to_string());
+    }
+    Ok(std::slice::from_raw_parts(states, states_len))
+}
+
+fn decode_entity_sprite_transform(
+    raw: u32,
+) -> Result<flux_plugin_sdk::EntitySpriteTransform, String> {
+    match raw {
+        0 => Ok(flux_plugin_sdk::EntitySpriteTransform::None),
+        1 => Ok(flux_plugin_sdk::EntitySpriteTransform::Rot90),
+        2 => Ok(flux_plugin_sdk::EntitySpriteTransform::Rot180),
+        3 => Ok(flux_plugin_sdk::EntitySpriteTransform::Rot270),
+        4 => Ok(flux_plugin_sdk::EntitySpriteTransform::FlipX),
+        5 => Ok(flux_plugin_sdk::EntitySpriteTransform::FlipY),
+        _ => Err(format!("unknown entity sprite transform {}", raw)),
+    }
 }
 
 fn cache_generation_root(

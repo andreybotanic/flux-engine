@@ -1,7 +1,7 @@
-id = "flux.api_temperature_overlay"
+﻿id = "flux.api_temperature_overlay"
 display_name = "API Temperature Overlay"
 version = "0.1.0"
-api_version = 5
+api_version = 7
 dll = "bin/flux_api_temperature_overlay_plugin.dll"
 configs = "config"
 assets = "assets"

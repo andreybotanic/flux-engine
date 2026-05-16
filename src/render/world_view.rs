@@ -16,6 +16,7 @@ use crate::{
     plugins::default_plugin::pipe_runtime::{
         PipeFlowVisualState, PipeGasField, PipeSimulationConfig,
     },
+    plugins::ContentRegistry,
     render::pipe_highlight_material::PipeHighlightRenderAssets,
     save::WorldLoadState,
     simulation::{
@@ -294,14 +295,8 @@ pub(crate) struct WorldFadeMaskLayer;
 #[derive(Resource, Clone)]
 pub(crate) struct WorldVisualAssets {
     backdrop_noise: Handle<Image>,
-    brick: Handle<Image>,
-    metal: Handle<Image>,
     boundary: Handle<Image>,
-    source: Handle<Image>,
-    sink: Handle<Image>,
-    bridge: Handle<Image>,
     pub(crate) pipe_masks: Vec<Handle<Image>>,
-    vent_world: Handle<Image>,
     pub(crate) vent_overlay: Handle<Image>,
     pub(crate) pipe_highlight: PipeHighlightRenderAssets,
 }
@@ -319,7 +314,7 @@ pub(crate) struct GasStructureEditHighlight;
 
 #[derive(Resource, Default)]
 pub(crate) struct GasStructureEntities {
-    by_cell: HashMap<(u32, u32), Entity>,
+    by_id: HashMap<PlacedStructureId, Entity>,
 }
 
 #[derive(Component)]

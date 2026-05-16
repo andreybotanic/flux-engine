@@ -6,7 +6,7 @@ use crate::{
         CellVisualPlacementConfigMap, GasRegistry, StructureHudConfigMap, StructureVisualConfigMap,
         WorldCellHudConfig,
     },
-    editor::{is_cursor_over_ui, ActiveEditorTool, MainMenuState},
+    editor::{is_cursor_over_ui, MainMenuState, MainToolbarLayout},
     input::camera::MainCamera,
     plugins::{
         default_plugin::pipe_runtime::{PipeFlowVisualState, PipeGasField, PipeSimulationConfig},
@@ -91,11 +91,11 @@ pub(crate) fn update_cell_inspector(
     window: Single<&Window, With<PrimaryWindow>>,
     camera_query: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     ui_state: (
-        Res<ActiveEditorTool>,
         Res<MainMenuState>,
         Res<WorldLoadState>,
         Res<crate::debug::DebugMode>,
         Res<PanelManager>,
+        Res<MainToolbarLayout>,
     ),
     gas_state: (
         Res<PipeSimulationConfig>,
@@ -123,7 +123,7 @@ pub(crate) fn update_cell_inspector(
         Query<(&CellInspectorBlockBody, &mut Node, &mut Text)>,
     )>,
 ) {
-    let (active_tool, main_menu, world_load_state, debug_mode, panel_manager) = ui_state;
+    let (main_menu, world_load_state, debug_mode, panel_manager, main_toolbar_layout) = ui_state;
     let (
         pipe_config,
         gas_registry,
@@ -152,7 +152,7 @@ pub(crate) fn update_cell_inspector(
         cursor_position,
         &window,
         debug_mode.active,
-        active_tool.selected,
+        *main_toolbar_layout,
         main_menu.open,
         Some(&panel_manager),
     ) {

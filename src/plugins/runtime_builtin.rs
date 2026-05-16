@@ -12,7 +12,7 @@ use flux_plugin_sdk::{
 use crate::plugins::{
     api::{
         runtime::{RuntimeOverlayDescriptor, SaveChunkDescriptor},
-        ui_api::ToolDescriptor,
+        ui_api::{EntityCategoryDescriptor, ToolDescriptor},
     },
     default_plugin::{
         asset_root, config_root,
@@ -126,6 +126,16 @@ fn convert_memory_registration(
                 color: substance.color,
                 aliases: vec![substance.alias.clone()],
                 flags: SubstanceFlags::gas(),
+            })
+            .collect(),
+        entity_categories: registration
+            .entity_categories
+            .iter()
+            .cloned()
+            .map(|category| EntityCategoryDescriptor {
+                id: engine_content_id(&category.id),
+                label: category.label,
+                icon_path: category.icon_path,
             })
             .collect(),
         entities: registration.entities.clone(),

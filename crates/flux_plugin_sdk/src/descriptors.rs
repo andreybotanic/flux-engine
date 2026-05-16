@@ -1,4 +1,4 @@
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use smallvec::SmallVec;
 
 use crate::{
@@ -23,7 +23,70 @@ pub struct EntityDescriptor {
     pub label: String,
     pub icon_path: String,
     pub silhouette_path: Option<String>,
+    pub default_state: PackedState,
+    pub states: Vec<EntityStateDescriptor>,
+    pub category: Option<EntityCategoryRef>,
     pub tags: Vec<ContentTag>,
+}
+
+/// Opaque packed state value owned by one entity kind.
+#[repr(transparent)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+pub struct PackedState(pub u16);
+
+impl PackedState {
+    /// Returns the raw packed state number.
+    pub fn value(self) -> u16 {
+        self.0
+    }
+}
+
+/// Sprite transform mode that can be applied to one entity state sprite.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EntitySpriteTransform {
+    #[default]
+    None,
+    Rot90,
+    Rot180,
+    Rot270,
+    FlipX,
+    FlipY,
+}
+
+/// One state-specific sprite descriptor for an entity kind.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntityStateDescriptor {
+    pub state: PackedState,
+    pub sprite_path: String,
+    pub transform: EntitySpriteTransform,
+}
+
+/// One registered entity category reference.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EntityCategoryRef {
+    id: ContentId,
+}
+
+impl EntityCategoryRef {
+    /// Builds a typed category reference from one stable category id.
+    pub fn new(id: ContentId) -> Self {
+        Self { id }
+    }
+
+    /// Returns the stable category id.
+    pub fn id(&self) -> &ContentId {
+        &self.id
+    }
+}
+
+/// One plugin-owned entity category.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntityCategoryDescriptor {
+    pub id: ContentId,
+    pub label: String,
+    pub icon_path: String,
 }
 
 /// One plugin-owned editor tool.

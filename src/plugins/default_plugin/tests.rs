@@ -34,7 +34,7 @@ fn default_plugin_registry_contains_all_builtin_content() {
     assert!(registry
         .provider_plugins()
         .contains(&PluginId::default_plugin()));
-    assert_eq!(registry.cells().len(), 3);
+    assert_eq!(registry.cells().len(), 23);
     assert_eq!(registry.structures().len(), 5);
     assert_eq!(registry.overlays().len(), 3);
     assert_eq!(registry.substances().len(), 3);
@@ -113,4 +113,38 @@ fn default_content_tags_support_overlay_selectors() {
         &pipe_id,
         &flux_plugin_sdk::Selector::not(flux_plugin_sdk::Selector::tag(pipe_tag)),
     ));
+}
+
+#[test]
+fn default_plugin_publishes_core_role_tags_for_cells_and_structures() {
+    let registry = default_content_registry();
+    let boundary = registry
+        .cell_by_tag(crate::plugins::content::CORE_TAG_CELL_BOUNDARY)
+        .expect("boundary cell must expose core boundary tag");
+    assert_eq!(boundary.material, boundary_cell_material());
+
+    let pipe = registry
+        .structure_by_tag(crate::plugins::content::CORE_TAG_STRUCTURE_PIPE)
+        .expect("pipe structure must expose core pipe tag");
+    assert_eq!(pipe.kind, pipe_structure_kind());
+
+    let vent = registry
+        .structure_by_tag(crate::plugins::content::CORE_TAG_STRUCTURE_VENT)
+        .expect("vent structure must expose core vent tag");
+    assert_eq!(vent.kind, vent_structure_kind());
+
+    let bridge = registry
+        .structure_by_tag(crate::plugins::content::CORE_TAG_STRUCTURE_PIPE_BRIDGE)
+        .expect("bridge structure must expose core bridge tag");
+    assert_eq!(bridge.kind, gas_pipe_bridge_structure_kind());
+
+    let source = registry
+        .structure_by_tag(crate::plugins::content::CORE_TAG_STRUCTURE_GAS_SOURCE)
+        .expect("gas source structure must expose core source tag");
+    assert_eq!(source.kind, gas_source_structure_kind());
+
+    let sink = registry
+        .structure_by_tag(crate::plugins::content::CORE_TAG_STRUCTURE_GAS_SINK)
+        .expect("gas sink structure must expose core sink tag");
+    assert_eq!(sink.kind, gas_sink_structure_kind());
 }

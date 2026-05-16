@@ -1,6 +1,10 @@
-﻿## Plugin SDK v5
+﻿## Plugin SDK v7
 
 - Текущий публичный контракт runtime-плагинов живёт в `crates/flux_plugin_sdk`. Это Rust-first SDK: автор плагина реализует `Plugin`, получает `PluginInit`, регистрирует content и подписки через `Registrar<Self>`, а ABI glue генерируется макросом `declare_plugin!(Type)`.
+- В `v7` регистрация контента двухфазная: сначала `register_categories(...)`, затем `register_content(...)`; для обратной совместимости `register_content(...)` по умолчанию делегирует в legacy `register(...)`.
+- `Registrar` знает фазу регистрации (`RegistrationPhase`) и поддерживает typed категории сущностей: `register_entity_category(...)` возвращает `EntityCategoryRef`, а lookup выполняется через `entity_category(id)`.
+- На ABI-уровне `FluxRegistrar` расширен полями `registration_phase` и `register_entity_category_fn`, а `FluxEntityDescriptor` хранит `category_id`, `default_state` и `states[]`.
+- `PackedState` зафиксирован как `#[repr(transparent)] struct PackedState(u16)`; в ABI это raw `u16`, в SDK это typed newtype.
 - Внутренний ABI слой полностью вынесен в `crates/flux_plugin_abi`. Все `extern "C"`, `#[repr(C)]`, `Flux*`-структуры, export names и dispatch glue скрыты от пользовательского кода плагина.
 - Для стабильности уже собранных runtime DLL любое расширение `#[repr(C)]` host/registrar структур делается только append-only (новые поля добавляются в хвост), иначе старые `.fluxplugin` могут падать из-за смещения callback offsets.
 - DLL по-прежнему экспортирует обязательные `flux_plugin_api_version`, `flux_plugin_create`, `flux_plugin_register`, `flux_plugin_dispatch` и `flux_plugin_destroy`, но эти entrypoints создаются SDK автоматически. Плагин больше не экспортирует пользовательские named handlers.
@@ -18,6 +22,7 @@
 - Runtime host теперь пробрасывает `write_log_fn` и для event-dispatch. Из-за этого `LoggerApi` и сообщения об ошибках из обработчиков больше не теряются во время игры и попадают в stderr-лог с plugin id и уровнем сообщения.
 - Sample plugin crates `src/plugins/flux_api_*`, `flux_stage7_sample_content_plugin` и `flux_stage1_sample_plugin` мигрированы на `flux_plugin_sdk`; пользовательский код этих плагинов больше не содержит ручного ABI.
 - `xtask` и ручная документация Plugin SDK должны рассматривать `crates/flux_plugin_sdk/src/*` как главный источник user-facing контракта. `src/plugins/abi.rs` в ядре теперь является только engine-side wrapper-слоем над внутренним ABI crate.
+- Для role-ориентированного выбора сущностей без жёсткой привязки к `flux.default` добавлены core content-теги (`flux.core.tag.cell.*`, `flux.core.tag.structure.*`). `ContentRegistry` поддерживает поиск по тегам (`cell_by_tag`, `structure_by_tag`), а default plugin публикует эти теги вместе со своими legacy-tag значениями.
 
 ### Overlay scene graph foundation
 
@@ -55,3 +60,5 @@
   - сводит узлы в слойный `LayerPlan` (`RenderEntities` / `RenderFreeGas` / `RenderImage` / `Blend` / `Material`);
   - материализует результат спавном overlay-entity с жёстким layer budget по `z`.
 - Если graph отсутствует или невалиден, отдельного frame-fallback больше нет: `PluginOverlaySprite` принудительно скрывается, и оверлей плагина не рисуется.
+
+

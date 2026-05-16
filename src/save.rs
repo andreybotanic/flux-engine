@@ -27,14 +27,14 @@ use crate::{
     world::{
         grid::{CellKind, WorldGrid, WORLD_HEIGHT, WORLD_WIDTH},
         structures::{
-            PlacedStructureMap, PlacedStructureSnapshot, PlacedStructureSnapshotEntry,
+            PackedState, PlacedStructureMap, PlacedStructureSnapshot, PlacedStructureSnapshotEntry,
             StructureParams, StructureRotation,
         },
         WorldCellChanged,
     },
 };
 
-const SCHEMA_VERSION: u32 = 6;
+const SCHEMA_VERSION: u32 = 7;
 const WORLD_CELLS_MAGIC: &[u8; 4] = b"FXWC";
 const GAS_STATE_MAGIC: &[u8; 4] = b"FXGS";
 const PLACED_STRUCTURES_MAGIC: &[u8; 4] = b"FXPS";
@@ -42,7 +42,7 @@ const PIPE_GAS_MAGIC: &[u8; 4] = b"FXPG";
 const WORLD_CELLS_VERSION: u16 = 2;
 const GAS_STATE_VERSION: u16 = 2;
 const PIPE_GAS_VERSION: u16 = 2;
-const PLACED_STRUCTURES_VERSION: u16 = 2;
+const PLACED_STRUCTURES_VERSION: u16 = 3;
 const CHUNK_WORLD_CELLS_ID: &str = "world_cells";
 const CHUNK_GAS_STATE_ID: &str = "gas_state";
 const CHUNK_PIPE_GAS_ID: &str = "pipe_gas";

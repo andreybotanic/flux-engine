@@ -1,11 +1,16 @@
 fn setup_editor_ui(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    content_registry: Res<crate::plugins::ContentRegistry>,
     gas_registry: Res<GasRegistry>,
     audio_settings: Res<AudioSettingsState>,
     sim_rate: Res<SimulationRateConfig>,
     gas_simulation: Res<GasSimulationConfig>,
     gas_visual_settings: Res<GasVisualSettings>,
+    mut active_tool: ResMut<ActiveEditorTool>,
+    mut active_entity_category: ResMut<ActiveEntityCategory>,
+    mut category_ui_registry: ResMut<EntityCategoryUiRegistry>,
+    mut main_toolbar_layout: ResMut<MainToolbarLayout>,
     mut panel_manager: ResMut<PanelManager>,
     mut panel_open_order: ResMut<PanelOpenOrder>,
     mut select_fields: ResMut<SelectFieldState>,
@@ -51,17 +56,6 @@ fn setup_editor_ui(
     let gamma_initial_text = fmt_f32(gamma_initial);
     let max_color_initial_text = max_color_initial.to_string();
     let icon_set = EditorIconSet {
-        build: asset_server.load("sprites/ui/tool_build.ktx2"),
-        gases: asset_server.load("sprites/ui/tool_gases.ktx2"),
-        pipe: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
-            crate::plugins::default_plugin::pipe_structure_kind(),
-        )),
-        vent: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
-            crate::plugins::default_plugin::vent_structure_kind(),
-        )),
-        bridge: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
-            crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
-        )),
         add_gas: asset_server.load("sprites/ui/tool_add_gas.ktx2"),
         clear_gas: asset_server.load("sprites/ui/tool_clear_gas.ktx2"),
         source: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
@@ -70,20 +64,6 @@ fn setup_editor_ui(
         sink: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::gas_sink_structure_kind(),
         )),
-        brick: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
-            crate::plugins::default_plugin::brick_cell_material(),
-        )),
-        metal: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
-            crate::plugins::default_plugin::metal_cell_material(),
-        )),
-        brick_silhouette: asset_server.load(
-            crate::plugins::default_plugin::cell_silhouette_path(crate::plugins::default_plugin::brick_cell_material())
-                .expect("brick silhouette is registered"),
-        ),
-        metal_silhouette: asset_server.load(
-            crate::plugins::default_plugin::cell_silhouette_path(crate::plugins::default_plugin::metal_cell_material())
-                .expect("metal silhouette is registered"),
-        ),
         pipe_silhouette: asset_server.load(
             crate::plugins::default_plugin::structure_silhouette_path(
                 crate::plugins::default_plugin::pipe_structure_kind(),
@@ -137,6 +117,73 @@ fn setup_editor_ui(
         audio_settings.runtime_music_volume_percent as i32,
     ));
 
+    let mut category_items: Vec<_> = content_registry
+        .entity_categories()
+        .values()
+        .cloned()
+        .collect();
+    let cells_category_id = crate::plugins::default_plugin::cells_category_content_id();
+    let gases_category_id = crate::plugins::default_plugin::gases_category_content_id();
+    category_items.sort_by(|left, right| {
+        let left_priority = entity_category_toolbar_priority(&left.id, &cells_category_id, &gases_category_id);
+        let right_priority =
+            entity_category_toolbar_priority(&right.id, &cells_category_id, &gases_category_id);
+        left_priority
+            .cmp(&right_priority)
+            .then_with(|| left.label.cmp(&right.label))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+
+    let main_toolbar_width = if category_items.is_empty() {
+        MAIN_TOOLBAR_PADDING * 2.0
+    } else {
+        (category_items.len() as f32 * MAIN_TOOL_BUTTON_SIZE)
+            + ((category_items.len() as f32 - 1.0) * MAIN_TOOL_BUTTON_GAP)
+            + (MAIN_TOOLBAR_PADDING * 2.0)
+    };
+    main_toolbar_layout.width = main_toolbar_width;
+    main_toolbar_layout.height = MAIN_TOOLBAR_HEIGHT;
+
+    let ui_categories = category_items
+        .iter()
+        .map(|category| {
+            let cell_variants =
+                collect_cell_variants_for_category(&content_registry, &asset_server, &category.id);
+            let gas_variants =
+                collect_pipe_variants_for_category(&content_registry, &asset_server, &category.id);
+            let kind = if category.id == cells_category_id || !cell_variants.is_empty() {
+                EntityCategoryKind::Cells
+            } else if category.id == gases_category_id || !gas_variants.is_empty() {
+                EntityCategoryKind::Gases
+            } else {
+                EntityCategoryKind::Other
+            };
+            (
+                EntityCategoryUiDescriptor {
+                    id: category.id.clone(),
+                    label: category.label.clone(),
+                    icon: asset_server.load(&category.icon_path),
+                    panel_id: panel_id_for_entity_category(&category.id),
+                    kind,
+                },
+                cell_variants,
+                gas_variants,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let initial_category = ui_categories
+        .iter()
+        .find(|(descriptor, _, _)| descriptor.id == cells_category_id)
+        .or_else(|| ui_categories.first())
+        .map(|(descriptor, _, _)| descriptor.id.clone());
+    active_entity_category.set(initial_category.clone());
+    active_tool.selected = None;
+    category_ui_registry.items = ui_categories
+        .iter()
+        .map(|(descriptor, _, _)| descriptor.clone())
+        .collect();
+
     commands
         .spawn((
             Node {
@@ -146,7 +193,7 @@ fn setup_editor_ui(
                 display: Display::Flex,
                 flex_direction: FlexDirection::Row,
                 column_gap: Val::Px(MAIN_TOOL_BUTTON_GAP),
-                width: Val::Px(MAIN_TOOLBAR_WIDTH),
+                width: Val::Px(main_toolbar_width),
                 height: Val::Px(MAIN_TOOLBAR_HEIGHT),
                 padding: UiRect::all(Val::Px(MAIN_TOOLBAR_PADDING)),
                 ..default()
@@ -155,108 +202,53 @@ fn setup_editor_ui(
             MainToolbarRoot,
         ))
         .with_children(|parent| {
-            spawn_tool_button(
-                parent,
-                "Build",
-                EditorTool::BuildSolid,
-                icon_set.build.clone(),
-                MAIN_TOOL_BUTTON_SIZE,
-                MAIN_TOOL_ICON_SIZE,
-            );
-            spawn_tool_button(
-                parent,
-                "Gases",
-                EditorTool::Gases,
-                icon_set.gases.clone(),
-                MAIN_TOOL_BUTTON_SIZE,
-                MAIN_TOOL_ICON_SIZE,
-            );
+            for (descriptor, _, _) in &ui_categories {
+                spawn_entity_category_button(
+                    parent,
+                    descriptor.label.clone(),
+                    descriptor.id.clone(),
+                    descriptor.icon.clone(),
+                    MAIN_TOOL_BUTTON_SIZE,
+                    MAIN_TOOL_ICON_SIZE,
+                );
+            }
         });
 
-    panel_manager.spawn_panel(
-        &mut commands,
-        &mut panel_open_order,
-        PanelSpec {
-            id: BUILD_TOOL_VARIANT_PANEL_ID,
-            title: "Build".to_string(),
-            collapse_icon: None,
-            corner: PanelCorner::BottomLeft,
-            width: TOOL_VARIANT_PANEL_WIDTH,
-            margin_x: MAIN_TOOLBAR_LEFT,
-            margin_y: TOOL_VARIANT_PANEL_BOTTOM,
-            stack_gap: DEFAULT_PANEL_STACK_GAP,
-            controls: PanelControls {
-                show_collapse: false,
-                show_close: false,
-                custom_actions: vec![TOOL_VARIANT_PANEL_CLOSE_ACTION_ID],
+    for (descriptor, cell_variants, gas_variants) in &ui_categories {
+        panel_manager.spawn_panel(
+            &mut commands,
+            &mut panel_open_order,
+            PanelSpec {
+                id: descriptor.panel_id,
+                title: descriptor.label.clone(),
+                collapse_icon: None,
+                corner: PanelCorner::BottomLeft,
+                width: TOOL_VARIANT_PANEL_WIDTH,
+                margin_x: MAIN_TOOLBAR_LEFT,
+                margin_y: TOOL_VARIANT_PANEL_BOTTOM,
+                stack_gap: DEFAULT_PANEL_STACK_GAP,
+                controls: PanelControls {
+                    show_collapse: false,
+                    show_close: false,
+                    custom_actions: vec![TOOL_VARIANT_PANEL_CLOSE_ACTION_ID],
+                },
+                scroll_policy: PanelScrollPolicy::AutoHalfScreen,
+                background: PANEL_BG,
+                header_background: crate::ui::palette::PANEL_HEADER_BG,
+                initial_visible: false,
+                initial_collapsed: false,
             },
-            scroll_policy: PanelScrollPolicy::AutoHalfScreen,
-            background: PANEL_BG,
-            header_background: crate::ui::palette::PANEL_HEADER_BG,
-            initial_visible: false,
-            initial_collapsed: false,
-        },
-        |parent| {
-            spawn_build_tool_variant_panel_content(
-                parent,
-                crate::plugins::default_plugin::cell_label(
-                    crate::plugins::default_plugin::brick_cell_material(),
-                ),
-                crate::plugins::default_plugin::cell_label(
-                    crate::plugins::default_plugin::metal_cell_material(),
-                ),
-                crate::plugins::default_plugin::brick_cell_material(),
-                crate::plugins::default_plugin::metal_cell_material(),
-                icon_set.brick.clone(),
-                icon_set.metal.clone(),
-            );
-        },
-    );
-
-    panel_manager.spawn_panel(
-        &mut commands,
-        &mut panel_open_order,
-        PanelSpec {
-            id: GASES_TOOL_VARIANT_PANEL_ID,
-            title: "Gases".to_string(),
-            collapse_icon: None,
-            corner: PanelCorner::BottomLeft,
-            width: TOOL_VARIANT_PANEL_WIDTH,
-            margin_x: MAIN_TOOLBAR_LEFT,
-            margin_y: TOOL_VARIANT_PANEL_BOTTOM,
-            stack_gap: DEFAULT_PANEL_STACK_GAP,
-            controls: PanelControls {
-                show_collapse: false,
-                show_close: false,
-                custom_actions: vec![TOOL_VARIANT_PANEL_CLOSE_ACTION_ID],
+            |parent| match descriptor.kind {
+                EntityCategoryKind::Cells => {
+                    spawn_cells_variant_panel_content(parent, cell_variants);
+                }
+                EntityCategoryKind::Gases => {
+                    spawn_gases_variant_panel_content(parent, gas_variants);
+                }
+                EntityCategoryKind::Other => {}
             },
-            scroll_policy: PanelScrollPolicy::AutoHalfScreen,
-            background: PANEL_BG,
-            header_background: crate::ui::palette::PANEL_HEADER_BG,
-            initial_visible: false,
-            initial_collapsed: false,
-        },
-        |parent| {
-            spawn_gases_tool_variant_panel_content(
-                parent,
-                crate::plugins::default_plugin::structure_label(
-                    crate::plugins::default_plugin::pipe_structure_kind(),
-                ),
-                crate::plugins::default_plugin::structure_label(
-                    crate::plugins::default_plugin::vent_structure_kind(),
-                ),
-                crate::plugins::default_plugin::structure_label(
-                    crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
-                ),
-                PipeToolKind::Pipe,
-                PipeToolKind::Vent,
-                PipeToolKind::Bridge,
-                icon_set.pipe.clone(),
-                icon_set.vent.clone(),
-                icon_set.bridge.clone(),
-            );
-        },
-    );
+        );
+    }
 
     commands
         .spawn((
@@ -1063,4 +1055,104 @@ fn setup_editor_ui(
                 SelectionSizeTooltipText,
             ));
         });
+}
+
+fn panel_id_for_entity_category(category_id: &ContentId) -> PanelId {
+    let sanitized = category_id
+        .as_str()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    let leaked = Box::leak(format!("entity_category_panel_{sanitized}").into_boxed_str());
+    PanelId::new(leaked)
+}
+
+fn entity_category_toolbar_priority(
+    category_id: &ContentId,
+    cells_category_id: &ContentId,
+    gases_category_id: &ContentId,
+) -> u8 {
+    if category_id == cells_category_id {
+        0
+    } else if category_id == gases_category_id {
+        1
+    } else {
+        2
+    }
+}
+
+fn collect_cell_variants_for_category(
+    content_registry: &crate::plugins::ContentRegistry,
+    asset_server: &AssetServer,
+    category_id: &ContentId,
+) -> Vec<(String, CellMaterial, Handle<Image>)> {
+    let mut descriptors = content_registry
+        .cells()
+        .values()
+        .filter(|descriptor| descriptor.category_id.as_ref() == Some(category_id))
+        .collect::<Vec<_>>();
+    descriptors.sort_by(|left, right| left.id.cmp(&right.id));
+
+    descriptors
+        .into_iter()
+        .map(|descriptor| {
+            let label = if descriptor.plugin_id == PluginId::default_plugin() {
+                crate::plugins::default_plugin::cell_label(descriptor.material).to_string()
+            } else {
+                descriptor.id.as_str().to_string()
+            };
+            (
+                label,
+                descriptor.material,
+                asset_server.load(descriptor.sprite.image_path.as_str()),
+            )
+        })
+        .collect()
+}
+
+fn collect_pipe_variants_for_category(
+    content_registry: &crate::plugins::ContentRegistry,
+    asset_server: &AssetServer,
+    category_id: &ContentId,
+) -> Vec<(String, PipeToolKind, Handle<Image>)> {
+    let mut descriptors = content_registry
+        .structures()
+        .values()
+        .filter(|descriptor| descriptor.category_id.as_ref() == Some(category_id))
+        .collect::<Vec<_>>();
+    descriptors.sort_by(|left, right| left.id.cmp(&right.id));
+
+    descriptors
+        .into_iter()
+        .filter_map(|descriptor| {
+            let pipe_kind = if descriptor.kind == crate::plugins::default_plugin::pipe_structure_kind()
+            {
+                Some(PipeToolKind::Pipe)
+            } else if descriptor.kind == crate::plugins::default_plugin::vent_structure_kind() {
+                Some(PipeToolKind::Vent)
+            } else if descriptor.kind
+                == crate::plugins::default_plugin::gas_pipe_bridge_structure_kind()
+            {
+                Some(PipeToolKind::Bridge)
+            } else {
+                None
+            }?;
+            let label = if descriptor.plugin_id == PluginId::default_plugin() {
+                crate::plugins::default_plugin::structure_label(descriptor.kind).to_string()
+            } else {
+                descriptor.id.as_str().to_string()
+            };
+            Some((
+                label,
+                pipe_kind,
+                asset_server.load(descriptor.sprite.image_path.as_str()),
+            ))
+        })
+        .collect()
 }

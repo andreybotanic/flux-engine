@@ -14,7 +14,7 @@ fn update_tool_button_tooltip(
     let mut hovered_text = None;
     for (interaction, meta) in &button_query {
         if *interaction == Interaction::Hovered {
-            hovered_text = Some(meta.label);
+            hovered_text = Some(meta.label.clone());
             break;
         }
     }
@@ -28,7 +28,7 @@ fn update_tool_button_tooltip(
         return;
     };
 
-    tooltip_text.0 = label.to_string();
+    tooltip_text.0 = label;
     node.display = Display::Flex;
     node.left = Val::Px((cursor.x + 14.0).min(window.width() - 130.0));
     node.top = Val::Px((cursor.y + 16.0).min(window.height() - 34.0));
@@ -85,6 +85,7 @@ fn update_selection_size_tooltip(
 fn handle_tool_variant_panel_actions(
     mut action_events: EventReader<PanelHeaderActionEvent>,
     mut tool_variant_panels: ResMut<ToolVariantPanelState>,
+    category_ui_registry: Res<EntityCategoryUiRegistry>,
     mut panel_manager: ResMut<PanelManager>,
     mut panel_open_order: ResMut<PanelOpenOrder>,
 ) {
@@ -93,20 +94,10 @@ fn handle_tool_variant_panel_actions(
             continue;
         }
 
-        if event.panel_id == BUILD_TOOL_VARIANT_PANEL_ID {
-            tool_variant_panels.build_closed = true;
+        if let Some(category) = category_ui_registry.by_panel_id(event.panel_id) {
+            tool_variant_panels.mark_closed(&category.id);
             panel_manager.set_visible(
-                BUILD_TOOL_VARIANT_PANEL_ID,
-                false,
-                &mut panel_open_order,
-            );
-            continue;
-        }
-
-        if event.panel_id == GASES_TOOL_VARIANT_PANEL_ID {
-            tool_variant_panels.gases_closed = true;
-            panel_manager.set_visible(
-                GASES_TOOL_VARIANT_PANEL_ID,
+                category.panel_id,
                 false,
                 &mut panel_open_order,
             );
@@ -117,6 +108,8 @@ fn handle_tool_variant_panel_actions(
 fn handle_editor_ui_actions(
     mut interactions: Query<(&Interaction, &EditorUiAction), (Changed<Interaction>, With<Button>)>,
     mut active_tool: ResMut<ActiveEditorTool>,
+    mut active_entity_category: ResMut<ActiveEntityCategory>,
+    category_ui_registry: Res<EntityCategoryUiRegistry>,
     mut cell_settings: ResMut<CellToolSettings>,
     mut pipe_settings: ResMut<PipeToolSettings>,
     mut gas_settings: ResMut<GasToolSettings>,
@@ -154,33 +147,56 @@ fn handle_editor_ui_actions(
             continue;
         }
 
-        match *action {
+        match action {
             EditorUiAction::SelectTool(next_tool) => {
-                active_tool.selected = Some(next_tool);
-                if next_tool == EditorTool::BuildSolid {
-                    tool_variant_panels.build_closed = false;
-                }
-                if next_tool == EditorTool::Gases {
-                    tool_variant_panels.gases_closed = false;
-                }
+                active_tool.selected = Some(*next_tool);
                 plugin_events.write(PluginRuntimeEvent::ToolSelected {
-                    tool_id: active_tool_content_id(Some(next_tool)),
+                    tool_id: active_tool_content_id(
+                        Some(*next_tool),
+                        active_entity_category.selected.as_ref(),
+                    ),
                 });
                 structure_edit.selected_cell = None;
                 select_fields.close_all();
                 unfocus_inputs();
                 clear_active_tool_state(&mut selection_drag, &mut brush_drag);
             }
+            EditorUiAction::SelectEntityCategory(category_id) => {
+                unfocus_inputs();
+                active_entity_category.set(Some(category_id.clone()));
+                active_tool.selected = Some(EditorTool::Construct);
+                tool_variant_panels.mark_open(category_id);
+                plugin_events.write(PluginRuntimeEvent::ToolSelected {
+                    tool_id: active_tool_content_id(
+                        Some(EditorTool::Construct),
+                        active_entity_category.selected.as_ref(),
+                    ),
+                });
+                structure_edit.selected_cell = None;
+                select_fields.close_all();
+                clear_active_tool_state(&mut selection_drag, &mut brush_drag);
+            }
             EditorUiAction::SelectCellMaterial(next_material) => {
                 unfocus_inputs();
-                cell_settings.material = next_material;
+                cell_settings.material = Some(*next_material);
             }
             EditorUiAction::SelectPipeTool(next_pipe_tool) => {
                 unfocus_inputs();
-                pipe_settings.selected = next_pipe_tool;
-                active_tool.selected = Some(EditorTool::Gases);
+                pipe_settings.selected = *next_pipe_tool;
+                active_tool.selected = Some(EditorTool::Construct);
+                if let Some(gases_category) = category_ui_registry
+                    .items
+                    .iter()
+                    .find(|item| item.kind == EntityCategoryKind::Gases)
+                {
+                    active_entity_category.set(Some(gases_category.id.clone()));
+                    tool_variant_panels.mark_open(&gases_category.id);
+                }
                 plugin_events.write(PluginRuntimeEvent::ToolSelected {
-                    tool_id: active_tool_content_id(Some(EditorTool::Gases)),
+                    tool_id: active_tool_content_id(
+                        Some(EditorTool::Construct),
+                        active_entity_category.selected.as_ref(),
+                    ),
                 });
                 structure_edit.selected_cell = None;
                 clear_active_tool_state(&mut selection_drag, &mut brush_drag);
@@ -205,6 +221,8 @@ fn handle_editor_ui_actions(
 fn refresh_editor_ui(
     ui_state: (
         Res<ActiveEditorTool>,
+        Res<ActiveEntityCategory>,
+        Res<EntityCategoryUiRegistry>,
         Res<CellToolSettings>,
         Res<PipeToolSettings>,
         Res<ToolVariantPanelState>,
@@ -239,6 +257,8 @@ fn refresh_editor_ui(
 ) {
     let (
         active_tool,
+        active_entity_category,
+        category_ui_registry,
         cell_settings,
         pipe_settings,
         tool_variant_panels,
@@ -249,6 +269,10 @@ fn refresh_editor_ui(
     ) = ui_state;
     let (debug_metrics, _sim_control, sim_perf) = sim_metrics;
     let selected_tool = active_tool.selected;
+    let selected_category_id = active_entity_category.selected.as_ref();
+    let selected_category_kind = selected_category_id
+        .and_then(|category_id| category_ui_registry.by_id(category_id))
+        .map(|descriptor| descriptor.kind);
     let (debug_overlay, sim_backend, overlay_mode) = ui_context;
     ui_scroll_block.block_panel_scrolling = main_menu.open;
 
@@ -348,11 +372,27 @@ fn refresh_editor_ui(
             EditorUiAction::SelectTool(action_tool) if Some(*action_tool) == selected_tool => {
                 BUTTON_ACTIVE
             }
-            EditorUiAction::SelectCellMaterial(material) if *material == cell_settings.material => {
+            EditorUiAction::SelectEntityCategory(category_id)
+                if selected_tool == Some(EditorTool::Construct)
+                    && selected_category_id == Some(category_id) =>
+            {
                 BUTTON_ACTIVE
             }
+            EditorUiAction::SelectCellMaterial(material)
+                if cell_settings.material == Some(*material) =>
+            {
+                if selected_tool == Some(EditorTool::Construct)
+                    && selected_category_kind == Some(EntityCategoryKind::Cells)
+                {
+                    BUTTON_ACTIVE
+                } else {
+                    BUTTON_IDLE
+                }
+            }
             EditorUiAction::SelectPipeTool(kind)
-                if selected_tool == Some(EditorTool::Gases) && *kind == pipe_settings.selected =>
+                if selected_tool == Some(EditorTool::Construct)
+                    && selected_category_kind == Some(EntityCategoryKind::Gases)
+                    && *kind == pipe_settings.selected =>
             {
                 BUTTON_ACTIVE
             }
@@ -379,29 +419,20 @@ fn refresh_editor_ui(
         };
     }
 
-    let build_tool_panel_visible = tool_variant_panel_visible(
-        selected_tool,
-        world_load_state.has_world,
-        tool_variant_panels.build_closed,
-        EditorTool::BuildSolid,
-    );
-    ui.panel_manager.set_visible(
-        BUILD_TOOL_VARIANT_PANEL_ID,
-        build_tool_panel_visible,
-        &mut ui.panel_open_order,
-    );
-
-    let gases_tool_panel_visible = tool_variant_panel_visible(
-        selected_tool,
-        world_load_state.has_world,
-        tool_variant_panels.gases_closed,
-        EditorTool::Gases,
-    );
-    ui.panel_manager.set_visible(
-        GASES_TOOL_VARIANT_PANEL_ID,
-        gases_tool_panel_visible,
-        &mut ui.panel_open_order,
-    );
+    for category in &category_ui_registry.items {
+        let is_selected = selected_category_id
+            .map(|selected| selected == &category.id)
+            .unwrap_or(false);
+        let visible = category_variant_panel_visible(
+            selected_tool,
+            selected_category_id,
+            &category.id,
+            world_load_state.has_world,
+            tool_variant_panels.is_closed(&category.id),
+        ) && is_selected;
+        ui.panel_manager
+            .set_visible(category.panel_id, visible, &mut ui.panel_open_order);
+    }
 
     let debug_panel_visible = world_load_state.has_world && debug_mode.active;
     ui.panel_manager.set_visible(
@@ -583,13 +614,19 @@ fn gpu_time_rows_visible(backend: crate::simulation::backend::SimulationBackend)
     matches!(backend, crate::simulation::backend::SimulationBackend::Gpu)
 }
 
-fn tool_variant_panel_visible(
+fn category_variant_panel_visible(
     selected_tool: Option<EditorTool>,
+    selected_category_id: Option<&ContentId>,
+    panel_category_id: &ContentId,
     world_loaded: bool,
-    closed: bool,
-    panel_tool: EditorTool,
+    panel_closed: bool,
 ) -> bool {
-    world_loaded && !closed && selected_tool == Some(panel_tool)
+    world_loaded
+        && !panel_closed
+        && selected_tool == Some(EditorTool::Construct)
+        && selected_category_id
+            .map(|selected| selected == panel_category_id)
+            .unwrap_or(false)
 }
 
 #[derive(SystemParam)]
@@ -675,8 +712,9 @@ struct RefreshEditorUiSystemParams<'w, 's> {
 
 #[cfg(test)]
 mod editor_ui_block_tests {
-    use super::{format_mass_error_text, gpu_time_rows_visible, tool_variant_panel_visible};
+    use super::{category_variant_panel_visible, format_mass_error_text, gpu_time_rows_visible};
     use crate::editor::EditorTool;
+    use crate::plugins::ContentId;
 
     #[test]
     fn gpu_time_rows_are_visible_only_for_gpu_backend() {
@@ -698,29 +736,42 @@ mod editor_ui_block_tests {
 
     #[test]
     fn variant_panel_visibility_respects_selected_tool_and_close_state() {
-        assert!(tool_variant_panel_visible(
-            Some(EditorTool::BuildSolid),
+        let cells = ContentId::parse("flux.default.category.cells").expect("cells id");
+        let gases = ContentId::parse("flux.default.category.gases").expect("gases id");
+        assert!(category_variant_panel_visible(
+            Some(EditorTool::Construct),
+            Some(&cells),
+            &cells,
             true,
-            false,
-            EditorTool::BuildSolid
+            false
         ));
-        assert!(!tool_variant_panel_visible(
-            Some(EditorTool::BuildSolid),
+        assert!(!category_variant_panel_visible(
+            Some(EditorTool::Construct),
+            Some(&cells),
+            &cells,
             true,
-            true,
-            EditorTool::BuildSolid
+            true
         ));
-        assert!(!tool_variant_panel_visible(
-            Some(EditorTool::BuildSolid),
+        assert!(!category_variant_panel_visible(
+            Some(EditorTool::Construct),
+            Some(&cells),
+            &cells,
             false,
-            false,
-            EditorTool::BuildSolid
+            false
         ));
-        assert!(!tool_variant_panel_visible(
-            Some(EditorTool::Gases),
+        assert!(!category_variant_panel_visible(
+            Some(EditorTool::Construct),
+            Some(&gases),
+            &cells,
             true,
-            false,
-            EditorTool::BuildSolid
+            false
+        ));
+        assert!(!category_variant_panel_visible(
+            Some(EditorTool::AddGas),
+            Some(&cells),
+            &cells,
+            true,
+            false
         ));
     }
 }

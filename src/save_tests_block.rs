@@ -349,6 +349,42 @@ mod tests {
     }
 
     #[test]
+    fn list_saves_ignores_corrupted_slot_meta_and_keeps_valid_slots() {
+        let root = temp_saves_root("flux_save_skip_corrupted_meta");
+        let registry = test_registry();
+        let world = WorldGrid::default();
+        let gas = GasField::from_registry(&registry);
+        let structures = PlacedStructureMap::default();
+        let pipe_gas = PipeGasField::from_registry(&registry);
+
+        let descriptor = create_save(
+            &root,
+            "valid-slot",
+            &world,
+            &gas,
+            &structures,
+            &pipe_gas,
+            &registry,
+            3,
+        )
+        .expect("save");
+
+        let broken_slot = root.join("broken_slot");
+        fs::create_dir_all(&broken_slot).expect("create broken slot dir");
+        fs::write(
+            broken_slot.join(META_FILE),
+            "schema_version = [this is invalid toml",
+        )
+        .expect("write broken meta");
+
+        let saves = list_saves(&root).expect("list saves");
+        assert_eq!(saves.len(), 1);
+        assert_eq!(saves[0].id, descriptor.id);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn save_meta_includes_preview_chunk_and_list_preview_path() {
         let root = temp_saves_root("flux_save_preview_meta");
         let registry = test_registry();

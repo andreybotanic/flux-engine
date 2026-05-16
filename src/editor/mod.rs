@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use bevy::{app::AppExit, ecs::system::SystemParam, prelude::*, window::PrimaryWindow};
 
 use crate::{
@@ -75,12 +77,11 @@ const TOP_LEFT_SIM_PANEL_HEIGHT: f32 = 112.0;
 
 const MAIN_TOOLBAR_LEFT: f32 = 12.0;
 const MAIN_TOOLBAR_BOTTOM: f32 = 12.0;
-const MAIN_TOOLBAR_WIDTH: f32 =
-    (MAIN_TOOL_BUTTON_SIZE * 2.0) + MAIN_TOOL_BUTTON_GAP + (MAIN_TOOLBAR_PADDING * 2.0);
 const MAIN_TOOLBAR_HEIGHT: f32 = MAIN_TOOL_BUTTON_SIZE + (MAIN_TOOLBAR_PADDING * 2.0);
 const TOOL_VARIANT_PANEL_BOTTOM: f32 =
     MAIN_TOOLBAR_BOTTOM + MAIN_TOOLBAR_HEIGHT + TOOL_VARIANT_PANEL_MARGIN_BOTTOM;
 const TOOL_VARIANT_PANEL_WIDTH: f32 = 286.0;
+const CONSTRUCT_TOOL_CONTENT_ID: &str = "flux.core.tool.construct";
 
 const DEBUG_TOOLBAR_LEFT: f32 = 306.0;
 const DEBUG_TOOLBAR_TOP: f32 = 12.0;
@@ -98,8 +99,6 @@ const STRUCTURE_PANEL_WIDTH: f32 = 286.0;
 const DEBUG_PANEL_ID: PanelId = PanelId::new("debug_panel");
 const GAS_TOOL_PANEL_ID: PanelId = PanelId::new("gas_tool_panel");
 const STRUCTURE_TOOL_PANEL_ID: PanelId = PanelId::new("structure_tool_panel");
-const BUILD_TOOL_VARIANT_PANEL_ID: PanelId = PanelId::new("build_tool_variant_panel");
-const GASES_TOOL_VARIANT_PANEL_ID: PanelId = PanelId::new("gases_tool_variant_panel");
 const TOOL_VARIANT_PANEL_CLOSE_ACTION_ID: PanelHeaderActionId = PanelHeaderActionId::new("X");
 const GAS_SELECT_ADD_ID: SelectFieldId = SelectFieldId::new("gas_select_add");
 const GAS_SELECT_SOURCE_ID: SelectFieldId = SelectFieldId::new("gas_select_source");
@@ -107,8 +106,7 @@ const SETTINGS_MUSIC_VOLUME_SLIDER_ID: SliderId = SliderId::new("settings_music_
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EditorTool {
-    BuildSolid,
-    Gases,
+    Construct,
     EraseSolid,
     Scissors,
     AddGas,
@@ -133,14 +131,12 @@ pub struct ActiveEditorTool {
 #[derive(Resource)]
 /// Stores `CellToolSettings` state.
 pub struct CellToolSettings {
-    pub material: CellMaterial,
+    pub material: Option<CellMaterial>,
 }
 
 impl Default for CellToolSettings {
     fn default() -> Self {
-        Self {
-            material: crate::plugins::default_plugin::brick_cell_material(),
-        }
+        Self { material: None }
     }
 }
 
@@ -253,18 +249,84 @@ struct BrushDragState {
 #[derive(Resource, Default)]
 /// Stores visibility suppression flags for tool-variant panels.
 struct ToolVariantPanelState {
-    build_closed: bool,
-    gases_closed: bool,
+    closed_category_ids: BTreeSet<ContentId>,
 }
 
-#[derive(Component, Clone, Copy)]
+impl ToolVariantPanelState {
+    fn mark_closed(&mut self, category_id: &ContentId) {
+        let _ = self.closed_category_ids.insert(category_id.clone());
+    }
+
+    fn mark_open(&mut self, category_id: &ContentId) {
+        self.closed_category_ids.remove(category_id);
+    }
+
+    fn is_closed(&self, category_id: &ContentId) -> bool {
+        self.closed_category_ids.contains(category_id)
+    }
+}
+
+#[derive(Component, Clone)]
 enum EditorUiAction {
     SelectTool(EditorTool),
+    SelectEntityCategory(ContentId),
     SelectCellMaterial(CellMaterial),
     SelectPipeTool(PipeToolKind),
     ToggleReplace,
     ToggleBuoyancy,
     ToggleShowMomentumVectors,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EntityCategoryKind {
+    Cells,
+    Gases,
+    Other,
+}
+
+#[derive(Clone)]
+struct EntityCategoryUiDescriptor {
+    id: ContentId,
+    label: String,
+    icon: Handle<Image>,
+    panel_id: PanelId,
+    kind: EntityCategoryKind,
+}
+
+#[derive(Resource, Default, Clone)]
+struct EntityCategoryUiRegistry {
+    items: Vec<EntityCategoryUiDescriptor>,
+}
+
+impl EntityCategoryUiRegistry {
+    fn by_panel_id(&self, panel_id: PanelId) -> Option<&EntityCategoryUiDescriptor> {
+        self.items
+            .iter()
+            .find(|descriptor| descriptor.panel_id == panel_id)
+    }
+
+    fn by_id(&self, category_id: &ContentId) -> Option<&EntityCategoryUiDescriptor> {
+        self.items
+            .iter()
+            .find(|descriptor| &descriptor.id == category_id)
+    }
+}
+
+#[derive(Resource, Default, Clone)]
+struct ActiveEntityCategory {
+    selected: Option<ContentId>,
+}
+
+impl ActiveEntityCategory {
+    fn set(&mut self, category_id: Option<ContentId>) {
+        self.selected = category_id;
+    }
+}
+
+#[derive(Resource, Default, Clone, Copy)]
+pub(crate) struct MainToolbarLayout {
+    width: f32,
+    height: f32,
 }
 
 #[derive(Component)]
@@ -511,7 +573,7 @@ enum MainMenuButtonAction {
 
 #[derive(Component)]
 struct ToolButtonMeta {
-    label: &'static str,
+    label: String,
 }
 
 #[derive(Component)]
@@ -528,19 +590,10 @@ struct SelectionSizeTooltipText;
 
 #[derive(Resource, Clone)]
 struct EditorIconSet {
-    build: Handle<Image>,
-    gases: Handle<Image>,
-    pipe: Handle<Image>,
-    vent: Handle<Image>,
-    bridge: Handle<Image>,
     add_gas: Handle<Image>,
     clear_gas: Handle<Image>,
     source: Handle<Image>,
     sink: Handle<Image>,
-    brick: Handle<Image>,
-    metal: Handle<Image>,
-    brick_silhouette: Handle<Image>,
-    metal_silhouette: Handle<Image>,
     pipe_silhouette: Handle<Image>,
     vent_silhouette: Handle<Image>,
     bridge_silhouette: Handle<Image>,
@@ -566,6 +619,9 @@ pub struct EditorPlugin;
 impl Plugin for EditorPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ActiveEditorTool>()
+            .init_resource::<ActiveEntityCategory>()
+            .init_resource::<EntityCategoryUiRegistry>()
+            .init_resource::<MainToolbarLayout>()
             .init_resource::<CellToolSettings>()
             .init_resource::<PipeToolSettings>()
             .init_resource::<BridgePlacementState>()
@@ -650,8 +706,9 @@ impl UiRectPx {
 mod tests {
     use super::{
         editor_tool_for_hotkey, escape_action, open_delete_confirmation, toggled_editor_tool,
-        EditorTool, EscAction,
+        EditorTool, EscAction, ToolVariantPanelState,
     };
+    use crate::plugins::ContentId;
     use crate::save::{MainMenuConfirmState, MainMenuMode, MainMenuScreen, MainMenuUiState};
     use bevy::prelude::KeyCode;
 
@@ -818,5 +875,16 @@ mod tests {
             toggled_editor_tool(Some(EditorTool::Scissors), EditorTool::Scissors),
             None
         );
+    }
+
+    #[test]
+    fn category_panel_state_reopens_after_close() {
+        let category_id = ContentId::parse("flux.default.category.cells").expect("category id");
+        let mut panel_state = ToolVariantPanelState::default();
+        assert!(!panel_state.is_closed(&category_id));
+        panel_state.mark_closed(&category_id);
+        assert!(panel_state.is_closed(&category_id));
+        panel_state.mark_open(&category_id);
+        assert!(!panel_state.is_closed(&category_id));
     }
 }

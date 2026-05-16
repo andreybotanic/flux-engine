@@ -68,7 +68,7 @@ FluxEngine/
 - `Cargo.toml`: Манифест Rust-проекта, workspace и зависимости; основной crate, `xtask`, `crates/flux_plugin_sdk` и `crates/flux_plugin_abi` входят в workspace, sample plugin crates живут под `src/plugins/*` и собираются отдельно через `xtask`.
 - `crates/flux_plugin_abi/Cargo.toml`: Манифест внутреннего ABI crate-а для runtime plugin handshake.
 - `crates/flux_plugin_abi/src/events.rs`: Внутренние ABI payload-структуры событий и mapping raw event kind values.
-- `crates/flux_plugin_abi/src/ffi.rs`: C-compatible `Flux*` ABI-структуры, callback typedef-ы и export-name константы для скрытого DLL-контракта.
+- `crates/flux_plugin_abi/src/ffi.rs`: C-compatible `Flux*` ABI-структуры, callback typedef-ы и export-name константы для скрытого DLL-контракта, включая API `v6`, `registration_phase` и ABI-дескрипторы категорий сущностей.
 - `crates/flux_plugin_abi/src/lib.rs`: Точка входа внутреннего ABI crate-а и re-export его модулей.
 - `crates/flux_plugin_sdk/Cargo.toml`: Манифест публичного Rust-first Plugin SDK.
 - `crates/flux_plugin_sdk/src/api.rs`: Публичные proxy API плагина (`WorldApi`, `EntityApi`, `GasApi`, `UiApi`, `OverlayApi`, `SaveApi`, `TimeApi`, `InputApi`, `LoggerApi`).
@@ -80,8 +80,8 @@ FluxEngine/
 - `crates/flux_plugin_sdk/src/lib.rs`: Публичная точка входа SDK, re-export-ы и macro `declare_plugin!`.
 - `crates/flux_plugin_sdk/src/overlay_graph.rs`: Public SDK model for plugin overlay scene graph: node IDs, selectors by `ContentId`/`ContentTag`, `RenderImageNode`, blend/material nodes and DAG validation.
 - `crates/flux_plugin_sdk/src/overlay_graph_tests.rs`: SDK unit-тесты graph validation/order, selector builders, `ContentTag` matching и JSON roundtrip overlay graph descriptors.
-- `crates/flux_plugin_sdk/src/plugin.rs`: Публичные `Plugin`, `PluginInit` и скрытый `PluginRuntime`, который связывает Rust-плагин с внутренним ABI dispatch.
-- `crates/flux_plugin_sdk/src/registrar.rs`: `Registrar<Self>`, typed `subscribe(...)` и внутренняя таблица зарегистрированных Rust-обработчиков.
+- `crates/flux_plugin_sdk/src/plugin.rs`: Публичные `Plugin`, `PluginInit` и скрытый `PluginRuntime`, который связывает Rust-плагин с внутренним ABI dispatch и управляет двухфазной регистрацией (`categories -> content`).
+- `crates/flux_plugin_sdk/src/registrar.rs`: `Registrar<Self>`, typed `subscribe(...)`, typed entity categories (`EntityCategoryRef`) и фазовые helper-ы регистрации.
 - `crates/flux_plugin_sdk/src/runtime_host.rs`: Internal SDK host-contract (`RuntimeHostBinding`, `RuntimeHostFns`, save/time snapshots) shared by ABI and built-in runtime execution.
 - `crates/flux_plugin_sdk/src/scope.rs`: Внутренний dispatch scope SDK, который временно привязывает proxy API к текущему runtime host.
 - `config/backups/simulation.toml.pre_tuning_20260503_174021.toml`: Резервная копия конфигурации симуляции для отката/сравнения.
@@ -105,7 +105,7 @@ FluxEngine/
 - `docs/technical_overview/04_backends_render_and_camera.md`: GPU/CPU backend-политика, parity/perf, рендер `F1/F2/F3` и камера.
 - `docs/technical_overview/05_config_data_flow_and_mvp_limits.md`: Конфигурация, high-level поток данных и текущие ограничения MVP.
 - `docs/technical_overview/06_pipe_content_animation.md`: Изолированное описание визуального pipe content animation в `F3`.
-- `docs/technical_overview/07_plugin_sdk_and_overlay_graph.md`: Текущий контракт Plugin SDK v5 и overlay graph runtime pipeline.
+- `docs/technical_overview/07_plugin_sdk_and_overlay_graph.md`: Текущий контракт Plugin SDK v6 и overlay graph runtime pipeline.
 - `plugin_state.toml`: Локальный runtime-файл пользовательских настроек plugin enable-state; хранится в корне проекта и игнорируется через `.gitignore`.
 - `plugins/.gitkeep`: Фиксирует пустой runtime-каталог для packaged plugins; реальные `.fluxplugin` игнорируются через `.gitignore`.
 - `plugins_dev/.gitkeep`: Фиксирует пустой runtime-каталог expanded dev plugins; реальные папки плагинов игнорируются через `.gitignore`.
@@ -119,8 +119,8 @@ FluxEngine/
 - `src/config/audio_settings_block.rs`: Runtime-состояние звуковых настроек, нормализация громкости `0..100 -> 0.0..1.0`, загрузка/сохранение `config/settings.toml` и тесты fallback/roundtrip.
 - `src/config/mod.rs`: Публичные конфиг-типы, включая `AudioSettingsState`; compatibility `GasRegistry` поверх plugin-owned substance registry, runtime-реестры base/visual/layout/HUD-метаданных и входная точка загрузки конфигов.
 - `src/debug/mod.rs`: Debug-режимы, оверлейные метрики и диагностические ресурсы.
-- `src/editor/editor_ui_block.rs`: Runtime-обработка editor UI: tooltip, state sync, панели.
-- `src/editor/input_block.rs`: Мышь/кисть/выделение и применение инструментов к миру, unified pipe/structure-сети и мосту.
+- `src/editor/editor_ui_block.rs`: Runtime-обработка editor UI: tooltip, state sync, динамический category-toolbar (`Cells/Gases/+plugin categories`), и visibility/close-логика category-панелей.
+- `src/editor/input_block.rs`: Мышь/кисть/выделение и применение инструментов к миру через `Construct` + активную категорию (`Cells`/`Gases`), unified pipe/structure-сеть и мост.
 - `src/editor/main_menu_actions_block.rs`: Обработчики действий меню: save/load/new/exit/plugins/reload/confirm, очередь preview-capture и post-save follow-up сценарии.
 - `src/editor/main_menu_block.rs`: Композиция логики main menu (escape/actions/ui refresh), включая экран `Settings`.
 - `src/editor/main_menu_escape_block.rs`: Обработка Esc и переходов состояний меню/инструментов, включая возврат из `Plugins` и `Settings` к root screen.
@@ -128,12 +128,12 @@ FluxEngine/
 - `src/editor/main_menu_save_list_block.rs`: Общая отправка action-ивентов кнопок главного меню, сборка карточек save/load, загрузка preview PNG в UI и hit-test логика primary-click по всей карточке.
 - `src/editor/main_menu_settings_block.rs`: Логика экрана `Settings`: открытие вкладок и live-применение изменений слайдера громкости в `AudioSettingsState`.
 - `src/editor/main_menu_ui_block.rs`: Обновление состояния и видимости элементов меню, включая экраны save/load/confirm/plugins/settings и отображение текущего значения slider-громкости.
-- `src/editor/mod.rs`: Публичные editor-типы/ресурсы и точка сборки editor-систем, включая `Pipe/Vent/Bridge`, состояние поворота моста и состояние подавления видимости nested-панелей `Build/Gases` после header-close.
+- `src/editor/mod.rs`: Публичные editor-типы/ресурсы и точка сборки editor-систем, включая `Construct`-инструмент, реестр UI-категорий, состояние поворота моста и suppress-state закрытых category-панелей.
 - `src/editor/overlay_setup_block.rs`: Инициализация визуальных editor-оверлеев.
 - `src/editor/ui_setup_block.rs`: Сборка editor-UI: панели, кнопки, поля и привязка виджетов.
 - `src/editor/ui_setup_debug_panels_block.rs`: Построение контента `Debug Panel` с вложенными сворачиваемыми блоками (`Time`, `Gas simulation`, `Gas overlay`), switch-строками и полями параметров.
 - `src/editor/ui_setup_menu_button_factory_block.rs`: Фабрика кнопок модального меню.
-- `src/editor/ui_setup_setup_fn_block.rs`: Основная функция первичной сборки editor-UI, включая main-toolbar (`Build/Gases`), nested-панели вариантов `Build`/`Gases` через `PanelManager`, контейнеры экранов главного меню и layout экрана `Settings` со слайдером громкости.
+- `src/editor/ui_setup_setup_fn_block.rs`: Основная функция первичной сборки editor-UI, включая динамический main-toolbar категорий из content registry, nested category-панели вариантов через `PanelManager`, контейнеры экранов главного меню и layout экрана `Settings` со слайдером громкости.
 - `src/editor/ui_setup_structure_buttons_block.rs`: Вспомогательные фабрики кнопок инструментов/материалов с параметризуемыми размерами и сборка tabular-контента (`3` колонки) для nested-панелей вариантов.
 - `src/input/camera.rs`: Управление камерой, зум/пан и тесты корректности якоря.
 - `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
@@ -146,7 +146,7 @@ FluxEngine/
 - `src/plugins/api/ui_api.rs`: Declarative plugin UI descriptors for tools, panels, HUD blocks and simple UI node trees.
 - `src/plugins/api/save_api.rs`: In-memory plugin save chunk store and chunk payload contracts.
 - `src/plugins/api/runtime.rs`: Runtime registry for plugin event subscriber groups, tool descriptors, overlay descriptors (including optional in-process overlay graph) and save chunk descriptors.
-- `src/plugins/content.rs`: Content registry runtime-модель: stable `ContentId`, provider plugins, descriptors клеток/структур/overlay, HUD metadata и registered substances.
+- `src/plugins/content.rs`: Content registry runtime-модель: stable `ContentId`, provider plugins, typed entity categories, descriptors клеток/структур/overlay, HUD metadata и registered substances.
 - `src/plugins/default_plugin/mod.rs`: Built-in locked `flux.default` content/runtime: default descriptor registration, generic ID facade, legacy numeric save adapters и wiring built-in SDK runtime + pipe-runtime support.
 - `src/plugins/default_plugin/runtime_sdk.rs`: In-process SDK plugin type для `flux.default`: typed proxy API + lifecycle/simulation/HUD обработчики, и graph-based `RenderOverlay` producer для `F3/Pipes` через `OverlayApi::submit_graph`.
 - `src/plugins/default_plugin/overlay_graph.rs`: Builder graph-пайплайна `F3/Pipes`: декларативные selector/material/image узлы, включая static pipe gas squares, moving packets и bridge/vent port icons.
@@ -178,16 +178,16 @@ FluxEngine/
 - `src/plugins/manifest.rs`: Парсинг и валидация `manifest.toml` в runtime-структуру `PluginManifest`.
 - `src/plugins/mod.rs`: Точка сборки plugin-подсистемы и её публичный re-export API; подключает общий runtime layer для DLL и built-in endpoint-ов.
 - `src/plugins/reload.rs`: Атомарный manual reload/rescan runtime-плагинов без загруженного мира: rebuild registry, пересборка gas registry, generation/report и сравнение source fingerprints.
-- `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin capabilities/content, включая сущности, газы, инструменты, overlay, save chunks и event subscriptions без `handler_name`.
+- `src/plugins/registration.rs`: Runtime-структура результата ABI-регистрации plugin capabilities/content, включая сущности с category-ссылками, реестр категорий, газы, инструменты, overlay, save chunks и event subscriptions без `handler_name`.
 - `src/plugins/runtime_builtin.rs`: Built-in runtime endpoint-ы на базе `flux_plugin_sdk::BuiltinPluginRuntime`, conversion engine events -> typed SDK events и сборка runtime registration для `flux.default`.
 - `src/plugins/runtime_dll.rs`: Общий runtime executor верхнего уровня: unified plugin endpoint registry, DLL host callbacks, dispatch и per-frame store для declarative overlay graph submit path.
-- `src/plugins/runtime_dll_events.rs`: Typed runtime event dispatch для SDK v5: кодирует ABI payload и вызывает единый `flux_plugin_dispatch` у каждого подписанного DLL-плагина.
+- `src/plugins/runtime_dll_events.rs`: Typed runtime event dispatch для SDK v7: кодирует ABI payload и вызывает единый `flux_plugin_dispatch` у каждого подписанного DLL-плагина.
 - `src/plugins/runtime_host_binding.rs`: Engine-side adapter `RuntimeHostContext -> flux_plugin_sdk::__private::RuntimeHostBinding` для единого host-исполнения built-in и ABI plugin runtimes и graph-only overlay submit path (`submit_overlay_graph`).
 - `src/plugins/flux_api_cell_demo_plugin/`: Runtime DLL fixture на `flux_plugin_sdk`, демонстрирующий entity/tool/input path нового SDK.
 - `src/plugins/flux_api_tick_demo_plugin/`: Runtime DLL fixture на `flux_plugin_sdk`, демонстрирующий simulation pre-step handler без named ABI exports.
 - `src/plugins/flux_api_temperature_overlay_plugin/`: Runtime DLL fixture на `flux_plugin_sdk`, демонстрирующий temperature-style graph overlay (`RenderImageNode` + selector-based entity layer) через `submit_graph`.
 - `src/plugins/flux_api_ui_save_demo_plugin/`: Runtime DLL fixture на `flux_plugin_sdk`, демонстрирующий HUD, save chunk и input-driven runtime path.
-- `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` и rebuild-helper для menu toggle; content registry создаётся из default descriptors плюс runtime registration включённых content-плагинов.
+- `src/plugins/registry.rs`: Bootstrap runtime registry/state, default plugin source priority, `LoadedPluginRegistry` и rebuild-helper для menu toggle; content bootstrap выполняется глобально в 2 фазы (`all categories -> all content`) с валидацией коллизий category id и ссылок на неизвестные категории.
 - `src/plugins/source.rs`: Discovery packaged/dev plugin sources, structured rejected-source diagnostics, source fingerprint и resolve plugin layout внутри plugin root.
 - `src/plugins/state.rs`: `EnabledPluginSet`, `plugin_state.toml`, runtime plugin statuses и aggregate `PluginRegistryState`.
 - `src/plugins/substances.rs`: Generic plugin-owned substance contract: `SubstanceId`, `SubstanceDefinition`, `SubstanceFlags` и deterministic `SubstanceRegistry` для compact runtime indices.
@@ -195,17 +195,17 @@ FluxEngine/
 - `src/render/overlay_graph_runtime.rs`: Generic runtime overlay graph compositor: evaluates DAG order, materializes layer plan (`RenderEntities`/`RenderFreeGas`/`RenderImage`/`Blend`/`Material`), spawns overlay entities и обслуживает dynamic `Rgba8` image instances.
 - `src/render/pipe_highlight_material.rs`: Кастомный `Material2d` и helper-логика для shader-подсветки труб в `F3`.
 - `src/render/save_preview.rs`: Offscreen preview pipeline для save-slots: отдельная камера, settle-frame в каноническом `F1`, screenshot capture, PNG-запись и восстановление UI/overlay состояния после кадра.
-- `src/render/world_view.rs`: Публичные render-системы world view, config-driven appearance z-order и layer-based pipe/bridge visuals.
+- `src/render/world_view.rs`: Публичные render-системы world view, config-driven appearance z-order и общий state-driven путь world-спрайтов сущностей.
 - `src/render/world_view_cursor_highlight_block.rs`: Helper отрисовки внутренней белой пунктирной рамки внутри наведённой клетки.
 - `src/render/world_view_overlay_block.rs`: Логика core overlay `F1/F2` и plugin overlay `F3/Pipes`, курсорной сетки, multi-container pipe gas-square sizing, flow-packet анимации и фильтрации визуального шума для пакетов `< 5` частиц.
-- `src/render/world_view_setup_block.rs`: Построение сущностей мира/слоёв, config-driven z-order стен/структур и спавн визуалов из `PlacedStructureMap`.
+- `src/render/world_view_setup_block.rs`: Построение сущностей мира/слоёв, config-driven z-order стен/структур и спавн визуалов из `PlacedStructureMap` через `state -> sprite(+transform)`.
 - `src/render/world_view_tests_block.rs`: Тесты вспомогательной математики рендера.
 - `src/save.rs`: Публичный save/load API, типы состояния меню/сессии, plugin menu screen state и queue/event контракты preview-capture.
 - `src/save_api_block.rs`: Операции верхнего уровня: list/create/overwrite/load snapshot и canonical preview-path для slot-а.
 - `src/save_content_gate_block.rs`: Сбор required plugin content IDs для save-meta и load-gate проверка доступности content перед чтением world chunks.
 - `src/save_content_gate_tests_block.rs`: Тесты required-content meta и load-gate сценариев plugin-compatible save schema.
 - `src/save_format_tests_block.rs`: Тесты отказа старых/битых save schema и mapping edge cases для gas chunks.
-- `src/save_gas_io_block.rs`: Чтение/запись chunk-ов мира, газа, unified placed-structures и node-based pipe-gas формата save schema `6`; world/structure/pipe chunks хранят stable content IDs, gas chunks мапятся между saved stable substance IDs/legacy aliases и текущими compact indices.
+- `src/save_gas_io_block.rs`: Чтение/запись chunk-ов мира, газа, unified placed-structures и node-based pipe-gas формата save schema `7`; placed-structures chunk хранит `PackedState(u16)`, world/structure/pipe chunks используют stable content IDs, gas chunks мапятся между saved stable substance IDs/legacy aliases и текущими compact indices.
 - `src/save_meta_io_block.rs`: Метаданные сейва, required content, диагностический список enabled plugins, валидация единственной поддерживаемой save-схемы и preview-chunk `png_v1`.
 - `src/save_pipe_gas_io_block.rs`: Чтение/запись node-based pipe-gas chunk v2 со stable pipe-container content IDs и mapping saved substance IDs в текущий compact registry.
 - `src/save_tests_block.rs`: Основные тесты сохранения/загрузки, roundtrip, preview meta и shared helpers для save test blocks.
@@ -255,7 +255,7 @@ FluxEngine/
 - `src/ui/toggle_switch.rs`: Переиспользуемый двухпозиционный toggle-switch UI-компонент для включения/выключения настроек, включая compact-layout для строк без label.
 - `src/world/grid.rs`: Клеточная сетка мира, generic material ID wrapper, координатные утилиты и тесты.
 - `src/world/mod.rs`: Плагин мира и события изменений клеток.
-- `src/world/structures.rs`: Unified layer/descriptor-модель структур, generic structure/layer ID wrapper-ы, `PlacedStructureMap`, rotation, bridge-footprint compatibility helpers и pipe-cut state.
+- `src/world/structures.rs`: Unified layer/descriptor-модель структур, generic structure/layer ID wrapper-ы, `PlacedStructureMap`, `PackedState(u16)` для сущностей, bridge-footprint compatibility helpers, pipe-cut state и пересчёт pipe mask-state `0..15`.
 - `xtask/Cargo.toml`: Манифест helper-crate-а для сборки/упаковки runtime-плагинов, cleanup `target` и генерации Plugin SDK документации.
 - `xtask/src/lib.rs`: Реализация команд `build-plugin`, `build-plugin --dev`, `pack-plugin`, `build-all-plugins`, `generate-sprite-ktx`, `check-sprite-ktx`, `clean-target`, `clean-target-hard`, `validate-wgsl`, `build-release`, Plugin SDK docs команд, discovery plugin projects, установка expanded output в `plugins_dev/<plugin_id>`, запуск `cargo validate-wgsl` перед `build-release` и безопасная упаковка `.fluxplugin`.
 - `xtask/src/sprite_ktx.rs`: Офлайн pipeline built-in sprite-ассетов: поиск `ktx`, скан source PNG в core/default-plugin директориях, генерация `.ktx2` с mipmaps и проверка актуальности generated файлов.
@@ -270,3 +270,4 @@ FluxEngine/
 - `xtask/src/plugin_sdk_docs/parser.rs`: Парсинг SDK-facing Rustdoc через `syn`, извлечение summary/section-блоков и поддержка `#[doc(hidden)]` для исключения внутренних SDK helper-ов из generated reference.
 - `xtask/src/plugin_sdk_docs/render.rs`: Рендер generated API items в Markdown/HTML-блоки mdBook, включая cross-links на документированные SDK-типы, списки методов структур и подключение external example-snippets.
 - `xtask/src/main.rs`: CLI entrypoint, который запускает `xtask::run_from_env()` и возвращает non-zero exit code при ошибке.
+

@@ -458,8 +458,7 @@ mod tests {
         },
         plugins::default_plugin::pipe_runtime::{
             PipeContainerKind, PipeFlowVisualState, PipeGasField, PipeSimulationConfig,
-            PipeTransferRecord,
-            PipeTransferVisualPath,
+            PipeTransferRecord, PipeTransferVisualPath,
         },
         simulation::gas::GasField,
         world::{

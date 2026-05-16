@@ -8,8 +8,6 @@ use crate::plugins::{
 use crate::ui::toggle_switch::{
     spawn_toggle_switch, spawn_toggle_switch_button, ToggleSwitchConfig, ToggleSwitchRoot,
 };
-use std::collections::BTreeSet;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PluginToggleControl {
     Actionable { next_enabled: bool },

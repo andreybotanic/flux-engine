@@ -10,7 +10,7 @@ mod tests {
         pipe_overlay_block_offset, pipe_overlay_block_visible,
         quadratic_bezier_point, straight_packet_position,
         pipe_highlight_visibility, vent_world_visibility, world_fade_alpha,
-        overlay_gas_visibility,
+        overlay_gas_visibility, structure_visual_key, wall_sprite_path_for_material,
         OverlayMode,
     };
     use crate::config::{
@@ -23,6 +23,7 @@ mod tests {
     };
     use bevy::prelude::Visibility;
     use bevy::math::{UVec2, Vec2, Vec3};
+    use std::collections::HashSet;
     use crate::world::{
         grid::{WorldGrid, CELL_SIZE},
         structures::{PlacedStructureMap, StructureRotation},
@@ -248,6 +249,41 @@ mod tests {
                 .draw_priority);
         assert!(structure_visuals.get(crate::plugins::default_plugin::gas_pipe_bridge_structure_kind()).draw_priority
             < cell_visual_layouts.get(crate::plugins::default_plugin::brick_cell_material()).draw_priority);
+    }
+
+    #[test]
+    fn wall_sprite_path_uses_registered_descriptor_for_extra_metal_material() {
+        let registry = crate::plugins::default_plugin::default_content_registry();
+        let path = wall_sprite_path_for_material(
+            &registry,
+            crate::world::grid::CellMaterial::new(crate::plugins::default_plugin::CELL_METAL_01_ID),
+        );
+        assert_eq!(path, "flux_default://world/tile_metal.ktx2");
+    }
+
+    #[test]
+    fn structure_visual_keys_do_not_collide_for_pipe_and_vent_in_same_cell() {
+        let world = WorldGrid::default();
+        let mut structures = PlacedStructureMap::default();
+        assert!(structures.place_pipe(12, 12, &world));
+        assert!(structures.place_vent(12, 12, &world));
+
+        let keys = structures
+            .iter()
+            .map(structure_visual_key)
+            .collect::<HashSet<_>>();
+
+        assert_eq!(keys.len(), structures.iter().count());
+    }
+
+    #[test]
+    fn wall_sprite_path_uses_registered_descriptor_for_extra_brick_material() {
+        let registry = crate::plugins::default_plugin::default_content_registry();
+        let path = wall_sprite_path_for_material(
+            &registry,
+            crate::world::grid::CellMaterial::new(crate::plugins::default_plugin::CELL_BRICK_01_ID),
+        );
+        assert_eq!(path, "flux_default://world/tile_brick.ktx2");
     }
 
     #[test]

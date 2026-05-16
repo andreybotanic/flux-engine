@@ -612,9 +612,7 @@ pub fn build_pipe_debug_hud_lines_for_cell(
     config: &PipeSimulationConfig,
     flow_state: &PipeFlowVisualState,
 ) -> Vec<String> {
-    solver::build_pipe_debug_hud_lines_for_cell(
-        cell, structures, pipe_gas, gas, config, flow_state,
-    )
+    solver::build_pipe_debug_hud_lines_for_cell(cell, structures, pipe_gas, gas, config, flow_state)
 }
 
 #[cfg(test)]

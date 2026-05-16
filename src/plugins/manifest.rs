@@ -107,22 +107,23 @@ struct RawPluginManifest {
 
 #[cfg(test)]
 mod tests {
-    use crate::plugins::PluginManifest;
+    use crate::plugins::{PluginManifest, ENGINE_PLUGIN_API_VERSION_VALUE};
 
     #[test]
     fn plugin_contract_manifest_accepts_valid_manifest() {
-        let manifest = PluginManifest::from_str(
+        let manifest = PluginManifest::from_str(&format!(
             r#"id = "valid.plugin"
 display_name = "Valid Plugin"
 version = "1.2.3"
-api_version = 4
+api_version = {}
 dll = "bin/valid.dll"
 configs = "config"
 assets = "assets"
 content = false
 description = "test"
 "#,
-        )
+            ENGINE_PLUGIN_API_VERSION_VALUE
+        ))
         .expect("manifest should parse");
 
         assert_eq!(manifest.id.as_str(), "valid.plugin");
@@ -132,17 +133,18 @@ description = "test"
 
     #[test]
     fn plugin_contract_manifest_rejects_empty_id() {
-        let error = PluginManifest::from_str(
+        let error = PluginManifest::from_str(&format!(
             r#"id = ""
 display_name = "Broken"
 version = "1.2.3"
-api_version = 4
+api_version = {}
 dll = "bin/valid.dll"
 configs = "config"
 assets = "assets"
 content = false
 "#,
-        )
+            ENGINE_PLUGIN_API_VERSION_VALUE
+        ))
         .expect_err("empty id must fail");
 
         assert!(error.to_string().contains("plugin id must not be empty"));

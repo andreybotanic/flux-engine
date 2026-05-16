@@ -33,6 +33,9 @@ pub fn build_registrar(
     register_gas_substance_fn: Option<
         unsafe extern "C" fn(*mut c_void, *const FluxGasSubstanceDescriptor) -> FluxStatus,
     >,
+    register_entity_category_fn: Option<
+        unsafe extern "C" fn(*mut c_void, *const FluxEntityCategoryDescriptor) -> FluxStatus,
+    >,
     register_entity_fn: Option<
         unsafe extern "C" fn(*mut c_void, *const FluxEntityDescriptor) -> FluxStatus,
     >,
@@ -54,12 +57,14 @@ pub fn build_registrar(
     register_subscription_fn: Option<
         unsafe extern "C" fn(*mut c_void, *const FluxSubscriptionDescriptor) -> FluxStatus,
     >,
+    registration_phase: u32,
     registration_context: *mut c_void,
 ) -> FluxRegistrar {
     FluxRegistrar {
         struct_size: std::mem::size_of::<FluxRegistrar>() as u32,
         api_version: crate::plugins::id::ENGINE_PLUGIN_API_VERSION_VALUE,
         register_gas_substance_fn,
+        register_entity_category_fn,
         register_entity_fn,
         register_tool_fn,
         register_panel_fn,
@@ -67,6 +72,7 @@ pub fn build_registrar(
         register_overlay_material_fn,
         register_save_chunk_fn,
         register_subscription_fn,
+        registration_phase,
         registration_context,
     }
 }

@@ -38,7 +38,10 @@ pub fn list_saves(root: &Path) -> Result<Vec<SaveDescriptor>, SaveError> {
         if !meta_path.exists() {
             continue;
         }
-        let meta = read_meta(&meta_path)?;
+        let meta = match read_meta(&meta_path) {
+            Ok(meta) => meta,
+            Err(_) => continue,
+        };
         if validate_meta_dimensions(&meta).is_err() {
             continue;
         }

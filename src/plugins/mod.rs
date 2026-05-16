@@ -18,14 +18,14 @@ pub mod substances;
 
 pub(crate) use self::api::PluginRuntimeEvent;
 pub use self::api::{
-    build_plugin_runtime_registry, HudBlock, InputModifiers, MouseButton, MouseCellEvent,
-    OverlayRenderPolicy, PluginEvent, PluginRuntimeRegistry, PluginSubscription,
-    RuntimeOverlayDescriptor, SaveChunk, SaveChunkDescriptor, SaveChunkStore, StructureEvent,
-    ToolDescriptor,
+    build_plugin_runtime_registry, EntityCategoryDescriptor as RuntimeEntityCategoryDescriptor,
+    HudBlock, InputModifiers, MouseButton, MouseCellEvent, OverlayRenderPolicy, PluginEvent,
+    PluginRuntimeRegistry, PluginSubscription, RuntimeOverlayDescriptor, SaveChunk,
+    SaveChunkDescriptor, SaveChunkStore, StructureEvent, ToolDescriptor,
 };
 pub use self::content::{
-    CellContentDescriptor, ContentId, ContentRegistry, LegacyStorageDescriptor,
-    OverlayContentDescriptor, SpriteMetadata, StructureContentDescriptor,
+    CellContentDescriptor, ContentId, ContentRegistry, EntityCategoryDescriptor,
+    LegacyStorageDescriptor, OverlayContentDescriptor, SpriteMetadata, StructureContentDescriptor,
 };
 pub use self::default_plugin::DefaultPluginContent;
 pub use self::diagnostics::{
