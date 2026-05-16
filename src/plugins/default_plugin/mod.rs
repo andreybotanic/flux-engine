@@ -155,7 +155,7 @@ pub fn default_world_cell_hud() -> WorldCellHudConfig {
 
 /// Returns every cell material descriptor registered by `flux.default`.
 pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
-    let mut descriptors = vec![
+    vec![
         cell_descriptor_for(
             CELL_BOUNDARY_ID,
             boundary_cell_material(),
@@ -186,56 +186,7 @@ pub fn default_cell_descriptors() -> Vec<CellContentDescriptor> {
             Some(CATEGORY_CELLS_ID),
             3,
         ),
-    ];
-
-    let extra_cells = [
-        (CELL_BRICK_01_ID, "Brick Alpha", true),
-        (CELL_BRICK_02_ID, "Brick Beta", true),
-        (CELL_BRICK_03_ID, "Brick Gamma", true),
-        (CELL_BRICK_04_ID, "Brick Delta", true),
-        (CELL_BRICK_05_ID, "Brick Epsilon", true),
-        (CELL_BRICK_06_ID, "Brick Zeta", true),
-        (CELL_BRICK_07_ID, "Brick Eta", true),
-        (CELL_BRICK_08_ID, "Brick Theta", true),
-        (CELL_BRICK_09_ID, "Brick Iota", true),
-        (CELL_BRICK_10_ID, "Brick Kappa", true),
-        (CELL_METAL_01_ID, "Metal Alpha", false),
-        (CELL_METAL_02_ID, "Metal Beta", false),
-        (CELL_METAL_03_ID, "Metal Gamma", false),
-        (CELL_METAL_04_ID, "Metal Delta", false),
-        (CELL_METAL_05_ID, "Metal Epsilon", false),
-        (CELL_METAL_06_ID, "Metal Zeta", false),
-        (CELL_METAL_07_ID, "Metal Eta", false),
-        (CELL_METAL_08_ID, "Metal Theta", false),
-        (CELL_METAL_09_ID, "Metal Iota", false),
-        (CELL_METAL_10_ID, "Metal Kappa", false),
-    ];
-    for (index, (id, label, is_brick)) in extra_cells.iter().enumerate() {
-        let (config_file, image, silhouette) = if *is_brick {
-            (
-                "brick.toml",
-                "flux_default://world/tile_brick.ktx2",
-                Some("flux_default://world/silhouette_brick.ktx2"),
-            )
-        } else {
-            (
-                "metal.toml",
-                "flux_default://world/tile_metal.ktx2",
-                Some("flux_default://world/silhouette_metal.ktx2"),
-            )
-        };
-        descriptors.push(cell_descriptor_for(
-            id,
-            CellMaterial::new(id),
-            config_file,
-            label,
-            image,
-            silhouette,
-            Some(CATEGORY_CELLS_ID),
-            (4 + index) as u8,
-        ));
-    }
-    descriptors
+    ]
 }
 
 /// Returns every structure descriptor registered by `flux.default`.
@@ -339,9 +290,7 @@ pub fn cell_material_from_content_id(id: &ContentId) -> Option<CellMaterial> {
         CELL_BOUNDARY_ID => Some(boundary_cell_material()),
         CELL_BRICK_ID => Some(brick_cell_material()),
         CELL_METAL_ID => Some(metal_cell_material()),
-        _ => extra_cell_materials()
-            .into_iter()
-            .find(|material| material.as_str() == id.as_str()),
+        _ => None,
     }
 }
 
@@ -427,9 +376,6 @@ pub fn structure_layer_descriptor(
 
 /// Returns the label registered for a legacy cell material.
 pub fn cell_label(material: CellMaterial) -> &'static str {
-    if let Some(extra_label) = extra_cell_label(material) {
-        return extra_label;
-    }
     match material.as_str() {
         CELL_BOUNDARY_ID => "Boundary",
         CELL_BRICK_ID => "Brick",
@@ -555,10 +501,7 @@ pub fn legacy_cell_kind_code(cell: crate::world::grid::CellKind) -> Option<u8> {
         crate::world::grid::CellKind::Solid(material) if material == metal_cell_material() => {
             Some(3)
         }
-        crate::world::grid::CellKind::Solid(material) => extra_cell_materials()
-            .iter()
-            .position(|candidate| *candidate == material)
-            .map(|index| (4 + index) as u8),
+        crate::world::grid::CellKind::Solid(_) => None,
     }
 }
 
@@ -589,74 +532,16 @@ pub fn legacy_cell_kind_from_code(code: u8) -> Option<crate::world::grid::CellKi
         1 => Some(crate::world::grid::CellKind::Solid(boundary_cell_material())),
         2 => Some(crate::world::grid::CellKind::Solid(brick_cell_material())),
         3 => Some(crate::world::grid::CellKind::Solid(metal_cell_material())),
-        _ => extra_cell_materials()
-            .get(code.saturating_sub(4) as usize)
-            .copied()
-            .map(crate::world::grid::CellKind::Solid),
+        _ => None,
     }
-}
-
-fn extra_cell_label(material: CellMaterial) -> Option<&'static str> {
-    const EXTRA_LABELS: [&str; 20] = [
-        "Brick Alpha",
-        "Brick Beta",
-        "Brick Gamma",
-        "Brick Delta",
-        "Brick Epsilon",
-        "Brick Zeta",
-        "Brick Eta",
-        "Brick Theta",
-        "Brick Iota",
-        "Brick Kappa",
-        "Metal Alpha",
-        "Metal Beta",
-        "Metal Gamma",
-        "Metal Delta",
-        "Metal Epsilon",
-        "Metal Zeta",
-        "Metal Eta",
-        "Metal Theta",
-        "Metal Iota",
-        "Metal Kappa",
-    ];
-    let index = extra_cell_materials()
-        .iter()
-        .position(|candidate| *candidate == material)?;
-    EXTRA_LABELS.get(index).copied()
 }
 
 fn is_brick_family_cell(material: CellMaterial) -> bool {
     material == brick_cell_material()
-        || matches!(
-            material.as_str(),
-            CELL_BRICK_01_ID
-                | CELL_BRICK_02_ID
-                | CELL_BRICK_03_ID
-                | CELL_BRICK_04_ID
-                | CELL_BRICK_05_ID
-                | CELL_BRICK_06_ID
-                | CELL_BRICK_07_ID
-                | CELL_BRICK_08_ID
-                | CELL_BRICK_09_ID
-                | CELL_BRICK_10_ID
-        )
 }
 
 fn is_metal_family_cell(material: CellMaterial) -> bool {
     material == metal_cell_material()
-        || matches!(
-            material.as_str(),
-            CELL_METAL_01_ID
-                | CELL_METAL_02_ID
-                | CELL_METAL_03_ID
-                | CELL_METAL_04_ID
-                | CELL_METAL_05_ID
-                | CELL_METAL_06_ID
-                | CELL_METAL_07_ID
-                | CELL_METAL_08_ID
-                | CELL_METAL_09_ID
-                | CELL_METAL_10_ID
-        )
 }
 
 /// Encodes one default plugin structure kind using the legacy numeric save code.

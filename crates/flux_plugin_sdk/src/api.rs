@@ -384,8 +384,12 @@ impl UiApi {
     /// Adds one complete HUD block.
     pub fn add_hud_block(&mut self, block: HudBlock) -> Result<(), PluginError> {
         scope::with_runtime_host("ui.add_hud_block", |host| {
-            for line in &block.lines {
-                host.submit_hud_line(block.id.as_str(), &block.title, line, block.sort_order)?;
+            if block.lines.is_empty() {
+                host.submit_hud_line(block.id.as_str(), &block.title, "", block.sort_order)?;
+            } else {
+                for line in &block.lines {
+                    host.submit_hud_line(block.id.as_str(), &block.title, line, block.sort_order)?;
+                }
             }
             Ok(())
         })

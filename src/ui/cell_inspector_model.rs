@@ -44,7 +44,6 @@ pub(crate) fn build_cell_inspector_blocks(
 ) -> Vec<CellInspectorBlockView> {
     let mut blocks = vec![build_world_cell_block(
         cell,
-        world,
         gas,
         pipe_config,
         gas_registry,
@@ -79,23 +78,12 @@ pub(crate) fn build_cell_inspector_blocks(
 
 fn build_world_cell_block(
     cell: UVec2,
-    world: &WorldGrid,
     gas: &GasField,
     pipe_config: &PipeSimulationConfig,
     gas_registry: &GasRegistry,
     world_cell_hud: &WorldCellHudConfig,
 ) -> CellInspectorBlockView {
-    let mut lines = vec![
-        format!("Coordinates: ({}, {})", cell.x, cell.y),
-        format!(
-            "State: {}",
-            if world.is_solid(cell.x, cell.y) {
-                "Solid"
-            } else {
-                "Empty"
-            }
-        ),
-    ];
+    let mut lines = vec![format!("Coordinates: ({}, {})", cell.x, cell.y)];
     lines.extend(build_world_cell_container_lines(
         cell,
         gas,
@@ -902,6 +890,49 @@ mod tests {
             .find(|block| block.title == "Metal")
             .expect("metal block");
         assert!(metal.lines.is_empty());
+    }
+
+    #[test]
+    fn solid_cell_hud_has_material_block_without_cell_state_line() {
+        let registry = registry();
+        let mut world = WorldGrid::default();
+        assert!(world.set_solid_with_material(
+            7,
+            7,
+            crate::plugins::default_plugin::brick_cell_material()
+        ));
+
+        let blocks = build_cell_inspector_blocks(
+            UVec2::new(7, 7),
+            &world,
+            &GasField::from_registry(&registry),
+            &pipe_config(),
+            &registry,
+            &world_hud_config(),
+            &cell_visual_layouts(),
+            &structure_hud_config(),
+            &structure_visuals(),
+            &PlacedStructureMap::default(),
+            &PipeGasField::from_registry(&registry),
+            &PipeFlowVisualState::default(),
+            false,
+        );
+
+        let cell_block = blocks
+            .iter()
+            .find(|block| block.title == "Cell")
+            .expect("cell block");
+        assert!(
+            !cell_block
+                .lines
+                .iter()
+                .any(|line| line.starts_with("State: ")),
+            "cell block must not duplicate entity state line"
+        );
+        assert!(
+            blocks.iter().any(|block| block.title == "Brick"),
+            "solid cell must render a separate entity block with material name"
+        );
     }
 
     #[test]

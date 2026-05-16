@@ -34,7 +34,7 @@ fn default_plugin_registry_contains_all_builtin_content() {
     assert!(registry
         .provider_plugins()
         .contains(&PluginId::default_plugin()));
-    assert_eq!(registry.cells().len(), 23);
+    assert_eq!(registry.cells().len(), 3);
     assert_eq!(registry.structures().len(), 5);
     assert_eq!(registry.overlays().len(), 3);
     assert_eq!(registry.substances().len(), 3);

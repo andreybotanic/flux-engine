@@ -253,7 +253,12 @@ fn load_visual_placement_configs(
         .into_iter()
         .map(|descriptor| {
             load_cell_visual_placement_entry(structures_root, descriptor.config_file_name)
-                .map(|config| (descriptor.material, config))
+                .map(|mut config| {
+                    // One shared visual TOML (e.g. brick/metal family) can back multiple
+                    // material entities, so the UI label must come from the descriptor itself.
+                    config.label = descriptor.visual.label.clone();
+                    (descriptor.material, config)
+                })
         })
         .collect::<Result<Vec<_>, _>>()?;
 

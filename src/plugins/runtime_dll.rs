@@ -661,15 +661,22 @@ pub unsafe extern "C" fn submit_hud_block_callback(
         Ok(id) => id,
         Err(_) => return FluxStatus::FAILED,
     };
+    let is_title_only_block_marker = line.is_empty();
     if let Some(existing) = store.blocks.iter_mut().find(|block| block.id == id) {
         existing.title = title;
         existing.sort_order = sort_order;
-        existing.lines.push(line);
+        if !is_title_only_block_marker || !existing.lines.is_empty() {
+            existing.lines.push(line);
+        }
     } else {
         store.blocks.push(HudBlock {
             id,
             title,
-            lines: vec![line],
+            lines: if is_title_only_block_marker {
+                Vec::new()
+            } else {
+                vec![line]
+            },
             sort_order,
         });
     }
@@ -1246,6 +1253,16 @@ mod tests {
         }
         .is_ok());
         assert!(unsafe {
+            submit_hud_block_callback(
+                context_ptr,
+                FluxUtf8Slice::from_str("flux.api_ui_save_demo.hud.material"),
+                FluxUtf8Slice::from_str("Brick"),
+                FluxUtf8Slice::from_str(""),
+                20,
+            )
+        }
+        .is_ok());
+        assert!(unsafe {
             write_save_chunk_callback(
                 context_ptr,
                 FluxUtf8Slice::from_str("flux.api_ui_save_demo.save.counter"),
@@ -1277,13 +1294,16 @@ mod tests {
             .graph
             .is_some());
         let hud = context.hud_blocks.as_ref().expect("hud");
-        assert_eq!(hud.blocks.len(), 1);
+        assert_eq!(hud.blocks.len(), 2);
         assert_eq!(hud.blocks[0].title, "Demo");
         assert_eq!(hud.blocks[0].sort_order, 10);
         assert_eq!(
             hud.blocks[0].lines,
             vec!["counter 1".to_string(), "cell (55, 29)".to_string()]
         );
+        assert_eq!(hud.blocks[1].title, "Brick");
+        assert_eq!(hud.blocks[1].sort_order, 20);
+        assert!(hud.blocks[1].lines.is_empty());
         let chunk_id = ContentId::parse("flux.api_ui_save_demo.save.counter").expect("chunk id");
         let chunk = context
             .save_chunks
@@ -1549,6 +1569,11 @@ mod tests {
             default_plugin::pipe_runtime::PipeGasField::from_registry(&game_config.gas_registry);
         let mut pipe_flow_visuals = default_plugin::pipe_runtime::PipeFlowVisualState::default();
         let mut hud = PluginHudBlockStore::default();
+        assert!(world.set_solid_with_material(
+            10,
+            10,
+            crate::plugins::default_plugin::brick_cell_material()
+        ));
 
         let mut context = RuntimeHostContext::new(&content, &game_config.gas_registry);
         context.world = Some(&mut world);
@@ -1572,6 +1597,7 @@ mod tests {
 
         assert!(!hud.blocks.is_empty());
         assert!(hud.blocks.iter().any(|block| block.title == "Cell"));
+        assert!(hud.blocks.iter().any(|block| block.title == "Brick"));
     }
 }
 

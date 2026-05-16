@@ -14,26 +14,6 @@ pub const CELL_BOUNDARY_ID: &str = "flux.default.cell.boundary";
 pub const CELL_BRICK_ID: &str = "flux.default.cell.brick";
 /// Stable content id for the default metal cell.
 pub const CELL_METAL_ID: &str = "flux.default.cell.metal";
-pub const CELL_BRICK_01_ID: &str = "flux.default.cell.brick_01";
-pub const CELL_BRICK_02_ID: &str = "flux.default.cell.brick_02";
-pub const CELL_BRICK_03_ID: &str = "flux.default.cell.brick_03";
-pub const CELL_BRICK_04_ID: &str = "flux.default.cell.brick_04";
-pub const CELL_BRICK_05_ID: &str = "flux.default.cell.brick_05";
-pub const CELL_BRICK_06_ID: &str = "flux.default.cell.brick_06";
-pub const CELL_BRICK_07_ID: &str = "flux.default.cell.brick_07";
-pub const CELL_BRICK_08_ID: &str = "flux.default.cell.brick_08";
-pub const CELL_BRICK_09_ID: &str = "flux.default.cell.brick_09";
-pub const CELL_BRICK_10_ID: &str = "flux.default.cell.brick_10";
-pub const CELL_METAL_01_ID: &str = "flux.default.cell.metal_01";
-pub const CELL_METAL_02_ID: &str = "flux.default.cell.metal_02";
-pub const CELL_METAL_03_ID: &str = "flux.default.cell.metal_03";
-pub const CELL_METAL_04_ID: &str = "flux.default.cell.metal_04";
-pub const CELL_METAL_05_ID: &str = "flux.default.cell.metal_05";
-pub const CELL_METAL_06_ID: &str = "flux.default.cell.metal_06";
-pub const CELL_METAL_07_ID: &str = "flux.default.cell.metal_07";
-pub const CELL_METAL_08_ID: &str = "flux.default.cell.metal_08";
-pub const CELL_METAL_09_ID: &str = "flux.default.cell.metal_09";
-pub const CELL_METAL_10_ID: &str = "flux.default.cell.metal_10";
 /// Stable content id for the default `Cells` entity category.
 pub const CATEGORY_CELLS_ID: &str = "flux.default.category.cells";
 /// Stable content id for the default `Gases` entity category.
@@ -100,32 +80,6 @@ pub const fn brick_cell_material() -> CellMaterial {
 /// Returns the default plugin metal cell id wrapper.
 pub const fn metal_cell_material() -> CellMaterial {
     CellMaterial::new(CELL_METAL_ID)
-}
-
-/// Returns all additional default-plugin cell materials used to stress-test category UI lists.
-pub fn extra_cell_materials() -> Vec<CellMaterial> {
-    vec![
-        CellMaterial::new(CELL_BRICK_01_ID),
-        CellMaterial::new(CELL_BRICK_02_ID),
-        CellMaterial::new(CELL_BRICK_03_ID),
-        CellMaterial::new(CELL_BRICK_04_ID),
-        CellMaterial::new(CELL_BRICK_05_ID),
-        CellMaterial::new(CELL_BRICK_06_ID),
-        CellMaterial::new(CELL_BRICK_07_ID),
-        CellMaterial::new(CELL_BRICK_08_ID),
-        CellMaterial::new(CELL_BRICK_09_ID),
-        CellMaterial::new(CELL_BRICK_10_ID),
-        CellMaterial::new(CELL_METAL_01_ID),
-        CellMaterial::new(CELL_METAL_02_ID),
-        CellMaterial::new(CELL_METAL_03_ID),
-        CellMaterial::new(CELL_METAL_04_ID),
-        CellMaterial::new(CELL_METAL_05_ID),
-        CellMaterial::new(CELL_METAL_06_ID),
-        CellMaterial::new(CELL_METAL_07_ID),
-        CellMaterial::new(CELL_METAL_08_ID),
-        CellMaterial::new(CELL_METAL_09_ID),
-        CellMaterial::new(CELL_METAL_10_ID),
-    ]
 }
 
 /// Returns the default plugin pipe structure id wrapper.

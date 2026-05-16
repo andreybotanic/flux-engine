@@ -252,11 +252,11 @@ mod tests {
     }
 
     #[test]
-    fn wall_sprite_path_uses_registered_descriptor_for_extra_metal_material() {
+    fn wall_sprite_path_uses_registered_descriptor_for_metal_material() {
         let registry = crate::plugins::default_plugin::default_content_registry();
         let path = wall_sprite_path_for_material(
             &registry,
-            crate::world::grid::CellMaterial::new(crate::plugins::default_plugin::CELL_METAL_01_ID),
+            crate::plugins::default_plugin::metal_cell_material(),
         );
         assert_eq!(path, "flux_default://world/tile_metal.ktx2");
     }
@@ -277,11 +277,11 @@ mod tests {
     }
 
     #[test]
-    fn wall_sprite_path_uses_registered_descriptor_for_extra_brick_material() {
+    fn wall_sprite_path_uses_registered_descriptor_for_brick_material() {
         let registry = crate::plugins::default_plugin::default_content_registry();
         let path = wall_sprite_path_for_material(
             &registry,
-            crate::world::grid::CellMaterial::new(crate::plugins::default_plugin::CELL_BRICK_01_ID),
+            crate::plugins::default_plugin::brick_cell_material(),
         );
         assert_eq!(path, "flux_default://world/tile_brick.ktx2");
     }
