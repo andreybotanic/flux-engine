@@ -82,6 +82,38 @@ fn update_selection_size_tooltip(
     node.top = Val::Px(center_screen.y - 24.0);
 }
 
+fn handle_tool_variant_panel_actions(
+    mut action_events: EventReader<PanelHeaderActionEvent>,
+    mut tool_variant_panels: ResMut<ToolVariantPanelState>,
+    mut panel_manager: ResMut<PanelManager>,
+    mut panel_open_order: ResMut<PanelOpenOrder>,
+) {
+    for event in action_events.read() {
+        if event.action_id != TOOL_VARIANT_PANEL_CLOSE_ACTION_ID {
+            continue;
+        }
+
+        if event.panel_id == BUILD_TOOL_VARIANT_PANEL_ID {
+            tool_variant_panels.build_closed = true;
+            panel_manager.set_visible(
+                BUILD_TOOL_VARIANT_PANEL_ID,
+                false,
+                &mut panel_open_order,
+            );
+            continue;
+        }
+
+        if event.panel_id == GASES_TOOL_VARIANT_PANEL_ID {
+            tool_variant_panels.gases_closed = true;
+            panel_manager.set_visible(
+                GASES_TOOL_VARIANT_PANEL_ID,
+                false,
+                &mut panel_open_order,
+            );
+        }
+    }
+}
+
 fn handle_editor_ui_actions(
     mut interactions: Query<(&Interaction, &EditorUiAction), (Changed<Interaction>, With<Button>)>,
     mut active_tool: ResMut<ActiveEditorTool>,
@@ -99,6 +131,7 @@ fn handle_editor_ui_actions(
         Single<&mut TextInputField, With<GasGammaInputField>>,
         Single<&mut TextInputField, With<GasMaxColorParticlesInputField>>,
     )>,
+    mut tool_variant_panels: ResMut<ToolVariantPanelState>,
     mut selection_drag: ResMut<SelectionDragState>,
     mut brush_drag: ResMut<BrushDragState>,
     mut plugin_events: EventWriter<PluginRuntimeEvent>,
@@ -124,6 +157,12 @@ fn handle_editor_ui_actions(
         match *action {
             EditorUiAction::SelectTool(next_tool) => {
                 active_tool.selected = Some(next_tool);
+                if next_tool == EditorTool::BuildSolid {
+                    tool_variant_panels.build_closed = false;
+                }
+                if next_tool == EditorTool::Gases {
+                    tool_variant_panels.gases_closed = false;
+                }
                 plugin_events.write(PluginRuntimeEvent::ToolSelected {
                     tool_id: active_tool_content_id(Some(next_tool)),
                 });
@@ -168,6 +207,7 @@ fn refresh_editor_ui(
         Res<ActiveEditorTool>,
         Res<CellToolSettings>,
         Res<PipeToolSettings>,
+        Res<ToolVariantPanelState>,
         Res<MainMenuState>,
         Res<DebugMode>,
         Res<WorldLoadState>,
@@ -201,6 +241,7 @@ fn refresh_editor_ui(
         active_tool,
         cell_settings,
         pipe_settings,
+        tool_variant_panels,
         main_menu,
         debug_mode,
         world_load_state,
@@ -330,33 +371,37 @@ fn refresh_editor_ui(
     }
 
     {
-        let mut cell_type_panel_root = ui.visibility_set.p1();
-        **cell_type_panel_root =
-            if world_load_state.has_world && selected_tool == Some(EditorTool::BuildSolid) {
-                Visibility::Visible
-            } else {
-                Visibility::Hidden
-            };
-    }
-
-    {
-        let mut gases_type_panel_root = ui.visibility_set.p2();
-        **gases_type_panel_root =
-            if world_load_state.has_world && selected_tool == Some(EditorTool::Gases) {
-                Visibility::Visible
-            } else {
-                Visibility::Hidden
-            };
-    }
-
-    {
-        let mut debug_toolbar_root = ui.visibility_set.p3();
+        let mut debug_toolbar_root = ui.visibility_set.p1();
         **debug_toolbar_root = if world_load_state.has_world && debug_mode.active {
             Visibility::Visible
         } else {
             Visibility::Hidden
         };
     }
+
+    let build_tool_panel_visible = tool_variant_panel_visible(
+        selected_tool,
+        world_load_state.has_world,
+        tool_variant_panels.build_closed,
+        EditorTool::BuildSolid,
+    );
+    ui.panel_manager.set_visible(
+        BUILD_TOOL_VARIANT_PANEL_ID,
+        build_tool_panel_visible,
+        &mut ui.panel_open_order,
+    );
+
+    let gases_tool_panel_visible = tool_variant_panel_visible(
+        selected_tool,
+        world_load_state.has_world,
+        tool_variant_panels.gases_closed,
+        EditorTool::Gases,
+    );
+    ui.panel_manager.set_visible(
+        GASES_TOOL_VARIANT_PANEL_ID,
+        gases_tool_panel_visible,
+        &mut ui.panel_open_order,
+    );
 
     let debug_panel_visible = world_load_state.has_world && debug_mode.active;
     ui.panel_manager.set_visible(
@@ -387,7 +432,7 @@ fn refresh_editor_ui(
     );
 
     {
-        let mut main_menu_root = ui.visibility_set.p4();
+        let mut main_menu_root = ui.visibility_set.p2();
         **main_menu_root = if main_menu.open {
             Visibility::Visible
         } else {
@@ -538,6 +583,15 @@ fn gpu_time_rows_visible(backend: crate::simulation::backend::SimulationBackend)
     matches!(backend, crate::simulation::backend::SimulationBackend::Gpu)
 }
 
+fn tool_variant_panel_visible(
+    selected_tool: Option<EditorTool>,
+    world_loaded: bool,
+    closed: bool,
+    panel_tool: EditorTool,
+) -> bool {
+    world_loaded && !closed && selected_tool == Some(panel_tool)
+}
+
 #[derive(SystemParam)]
 struct RefreshEditorUiSystemParams<'w, 's> {
     gas_input: Single<'w, &'static TextInputField, With<GasAmountInputField>>,
@@ -567,8 +621,6 @@ struct RefreshEditorUiSystemParams<'w, 's> {
         's,
         (
             Single<'w, &'static mut Visibility, With<MainToolbarRoot>>,
-            Single<'w, &'static mut Visibility, With<CellTypePanelRoot>>,
-            Single<'w, &'static mut Visibility, With<GasesTypePanelRoot>>,
             Single<'w, &'static mut Visibility, With<DebugToolbarRoot>>,
             Single<'w, &'static mut Visibility, With<MainMenuRoot>>,
         ),
@@ -623,7 +675,8 @@ struct RefreshEditorUiSystemParams<'w, 's> {
 
 #[cfg(test)]
 mod editor_ui_block_tests {
-    use super::{format_mass_error_text, gpu_time_rows_visible};
+    use super::{format_mass_error_text, gpu_time_rows_visible, tool_variant_panel_visible};
+    use crate::editor::EditorTool;
 
     #[test]
     fn gpu_time_rows_are_visible_only_for_gpu_backend() {
@@ -641,5 +694,33 @@ mod editor_ui_block_tests {
         assert_eq!(text, "0.1234");
         assert!(!text.contains("Anisotropy"));
         assert!(!text.contains("Radial waves"));
+    }
+
+    #[test]
+    fn variant_panel_visibility_respects_selected_tool_and_close_state() {
+        assert!(tool_variant_panel_visible(
+            Some(EditorTool::BuildSolid),
+            true,
+            false,
+            EditorTool::BuildSolid
+        ));
+        assert!(!tool_variant_panel_visible(
+            Some(EditorTool::BuildSolid),
+            true,
+            true,
+            EditorTool::BuildSolid
+        ));
+        assert!(!tool_variant_panel_visible(
+            Some(EditorTool::BuildSolid),
+            false,
+            false,
+            EditorTool::BuildSolid
+        ));
+        assert!(!tool_variant_panel_visible(
+            Some(EditorTool::Gases),
+            true,
+            false,
+            EditorTool::BuildSolid
+        ));
     }
 }

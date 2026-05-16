@@ -66,13 +66,21 @@ fn handle_editor_mouse_input(
         mut plugin_events,
     ) = data_state;
 
-    if keyboard.just_pressed(KeyCode::KeyX) && !main_menu.open && world_load_state.has_world {
-        active_tool_toggle_scissors(
-            &mut selection_drag,
-            &mut brush_drag,
-            &mut active_tool,
-            &mut structure_edit,
-        );
+    if !main_menu.open && world_load_state.has_world {
+        for key in [KeyCode::KeyX, KeyCode::KeyC] {
+            if !keyboard.just_pressed(key) {
+                continue;
+            }
+            if let Some(tool) = editor_tool_for_hotkey(key) {
+                active_tool_toggle(
+                    &mut selection_drag,
+                    &mut brush_drag,
+                    &mut active_tool,
+                    &mut structure_edit,
+                    tool,
+                );
+            }
+        }
     }
     if keyboard.just_pressed(KeyCode::KeyR)
         && !main_menu.open
@@ -483,19 +491,32 @@ fn rasterize_grid_path(from: UVec2, to: UVec2) -> Vec<UVec2> {
     expanded
 }
 
-fn active_tool_toggle_scissors(
+fn active_tool_toggle(
     selection_drag: &mut SelectionDragState,
     brush_drag: &mut BrushDragState,
     active_tool: &mut ActiveEditorTool,
     structure_edit: &mut StructureEditState,
+    tool: EditorTool,
 ) {
-    active_tool.selected = if active_tool.selected == Some(EditorTool::Scissors) {
-        None
-    } else {
-        Some(EditorTool::Scissors)
-    };
+    active_tool.selected = toggled_editor_tool(active_tool.selected, tool);
     structure_edit.selected_cell = None;
     clear_active_tool_state(selection_drag, brush_drag);
+}
+
+fn toggled_editor_tool(current: Option<EditorTool>, tool: EditorTool) -> Option<EditorTool> {
+    if current == Some(tool) {
+        None
+    } else {
+        Some(tool)
+    }
+}
+
+fn editor_tool_for_hotkey(key: KeyCode) -> Option<EditorTool> {
+    match key {
+        KeyCode::KeyX => Some(EditorTool::EraseSolid),
+        KeyCode::KeyC => Some(EditorTool::Scissors),
+        _ => None,
+    }
 }
 
 fn update_editor_cursor_overlays(
@@ -900,7 +921,7 @@ pub(crate) fn is_cursor_over_ui(
     cursor: Vec2,
     window: &Window,
     debug_mode_active: bool,
-    selected_tool: Option<EditorTool>,
+    _selected_tool: Option<EditorTool>,
     main_menu_open: bool,
     panel_manager: Option<&PanelManager>,
 ) -> bool {
@@ -918,24 +939,6 @@ pub(crate) fn is_cursor_over_ui(
             MAIN_TOOLBAR_HEIGHT,
         ),
     ];
-
-    if selected_tool == Some(EditorTool::BuildSolid) {
-        rects.push(UiRectPx::top_left(
-            MAIN_TOOLBAR_LEFT,
-            window.height() - CELL_TYPE_PANEL_BOTTOM - CELL_TYPE_PANEL_HEIGHT,
-            CELL_TYPE_PANEL_WIDTH,
-            CELL_TYPE_PANEL_HEIGHT,
-        ));
-    }
-
-    if selected_tool == Some(EditorTool::Gases) {
-        rects.push(UiRectPx::top_left(
-            MAIN_TOOLBAR_LEFT,
-            window.height() - CELL_TYPE_PANEL_BOTTOM - CELL_TYPE_PANEL_HEIGHT,
-            CELL_TYPE_PANEL_WIDTH,
-            CELL_TYPE_PANEL_HEIGHT,
-        ));
-    }
 
     if debug_mode_active {
         rects.push(UiRectPx::top_left(

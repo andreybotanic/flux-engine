@@ -204,18 +204,96 @@ fn spawn_structure_tool_panel_content(
         });
 }
 
+fn spawn_build_tool_variant_panel_content(
+    parent: &mut ChildSpawnerCommands,
+    brick_label: &'static str,
+    metal_label: &'static str,
+    brick_material: CellMaterial,
+    metal_material: CellMaterial,
+    brick_icon: Handle<Image>,
+    metal_icon: Handle<Image>,
+) {
+    let variants = [
+        (brick_label, brick_material, brick_icon),
+        (metal_label, metal_material, metal_icon),
+    ];
+    for row_variants in variants.chunks(TOOL_VARIANT_PANEL_COLUMNS) {
+        parent
+            .spawn((Node {
+                display: Display::Flex,
+                flex_direction: FlexDirection::Row,
+                column_gap: Val::Px(TOOL_VARIANT_BUTTON_GAP),
+                ..default()
+            },))
+            .with_children(|row| {
+                for (label, material, icon) in row_variants {
+                    spawn_cell_material_button(
+                        row,
+                        label,
+                        *material,
+                        icon.clone(),
+                        TOOL_VARIANT_BUTTON_SIZE,
+                        TOOL_VARIANT_ICON_SIZE,
+                    );
+                }
+            });
+    }
+}
+
+fn spawn_gases_tool_variant_panel_content(
+    parent: &mut ChildSpawnerCommands,
+    pipe_label: &'static str,
+    vent_label: &'static str,
+    bridge_label: &'static str,
+    pipe_tool: PipeToolKind,
+    vent_tool: PipeToolKind,
+    bridge_tool: PipeToolKind,
+    pipe_icon: Handle<Image>,
+    vent_icon: Handle<Image>,
+    bridge_icon: Handle<Image>,
+) {
+    let variants = [
+        (pipe_label, pipe_tool, pipe_icon),
+        (vent_label, vent_tool, vent_icon),
+        (bridge_label, bridge_tool, bridge_icon),
+    ];
+    for row_variants in variants.chunks(TOOL_VARIANT_PANEL_COLUMNS) {
+        parent
+            .spawn((Node {
+                display: Display::Flex,
+                flex_direction: FlexDirection::Row,
+                column_gap: Val::Px(TOOL_VARIANT_BUTTON_GAP),
+                ..default()
+            },))
+            .with_children(|row| {
+                for (label, pipe_tool, icon) in row_variants {
+                    spawn_pipe_tool_button(
+                        row,
+                        label,
+                        *pipe_tool,
+                        icon.clone(),
+                        TOOL_VARIANT_BUTTON_SIZE,
+                        TOOL_VARIANT_ICON_SIZE,
+                    );
+                }
+            });
+    }
+}
+
 fn spawn_tool_button(
     parent: &mut ChildSpawnerCommands,
     label: &'static str,
     tool: EditorTool,
     icon: Handle<Image>,
+    button_size: f32,
+    icon_size: f32,
 ) {
     parent
         .spawn((
             Button,
             Node {
-                width: Val::Px(TOOL_BUTTON_SIZE),
-                height: Val::Px(TOOL_BUTTON_SIZE),
+                width: Val::Px(button_size),
+                height: Val::Px(button_size),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
                 ..default()
@@ -228,8 +306,8 @@ fn spawn_tool_button(
             button.spawn((
                 ImageNode::new(icon),
                 Node {
-                    width: Val::Px(TOOL_ICON_SIZE),
-                    height: Val::Px(TOOL_ICON_SIZE),
+                    width: Val::Px(icon_size),
+                    height: Val::Px(icon_size),
                     ..default()
                 },
             ));
@@ -241,13 +319,15 @@ fn spawn_cell_material_button(
     label: &'static str,
     material: CellMaterial,
     icon: Handle<Image>,
+    button_size: f32,
+    icon_size: f32,
 ) {
     parent
         .spawn((
             Button,
             Node {
-                width: Val::Px(TOOL_BUTTON_SIZE),
-                height: Val::Px(TOOL_BUTTON_SIZE),
+                width: Val::Px(button_size),
+                height: Val::Px(button_size),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
                 ..default()
@@ -260,8 +340,8 @@ fn spawn_cell_material_button(
             button.spawn((
                 ImageNode::new(icon),
                 Node {
-                    width: Val::Px(TOOL_ICON_SIZE),
-                    height: Val::Px(TOOL_ICON_SIZE),
+                    width: Val::Px(icon_size),
+                    height: Val::Px(icon_size),
                     ..default()
                 },
             ));
@@ -273,13 +353,15 @@ fn spawn_pipe_tool_button(
     label: &'static str,
     pipe_tool: PipeToolKind,
     icon: Handle<Image>,
+    button_size: f32,
+    icon_size: f32,
 ) {
     parent
         .spawn((
             Button,
             Node {
-                width: Val::Px(TOOL_BUTTON_SIZE),
-                height: Val::Px(TOOL_BUTTON_SIZE),
+                width: Val::Px(button_size),
+                height: Val::Px(button_size),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
                 ..default()
@@ -292,8 +374,8 @@ fn spawn_pipe_tool_button(
             button.spawn((
                 ImageNode::new(icon),
                 Node {
-                    width: Val::Px(TOOL_ICON_SIZE),
-                    height: Val::Px(TOOL_ICON_SIZE),
+                    width: Val::Px(icon_size),
+                    height: Val::Px(icon_size),
                     ..default()
                 },
             ));

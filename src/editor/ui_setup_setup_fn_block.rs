@@ -52,10 +52,7 @@ fn setup_editor_ui(
     let max_color_initial_text = max_color_initial.to_string();
     let icon_set = EditorIconSet {
         build: asset_server.load("sprites/ui/tool_build.ktx2"),
-        gases: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
-            crate::plugins::default_plugin::pipe_structure_kind(),
-        )),
-        erase: asset_server.load("sprites/ui/tool_erase.ktx2"),
+        gases: asset_server.load("sprites/ui/tool_gases.ktx2"),
         pipe: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::pipe_structure_kind(),
         )),
@@ -73,10 +70,10 @@ fn setup_editor_ui(
         sink: asset_server.load(crate::plugins::default_plugin::structure_tool_icon_path(
             crate::plugins::default_plugin::gas_sink_structure_kind(),
         )),
-        brick: asset_server.load(crate::plugins::default_plugin::cell_tool_icon_path(
+        brick: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
             crate::plugins::default_plugin::brick_cell_material(),
         )),
-        metal: asset_server.load(crate::plugins::default_plugin::cell_tool_icon_path(
+        metal: asset_server.load(crate::plugins::default_plugin::cell_sprite_path(
             crate::plugins::default_plugin::metal_cell_material(),
         )),
         brick_silhouette: asset_server.load(
@@ -148,13 +145,13 @@ fn setup_editor_ui(
                 bottom: Val::Px(MAIN_TOOLBAR_BOTTOM),
                 display: Display::Flex,
                 flex_direction: FlexDirection::Row,
-                column_gap: Val::Px(8.0),
+                column_gap: Val::Px(MAIN_TOOL_BUTTON_GAP),
                 width: Val::Px(MAIN_TOOLBAR_WIDTH),
                 height: Val::Px(MAIN_TOOLBAR_HEIGHT),
-                padding: UiRect::all(Val::Px(8.0)),
+                padding: UiRect::all(Val::Px(MAIN_TOOLBAR_PADDING)),
                 ..default()
             },
-            BackgroundColor(PANEL_BG),
+            BackgroundColor(crate::ui::palette::TRANSPARENT),
             MainToolbarRoot,
         ))
         .with_children(|parent| {
@@ -163,96 +160,103 @@ fn setup_editor_ui(
                 "Build",
                 EditorTool::BuildSolid,
                 icon_set.build.clone(),
+                MAIN_TOOL_BUTTON_SIZE,
+                MAIN_TOOL_ICON_SIZE,
             );
             spawn_tool_button(
                 parent,
                 "Gases",
                 EditorTool::Gases,
                 icon_set.gases.clone(),
-            );
-            spawn_tool_button(
-                parent,
-                "Erase",
-                EditorTool::EraseSolid,
-                icon_set.erase.clone(),
+                MAIN_TOOL_BUTTON_SIZE,
+                MAIN_TOOL_ICON_SIZE,
             );
         });
 
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(MAIN_TOOLBAR_LEFT),
-                bottom: Val::Px(CELL_TYPE_PANEL_BOTTOM),
-                display: Display::Flex,
-                flex_direction: FlexDirection::Row,
-                column_gap: Val::Px(8.0),
-                width: Val::Px(CELL_TYPE_PANEL_WIDTH),
-                height: Val::Px(CELL_TYPE_PANEL_HEIGHT),
-                padding: UiRect::all(Val::Px(8.0)),
-                ..default()
+    panel_manager.spawn_panel(
+        &mut commands,
+        &mut panel_open_order,
+        PanelSpec {
+            id: BUILD_TOOL_VARIANT_PANEL_ID,
+            title: "Build".to_string(),
+            collapse_icon: None,
+            corner: PanelCorner::BottomLeft,
+            width: TOOL_VARIANT_PANEL_WIDTH,
+            margin_x: MAIN_TOOLBAR_LEFT,
+            margin_y: TOOL_VARIANT_PANEL_BOTTOM,
+            stack_gap: DEFAULT_PANEL_STACK_GAP,
+            controls: PanelControls {
+                show_collapse: false,
+                show_close: false,
+                custom_actions: vec![TOOL_VARIANT_PANEL_CLOSE_ACTION_ID],
             },
-            BackgroundColor(PANEL_BG),
-            GasesTypePanelRoot,
-        ))
-        .with_children(|parent| {
-            spawn_pipe_tool_button(
+            scroll_policy: PanelScrollPolicy::AutoHalfScreen,
+            background: PANEL_BG,
+            header_background: crate::ui::palette::PANEL_HEADER_BG,
+            initial_visible: false,
+            initial_collapsed: false,
+        },
+        |parent| {
+            spawn_build_tool_variant_panel_content(
+                parent,
+                crate::plugins::default_plugin::cell_label(
+                    crate::plugins::default_plugin::brick_cell_material(),
+                ),
+                crate::plugins::default_plugin::cell_label(
+                    crate::plugins::default_plugin::metal_cell_material(),
+                ),
+                crate::plugins::default_plugin::brick_cell_material(),
+                crate::plugins::default_plugin::metal_cell_material(),
+                icon_set.brick.clone(),
+                icon_set.metal.clone(),
+            );
+        },
+    );
+
+    panel_manager.spawn_panel(
+        &mut commands,
+        &mut panel_open_order,
+        PanelSpec {
+            id: GASES_TOOL_VARIANT_PANEL_ID,
+            title: "Gases".to_string(),
+            collapse_icon: None,
+            corner: PanelCorner::BottomLeft,
+            width: TOOL_VARIANT_PANEL_WIDTH,
+            margin_x: MAIN_TOOLBAR_LEFT,
+            margin_y: TOOL_VARIANT_PANEL_BOTTOM,
+            stack_gap: DEFAULT_PANEL_STACK_GAP,
+            controls: PanelControls {
+                show_collapse: false,
+                show_close: false,
+                custom_actions: vec![TOOL_VARIANT_PANEL_CLOSE_ACTION_ID],
+            },
+            scroll_policy: PanelScrollPolicy::AutoHalfScreen,
+            background: PANEL_BG,
+            header_background: crate::ui::palette::PANEL_HEADER_BG,
+            initial_visible: false,
+            initial_collapsed: false,
+        },
+        |parent| {
+            spawn_gases_tool_variant_panel_content(
                 parent,
                 crate::plugins::default_plugin::structure_label(
                     crate::plugins::default_plugin::pipe_structure_kind(),
                 ),
-                PipeToolKind::Pipe,
-                icon_set.pipe.clone(),
-            );
-            spawn_pipe_tool_button(
-                parent,
                 crate::plugins::default_plugin::structure_label(
                     crate::plugins::default_plugin::vent_structure_kind(),
                 ),
-                PipeToolKind::Vent,
-                icon_set.vent.clone(),
-            );
-            spawn_pipe_tool_button(
-                parent,
                 crate::plugins::default_plugin::structure_label(
                     crate::plugins::default_plugin::gas_pipe_bridge_structure_kind(),
                 ),
+                PipeToolKind::Pipe,
+                PipeToolKind::Vent,
                 PipeToolKind::Bridge,
+                icon_set.pipe.clone(),
+                icon_set.vent.clone(),
                 icon_set.bridge.clone(),
             );
-        });
-
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(MAIN_TOOLBAR_LEFT),
-                bottom: Val::Px(CELL_TYPE_PANEL_BOTTOM),
-                display: Display::Flex,
-                flex_direction: FlexDirection::Row,
-                column_gap: Val::Px(8.0),
-                width: Val::Px(CELL_TYPE_PANEL_WIDTH),
-                height: Val::Px(CELL_TYPE_PANEL_HEIGHT),
-                padding: UiRect::all(Val::Px(8.0)),
-                ..default()
-            },
-            BackgroundColor(PANEL_BG),
-            CellTypePanelRoot,
-        ))
-        .with_children(|parent| {
-            spawn_cell_material_button(
-                parent,
-                crate::plugins::default_plugin::cell_label(crate::plugins::default_plugin::brick_cell_material()),
-                crate::plugins::default_plugin::brick_cell_material(),
-                icon_set.brick.clone(),
-            );
-            spawn_cell_material_button(
-                parent,
-                crate::plugins::default_plugin::cell_label(crate::plugins::default_plugin::metal_cell_material()),
-                crate::plugins::default_plugin::metal_cell_material(),
-                icon_set.metal.clone(),
-            );
-        });
+        },
+    );
 
     commands
         .spawn((
@@ -262,7 +266,7 @@ fn setup_editor_ui(
                 top: Val::Px(DEBUG_TOOLBAR_TOP),
                 display: Display::Flex,
                 flex_direction: FlexDirection::Row,
-                column_gap: Val::Px(8.0),
+                column_gap: Val::Px(DEBUG_TOOL_BUTTON_GAP),
                 width: Val::Px(DEBUG_TOOLBAR_WIDTH),
                 height: Val::Px(DEBUG_TOOLBAR_HEIGHT),
                 padding: UiRect::all(Val::Px(8.0)),
@@ -277,12 +281,16 @@ fn setup_editor_ui(
                 "Add Gas",
                 EditorTool::AddGas,
                 icon_set.add_gas.clone(),
+                DEBUG_TOOL_BUTTON_SIZE,
+                DEBUG_TOOL_ICON_SIZE,
             );
             spawn_tool_button(
                 parent,
                 "Clear Gas",
                 EditorTool::ClearGas,
                 icon_set.clear_gas.clone(),
+                DEBUG_TOOL_BUTTON_SIZE,
+                DEBUG_TOOL_ICON_SIZE,
             );
             spawn_tool_button(
                 parent,
@@ -291,6 +299,8 @@ fn setup_editor_ui(
                 ),
                 EditorTool::CreateGasSource,
                 icon_set.source.clone(),
+                DEBUG_TOOL_BUTTON_SIZE,
+                DEBUG_TOOL_ICON_SIZE,
             );
             spawn_tool_button(
                 parent,
@@ -299,6 +309,8 @@ fn setup_editor_ui(
                 ),
                 EditorTool::CreateGasSink,
                 icon_set.sink.clone(),
+                DEBUG_TOOL_BUTTON_SIZE,
+                DEBUG_TOOL_ICON_SIZE,
             );
         });
 

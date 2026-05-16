@@ -30,8 +30,8 @@ use crate::{
         },
         palette,
         panels::{
-            PanelControls, PanelCorner, PanelId, PanelManager, PanelOpenOrder, PanelScrollPolicy,
-            PanelSpec, DEFAULT_PANEL_STACK_GAP,
+            PanelControls, PanelCorner, PanelHeaderActionEvent, PanelHeaderActionId, PanelId,
+            PanelManager, PanelOpenOrder, PanelScrollPolicy, PanelSpec, DEFAULT_PANEL_STACK_GAP,
         },
         scroll_area::{spawn_scroll_area_scrollbar, ScrollAreaViewport, UiScrollBlockState},
         select_field::{spawn_select_field, SelectFieldConfig, SelectFieldId, SelectFieldState},
@@ -49,8 +49,18 @@ const BUTTON_IDLE: Color = palette::BUTTON_IDLE;
 const BUTTON_ACTIVE: Color = palette::BUTTON_ACTIVE;
 const INPUT_FOCUSED: Color = palette::INPUT_FOCUSED;
 const DEBUG_PANEL_TEXT_COLOR: Color = palette::TEXT_PRIMARY;
-const TOOL_BUTTON_SIZE: f32 = 40.0;
-const TOOL_ICON_SIZE: f32 = 20.0;
+const MAIN_TOOL_BUTTON_SIZE: f32 = 48.0;
+const MAIN_TOOL_ICON_SIZE: f32 = 32.0;
+const MAIN_TOOL_BUTTON_GAP: f32 = 16.0;
+const MAIN_TOOLBAR_PADDING: f32 = 8.0;
+const DEBUG_TOOL_BUTTON_SIZE: f32 = 40.0;
+const DEBUG_TOOL_ICON_SIZE: f32 = 20.0;
+const DEBUG_TOOL_BUTTON_GAP: f32 = 8.0;
+const TOOL_VARIANT_BUTTON_SIZE: f32 = 72.0;
+const TOOL_VARIANT_ICON_SIZE: f32 = 48.0;
+const TOOL_VARIANT_BUTTON_GAP: f32 = 12.0;
+const TOOL_VARIANT_PANEL_MARGIN_BOTTOM: f32 = 10.0;
+const TOOL_VARIANT_PANEL_COLUMNS: usize = 3;
 const TOOLTIP_BG: Color = palette::TOOLTIP_BG;
 const MODAL_BUTTON_BG: Color = palette::MENU_MODAL_BUTTON_BG;
 const MODAL_BUTTON_HOVER: Color = palette::MENU_MODAL_BUTTON_HOVER;
@@ -65,11 +75,12 @@ const TOP_LEFT_SIM_PANEL_HEIGHT: f32 = 112.0;
 
 const MAIN_TOOLBAR_LEFT: f32 = 12.0;
 const MAIN_TOOLBAR_BOTTOM: f32 = 12.0;
-const MAIN_TOOLBAR_WIDTH: f32 = 176.0;
-const MAIN_TOOLBAR_HEIGHT: f32 = 56.0;
-const CELL_TYPE_PANEL_HEIGHT: f32 = 56.0;
-const CELL_TYPE_PANEL_BOTTOM: f32 = MAIN_TOOLBAR_BOTTOM + MAIN_TOOLBAR_HEIGHT + 10.0;
-const CELL_TYPE_PANEL_WIDTH: f32 = 176.0;
+const MAIN_TOOLBAR_WIDTH: f32 =
+    (MAIN_TOOL_BUTTON_SIZE * 2.0) + MAIN_TOOL_BUTTON_GAP + (MAIN_TOOLBAR_PADDING * 2.0);
+const MAIN_TOOLBAR_HEIGHT: f32 = MAIN_TOOL_BUTTON_SIZE + (MAIN_TOOLBAR_PADDING * 2.0);
+const TOOL_VARIANT_PANEL_BOTTOM: f32 =
+    MAIN_TOOLBAR_BOTTOM + MAIN_TOOLBAR_HEIGHT + TOOL_VARIANT_PANEL_MARGIN_BOTTOM;
+const TOOL_VARIANT_PANEL_WIDTH: f32 = 286.0;
 
 const DEBUG_TOOLBAR_LEFT: f32 = 306.0;
 const DEBUG_TOOLBAR_TOP: f32 = 12.0;
@@ -87,6 +98,9 @@ const STRUCTURE_PANEL_WIDTH: f32 = 286.0;
 const DEBUG_PANEL_ID: PanelId = PanelId::new("debug_panel");
 const GAS_TOOL_PANEL_ID: PanelId = PanelId::new("gas_tool_panel");
 const STRUCTURE_TOOL_PANEL_ID: PanelId = PanelId::new("structure_tool_panel");
+const BUILD_TOOL_VARIANT_PANEL_ID: PanelId = PanelId::new("build_tool_variant_panel");
+const GASES_TOOL_VARIANT_PANEL_ID: PanelId = PanelId::new("gases_tool_variant_panel");
+const TOOL_VARIANT_PANEL_CLOSE_ACTION_ID: PanelHeaderActionId = PanelHeaderActionId::new("X");
 const GAS_SELECT_ADD_ID: SelectFieldId = SelectFieldId::new("gas_select_add");
 const GAS_SELECT_SOURCE_ID: SelectFieldId = SelectFieldId::new("gas_select_source");
 const SETTINGS_MUSIC_VOLUME_SLIDER_ID: SliderId = SliderId::new("settings_music_volume_slider");
@@ -236,6 +250,13 @@ struct BrushDragState {
     last_cell: Option<UVec2>,
 }
 
+#[derive(Resource, Default)]
+/// Stores visibility suppression flags for tool-variant panels.
+struct ToolVariantPanelState {
+    build_closed: bool,
+    gases_closed: bool,
+}
+
 #[derive(Component, Clone, Copy)]
 enum EditorUiAction {
     SelectTool(EditorTool),
@@ -251,12 +272,6 @@ struct MainToolbarRoot;
 
 #[derive(Component)]
 struct DebugToolbarRoot;
-
-#[derive(Component)]
-struct CellTypePanelRoot;
-
-#[derive(Component)]
-struct GasesTypePanelRoot;
 
 #[derive(Component)]
 struct GasReplaceLabel;
@@ -515,7 +530,6 @@ struct SelectionSizeTooltipText;
 struct EditorIconSet {
     build: Handle<Image>,
     gases: Handle<Image>,
-    erase: Handle<Image>,
     pipe: Handle<Image>,
     vent: Handle<Image>,
     bridge: Handle<Image>,
@@ -565,10 +579,12 @@ impl Plugin for EditorPlugin {
             .init_resource::<StructureEditState>()
             .init_resource::<SelectionDragState>()
             .init_resource::<BrushDragState>()
+            .init_resource::<ToolVariantPanelState>()
             .add_event::<MainMenuActionRequest>()
             .add_systems(Startup, (setup_editor_ui, setup_editor_overlays))
             .add_systems(Update, handle_escape_and_main_menu)
             .add_systems(Update, emit_plugin_keyboard_events)
+            .add_systems(Update, handle_tool_variant_panel_actions)
             .add_systems(Update, handle_editor_ui_actions)
             .add_systems(Update, refresh_editor_ui)
             .add_systems(Update, handle_settings_slider_changes)
@@ -632,8 +648,12 @@ impl UiRectPx {
 
 #[cfg(test)]
 mod tests {
-    use super::{escape_action, open_delete_confirmation, EscAction};
+    use super::{
+        editor_tool_for_hotkey, escape_action, open_delete_confirmation, toggled_editor_tool,
+        EditorTool, EscAction,
+    };
     use crate::save::{MainMenuConfirmState, MainMenuMode, MainMenuScreen, MainMenuUiState};
+    use bevy::prelude::KeyCode;
 
     #[test]
     fn escape_closes_in_game_menu_when_open() {
@@ -766,5 +786,37 @@ mod tests {
             ui.confirm_state,
             Some(MainMenuConfirmState::DeleteSave(ref id)) if id == "slot-1"
         ));
+    }
+
+    #[test]
+    fn hotkeys_map_x_to_erase_and_c_to_scissors() {
+        assert_eq!(
+            editor_tool_for_hotkey(KeyCode::KeyX),
+            Some(EditorTool::EraseSolid)
+        );
+        assert_eq!(
+            editor_tool_for_hotkey(KeyCode::KeyC),
+            Some(EditorTool::Scissors)
+        );
+    }
+
+    #[test]
+    fn tool_hotkey_toggle_is_bidirectional() {
+        assert_eq!(
+            toggled_editor_tool(None, EditorTool::EraseSolid),
+            Some(EditorTool::EraseSolid)
+        );
+        assert_eq!(
+            toggled_editor_tool(Some(EditorTool::EraseSolid), EditorTool::EraseSolid),
+            None
+        );
+        assert_eq!(
+            toggled_editor_tool(Some(EditorTool::EraseSolid), EditorTool::Scissors),
+            Some(EditorTool::Scissors)
+        );
+        assert_eq!(
+            toggled_editor_tool(Some(EditorTool::Scissors), EditorTool::Scissors),
+            None
+        );
     }
 }

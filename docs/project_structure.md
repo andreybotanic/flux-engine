@@ -60,7 +60,7 @@ FluxEngine/
 - `assets/shaders/gas_solver.wgsl`: GPU-шейдер газового шага (WGSL), синхронизированный с CPU-эталоном.
 - `assets/sprites/ui/main_menu_background.png`: Source и runtime fullscreen-фон главного меню (без `.ktx2`).
 - `assets/sprites/ui/select_arrow.{png,ktx2}`: Source+runtime UI-спрайт стрелки для выпадающих списков.
-- `assets/sprites/ui/tool_build.*`, `tool_erase.*`, `tool_add_gas.*`, `tool_clear_gas.*`: Core source PNG и runtime `.ktx2` спрайты общих инструментов; content-specific tool icons лежат в default plugin assets.
+- `assets/sprites/ui/tool_build.*`, `tool_gases.*`, `tool_erase.*`, `tool_add_gas.*`, `tool_clear_gas.*`: Core source PNG и runtime `.ktx2` спрайты общих инструментов; `tool_build/tool_gases` — отдельные крупные иконки main-toolbar, content-specific tool icons лежат в default plugin assets.
 - `assets/sprites/world/backdrop_noise.png`: Source и runtime core фоновая текстура мира (без `.ktx2`); default-owned тайлы/структуры лежат в default plugin assets.
 - `assets/music/menu/*.mp3`: Набор треков фоновой музыки для `Main Menu`; сканируется один раз на старте и проигрывается в случайном цикле с fade и паузами.
 - `assets/music/game/*.mp3`: Набор треков фоновой музыки для режима загруженного мира (`игра` + `Game Menu`) с тем же циклом воспроизведения.
@@ -128,13 +128,13 @@ FluxEngine/
 - `src/editor/main_menu_save_list_block.rs`: Общая отправка action-ивентов кнопок главного меню, сборка карточек save/load, загрузка preview PNG в UI и hit-test логика primary-click по всей карточке.
 - `src/editor/main_menu_settings_block.rs`: Логика экрана `Settings`: открытие вкладок и live-применение изменений слайдера громкости в `AudioSettingsState`.
 - `src/editor/main_menu_ui_block.rs`: Обновление состояния и видимости элементов меню, включая экраны save/load/confirm/plugins/settings и отображение текущего значения slider-громкости.
-- `src/editor/mod.rs`: Публичные editor-типы/ресурсы и точка сборки editor-систем, включая `Pipe/Vent/Bridge` и состояние поворота моста.
+- `src/editor/mod.rs`: Публичные editor-типы/ресурсы и точка сборки editor-систем, включая `Pipe/Vent/Bridge`, состояние поворота моста и состояние подавления видимости nested-панелей `Build/Gases` после header-close.
 - `src/editor/overlay_setup_block.rs`: Инициализация визуальных editor-оверлеев.
 - `src/editor/ui_setup_block.rs`: Сборка editor-UI: панели, кнопки, поля и привязка виджетов.
 - `src/editor/ui_setup_debug_panels_block.rs`: Построение контента `Debug Panel` с вложенными сворачиваемыми блоками (`Time`, `Gas simulation`, `Gas overlay`), switch-строками и полями параметров.
 - `src/editor/ui_setup_menu_button_factory_block.rs`: Фабрика кнопок модального меню.
-- `src/editor/ui_setup_setup_fn_block.rs`: Основная функция первичной сборки editor-UI, включая кнопку `Gases`, подпaнель выбора `Pipe/Vent/Bridge`, контейнеры экранов главного меню и layout экрана `Settings` со слайдером громкости.
-- `src/editor/ui_setup_structure_buttons_block.rs`: Вспомогательные фабрики кнопок инструментов/материалов.
+- `src/editor/ui_setup_setup_fn_block.rs`: Основная функция первичной сборки editor-UI, включая main-toolbar (`Build/Gases`), nested-панели вариантов `Build`/`Gases` через `PanelManager`, контейнеры экранов главного меню и layout экрана `Settings` со слайдером громкости.
+- `src/editor/ui_setup_structure_buttons_block.rs`: Вспомогательные фабрики кнопок инструментов/материалов с параметризуемыми размерами и сборка tabular-контента (`3` колонки) для nested-панелей вариантов.
 - `src/input/camera.rs`: Управление камерой, зум/пан и тесты корректности якоря.
 - `src/input/mod.rs`: Плагин подсистемы ввода и wiring систем ввода.
 - `src/lib.rs`: Корневой модуль библиотеки и экспорт подсистем, включая `plugins` и подсистему фоновой музыки `bgm`.
